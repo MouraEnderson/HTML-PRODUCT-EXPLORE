@@ -43,6 +43,20 @@ var App = (function () {
     return false;
   }
 
+  function isSnapshotDeliveryMode() {
+    if (APP_CONFIG.SNAPSHOT_DELIVERY_MODE === false) return false;
+    return !!(
+      APP_CONFIG.SNAPSHOT_URL ||
+      APP_CONFIG.DEFAULT_SNAPSHOT_PATH ||
+      APP_CONFIG.SNAPSHOT_FIRST ||
+      root.__3DX_TRUSTED_WIDGET__
+    );
+  }
+
+  function allowApiLoad() {
+    return !!root.__3DX_ALLOW_API__;
+  }
+
   function allowDemoOnApiFail() {
     if (APP_CONFIG.DEMO_ON_API_FAIL === false) return false;
     if (userRequestedRealProduct()) return false;
@@ -159,6 +173,8 @@ var App = (function () {
       loading = false;
       setLoading(false);
     }
+    root.__3DX_ALLOW_API__ = true;
+    var hadSnapshot = BomService.getNodeCount() > 1 && APP_CONFIG.IMPORT_MODE;
     setLoading(true);
     if (btnEl) {
       btnEl.disabled = true;
@@ -215,6 +231,7 @@ var App = (function () {
         setStatus(msg, 'error');
       })
       .finally(function () {
+        root.__3DX_ALLOW_API__ = false;
         setLoading(false);
         if (btnEl) {
           btnEl.disabled = false;
@@ -286,6 +303,9 @@ var App = (function () {
 
   function loadBom(physicalId) {
     if (!physicalId || loading) return Promise.resolve();
+    if (isSnapshotDeliveryMode() && !allowApiLoad()) {
+      return Promise.resolve();
+    }
     if (physicalId === lastLoadedId && BomService.getNodeCount() > 1) {
       return Promise.resolve();
     }
@@ -314,6 +334,9 @@ var App = (function () {
             'GitHub não acessa API ENOVIA. Demo com ~20 itens. Estrutura real: deploy 3DSpace.'
           );
         }
+        if (isSnapshotDeliveryMode() || APP_CONFIG.IMPORT_MODE) {
+          return restoreSnapshotAfterScanFail('Erro: ' + (err.message || err));
+        }
         if (typeof BomService !== 'undefined' && BomService.reset) {
           BomService.reset();
           lastLoadedId = null;
@@ -339,6 +362,9 @@ var App = (function () {
     var label = byId('selectionLabel');
     if (label) {
       label.textContent = (sel.displayName || sel.name || sel.physicalid);
+    }
+    if (isSnapshotDeliveryMode() && !allowApiLoad()) {
+      return;
     }
     if (APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.CAN_USE_ENOVIA_API) {
       return;
@@ -669,7 +695,19 @@ var App = (function () {
   function bootstrap() {
     setStatus('BOM Analytics v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION) + ' — iniciando…', 'info');
     var watchdog = window.setTimeout(function () {
-      if (BomService.getNodeCount() <= 1) runFallback();
+      if (BomService.getNodeCount() <= 1) {
+        if (isSnapshotDeliveryMode() && typeof BomSnapshot !== 'undefined' && BomSnapshot.applyBuiltinMont10) {
+          BomSnapshot.applyBuiltinMont10().then(function (meta) {
+            APP_CONFIG.IMPORT_MODE = true;
+            var lbl = byId('selectionLabel');
+            if (lbl) lbl.textContent = meta.productName;
+            refreshUI();
+            setStatus('Snapshot: ' + meta.productName + ' — ' + meta.itemCount + ' itens', 'ok');
+          });
+        } else {
+          runFallback();
+        }
+      }
       forceStopLoading();
     }, 12000);
     var wait = isTrustedBoot() ? Promise.resolve(true) : waitForTrustedWidget(2500);
@@ -757,6 +795,20 @@ var App = (function () {
   }
 
   function trySyncThenLoad() {
+    if (isSnapshotDeliveryMode()) {
+      if (BomService.getNodeCount() > 1) return;
+      if (typeof BomSnapshot !== 'undefined' && BomSnapshot.applyBuiltinMont10) {
+        return BomSnapshot.applyBuiltinMont10().then(function (meta) {
+          APP_CONFIG.IMPORT_MODE = true;
+          lastLoadedId = meta.rootPhysicalId;
+          var lbl = byId('selectionLabel');
+          if (lbl) lbl.textContent = meta.productName;
+          refreshUI();
+          setStatus('Snapshot: ' + meta.productName + ' — ' + meta.itemCount + ' itens', 'ok');
+        });
+      }
+      return;
+    }
     if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.pollSelection) {
       ProductExplorerBridge.pollSelection();
     }
@@ -795,7 +847,9 @@ var App = (function () {
       'Selecione a raiz no Product Explorer → clique Varrer estrutura (API ENOVIA).',
       'info'
     );
+    if (APP_CONFIG.EXPLORER_FALLBACK_MS === 0) return;
     window.setTimeout(function () {
+      if (isSnapshotDeliveryMode()) return;
       pullExplorerSelection();
       var later = ProductExplorerBridge.getSelection();
       if (later && later.physicalid && later.physicalid !== lastLoadedId) {
@@ -848,9 +902,6 @@ var App = (function () {
     APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
 
     if (hasSnapshotConfigured()) {
-      try {
-        initAppCore(getTenantSpaceUrl());
-      } catch (eInit) { /* */ }
       setStatus('Carregando Mont10… v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION), 'info');
       var instant =
         typeof BomSnapshot !== 'undefined' && BomSnapshot.applyBuiltinMont10
@@ -861,12 +912,15 @@ var App = (function () {
           APP_CONFIG.IMPORT_MODE = true;
           APP_CONFIG.DEMO_MODE = false;
           lastLoadedId = meta.rootPhysicalId;
+          try {
+            initAppCore(getTenantSpaceUrl());
+          } catch (eInit) { /* */ }
           var lbl = byId('selectionLabel');
           if (lbl) lbl.textContent = meta.productName;
           var tableLbl = byId('tableProductLabel');
           if (tableLbl) tableLbl.textContent = meta.productName;
           refreshUI();
-          setStatus('Snapshot: ' + meta.productName + ' — ' + meta.itemCount + ' itens', 'ok');
+          setStatus('Snapshot: ' + meta.productName + ' — ' + meta.itemCount + ' itens (sem Varrer)', 'ok');
           bootstrapApisBackground();
         })
         .catch(function () {

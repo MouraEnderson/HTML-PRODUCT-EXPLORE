@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260601i',
+    BUILD: 'bom20260601j',
     /** Entrega Mont10: snapshot padrão no Additional App (frame 3DX perde ?query) */
     DEFAULT_SNAPSHOT_PATH: 'data/mont10.json',
 
@@ -38,12 +38,14 @@
     AUTO_LOAD_DEMO_DRONE: false,
     DEMO_ON_API_FAIL: false,
     SNAPSHOT_FIRST: true,
+    /** 3DDashboard: Mont10 no boot; API só no botão Varrer */
+    SNAPSHOT_DELIVERY_MODE: true,
     AUTO_SYNC_EXPLORER_MS: 15000,
     SKIP_PP_ENRICH: true,
     BOM_FAST_DEPTH: 3,
     USE_FAST_BOOT: true,
     /** Se Explorer não responder em N ms, carrega produto padrão do tenant */
-    EXPLORER_FALLBACK_MS: 800,
+    EXPLORER_FALLBACK_MS: 0,
 
     /** Limite de nós na árvore (proteção memória) */
     BOM_MAX_NODES: 50000,
