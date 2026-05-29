@@ -560,3 +560,92 @@ table.data-table td {
   color: var(--text-muted);
   text-align: center;
 }
+
+/* —— UI clean —— */
+.ui-hidden { display: none !important; }
+
+body.ui-clean .main-clean {
+  padding: 10px 14px 16px;
+  max-width: 100%;
+}
+
+.clean-header {
+  padding: 10px 14px;
+  gap: 10px;
+}
+
+.clean-header h1 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.selection-line {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.search-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.search-group input[type="search"] {
+  min-width: 180px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+.platform-search-results {
+  margin: 0 14px;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.platform-search-results:not(.open) {
+  display: none;
+}
+
+.filter-row {
+  margin: 8px 0;
+}
+
+.filter-row input {
+  width: 100%;
+  max-width: 360px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.split-clean {
+  min-height: 280px;
+}
+
+.kpi-compact .kpi-card {
+  padding: 8px 12px;
+}
+
+.kpi-compact .kpi-value {
+  font-size: 1.25rem;
+}
+
+.status-bar {
+  font-size: 0.78rem;
+  padding: 4px 14px;
+}

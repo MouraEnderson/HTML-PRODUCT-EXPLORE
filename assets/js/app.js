@@ -33,8 +33,10 @@ var App = (function () {
     currentAnomalies = AnomalyDetector.detect(index);
 
     KpiCards.render(currentMetrics, currentAnomalies);
-    ChartsManager.destroyAll();
-    ChartsManager.render(currentMetrics);
+    if (APP_CONFIG.SHOW_CHARTS !== false) {
+      ChartsManager.destroyAll();
+      ChartsManager.render(currentMetrics);
+    }
     BomTree.refresh(index, rootId);
     DataTable.setData(filtered);
     renderIssues(currentAnomalies.issues);
@@ -44,6 +46,7 @@ var App = (function () {
   }
 
   function renderIssues(issues) {
+    if (APP_CONFIG.SHOW_ISSUES_PANEL === false) return;
     var el = document.getElementById('issuesList');
     if (!el) return;
     var top = issues.slice(0, 50);
@@ -106,8 +109,10 @@ var App = (function () {
   }
 
   function onSelection(sel) {
-    document.getElementById('selectionLabel').textContent =
-      sel.displayName + ' (' + sel.physicalid + ')';
+    var label = document.getElementById('selectionLabel');
+    if (label) {
+      label.textContent = (sel.displayName || sel.name || sel.physicalid);
+    }
     loadBom(sel.physicalid);
   }
 
@@ -168,13 +173,19 @@ var App = (function () {
       else setStatus('Selecione um objeto no Product Explorer.', 'warn');
     });
 
-    document.getElementById('btnExport').addEventListener('click', function () {
-      DataTable.exportExcel();
-    });
+    var btnExport = document.getElementById('btnExport');
+    if (btnExport) {
+      btnExport.addEventListener('click', function () {
+        DataTable.exportExcel();
+      });
+    }
 
-    document.getElementById('btnExpandAll').addEventListener('click', function () {
-      setStatus('Expansão total desabilitada por performance. Expanda por nível na árvore.', 'warn');
-    });
+    var btnExpand = document.getElementById('btnExpandAll');
+    if (btnExpand) {
+      btnExpand.addEventListener('click', function () {
+        setStatus('Expanda níveis na árvore.', 'info');
+      });
+    }
 
     var btnDrone = document.getElementById('btnLoadDrone');
     if (btnDrone) {
@@ -203,21 +214,35 @@ var App = (function () {
       onSelect: onSelection,
       onStatus: setStatusPublic
     });
-    DropZone.init({
-      onImported: function (count, fileName) {
-        APP_CONFIG.IMPORT_MODE = true;
-        APP_CONFIG.DEMO_MODE = false;
-        refreshUI();
-        setStatus('Importado: ' + fileName + ' — ' + count + ' itens na estrutura.', 'ok');
-      },
-      on3DXProduct: function (sel) {
-        loadPhysicalProduct(sel);
-      },
-      onError: function (msg) {
-        setStatus('Importação: ' + msg, 'error');
-      }
-    });
+    if (!APP_CONFIG.UI_CLEAN && document.getElementById('dropZone')) {
+      DropZone.init({
+        onImported: function (count, fileName) {
+          APP_CONFIG.IMPORT_MODE = true;
+          APP_CONFIG.DEMO_MODE = false;
+          refreshUI();
+          setStatus('Importado: ' + fileName + ' — ' + count + ' itens.', 'ok');
+        },
+        on3DXProduct: function (sel) {
+          loadPhysicalProduct(sel);
+        },
+        onError: function (msg) {
+          setStatus('Importação: ' + msg, 'error');
+        }
+      });
+    }
     toggleCrossOriginUI();
+    if (APP_CONFIG.UI_CLEAN) {
+      scheduleExplorerSync();
+    }
+  }
+
+  function scheduleExplorerSync() {
+    setTimeout(function () {
+      if (typeof ExplorerSyncPanel !== 'undefined') {
+        var btn = document.getElementById('btnSyncExplorer');
+        if (btn) btn.click();
+      }
+    }, 1200);
   }
 
   function toggleCrossOriginUI() {
@@ -321,7 +346,7 @@ var App = (function () {
           '132FB3CE26D70E006A18D1870000316D';
         if (APP_QUERY.physicalid) defaultDrone = APP_QUERY.physicalid;
 
-        if (!APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.DEMO_MODE) {
+        if (!APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.DEMO_MODE && APP_CONFIG.AUTO_LOAD_DEMO_DRONE) {
           return loadPhysicalProduct({
             physicalid: defaultDrone,
             displayName: '01_SKA_Drone Assembly_130520206',
@@ -329,6 +354,11 @@ var App = (function () {
             type: 'VPMReference',
             displayType: 'Physical Product'
           });
+        }
+
+        if (APP_CONFIG.UI_CLEAN && !APP_CONFIG.CROSS_ORIGIN_WIDGET) {
+          setStatus('Abra o produto no Explorer → Do Explorer.', 'info');
+          return Promise.resolve();
         }
 
         if (APP_CONFIG.DEMO_MODE) {

@@ -56,11 +56,14 @@ var ExplorerSyncPanel = (function () {
     if (btnSync) {
       btnSync.addEventListener('click', function () {
         requestSyncFromDashboard();
+        var stored = loadStoredSelection();
+        if (stored && options.onSelect) {
+          options.onSelect(stored);
+          if (options.onStatus) options.onStatus('Produto do Explorer: ' + (stored.displayName || stored.physicalid), 'ok');
+          return;
+        }
         if (options.onStatus) {
-          options.onStatus(
-            'Pedido enviado ao 3DDashboard. Se nada mudar em 5s, use o ID manual (aba EXPLORE).',
-            'warn'
-          );
+          options.onStatus('Abra o produto no Explorer (aba EXPLORE) e clique de novo.', 'info');
         }
       });
     }

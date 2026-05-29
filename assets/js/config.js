@@ -7,7 +7,13 @@
 
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
-    VERSION: '1.0.0',
+    VERSION: '1.1.0',
+
+    /** UI enxuta: Explorer + Pesquisar + árvore/tabela */
+    UI_CLEAN: true,
+    SHOW_CHARTS: false,
+    SHOW_ISSUES_PANEL: false,
+    AUTO_LOAD_DEMO_DRONE: false,
 
     /** Limite de nós na árvore (proteção memória) */
     BOM_MAX_NODES: 50000,
