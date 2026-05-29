@@ -10,31 +10,24 @@
   </style>
   <script type="text/javascript">
   //<![CDATA[
-    var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
     var HTML =
       '<div class="ok">BOM Analytics — widget UWA OK</div>' +
-      '<div class="hint">Carregando dashboard completo em 2s…<br/>' +
-      'Se ficar aqui, troque a URL do app para <b>widget-uwa.html</b></div>';
-
-    function goFull() {
-      if (typeof widget === 'undefined' || !widget || !widget.body) return;
-      widget.body.innerHTML =
-        '<div class="hint" style="background:#fff3e0;">Carregando widget-uwa…</div>';
-      window.location.replace(GH + 'widget-uwa.html');
-    }
+      '<div class="hint">Troque a URL do Additional App para <b>widget-uwa.html</b> e Ctrl+F5.</div>';
 
     function onLoad() {
       if (!widget || !widget.body) return;
       widget.body.innerHTML = HTML;
-      window.setTimeout(goFull, 2000);
     }
 
     function wait() {
       if (typeof widget !== 'undefined' && widget && widget.addEvent) {
         widget.addEvent('onLoad', onLoad);
+        if (widget.body && !widget.body.innerHTML.replace(/\s/g, '')) {
+          window.setTimeout(onLoad, 0);
+        }
         return;
       }
-      setTimeout(wait, 100);
+      setTimeout(wait, 80);
     }
     wait();
   //]]>

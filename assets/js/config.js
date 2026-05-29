@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'trustedapi20260602',
+    BUILD: 'uwa20260602e',
     CAN_USE_ENOVIA_API: false,
 
     /** Somente Explorer → gráficos + tabela */

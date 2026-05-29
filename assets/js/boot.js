@@ -7,7 +7,7 @@ var BomBoot = (function (global) {
   'use strict';
 
   var REPO = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-  var VER = 'snapshot20260601d';
+  var VER = 'uwa20260602e';
 
   var SCRIPTS = [
     'assets/js/config.js',

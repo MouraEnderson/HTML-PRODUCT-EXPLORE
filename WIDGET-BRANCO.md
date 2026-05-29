@@ -36,6 +36,8 @@ Causa corrigida: só montar UI em **`widget.onLoad`** (não antes). Atualize `wi
 
 Deve aparecer primeiro **"carregando módulos…"** (azul), depois o botão verde **Varrer**.
 
+**Branco com `widget-uwa` (teste OK no min):** costuma ser `onLoad` perdido ou `chart.umd.min.js` em 404 no GitHub. Build `trustedapi20260602d` corrige (chart em `assets/vendor/`, fallback de `onLoad`, Chart opcional).
+
 ### Passo B — dashboard completo
 
 URL definitiva:
