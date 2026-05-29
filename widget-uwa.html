@@ -7,26 +7,43 @@
   <link rel="stylesheet" type="text/css" href="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/css/dashboard.css?v=ghpages" />
   <script type="text/javascript">window.__3DX_TRUSTED_WIDGET__=true;window.__3DX_BOOT_DEFER__=true;</script>
   <script type="text/javascript" src="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/vendor/chart.umd.min.js"></script>
-  <script type="text/javascript" src="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/js/bom-bundle.js?v=ghpages"></script>
+  <script type="text/javascript" src="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/js/bom-bundle.js?v=waf20260530"></script>
   <script type="text/javascript">
   //<![CDATA[
-    var BOM_GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-    function bomOnLoad() {
+    function bomMount() {
       var tpl = document.getElementById('bom-app-template');
       if (!tpl || !widget || !widget.body) return;
       widget.body.innerHTML = tpl.innerHTML;
       widget.body.className = 'ui-explorer-only';
       window.__3DX_TRUSTED_WIDGET__ = true;
       window.__3DX_BOOT_DEFER__ = true;
+    }
+
+    function bomStartApp() {
       var bar = widget.body.querySelector('#statusBar');
       if (typeof App === 'undefined') {
-        if (bar) {
-          bar.textContent = 'Scripts não carregaram. Confirme GitHub Pages ou use 3DSpace (SOLUCAO-FINAL.md).';
-        }
+        if (bar) bar.textContent = 'Bundle não carregou — aguarde 1 min e Ctrl+F5';
         return;
       }
       try { App.run(); } catch (e) {
         if (bar) bar.textContent = 'Erro: ' + (e.message || e);
+      }
+    }
+
+    function bomOnLoad() {
+      bomMount();
+      if (typeof require !== 'undefined') {
+        require(['DS/WAFData/WAFData', 'DS/i3DXCompassServices/i3DXCompassServices', 'DS/PlatformAPI/PlatformAPI'],
+          function (WAF, Compass, PlatformAPI) {
+            window.WAFData = WAF;
+            window.__3DX_COMPASS__ = Compass;
+            window.__3DX_PLATFORM_API__ = PlatformAPI;
+            bomStartApp();
+          },
+          function () { bomStartApp(); }
+        );
+      } else {
+        bomStartApp();
       }
     }
     if (typeof widget !== 'undefined' && widget.addEvent) {
@@ -46,7 +63,7 @@
     <button type="button" class="ui-hidden" id="btnSyncExplorer">sync</button>
     <button type="button" class="ui-hidden" id="btnRefresh">refresh</button>
   </header>
-  <div id="statusBar" class="status-bar">Preparando… ghpages</div>
+  <div id="statusBar" class="status-bar">Preparando… waf20260530</div>
   <div class="ui-hidden" aria-hidden="true">
     <input type="text" id="explorerObjectId" />
     <input type="text" id="explorerObjectName" />

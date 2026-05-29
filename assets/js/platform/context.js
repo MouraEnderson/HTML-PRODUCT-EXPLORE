@@ -2,7 +2,7 @@
  * @file platform/context.js
  * Security context, tenant e CSRF para requisições ENOVIA.
  */
-var PlatformContext = (function () {
+var PlatformContext = (function (global) {
   'use strict';
 
   var state = {
@@ -33,16 +33,30 @@ var PlatformContext = (function () {
 
   function loadFromWidget() {
     return new Promise(function (resolve) {
+      var PlatformAPI = global.__3DX_PLATFORM_API__;
+      if (PlatformAPI && PlatformAPI.getSecurityContext) {
+        PlatformAPI.getSecurityContext().then(function (ctx) {
+          state.securityContext = ctx;
+          return PlatformAPI.getTenant();
+        }).then(function (tenant) {
+          state.tenant = tenant;
+          state.ready = true;
+          resolve(true);
+        }).catch(function () {
+          resolve(false);
+        });
+        return;
+      }
       var req = getRequire();
       if (!req) {
         resolve(false);
         return;
       }
       try {
-        req(['DS/PlatformAPI/PlatformAPI'], function (PlatformAPI) {
-          PlatformAPI.getSecurityContext().then(function (ctx) {
+        req(['DS/PlatformAPI/PlatformAPI'], function (PAPI) {
+          PAPI.getSecurityContext().then(function (ctx) {
             state.securityContext = ctx;
-            return PlatformAPI.getTenant();
+            return PAPI.getTenant();
           }).then(function (tenant) {
             state.tenant = tenant;
             state.ready = true;
@@ -139,4 +153,4 @@ var PlatformContext = (function () {
     setCsrfToken: function (t) { state.csrfToken = t; },
     isReady: function () { return state.ready; }
   };
-})();
+})(typeof window !== 'undefined' ? window : this);

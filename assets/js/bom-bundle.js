@@ -10,7 +10,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: '20260530',
+    BUILD: 'waf20260530',
 
     /** Somente Explorer → gráficos + tabela */
     EXPLORER_ONLY: true,
@@ -397,7 +397,7 @@ var PlatformBridge = (function () {
  * @file platform/context.js
  * Security context, tenant e CSRF para requisições ENOVIA.
  */
-var PlatformContext = (function () {
+var PlatformContext = (function (global) {
   'use strict';
 
   var state = {
@@ -428,16 +428,30 @@ var PlatformContext = (function () {
 
   function loadFromWidget() {
     return new Promise(function (resolve) {
+      var PlatformAPI = global.__3DX_PLATFORM_API__;
+      if (PlatformAPI && PlatformAPI.getSecurityContext) {
+        PlatformAPI.getSecurityContext().then(function (ctx) {
+          state.securityContext = ctx;
+          return PlatformAPI.getTenant();
+        }).then(function (tenant) {
+          state.tenant = tenant;
+          state.ready = true;
+          resolve(true);
+        }).catch(function () {
+          resolve(false);
+        });
+        return;
+      }
       var req = getRequire();
       if (!req) {
         resolve(false);
         return;
       }
       try {
-        req(['DS/PlatformAPI/PlatformAPI'], function (PlatformAPI) {
-          PlatformAPI.getSecurityContext().then(function (ctx) {
+        req(['DS/PlatformAPI/PlatformAPI'], function (PAPI) {
+          PAPI.getSecurityContext().then(function (ctx) {
             state.securityContext = ctx;
-            return PlatformAPI.getTenant();
+            return PAPI.getTenant();
           }).then(function (tenant) {
             state.tenant = tenant;
             state.ready = true;
@@ -534,7 +548,7 @@ var PlatformContext = (function () {
     setCsrfToken: function (t) { state.csrfToken = t; },
     isReady: function () { return state.ready; }
   };
-})();
+})(typeof window !== 'undefined' ? window : this);
 
 ;/* --- assets\js\platform\compass.js --- */
 /**
@@ -602,6 +616,19 @@ var CompassServices = (function () {
         if (!settled && fallback) done(fallback);
       }, 6000);
 
+      if (typeof __3DX_COMPASS__ !== 'undefined' && __3DX_COMPASS__.getServiceUrl) {
+        __3DX_COMPASS__.getServiceUrl({
+          serviceName: '3DSpace',
+          platformId: platformId || undefined,
+          onComplete: done,
+          onFailure: function () {
+            if (fallback) done(fallback);
+            else fail(new Error('Compass getServiceUrl failed'));
+          }
+        });
+        return;
+      }
+
       var req = getRequire();
       if (!req) {
         if (fallback) done(fallback);
@@ -652,23 +679,91 @@ var CompassServices = (function () {
   };
 })();
 
+;/* --- assets\js\platform\waf-bootstrap.js --- */
+/**
+ * @file platform/waf-bootstrap.js
+ * Carrega WAFData / Compass via require do 3DDashboard (obrigatório para API ENOVIA).
+ */
+var WafBootstrap = (function (global) {
+  'use strict';
+
+  var loadPromise = null;
+
+  function getRequire() {
+    if (typeof require !== 'undefined') return require;
+    try {
+      if (global.widget && global.widget.requirejs) return global.widget.requirejs;
+    } catch (e1) { /* */ }
+    try {
+      if (global.top && global.top !== global && global.top.require) return global.top.require;
+    } catch (e2) { /* */ }
+    try {
+      if (global.parent && global.parent !== global && global.parent.require) {
+        return global.parent.require;
+      }
+    } catch (e3) { /* */ }
+    return null;
+  }
+
+  function ensure() {
+    if (loadPromise) return loadPromise;
+
+    loadPromise = new Promise(function (resolve, reject) {
+      if (typeof WAFData !== 'undefined' && WAFData.authenticatedRequest) {
+        resolve({ WAFData: WAFData });
+        return;
+      }
+
+      var req = getRequire();
+      if (!req) {
+        reject(new Error(
+          'WAFData indisponível. Widget deve rodar no 3DDashboard (Additional App), não no Chrome direto.'
+        ));
+        return;
+      }
+
+      req([
+        'DS/WAFData/WAFData',
+        'DS/i3DXCompassServices/i3DXCompassServices',
+        'DS/PlatformAPI/PlatformAPI'
+      ], function (WAF, Compass, PlatformAPI) {
+        if (WAF) global.WAFData = WAF;
+        if (Compass) global.__3DX_COMPASS__ = Compass;
+        if (PlatformAPI) global.__3DX_PLATFORM_API__ = PlatformAPI;
+        resolve({ WAFData: WAF, Compass: Compass, PlatformAPI: PlatformAPI });
+      }, function (err) {
+        reject(err || new Error('Falha ao carregar módulos DS (WAFData)'));
+      });
+    });
+
+    return loadPromise;
+  }
+
+  return {
+    ensure: ensure,
+    getRequire: getRequire
+  };
+})(typeof window !== 'undefined' ? window : this);
+
 ;/* --- assets\js\platform\waf-client.js --- */
 /**
  * @file platform/waf-client.js
- * Cliente HTTP autenticado via WAFData.
+ * Cliente HTTP autenticado via WAFData (nunca fetch cross-origin para 3DSpace).
  */
 var WafClient = (function () {
   'use strict';
 
   function getWAFData() {
-    if (typeof WAFData !== 'undefined') return WAFData;
+    if (typeof WAFData !== 'undefined' && WAFData.authenticatedRequest) return WAFData;
     try {
       if (typeof widget !== 'undefined' && widget && widget.WAFData) return widget.WAFData;
     } catch (e) { /* */ }
-    if (window.parent && window.parent.WAFData) {
-      try { return window.parent.WAFData; } catch (e) { return null; }
-    }
     return null;
+  }
+
+  function is3DSpaceUrl(url) {
+    return (url || '').indexOf('3dexperience.3ds.com') >= 0 ||
+      (url || '').indexOf('/enovia') >= 0;
   }
 
   function request(method, url, options) {
@@ -679,33 +774,42 @@ var WafClient = (function () {
       return Promise.reject(new Error('DEMO_MODE: use BomService mock'));
     }
 
-    var WAF = getWAFData();
-    if (!WAF || !WAF.authenticatedRequest) {
-      return fetch(url, {
-        method: method,
-        headers: headers,
-        credentials: 'include',
-        body: options.body ? JSON.stringify(options.body) : undefined
-      }).then(function (res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + url);
-        return res.json();
+    function doRequest() {
+      var WAF = getWAFData();
+      if (!WAF || !WAF.authenticatedRequest) {
+        if (is3DSpaceUrl(url)) {
+          return Promise.reject(new Error(
+            'API ENOVIA bloqueada (sem WAFData). Use Additional App no 3DDashboard ou HTML no 3DSpace.'
+          ));
+        }
+        return Promise.reject(new Error('WAFData não disponível para: ' + url));
+      }
+
+      return new Promise(function (resolve, reject) {
+        WAF.authenticatedRequest(url, {
+          method: method,
+          headers: headers,
+          data: options.body,
+          type: 'json',
+          onComplete: function (data) {
+            resolve(data);
+          },
+          onFailure: function (err) {
+            var msg = (err && (err.message || err.error)) || 'WAF request failed';
+            reject(new Error(msg));
+          }
+        });
       });
     }
 
-    return new Promise(function (resolve, reject) {
-      WAF.authenticatedRequest(url, {
-        method: method,
-        headers: headers,
-        data: options.body,
-        type: 'json',
-        onComplete: function (data) {
-          resolve(data);
-        },
-        onFailure: function (err) {
-          reject(err || new Error('WAF request failed'));
-        }
+    if (typeof WafBootstrap !== 'undefined') {
+      return WafBootstrap.ensure().then(doRequest).catch(function (err) {
+        if (getWAFData()) return doRequest();
+        throw err;
       });
-    });
+    }
+
+    return doRequest();
   }
 
   function get(url, headers) {
@@ -2527,14 +2631,25 @@ var App = (function () {
       })
       .catch(function (err) {
         console.error(err);
+        var msg = err.message || String(err);
         var sel = ProductExplorerBridge.getSelection();
+        if (sel && (msg.indexOf('Failed to fetch') >= 0 || msg.indexOf('WAF') >= 0)) {
+          return BomService.loadRootFromSelection(sel).then(function () {
+            refreshUI();
+            setStatus(
+              'Preview local (sem API). Deploy 3DSpace para BOM completa: ' +
+              (sel.displayName || sel.physicalid),
+              'warn'
+            );
+          });
+        }
         if (sel) {
           return BomService.loadRootFromSelection(sel).then(function () {
             refreshUI();
             setStatus('Exibindo raiz do Explorer (' + (sel.displayName || sel.physicalid) + ').', 'warn');
           });
         }
-        setStatus('Erro: ' + (err.message || err), 'error');
+        setStatus('Erro: ' + msg, 'error');
       })
       .finally(function () {
         setLoading(false);
@@ -2839,21 +2954,44 @@ var App = (function () {
   }
 
   function bootstrapTrustedFast() {
-    var space = getTenantSpaceUrl();
-    if (!space) {
-      setStatus('URL 3DSpace não configurada em config.js.', 'error');
-      return Promise.resolve();
-    }
     APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
-    setStatus('Conectando 3DSpace… v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION), 'info');
-    return PlatformContext.init()
+    setStatus('Conectando APIs 3DEXPERIENCE… v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION), 'info');
+
+    var chain = PlatformContext.init();
+    if (typeof WafBootstrap !== 'undefined') {
+      chain = WafBootstrap.ensure().then(function () {
+        return PlatformContext.init();
+      });
+    }
+
+    return chain
       .then(function () {
+        return CompassServices.get3DSpaceUrl(PlatformContext.getState().platformId);
+      })
+      .then(function (spaceUrl) {
+        var space = spaceUrl || getTenantSpaceUrl();
+        if (!space) {
+          throw new Error('URL 3DSpace não encontrada');
+        }
         initAppCore(space);
         return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
       })
       .then(function () {
         setStatus('Carregando E-BOM…', 'info');
         trySyncThenLoad();
+      })
+      .catch(function (err) {
+        console.error(err);
+        var msg = err.message || String(err);
+        if (msg.indexOf('Failed to fetch') >= 0 || msg.indexOf('WAFData') >= 0) {
+          setStatus(
+            'API ENOVIA: instale no 3DSpace (BomAnalytics-3DSpace.zip) — GitHub não acessa 3DSpace. Ver SOLUCAO-FINAL.md',
+            'error'
+          );
+        } else {
+          setStatus('Erro API: ' + msg, 'error');
+        }
+        runFallback();
       });
   }
 

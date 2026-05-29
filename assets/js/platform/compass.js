@@ -63,6 +63,19 @@ var CompassServices = (function () {
         if (!settled && fallback) done(fallback);
       }, 6000);
 
+      if (typeof __3DX_COMPASS__ !== 'undefined' && __3DX_COMPASS__.getServiceUrl) {
+        __3DX_COMPASS__.getServiceUrl({
+          serviceName: '3DSpace',
+          platformId: platformId || undefined,
+          onComplete: done,
+          onFailure: function () {
+            if (fallback) done(fallback);
+            else fail(new Error('Compass getServiceUrl failed'));
+          }
+        });
+        return;
+      }
+
       var req = getRequire();
       if (!req) {
         if (fallback) done(fallback);

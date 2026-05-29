@@ -6,6 +6,7 @@ $files = @(
   'assets\js\platform\platform-bridge.js',
   'assets\js\platform\context.js',
   'assets\js\platform\compass.js',
+  'assets\js\platform\waf-bootstrap.js',
   'assets\js\platform\waf-client.js',
   'assets\js\integration\3dx-content-parser.js',
   'assets\js\integration\enovia-api.js',

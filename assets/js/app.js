@@ -137,14 +137,25 @@ var App = (function () {
       })
       .catch(function (err) {
         console.error(err);
+        var msg = err.message || String(err);
         var sel = ProductExplorerBridge.getSelection();
+        if (sel && (msg.indexOf('Failed to fetch') >= 0 || msg.indexOf('WAF') >= 0)) {
+          return BomService.loadRootFromSelection(sel).then(function () {
+            refreshUI();
+            setStatus(
+              'Preview local (sem API). Deploy 3DSpace para BOM completa: ' +
+              (sel.displayName || sel.physicalid),
+              'warn'
+            );
+          });
+        }
         if (sel) {
           return BomService.loadRootFromSelection(sel).then(function () {
             refreshUI();
             setStatus('Exibindo raiz do Explorer (' + (sel.displayName || sel.physicalid) + ').', 'warn');
           });
         }
-        setStatus('Erro: ' + (err.message || err), 'error');
+        setStatus('Erro: ' + msg, 'error');
       })
       .finally(function () {
         setLoading(false);
@@ -449,21 +460,44 @@ var App = (function () {
   }
 
   function bootstrapTrustedFast() {
-    var space = getTenantSpaceUrl();
-    if (!space) {
-      setStatus('URL 3DSpace não configurada em config.js.', 'error');
-      return Promise.resolve();
-    }
     APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
-    setStatus('Conectando 3DSpace… v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION), 'info');
-    return PlatformContext.init()
+    setStatus('Conectando APIs 3DEXPERIENCE… v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION), 'info');
+
+    var chain = PlatformContext.init();
+    if (typeof WafBootstrap !== 'undefined') {
+      chain = WafBootstrap.ensure().then(function () {
+        return PlatformContext.init();
+      });
+    }
+
+    return chain
       .then(function () {
+        return CompassServices.get3DSpaceUrl(PlatformContext.getState().platformId);
+      })
+      .then(function (spaceUrl) {
+        var space = spaceUrl || getTenantSpaceUrl();
+        if (!space) {
+          throw new Error('URL 3DSpace não encontrada');
+        }
         initAppCore(space);
         return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
       })
       .then(function () {
         setStatus('Carregando E-BOM…', 'info');
         trySyncThenLoad();
+      })
+      .catch(function (err) {
+        console.error(err);
+        var msg = err.message || String(err);
+        if (msg.indexOf('Failed to fetch') >= 0 || msg.indexOf('WAFData') >= 0) {
+          setStatus(
+            'API ENOVIA: instale no 3DSpace (BomAnalytics-3DSpace.zip) — GitHub não acessa 3DSpace. Ver SOLUCAO-FINAL.md',
+            'error'
+          );
+        } else {
+          setStatus('Erro API: ' + msg, 'error');
+        }
+        runFallback();
       });
   }
 

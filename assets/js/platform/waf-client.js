@@ -1,19 +1,21 @@
 /**
  * @file platform/waf-client.js
- * Cliente HTTP autenticado via WAFData.
+ * Cliente HTTP autenticado via WAFData (nunca fetch cross-origin para 3DSpace).
  */
 var WafClient = (function () {
   'use strict';
 
   function getWAFData() {
-    if (typeof WAFData !== 'undefined') return WAFData;
+    if (typeof WAFData !== 'undefined' && WAFData.authenticatedRequest) return WAFData;
     try {
       if (typeof widget !== 'undefined' && widget && widget.WAFData) return widget.WAFData;
     } catch (e) { /* */ }
-    if (window.parent && window.parent.WAFData) {
-      try { return window.parent.WAFData; } catch (e) { return null; }
-    }
     return null;
+  }
+
+  function is3DSpaceUrl(url) {
+    return (url || '').indexOf('3dexperience.3ds.com') >= 0 ||
+      (url || '').indexOf('/enovia') >= 0;
   }
 
   function request(method, url, options) {
@@ -24,33 +26,42 @@ var WafClient = (function () {
       return Promise.reject(new Error('DEMO_MODE: use BomService mock'));
     }
 
-    var WAF = getWAFData();
-    if (!WAF || !WAF.authenticatedRequest) {
-      return fetch(url, {
-        method: method,
-        headers: headers,
-        credentials: 'include',
-        body: options.body ? JSON.stringify(options.body) : undefined
-      }).then(function (res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + url);
-        return res.json();
+    function doRequest() {
+      var WAF = getWAFData();
+      if (!WAF || !WAF.authenticatedRequest) {
+        if (is3DSpaceUrl(url)) {
+          return Promise.reject(new Error(
+            'API ENOVIA bloqueada (sem WAFData). Use Additional App no 3DDashboard ou HTML no 3DSpace.'
+          ));
+        }
+        return Promise.reject(new Error('WAFData não disponível para: ' + url));
+      }
+
+      return new Promise(function (resolve, reject) {
+        WAF.authenticatedRequest(url, {
+          method: method,
+          headers: headers,
+          data: options.body,
+          type: 'json',
+          onComplete: function (data) {
+            resolve(data);
+          },
+          onFailure: function (err) {
+            var msg = (err && (err.message || err.error)) || 'WAF request failed';
+            reject(new Error(msg));
+          }
+        });
       });
     }
 
-    return new Promise(function (resolve, reject) {
-      WAF.authenticatedRequest(url, {
-        method: method,
-        headers: headers,
-        data: options.body,
-        type: 'json',
-        onComplete: function (data) {
-          resolve(data);
-        },
-        onFailure: function (err) {
-          reject(err || new Error('WAF request failed'));
-        }
+    if (typeof WafBootstrap !== 'undefined') {
+      return WafBootstrap.ensure().then(doRequest).catch(function (err) {
+        if (getWAFData()) return doRequest();
+        throw err;
       });
-    });
+    }
+
+    return doRequest();
   }
 
   function get(url, headers) {
