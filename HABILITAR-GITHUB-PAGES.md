@@ -35,13 +35,13 @@ Aguarde **2–10 minutos**. A página mostra a URL do site, algo como:
 | Diagnóstico | https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/teste-url.html |
 | Widget | https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-uwa.html |
 
-Se ainda der 404, use a **URL alternativa** (não precisa de Pages):
+**Não use jsDelivr no Chrome** — o navegador mostra o HTML como texto/código. Isso é esperado.
+
+**URL do Additional App** (com Pages ativo):
 
 ```
-https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/widget-uwa.html
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-uwa.html
 ```
-
-Coloque esta URL no **Additional App** até o GitHub Pages ficar verde.
 
 ## Erros de digitação (404 falso)
 
