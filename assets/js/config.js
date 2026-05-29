@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'uwa20260603',
+    BUILD: 'bom20260529a',
     /** Varredura automática quando Explorer envia seleção (Additional App) */
     AUTO_SCAN_ON_SELECTION: true,
     CAN_USE_ENOVIA_API: false,
@@ -201,26 +201,29 @@
     APP_CONFIG.DEMO_ROOT_ID = query.physicalid;
   }
 
+  function uiRoot() {
+    if (global.__3DX_UI_ROOT__) return global.__3DX_UI_ROOT__;
+    return null;
+  }
+
   function byId3dx(id) {
+    var mount = uiRoot();
+    if (mount) {
+      var inMount = mount.querySelector('#' + id);
+      if (inMount) return inMount;
+    }
     var el = document.getElementById(id);
     if (el) return el;
-    try {
-      if (typeof widget !== 'undefined' && widget && widget.body) {
-        return widget.body.querySelector('#' + id);
-      }
-    } catch (e) { /* */ }
     return null;
   }
 
   function qs3dx(sel) {
-    var el = document.querySelector(sel);
-    if (el) return el;
-    try {
-      if (typeof widget !== 'undefined' && widget && widget.body) {
-        return widget.body.querySelector(sel);
-      }
-    } catch (e) { /* */ }
-    return null;
+    var mount = uiRoot();
+    if (mount) {
+      var inMount = mount.querySelector(sel);
+      if (inMount) return inMount;
+    }
+    return document.querySelector(sel);
   }
 
   global.byId3dx = byId3dx;

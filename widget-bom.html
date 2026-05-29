@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:widget="http://www.netvibes.com/ns/">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <title>BOM Analytics</title>
+  <style type="text/css">
+    .bom-root { min-height: 420px; background: #f0f6fa; font-family: "Segoe UI", sans-serif; color: #1a2332; position: relative; }
+    .bom-ver { margin: 0; padding: 8px 12px; background: #e8f5e9; color: #1b5e20; font-size: 12px; font-weight: bold; }
+    .bom-h1 { margin: 0; padding: 10px 14px; background: #fff; border-bottom: 1px solid #dde3ea; font-size: 16px; color: #005686; }
+    .bom-st { padding: 8px 14px; font-size: 13px; background: #e3f2fd; color: #0d47a1; }
+    .bom-st-ok { background: #e8f5e9; color: #1b5e20; }
+    .bom-st-err { background: #ffebee; color: #b71c1c; }
+    .bom-st-warn { background: #fff3e0; color: #e65100; }
+    .bom-panel { margin: 10px 14px; padding: 12px; background: #fff; border: 2px solid #ff9800; border-radius: 8px; }
+    .bom-btn { display: block; width: 100%; padding: 12px; background: #2e7d32; color: #fff; border: 0; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; }
+    .bom-btn:disabled { background: #9e9e9e; }
+    .bom-charts { display: block; padding: 8px 14px; }
+    .bom-chart { display: inline-block; width: 48%; min-height: 120px; margin: 1%; background: #fff; border: 1px solid #dde3ea; vertical-align: top; }
+    .bom-table-wrap { margin: 8px 14px; background: #fff; border: 1px solid #dde3ea; max-height: 200px; overflow: auto; }
+    .bom-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .bom-table th, .bom-table td { border: 1px solid #e0e0e0; padding: 4px 6px; }
+    .bom-hidden { display: none; }
+  </style>
+  <script type="text/javascript">
+  //<![CDATA[
+    window.__3DX_TRUSTED_WIDGET__ = true;
+    window.__3DX_BOOT_DEFER__ = true;
+
+    var BOM_BUILD = 'bom20260529a';
+    var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
+
+    var UI_HTML =
+      '<div class="bom-root">' +
+      '<p class="bom-ver">BOM Analytics — build ' + BOM_BUILD + ' (Fase 1 UWA)</p>' +
+      '<div class="bom-h1">BOM Analytics — Estrutura: <strong id="selectionLabel">-</strong></div>' +
+      '<div id="statusBar" class="bom-st">Montando widget...</div>' +
+      '<div class="bom-panel">' +
+      '<button type="button" id="btnScanExplorer" class="bom-btn">Varrer estrutura Explorer</button>' +
+      '<p style="margin:8px 0 0;font-size:13px;color:#0d47a1;">Mont10 no Explorer, depois Varrer</p></div>' +
+      '<div class="bom-hidden" id="hiddenFields">' +
+      '<textarea id="pasteArea"></textarea>' +
+      '<button type="button" id="btnImportPaste"></button>' +
+      '<button type="button" id="btnLoadExample"></button>' +
+      '<button type="button" id="btnSyncExplorer"></button>' +
+      '<button type="button" id="btnRefresh"></button>' +
+      '<input type="file" id="snapshotFileInput" accept=".json" />' +
+      '<input type="text" id="explorerObjectId" />' +
+      '<input type="text" id="explorerObjectName" />' +
+      '<button type="button" id="btnLoadObjectId"></button>' +
+      '<select id="filterMaturity"><option value="all">all</option></select>' +
+      '<select id="filterType"><option value="all">all</option></select>' +
+      '<select id="filterApproval"><option value="all">all</option></select>' +
+      '<select id="filterPP"><option value="all">all</option></select>' +
+      '<input type="search" id="searchInput" /></div>' +
+      '<div id="kpiGrid" style="padding:8px 14px;"></div>' +
+      '<div class="bom-charts">' +
+      '<div class="bom-chart"><canvas id="chartMaturity"></canvas></div>' +
+      '<div class="bom-chart"><canvas id="chartType"></canvas></div>' +
+      '<div class="bom-chart"><canvas id="chartRevision"></canvas></div>' +
+      '<div class="bom-chart"><canvas id="chartApproval"></canvas></div></div>' +
+      '<div class="bom-table-wrap"><div style="padding:8px;font-weight:bold;">E-BOM — <span id="tableProductLabel">-</span></div>' +
+      '<table id="bomTable" class="bom-table"><thead><tr></tr></thead><tbody></tbody></table></div>' +
+      '<div id="loadingOverlay" class="bom-hidden">Varrendo...</div></div>';
+
+    function uiRoot() {
+      return window.__3DX_UI_ROOT__ || null;
+    }
+
+    function setBar(msg, kind) {
+      var root = uiRoot();
+      if (!root) return;
+      var el = root.querySelector('#statusBar');
+      if (!el) return;
+      el.innerHTML = msg;
+      el.className = 'bom-st';
+      if (kind === 'ok') el.className = 'bom-st bom-st-ok';
+      if (kind === 'error') el.className = 'bom-st bom-st-err';
+      if (kind === 'warn') el.className = 'bom-st bom-st-warn';
+    }
+
+    function paint() {
+      if (!widget || !widget.body) return;
+      widget.body.innerHTML = UI_HTML;
+      window.__3DX_UI_ROOT__ = widget.body;
+      widget.body.style.minHeight = '420px';
+    }
+
+    function getRequire() {
+      if (widget && widget.requirejs) return widget.requirejs;
+      if (typeof require !== 'undefined') return require;
+      return null;
+    }
+
+    function loadScript(url, optional, next) {
+      var s = document.createElement('script');
+      s.type = 'text/javascript';
+      s.charset = 'UTF-8';
+      s.src = url;
+      if (s.addEventListener) {
+        s.addEventListener('load', function () { if (next) next(null); }, false);
+        s.addEventListener('error', function () {
+          if (optional) { if (next) next(null); } else if (next) next('erro');
+        }, false);
+      } else {
+        s.onload = function () { if (next) next(null); };
+        s.onerror = function () { if (optional) { if (next) next(null); } else if (next) next('erro'); };
+      }
+      document.getElementsByTagName('head')[0].appendChild(s);
+    }
+
+    function loadWaf(next) {
+      if (typeof WAFData !== 'undefined' && WAFData.authenticatedRequest) {
+        next(null);
+        return;
+      }
+      var req = getRequire();
+      if (!req) {
+        next('require/WAFData indisponivel');
+        return;
+      }
+      req(
+        ['DS/WAFData/WAFData', 'DS/i3DXCompassServices/i3DXCompassServices', 'DS/PlatformAPI/PlatformAPI'],
+        function (WAF, Compass, PAPI) {
+          window.WAFData = WAF;
+          window.__3DX_COMPASS__ = Compass;
+          window.__3DX_PLATFORM_API__ = PAPI;
+          next(null);
+        },
+        function () {
+          next('Falha ao carregar WAFData');
+        }
+      );
+    }
+
+    function startBundle() {
+      loadScript(GH + 'assets/vendor/chart.umd.min.js?v=' + BOM_BUILD, true, function () {
+        loadScript(GH + 'assets/js/bom-bundle.js?v=' + BOM_BUILD, false, function (err) {
+          if (err) {
+            setBar('Bundle bloqueado (github.io). Ver F12.', 'error');
+            return;
+          }
+          try {
+            if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
+            if (typeof App !== 'undefined' && App.run) {
+              App.run();
+              setBar('Pronto — abra Mont10 e clique Varrer.', 'ok');
+            } else {
+              setBar('App nao carregou. Ver Console F12.', 'error');
+            }
+          } catch (ex) {
+            setBar('Erro: ' + (ex.message || ex), 'error');
+          }
+        });
+      });
+    }
+
+    function executeInit() {
+      paint();
+      setBar('Carregando WAFData...', 'info');
+      loadWaf(function (err) {
+        if (err) {
+          setBar('Varredura falhou: ' + err, 'error');
+          return;
+        }
+        startBundle();
+      });
+    }
+
+    function widgetLoading() {
+      if (widget) {
+        widget.addEvent('onLoad', executeInit);
+        widget.addEvent('onRefresh', function () {
+          if (typeof App !== 'undefined' && App.runExplorerScan && uiRoot()) {
+            App.runExplorerScan(uiRoot().querySelector('#btnScanExplorer'));
+          }
+        });
+        if (widget.body) {
+          window.setTimeout(executeInit, 0);
+        }
+      } else {
+        window.setTimeout(widgetLoading, 100);
+      }
+    }
+
+    widgetLoading();
+  //]]>
+  </script>
+</head>
+<body></body>
+</html>

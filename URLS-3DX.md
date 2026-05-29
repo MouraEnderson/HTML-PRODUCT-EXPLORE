@@ -1,41 +1,23 @@
-# URLs corretas — BOM Analytics
+# URLs — BOM Analytics
 
-## Additional App (3DDashboard) — use esta
+## Additional App (use esta)
 
 ```
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-uwa.html
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-bom.html
 ```
 
-Tipo: **Widget** | Armazenamento: **Externo**
+Build visível no widget: **bom20260529a**
 
-## Teste no Chrome (página renderizada, não código)
+## Diagnóstico Pages
 
 ```
 https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/teste-url.html
 ```
 
-Depois:
+## Obsoleto (não usar no Additional App)
 
-```
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-uwa.html
-```
+- `widget-min.html` — teste antigo
+- `widget-uwa.html` — entrada experimental
+- `cdn.jsdelivr.net/...` — Chrome mostra código-fonte
 
-Deve ver botão verde **Varrer**, não lista de código XML/HTML.
-
-## Não usar para abrir no Chrome
-
-| URL | Por quê |
-|-----|---------|
-| `cdn.jsdelivr.net/gh/.../widget-uwa.html` | Chrome mostra **só o código-fonte** |
-| `raw.githubusercontent.com/...` | Mesmo problema |
-| `github.com/.../blob/...` | Página do GitHub, não o widget |
-
-No **3DDashboard** só aparece `widget.body` — a UI tem de ser montada lá (não no `body` da página).
-
-Se o Chrome mostra o widget mas o Additional App fica **branco**: remova o widget, adicione de novo, Ctrl+F5, URL **github.io** acima.
-
-## Se github.io ainda der 404
-
-Settings → Pages → confirme URL publicada na tela (verde). Aguarde 10 min após Save.
-
-Build: Actions → **Deploy GitHub Pages** → último run verde.
+Guia passo a passo: `FASE-0-E-1.md`

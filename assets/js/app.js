@@ -8,14 +8,12 @@ var App = (function () {
   var root = typeof window !== 'undefined' ? window : this;
 
   function byId(id) {
-    var el = document.getElementById(id);
-    if (el) return el;
-    try {
-      if (typeof widget !== 'undefined' && widget && widget.body) {
-        return widget.body.querySelector('#' + id);
-      }
-    } catch (e) { /* UWA */ }
-    return null;
+    if (typeof byId3dx === 'function') return byId3dx(id);
+    if (root.__3DX_UI_ROOT__) {
+      var m = root.__3DX_UI_ROOT__.querySelector('#' + id);
+      if (m) return m;
+    }
+    return document.getElementById(id);
   }
 
   var currentMetrics = null;
