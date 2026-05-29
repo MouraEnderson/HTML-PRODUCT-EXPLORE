@@ -30,7 +30,9 @@ Deve ver botão verde **Varrer**, não lista de código XML/HTML.
 | `raw.githubusercontent.com/...` | Mesmo problema |
 | `github.com/.../blob/...` | Página do GitHub, não o widget |
 
-No **3DDashboard** o iframe pode tolerar CDN, mas o padrão DS e MIME correto é **github.io**.
+No **3DDashboard** só aparece `widget.body` — a UI tem de ser montada lá (não no `body` da página).
+
+Se o Chrome mostra o widget mas o Additional App fica **branco**: remova o widget, adicione de novo, Ctrl+F5, URL **github.io** acima.
 
 ## Se github.io ainda der 404
 

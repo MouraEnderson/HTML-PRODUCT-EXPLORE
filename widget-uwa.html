@@ -9,7 +9,7 @@
     window.__3DX_BOOT_DEFER__ = true;
   </script>
   <style type="text/css">
-    body { margin: 0; }
+    body { margin: 0; background: #f0f6fa; }
     .ui-explorer-only { min-height: 420px; background: #f0f6fa; font: 13px "Segoe UI", sans-serif; color: #1a2332; }
     .explorer-header { padding: 10px 14px; background: #fff; border-bottom: 1px solid #dde3ea; }
     .explorer-header h1 { margin: 0; font-size: 1rem; color: #005686; }
@@ -29,34 +29,32 @@
     .snapshot-steps { margin: 0 0 8px; font-size: 0.85rem; color: #0d47a1; }
     .dashboard-explorer { padding: 8px 14px 16px; }
     .kpi-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-    .kpi-card { background: #fff; border: 1px solid #dde3ea; border-radius: 6px; padding: 8px 12px; min-width: 100px; }
-    .kpi-card b { display: block; font-size: 1.2rem; color: #005686; }
     .charts-main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-    .chart-card { background: #fff; border: 1px solid #dde3ea; border-radius: 6px; padding: 8px; min-height: 140px; }
+    .chart-card { background: #fff; border: 1px solid #dde3ea; border-radius: 6px; padding: 8px; min-height: 120px; }
     .table-panel { background: #fff; border: 1px solid #dde3ea; border-radius: 6px; overflow: hidden; }
     .panel-header { padding: 8px 12px; font-weight: 600; background: #f8f9fa; border-bottom: 1px solid #dde3ea; }
-    .table-scroll { max-height: 220px; overflow: auto; }
+    .table-scroll { max-height: 200px; overflow: auto; }
     .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .data-table th, .data-table td { border: 1px solid #e0e0e0; padding: 4px 6px; text-align: left; }
-    .data-table th { background: #f5f5f5; position: sticky; top: 0; }
+    .data-table th, .data-table td { border: 1px solid #e0e0e0; padding: 4px 6px; }
+    .data-table th { background: #f5f5f5; }
     .ui-hidden { display: none !important; }
-    .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.7); display: flex; align-items: center; justify-content: center; z-index: 99; }
+    .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.75); display: flex; align-items: center; justify-content: center; z-index: 9; }
     .loading-overlay.hidden { display: none; }
-    .chrome-hint { padding: 8px 14px; font-size: 12px; background: #fff8e1; color: #6d4c00; }
+    .env-hint { padding: 8px 14px; font-size: 12px; background: #e8f5e9; color: #1b5e20; }
   </style>
 </head>
 <body>
-  <!-- Sempre visível (Chrome + 3DDashboard). Não usar display:none no template. -->
-  <div id="app-shell" class="ui-explorer-only">
-    <p class="chrome-hint" id="envHint">Carregando BOM Analytics…</p>
-    <header class="app-header explorer-header">
+  <!-- Template: no 3DDashboard só widget.body é visível — nunca depender do body da página -->
+  <div id="bom-tpl" style="display:none">
+    <p class="env-hint" id="envHint">3DDashboard — BOM Analytics</p>
+    <header class="explorer-header">
       <h1>BOM Analytics</h1>
       <p class="explorer-product">Estrutura: <strong id="selectionLabel">—</strong></p>
     </header>
-    <div id="statusBar" class="status-bar status-info">Iniciando…</div>
+    <div id="statusBar" class="status-bar status-info">Montando widget…</div>
     <section class="snapshot-panel">
       <button type="button" id="btnScanExplorer" class="btn-scan-main">Varrer estrutura Explorer</button>
-      <p class="snapshot-steps">Mont10 no Explorer → <strong>Varrer</strong> (API + snapshot + gráficos)</p>
+      <p class="snapshot-steps">Mont10 no Explorer → <strong>Varrer</strong></p>
     </section>
     <div class="ui-hidden" aria-hidden="true">
       <textarea id="pasteArea" rows="2"></textarea>
@@ -75,7 +73,7 @@
       <input type="search" id="searchInput" />
     </div>
     <main class="dashboard-explorer">
-      <section id="kpiGrid" class="kpi-grid kpi-compact"></section>
+      <section id="kpiGrid" class="kpi-grid"></section>
       <section class="charts-grid charts-main">
         <div class="chart-card"><canvas id="chartMaturity"></canvas></div>
         <div class="chart-card"><canvas id="chartType"></canvas></div>
@@ -84,7 +82,7 @@
       </section>
       <section class="panel table-panel">
         <div class="panel-header">E-BOM — <span id="tableProductLabel">—</span></div>
-        <div class="table-scroll table-scroll-wide">
+        <div class="table-scroll">
           <table id="bomTable" class="data-table"><thead><tr></tr></thead><tbody></tbody></table>
         </div>
       </section>
@@ -94,44 +92,68 @@
 
   <script type="text/javascript">
   //<![CDATA[
-    /* Scripts/CSS sempre no GitHub Pages (MIME correto). Não usar jsDelivr no Chrome — abre só código. */
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-    var VER = 'uwa20260603d';
+    var VER = 'uwa20260603e';
+    var uiMounted = false;
+    var bootStarted = false;
     var appStarted = false;
 
-    function getMountRoot() {
-      if (typeof widget !== 'undefined' && widget && widget.body) return widget.body;
-      return document.getElementById('app-shell');
+    function tplHtml() {
+      var t = document.getElementById('bom-tpl');
+      return t ? t.innerHTML : '<p>Erro: template BOM</p>';
+    }
+
+    function inDashboard() {
+      try {
+        return typeof widget !== 'undefined' && widget && widget.body;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function getRoot() {
+      if (inDashboard()) return widget.body;
+      var shell = document.getElementById('chrome-shell');
+      return shell || document.body;
+    }
+
+    function mountUi() {
+      if (uiMounted) return true;
+      var html = tplHtml();
+      if (inDashboard()) {
+        widget.body.innerHTML = html;
+        widget.body.className = 'ui-explorer-only';
+        widget.body.style.minHeight = '420px';
+        widget.body.style.background = '#f0f6fa';
+        widget.body.style.position = 'relative';
+        uiMounted = true;
+        return true;
+      }
+      if (!document.getElementById('chrome-shell')) {
+        var wrap = document.createElement('div');
+        wrap.id = 'chrome-shell';
+        wrap.className = 'ui-explorer-only';
+        wrap.innerHTML = html;
+        document.body.appendChild(wrap);
+        var hint = wrap.querySelector('#envHint');
+        if (hint) {
+          hint.textContent = 'Modo Chrome — varredura API só no 3DDashboard.';
+          hint.style.background = '#fff8e1';
+          hint.style.color = '#6d4c00';
+        }
+        uiMounted = true;
+        return true;
+      }
+      return false;
     }
 
     function setBar(msg, kind) {
-      var root = getMountRoot();
+      var root = getRoot();
       if (!root) return;
       var el = root.querySelector('#statusBar');
       if (!el) return;
       el.textContent = msg;
       el.className = 'status-bar status-' + (kind || 'info');
-    }
-
-    function setEnvHint() {
-      var hint = document.getElementById('envHint');
-      if (!hint) return;
-      if (typeof widget !== 'undefined' && widget && widget.body) {
-        hint.textContent = 'Modo 3DDashboard (Additional App) — varredura API ativa.';
-      } else {
-        hint.textContent =
-          'Modo Chrome: interface visível; varredura real só no 3DDashboard (Additional App).';
-      }
-    }
-
-    function syncToWidgetBody() {
-      if (typeof widget === 'undefined' || !widget || !widget.body) return;
-      var shell = document.getElementById('app-shell');
-      if (!shell) return;
-      widget.body.innerHTML = shell.innerHTML;
-      widget.body.className = 'ui-explorer-only';
-      widget.body.style.minHeight = '420px';
-      shell.style.display = 'none';
     }
 
     function getRequire() {
@@ -165,7 +187,7 @@
         }
         var req = getRequire();
         if (!req) {
-          reject(new Error('WAFData só no 3DDashboard (Additional App Widget)'));
+          reject(new Error('require/WAFData indisponível'));
           return;
         }
         setBar('Carregando WAFData…', 'info');
@@ -178,7 +200,7 @@
             resolve();
           },
           function (err) {
-            reject(err || new Error('Falha require WAFData'));
+            reject(err || new Error('Falha WAFData'));
           }
         );
       });
@@ -191,19 +213,25 @@
         if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
         if (typeof App !== 'undefined' && App.run) {
           App.run();
-          setBar('Pronto — Mont10 no Explorer → Varrer.', 'ok');
+          setBar('Pronto — Mont10 aberto → Varrer.', 'ok');
           return;
         }
-        setBar('Bundle não carregou (menu ⋮ Atualizar no dashboard).', 'error');
+        setBar('Bundle não carregou. ⋮ → Atualizar widget.', 'error');
       } catch (err) {
         setBar('Erro: ' + (err.message || err), 'error');
       }
     }
 
     function bootPipeline() {
-      setEnvHint();
-      syncToWidgetBody();
-      setBar('Carregando módulos BOM…', 'info');
+      if (bootStarted) return;
+      if (!mountUi()) return;
+      bootStarted = true;
+      setBar('Carregando módulos…', 'info');
+
+      if (!inDashboard()) {
+        setBar('WAFData só no 3DDashboard — teste no Additional App.', 'warn');
+      }
+
       loadWafModules()
         .then(function () {
           return loadScript(GH + 'assets/vendor/chart.umd.min.js?v=' + VER, true);
@@ -216,41 +244,45 @@
         })
         .catch(function (err) {
           var msg = (err && err.message) ? err.message : String(err);
-          if (msg.indexOf('3DDashboard') >= 0) {
-            setBar(msg + ' — teste varredura no dashboard, não no Chrome.', 'warn');
-          } else {
-            setBar('Varredura falhou: ' + msg, 'error');
+          if (!inDashboard()) {
+            setBar('Chrome: ' + msg, 'warn');
+            return;
           }
+          setBar('Varredura falhou: ' + msg, 'error');
         });
     }
 
-    function onWidgetReady() {
-      syncToWidgetBody();
+    function tryBoot() {
+      mountUi();
       bootPipeline();
     }
 
     function widgetLoading() {
-      setEnvHint();
-      if (typeof widget !== 'undefined' && widget && widget.addEvent) {
-        widget.addEvent('onLoad', onWidgetReady);
-        widget.addEvent('onRefresh', function () {
-          if (typeof App !== 'undefined' && App.runExplorerScan) {
-            var b = getMountRoot().querySelector('#btnScanExplorer');
-            App.runExplorerScan(b);
-          }
-        });
-        window.setTimeout(onWidgetReady, 0);
+      if (typeof widget !== 'undefined' && widget) {
+        if (!widget.body) {
+          window.setTimeout(widgetLoading, 40);
+          return;
+        }
+        try {
+          widget.addEvent('onLoad', tryBoot);
+          widget.addEvent('onRefresh', function () {
+            if (typeof App !== 'undefined' && App.runExplorerScan) {
+              var b = widget.body.querySelector('#btnScanExplorer');
+              App.runExplorerScan(b);
+            }
+          });
+        } catch (e1) { /* */ }
+        tryBoot();
         return;
       }
-      window.setTimeout(widgetLoading, 100);
+      window.setTimeout(widgetLoading, 40);
     }
 
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', bootPipeline);
-    } else {
-      bootPipeline();
-    }
     widgetLoading();
+
+    window.setTimeout(function () {
+      if (!inDashboard()) tryBoot();
+    }, 1500);
   //]]>
   </script>
 </body>
