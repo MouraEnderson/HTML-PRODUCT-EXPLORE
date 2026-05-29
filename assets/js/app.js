@@ -271,9 +271,23 @@ var App = (function () {
       }
     );
 
+    var btnExample = byId('btnLoadExample');
+    if (btnExample) {
+      btnExample.addEventListener('click', function () {
+        var url = BomSnapshot.resolveUrl('data/mont10-exemplo-snapshot.json');
+        loadSnapshotFromUrl(url);
+      });
+    }
+
     var btnSync = byId('btnSyncExplorer');
     if (btnSync) {
       btnSync.addEventListener('click', function () {
+        setStatus(
+          'Sincronizar não lê a árvore no GitHub. Grade Explorer → Ctrl+C → cole abaixo → Importar.',
+          'warn'
+        );
+        var area = byId('pasteArea');
+        if (area) area.focus();
         pullExplorerSelection();
         var fromHash = ProductExplorerBridge.readHashSelection && ProductExplorerBridge.readHashSelection();
         var sel = fromHash || ProductExplorerBridge.getSelection();
@@ -335,10 +349,12 @@ var App = (function () {
       '.paste-panel',
       '.drop-zone',
       '.explorer-sync-panel',
+      '.explorer-id-row',
       '.platform-search.panel',
       '.split-panel',
       '.issues-panel',
-      '.header-actions .search-group'
+      '.header-actions .search-group',
+      '#btnSyncExplorer'
     ];
     selectors.forEach(function (sel) {
       document.querySelectorAll(sel).forEach(function (el) {
@@ -551,8 +567,8 @@ var App = (function () {
       return;
     }
     setStatus(
-      'Cole a grade do Explorer (caixa abaixo) ou abra collect.html para gerar JSON.',
-      'info'
+      'PASSO: grade Explorer (Mont,M1,M2) → Ctrl+C → cole na caixa azul → Importar estrutura',
+      'warn'
     );
     window.setTimeout(function () {
       pullExplorerSelection();

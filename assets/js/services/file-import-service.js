@@ -9,11 +9,11 @@ var FileImportService = (function () {
     level: ['nivel', 'nível', 'level', 'n', 'depth', 'profundidade'],
     name: ['name', 'nome', 'title', 'titulo', 'título', 'display name', 'displayname'],
     title: ['title', 'titulo', 'título', 'description', 'descricao'],
-    type: ['type', 'tipo', 'display type', 'policy', 'tipologia'],
-    revision: ['revision', 'revisao', 'revisão', 'rev', 'majorrevision'],
-    state: ['state', 'estado', 'maturity', 'maturidade', 'current', 'status'],
+    type: ['type', 'tipo', 'display type', 'policy', 'tipologia', 'physical product'],
+    revision: ['revision', 'revisao', 'revisão', 'rev', 'revis', 'majorrevision'],
+    state: ['state', 'estado', 'maturity', 'maturidade', 'estado de maturidade', 'current', 'status'],
     quantity: ['quantity', 'quantidade', 'qty', 'qtd', 'amount'],
-    owner: ['owner', 'proprietario', 'proprietário', 'creator'],
+    owner: ['owner', 'proprietario', 'proprietário', 'propriet', 'creator'],
     organization: ['organization', 'organizacao', 'organização', 'org'],
     collabSpace: ['collabspace', 'collaborative space', 'espaco', 'espaço', 'project'],
     approval: ['approval', 'aprovacao', 'aprovação', 'approval status'],
@@ -185,6 +185,24 @@ var FileImportService = (function () {
   }
 
   /** Colar da grade/árvore do Explorer (TSV, com ou sem cabeçalho). */
+  function stripIconNoise(name) {
+    var n = cleanCell(name);
+    if (!n) return '';
+    if (/^physical\s*product$/i.test(n)) return '';
+    if (/^vpm/i.test(n) && n.length < 12) return '';
+    return n;
+  }
+
+  /** Explorer: várias linhas no nível 0 → primeira raiz, demais filhos. */
+  function inferAssemblyLevels(items) {
+    if (!items || items.length < 2) return items;
+    var allZero = items.every(function (it) { return !it.level || it.level === 0; });
+    if (!allZero) return items;
+    items[0].level = 0;
+    for (var i = 1; i < items.length; i++) items[i].level = 1;
+    return items;
+  }
+
   function parseText(text) {
     var rows = textToRows(text).map(function (row) {
       return row.map(function (c) { return cleanCell(c); });
@@ -192,7 +210,14 @@ var FileImportService = (function () {
     if (rows.length === 1 && rows[0].length === 1) {
       return buildItemsFromSingleColumn([rows[0][0]]);
     }
-    return smartParseRows(rows);
+    var items = smartParseRows(rows);
+    items.forEach(function (it) {
+      it.name = stripIconNoise(it.name) || it.name;
+      it.title = stripIconNoise(it.title) || it.title;
+    });
+    return inferAssemblyLevels(items.filter(function (it) {
+      return it.name && it.name.length > 0;
+    }));
   }
 
   function parseRowsWithoutHeader(rows) {
@@ -251,7 +276,9 @@ var FileImportService = (function () {
       }
 
       if (!name) name = cleanCell(cell(row, colMap, 'name', '')) || cleanCell(cell(row, colMap, 'title', ''));
+      name = stripIconNoise(name);
       if (!name) continue;
+      if (/^physical\s*product$/i.test(name)) continue;
       if (isStatusLabel(name) && items.length) {
         items[items.length - 1].state = name;
         items[items.length - 1].maturity = name;

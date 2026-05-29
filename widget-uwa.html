@@ -7,7 +7,7 @@
   <link rel="stylesheet" type="text/css" href="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/css/dashboard.css?v=snapshot2b" />
   <script type="text/javascript">window.__3DX_TRUSTED_WIDGET__=true;window.__3DX_BOOT_DEFER__=true;</script>
   <script type="text/javascript" src="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/vendor/chart.umd.min.js"></script>
-  <script type="text/javascript" src="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/js/bom-bundle.js?v=snapshot20260601b"></script>
+  <script type="text/javascript" src="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/js/bom-bundle.js?v=snapshot20260601c"></script>
   <script type="text/javascript">
   //<![CDATA[
     var __bomMounted = false;
@@ -98,12 +98,15 @@
     <button type="button" class="ui-hidden" id="btnSyncExplorer">↻</button>
     <button type="button" class="ui-hidden" id="btnRefresh">refresh</button>
   </header>
-  <div id="statusBar" class="status-bar">Preparando… cole estrutura do Explorer</div>
-  <section class="snapshot-panel" id="snapshotPanel">
-    <p class="snapshot-hint"><strong>1.</strong> Explorer Mont10 → selecione linhas → <strong>Ctrl+C</strong></p>
-    <textarea id="pasteArea" class="paste-area" rows="4" placeholder="Cole aqui (Ctrl+V)…"></textarea>
+  <div id="statusBar" class="status-bar status-warn">Aguardando cola do Explorer (não lê sozinho)</div>
+  <section class="snapshot-panel snapshot-panel-focus" id="snapshotPanel">
+    <p class="snapshot-steps"><strong>①</strong> Clique na <strong>grade</strong> à esquerda (Mont10, M1, M2)<br/>
+    <strong>②</strong> <strong>Ctrl+C</strong> &nbsp;→&nbsp; <strong>③</strong> clique na caixa abaixo e <strong>Ctrl+V</strong><br/>
+    <strong>④</strong> botão verde <strong>Importar estrutura</strong></p>
+    <textarea id="pasteArea" class="paste-area" rows="5" placeholder="Cole aqui depois do Ctrl+C na grade do Explorer…"></textarea>
     <div class="snapshot-actions">
-      <button type="button" id="btnImportPaste" class="btn-primary">Importar estrutura</button>
+      <button type="button" id="btnImportPaste" class="btn-primary btn-import-big">Importar estrutura</button>
+      <button type="button" id="btnLoadExample" class="btn-secondary">Teste: Mont10 exemplo (3 itens)</button>
       <button type="button" id="btnLoadSnapshotFile">Arquivo .json</button>
       <input type="file" id="snapshotFileInput" accept=".json,application/json" class="ui-hidden" />
       <a class="snapshot-link" href="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/collect.html" target="_blank" rel="noopener">Coletor JSON</a>
