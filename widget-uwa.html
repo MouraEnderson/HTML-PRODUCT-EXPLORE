@@ -94,8 +94,19 @@
 
   <script type="text/javascript">
   //<![CDATA[
-    var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-    var VER = 'uwa20260603b';
+    function assetBase() {
+      var h = (location.hostname || '').toLowerCase();
+      if (h.indexOf('cdn.jsdelivr.net') >= 0) {
+        return 'https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/';
+      }
+      if (h.indexOf('github.io') >= 0) {
+        var dir = (location.pathname || '/').replace(/\/[^/]*$/, '/');
+        return location.origin + dir;
+      }
+      return 'https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/';
+    }
+    var GH = assetBase();
+    var VER = 'uwa20260603c';
     var appStarted = false;
 
     function getMountRoot() {
