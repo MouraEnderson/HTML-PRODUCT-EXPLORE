@@ -182,14 +182,10 @@ var App = (function () {
 
   function runHealthCheck() {
     var problems = [];
-    if (typeof XLSX === 'undefined') problems.push('XLSX (Excel) não carregou');
-    if (typeof Chart === 'undefined') problems.push('Chart.js não carregou');
+    if (typeof Chart === 'undefined') problems.push('Chart.js não carregou (gráficos desativados)');
     if (problems.length) {
-      setStatus(
-        'Atenção: ' + problems.join('; ') + '. Use CSV ou importar.html. Botão "Testar com exemplo CSV".',
-        'error'
-      );
-      return false;
+      setStatus('Atenção: ' + problems.join('; ') + '. Colar do Explorer (Ctrl+C) continua funcionando.', 'warn');
+      return true;
     }
     return true;
   }
@@ -205,7 +201,7 @@ var App = (function () {
         initAppCore(null);
         runHealthCheck();
         setStatus(
-          'Modo externo: arraste CSV/Excel OU clique "Testar com exemplo CSV". Sincronizar Explorer não funciona aqui.',
+          'Modo externo: copie a E-BOM no Explorer (Ctrl+C), cole na caixa e clique Importar. Sincronizar automático não funciona aqui.',
           'warn'
         );
       } catch (err) {

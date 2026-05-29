@@ -1,6 +1,6 @@
 /**
  * @file ui/drop-zone.js
- * Drag & drop — export Product Explorer (Excel/CSV).
+ * Colar estrutura do Product Explorer (Ctrl+C) — sem arquivo.
  */
 var DropZone = (function () {
   'use strict';
@@ -8,26 +8,71 @@ var DropZone = (function () {
   function init(options) {
     options = options || {};
     var zone = document.getElementById('dropZone');
+    var pasteArea = document.getElementById('pasteArea');
     if (!zone) return;
 
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(function (ev) {
-      zone.addEventListener(ev, prevent, false);
-      document.body.addEventListener(ev, prevent, false);
-    });
+    if (pasteArea) {
+      pasteArea.addEventListener('paste', function (e) {
+        var text = '';
+        if (e.clipboardData) text = e.clipboardData.getData('text/plain') || '';
+        if (text) {
+          e.preventDefault();
+          pasteArea.value = text;
+          processPaste(text, options);
+        }
+      });
+    }
 
-    zone.addEventListener('dragover', function () {
-      zone.classList.add('drag-over');
-    });
-    zone.addEventListener('dragleave', function () {
-      zone.classList.remove('drag-over');
-    });
+    var btnImport = document.getElementById('btnImportPaste');
+    if (btnImport && pasteArea) {
+      btnImport.addEventListener('click', function () {
+        processPaste(pasteArea.value, options);
+      });
+    }
 
-    zone.addEventListener('drop', function (e) {
-      zone.classList.remove('drag-over');
-      var files = e.dataTransfer && e.dataTransfer.files;
-      if (!files || !files.length) return;
-      handleFiles(files[0], options);
-    });
+    var btnClip = document.getElementById('btnReadClipboard');
+    if (btnClip) {
+      btnClip.addEventListener('click', function () {
+        if (!navigator.clipboard || !navigator.clipboard.readText) {
+          if (options.onError) {
+            options.onError('Use Ctrl+V na caixa de texto (leitura automática bloqueada no widget).');
+          }
+          return;
+        }
+        navigator.clipboard.readText().then(function (text) {
+          if (pasteArea) pasteArea.value = text;
+          processPaste(text, options);
+        }).catch(function () {
+          if (options.onError) {
+            options.onError('Clique na caixa abaixo e pressione Ctrl+V.');
+          }
+        });
+      });
+    }
+
+    var btnSample = document.getElementById('btnSampleImport');
+    if (btnSample) {
+      btnSample.addEventListener('click', function () {
+        var sample =
+          'Nível\tNome\tTitle\tTipo\tRevisão\tEstado\n' +
+          '0\t01_SKA_Drone Assembly\tDrone Assembly\tVPMReference\tA\tRELEASED\n' +
+          '1\tASM_Fuselage\tFuselage\tVPMReference\tB\tIN_WORK\n' +
+          '2\tPRT_Frame_01\tFrame\tVPMPart\tA\tRELEASED';
+        if (pasteArea) pasteArea.value = sample;
+        processPaste(sample, options);
+      });
+    }
+
+    var zoneFile = document.getElementById('fileDropOptional');
+    if (zoneFile) {
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(function (ev) {
+        zoneFile.addEventListener(ev, prevent, false);
+      });
+      zoneFile.addEventListener('drop', function (e) {
+        var files = e.dataTransfer && e.dataTransfer.files;
+        if (files && files[0]) handleFiles(files[0], options);
+      });
+    }
 
     var input = document.getElementById('fileInput');
     if (input) {
@@ -35,37 +80,32 @@ var DropZone = (function () {
         if (input.files && input.files[0]) handleFiles(input.files[0], options);
       });
     }
-
-    var btnSample = document.getElementById('btnSampleImport');
-    if (btnSample) {
-      btnSample.addEventListener('click', function () {
-        var url = (window.__3DX_ASSET_ROOT__ || 'assets/') + 'samples/estrutura-exemplo.csv';
-        setStatus('Carregando exemplo...', 'info');
-        fetch(url)
-          .then(function (r) {
-            if (!r.ok) throw new Error('Exemplo não encontrado (' + r.status + '). Use importar.html');
-            return r.text();
-          })
-          .then(function (text) {
-            var blob = new Blob([text], { type: 'text/csv' });
-            var file = new File([blob], 'estrutura-exemplo.csv', { type: 'text/csv' });
-            handleFiles(file, options);
-          })
-          .catch(function (err) {
-            if (options.onError) options.onError(err.message || err);
-          });
-      });
-    }
-  }
-
-  function setStatus(msg) {
-    var bar = document.getElementById('statusBar');
-    if (bar) bar.textContent = msg;
   }
 
   function prevent(e) {
     e.preventDefault();
     e.stopPropagation();
+  }
+
+  function processPaste(text, options) {
+    if (!text || !String(text).trim()) {
+      if (options.onError) options.onError('Nada para importar. Copie linhas no Explorer primeiro.');
+      return;
+    }
+    var label = document.getElementById('dropZoneLabel');
+    if (label) label.textContent = 'Processando dados colados...';
+
+    FileImportService.parseTextAsync(text)
+      .then(function (items) {
+        return BomService.loadFromImportedItems(items);
+      })
+      .then(function () {
+        finishImport(options, 'dados colados do Explorer');
+      })
+      .catch(function (err) {
+        if (label) label.textContent = 'Cole aqui a estrutura copiada do Product Explorer';
+        if (options.onError) options.onError(err.message || err);
+      });
   }
 
   function handleFiles(file, options) {
@@ -77,23 +117,30 @@ var DropZone = (function () {
         return BomService.loadFromImportedItems(items);
       })
       .then(function () {
-        var n = BomService.getNodeCount();
-        var root = BomService.getRootId();
-        if (root) {
-          ProductExplorerBridge.setSelection({
-            physicalid: root,
-            name: BomService.getNode(root).name,
-            displayName: BomService.getNode(root).title || BomService.getNode(root).name,
-            type: BomService.getNode(root).type
-          });
-        }
-        if (options.onImported) options.onImported(n, file.name);
-        if (label) label.textContent = 'Arquivo carregado: ' + file.name + ' (' + n + ' itens)';
+        finishImport(options, file.name);
       })
       .catch(function (err) {
-        if (label) label.textContent = 'Solte aqui o Excel/CSV exportado do Product Explorer';
+        if (label) label.textContent = 'Cole aqui a estrutura copiada do Product Explorer';
         if (options.onError) options.onError(err.message || err);
       });
+  }
+
+  function finishImport(options, sourceLabel) {
+    var n = BomService.getNodeCount();
+    var root = BomService.getRootId();
+    if (root) {
+      ProductExplorerBridge.setSelection({
+        physicalid: root,
+        name: BomService.getNode(root).name,
+        displayName: BomService.getNode(root).title || BomService.getNode(root).name,
+        type: BomService.getNode(root).type
+      });
+      var sel = document.getElementById('selectionLabel');
+      if (sel) sel.textContent = (BomService.getNode(root).name || root) + ' (' + root + ')';
+    }
+    if (options.onImported) options.onImported(n, sourceLabel);
+    var label = document.getElementById('dropZoneLabel');
+    if (label) label.textContent = 'Importado: ' + n + ' itens (' + sourceLabel + ')';
   }
 
   return { init: init };

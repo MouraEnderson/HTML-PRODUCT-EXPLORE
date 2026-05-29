@@ -51,20 +51,32 @@
     </div>
   </header>
 
-  <div id="externalBanner" class="external-banner hidden">Modo Web Page Reader: arraste o Excel/CSV exportado do Product Explorer na área abaixo (recomendado).</div>
+  <div id="externalBanner" class="external-banner hidden">Modo Web Page Reader: copie a estrutura no Product Explorer (Ctrl+C) e cole na caixa abaixo — sem Excel nem CSV.</div>
 
-  <section id="dropZone" class="drop-zone panel" aria-label="Importar estrutura">
-    <div class="panel-header">Arrastar estrutura do Product Explorer</div>
+  <section id="dropZone" class="drop-zone panel paste-panel" aria-label="Colar estrutura do Explorer">
+    <div class="panel-header">Copiar e colar do Product Explorer (recomendado)</div>
     <div class="drop-zone-inner">
-      <div class="drop-icon">📂</div>
-      <p id="dropZoneLabel" class="drop-label">Solte aqui o <strong>Excel ou CSV</strong> exportado do Product Explorer</p>
-      <p class="drop-hint">No Explorer: estrutura aberta → Exportar / Excel → arraste o arquivo para esta área</p>
-      <label class="btn btn-primary file-btn">
-        Escolher arquivo
-        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.txt" hidden />
-      </label>
-      <button type="button" class="btn" id="btnSampleImport">Testar com exemplo CSV</button>
-      <a class="btn" href="importar.html" target="_blank" rel="noopener">Versão simples (só CSV)</a>
+      <p id="dropZoneLabel" class="drop-label">Cole aqui as linhas copiadas da grade <strong>E-BOM</strong> do Explorer</p>
+      <ol class="paste-steps">
+        <li>Aba <strong>EXPLORE</strong> → abra o produto (ex.: Drone) e expanda a estrutura.</li>
+        <li>Na tabela/árvore E-BOM: clique na primeira linha, <strong>Shift+clique</strong> na última (ou Ctrl+A na grade).</li>
+        <li><strong>Ctrl+C</strong> → clique na caixa abaixo → <strong>Ctrl+V</strong> → <strong>Importar estrutura</strong>.</li>
+      </ol>
+      <textarea id="pasteArea" class="paste-area" rows="8" placeholder="Cole aqui (Ctrl+V) o texto copiado do Product Explorer..."></textarea>
+      <div class="paste-actions">
+        <button type="button" class="btn btn-primary" id="btnImportPaste">Importar estrutura</button>
+        <button type="button" class="btn" id="btnReadClipboard">Ler área de transferência</button>
+        <button type="button" class="btn" id="btnSampleImport">Testar com exemplo</button>
+      </div>
+      <details class="file-import-optional">
+        <summary>Arquivo (opcional — só se sua empresa permitir export)</summary>
+        <div id="fileDropOptional" class="file-drop-mini">
+          <label class="btn file-btn">
+            Escolher arquivo
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.txt" hidden />
+          </label>
+        </div>
+      </details>
     </div>
   </section>
   <div id="statusBar" class="status-bar">Inicializando...</div>

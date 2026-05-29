@@ -1,6 +1,6 @@
 /**
  * @file services/file-import-service.js
- * Importa estrutura Product Explorer via Excel/CSV (drag & drop).
+ * Importa estrutura Product Explorer via colar (Ctrl+C) ou arquivo opcional.
  */
 var FileImportService = (function () {
   'use strict';
@@ -46,9 +46,68 @@ var FileImportService = (function () {
     return v === undefined || v === null || v === '' ? def : v;
   }
 
+  function looksLikeHeader(row) {
+    if (!row || !row.length) return false;
+    var joined = row.map(function (c) { return normHeader(c); }).join(' ');
+    return COLUMN_ALIASES.name.some(function (a) { return joined.indexOf(a) >= 0; }) ||
+      COLUMN_ALIASES.level.some(function (a) { return joined.indexOf(a) >= 0; }) ||
+      joined.indexOf('nome') >= 0 ||
+      joined.indexOf('title') >= 0;
+  }
+
+  function leadingDepth(str) {
+    var s = String(str || '');
+    var tabs = (s.match(/^\t*/) || [''])[0].length;
+    if (tabs > 0) return { depth: tabs, text: s.replace(/^\t+/, '').trim() };
+    var spaces = (s.match(/^ */) || [''])[0].length;
+    return { depth: Math.floor(spaces / 2), text: s.trim() };
+  }
+
+  function splitLine(line) {
+    if (line.indexOf('\t') >= 0) return line.split('\t').map(function (c) { return c.replace(/^"|"$/g, '').trim(); });
+    if (line.indexOf(';') >= 0) return line.split(';').map(function (c) { return c.replace(/^"|"$/g, '').trim(); });
+    return line.split(',').map(function (c) { return c.replace(/^"|"$/g, '').trim(); });
+  }
+
+  function textToRows(text) {
+    var lines = String(text || '').split(/\r?\n/).filter(function (l) { return l.trim(); });
+    if (!lines.length) throw new Error('Nada colado. Copie linhas no Product Explorer (Ctrl+C) e cole de novo.');
+    return lines.map(splitLine);
+  }
+
+  /** Colar da grade/árvore do Explorer (TSV, com ou sem cabeçalho). */
+  function parseText(text) {
+    var rows = textToRows(text);
+    if (rows.length === 1 && rows[0].length === 1) {
+      throw new Error('Só uma célula detectada. Selecione várias linhas na estrutura E-BOM antes de copiar.');
+    }
+    if (looksLikeHeader(rows[0])) return parseRows(rows);
+    return parseRowsWithoutHeader(rows);
+  }
+
+  function parseRowsWithoutHeader(rows) {
+    var colMap = {};
+    var first = rows[0];
+    if (first.length >= 2 && /^\d+$/.test(String(first[0]).trim())) {
+      colMap.level = 0;
+      colMap.name = 1;
+      colMap.title = 2;
+      colMap.type = 3;
+      colMap.revision = 4;
+      colMap.state = 5;
+    } else {
+      colMap.name = 0;
+      colMap.title = 1;
+      colMap.type = 2;
+      colMap.revision = 3;
+      colMap.state = 4;
+    }
+    return buildItemsFromRows(rows, colMap, true);
+  }
+
   function parseRows(rows) {
     if (!rows || rows.length < 2) {
-      throw new Error('Planilha vazia ou sem cabeçalho.');
+      throw new Error('Dados insuficientes. Copie pelo menos o cabeçalho e uma linha do Explorer.');
     }
     var headers = rows[0].map(function (c) { return String(c || ''); });
     var colMap = mapColumns(headers);
@@ -56,18 +115,36 @@ var FileImportService = (function () {
       colMap.name = 0;
       colMap.level = colMap.level !== undefined ? colMap.level : (headers.length > 1 ? 1 : undefined);
     }
+    return buildItemsFromRows(rows.slice(1), colMap, false);
+  }
 
+  function buildItemsFromRows(dataRows, colMap, inferIndent) {
     var items = [];
-    for (var r = 1; r < rows.length; r++) {
-      var row = rows[r];
+    var stackLevel = 0;
+    for (var r = 0; r < dataRows.length; r++) {
+      var row = dataRows[r];
       if (!row || !row.length) continue;
-      var name = cell(row, colMap, 'name', '') || cell(row, colMap, 'title', '');
+
+      var level = 0;
+      var name = '';
+      if (inferIndent && colMap.level === undefined) {
+        var lead = leadingDepth(row[colMap.name] !== undefined ? row[colMap.name] : row[0]);
+        level = lead.depth;
+        name = lead.text;
+        if (colMap.name !== undefined && row[colMap.name] !== undefined) {
+          row = row.slice();
+          row[colMap.name] = lead.text;
+        }
+      } else {
+        level = parseInt(cell(row, colMap, 'level', ''), 10);
+        if (isNaN(level)) level = stackLevel;
+      }
+
+      if (!name) name = cell(row, colMap, 'name', '') || cell(row, colMap, 'title', '');
       if (!name) continue;
+      stackLevel = level;
 
-      var level = parseInt(cell(row, colMap, 'level', '0'), 10);
-      if (isNaN(level)) level = 0;
-
-      var pid = cell(row, colMap, 'physicalid', '') || ('IMP_' + r + '_' + name.replace(/\W/g, '_').slice(0, 40));
+      var pid = cell(row, colMap, 'physicalid', '') || ('IMP_' + (r + 1) + '_' + name.replace(/\W/g, '_').slice(0, 40));
       items.push({
         physicalid: String(pid),
         name: String(name),
@@ -84,8 +161,11 @@ var FileImportService = (function () {
         approval: cell(row, colMap, 'approval', 'Unknown'),
         level: level,
         parentKey: cell(row, colMap, 'parent', ''),
-        rowIndex: r
+        rowIndex: r + 1
       });
+    }
+    if (!items.length) {
+      throw new Error('Nenhuma linha válida. Selecione a tabela E-BOM no Explorer, Ctrl+C, cole aqui.');
     }
     return items;
   }
@@ -117,31 +197,31 @@ var FileImportService = (function () {
       var reader = new FileReader();
       reader.onload = function (e) {
         try {
-          var text = e.target.result;
-          var lines = text.split(/\r?\n/).filter(function (l) { return l.trim(); });
-          var sep = text.indexOf(';') >= 0 ? ';' : (text.indexOf('\t') >= 0 ? '\t' : ',');
-          var rows = lines.map(function (line) {
-            return line.split(sep).map(function (c) { return c.replace(/^"|"$/g, '').trim(); });
-          });
-          resolve(parseRows(rows));
+          resolve(parseText(e.target.result));
         } catch (err) {
           reject(err);
         }
       };
-      reader.onerror = function () { reject(new Error('Falha ao ler CSV.')); };
+      reader.onerror = function () { reject(new Error('Falha ao ler arquivo.')); };
       reader.readAsText(file);
     });
+  }
+
+  function parseTextAsync(text) {
+    return Promise.resolve(parseText(text));
   }
 
   function parseFile(file) {
     var name = (file.name || '').toLowerCase();
     if (name.endsWith('.xlsx') || name.endsWith('.xls')) return parseXlsx(file);
     if (name.endsWith('.csv') || name.endsWith('.txt')) return parseCsv(file);
-    return Promise.reject(new Error('Formato não suportado. Use .xlsx ou .csv exportado do Product Explorer.'));
+    return Promise.reject(new Error('Formato não suportado. Cole do Explorer (Ctrl+C) ou use .txt.'));
   }
 
   return {
     parseFile: parseFile,
+    parseText: parseText,
+    parseTextAsync: parseTextAsync,
     parseRows: parseRows
   };
 })();

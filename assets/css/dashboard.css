@@ -121,6 +121,53 @@ body {
   font-size: 1rem;
 }
 
+.paste-steps {
+  text-align: left;
+  margin: 0 0 12px;
+  padding-left: 1.25rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.paste-area {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto 12px;
+  display: block;
+  font-family: Consolas, 'Segoe UI', monospace;
+  font-size: 0.78rem;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  resize: vertical;
+  min-height: 120px;
+}
+
+.paste-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.file-import-optional {
+  margin-top: 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-align: left;
+  max-width: 520px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.file-drop-mini {
+  margin-top: 8px;
+}
+
 .drop-hint {
   margin: 0 0 16px;
   font-size: 0.82rem;
