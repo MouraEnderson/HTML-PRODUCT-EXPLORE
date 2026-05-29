@@ -10,7 +10,8 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'snapshot20260601d',
+    BUILD: 'trustedapi20260602',
+    CAN_USE_ENOVIA_API: false,
 
     /** Somente Explorer → gráficos + tabela */
     EXPLORER_ONLY: true,
@@ -160,31 +161,35 @@
     APP_CONFIG.BOM_MAX_NODES = parseInt(query.maxNodes, 10) || APP_CONFIG.BOM_MAX_NODES;
   }
 
-  var _host = (global.location && global.location.hostname) ? global.location.hostname.toLowerCase() : '';
-  APP_CONFIG.WIDGET_MODE = 'unknown';
+  function detectRuntimeMode() {
+    var _host = (global.location && global.location.hostname) ? global.location.hostname.toLowerCase() : '';
+    var trusted = false;
+    try {
+      if (global.__3DX_TRUSTED_WIDGET__) trusted = true;
+      if (typeof widget !== 'undefined' && widget) trusted = true;
+      if (typeof WAFData !== 'undefined' && WAFData.authenticatedRequest) trusted = true;
+      if (typeof require !== 'undefined') trusted = true;
+    } catch (e) { /* */ }
 
-  if (_host.indexOf('3dexperience.3ds.com') >= 0) {
-    APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
-    APP_CONFIG.WIDGET_MODE = '3dexperience_host';
-  } else {
+    if (query.trusted === '1') trusted = true;
+
+    if (trusted || _host.indexOf('3dexperience.3ds.com') >= 0) {
+      APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
+      APP_CONFIG.CAN_USE_ENOVIA_API = true;
+      APP_CONFIG.WIDGET_MODE = trusted ? 'additional_app' : '3dexperience_host';
+      return;
+    }
+
     APP_CONFIG.CROSS_ORIGIN_WIDGET =
       _host.indexOf('github.io') >= 0 ||
       _host.indexOf('jsdelivr.net') >= 0 ||
       _host.indexOf('githubusercontent.com') >= 0;
+    APP_CONFIG.CAN_USE_ENOVIA_API = false;
     APP_CONFIG.WIDGET_MODE = APP_CONFIG.CROSS_ORIGIN_WIDGET ? 'web_page_reader' : 'external';
   }
 
-  try {
-    if (global.__3DX_TRUSTED_WIDGET__ || (typeof widget !== 'undefined' && widget)) {
-      APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
-      APP_CONFIG.WIDGET_MODE = 'additional_app';
-    }
-  } catch (e) { /* */ }
-
-  if (query.trusted === '1') {
-    APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
-    APP_CONFIG.WIDGET_MODE = 'forced_trusted';
-  }
+  detectRuntimeMode();
+  global.detectRuntimeMode = detectRuntimeMode;
 
   if (query.snapshot || query.snap || query.data) {
     APP_CONFIG.SNAPSHOT_URL = query.snapshot || query.snap || query.data;
@@ -2055,7 +2060,13 @@ var ExplorerScanner = (function () {
   }
 
   function canUseWafApi() {
-    return typeof WAFData !== 'undefined' && typeof EnoviaApi !== 'undefined';
+    if (typeof WAFData === 'undefined' || typeof EnoviaApi === 'undefined') return false;
+    if (APP_CONFIG && APP_CONFIG.CAN_USE_ENOVIA_API) return true;
+    try {
+      if (typeof widget !== 'undefined' && widget) return true;
+      if (typeof require !== 'undefined') return true;
+    } catch (e) { /* */ }
+    return false;
   }
 
   function isValidId(id) {
@@ -2114,7 +2125,14 @@ var ExplorerScanner = (function () {
   }
 
   function scanViaApi(sel) {
-    return ensureSpaceApi().then(function () {
+    var boot =
+      typeof WafBootstrap !== 'undefined' && WafBootstrap.ensure
+        ? WafBootstrap.ensure()
+        : Promise.resolve();
+    return boot.then(function () {
+      if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
+      return ensureSpaceApi();
+    }).then(function () {
       return BomService.loadRoot(sel.physicalid);
     }).then(function () {
       var rootId = BomService.getRootId();
@@ -3941,6 +3959,10 @@ var App = (function () {
   }
 
   function loadDefaultExplorerProduct() {
+    if (APP_CONFIG.CAN_USE_ENOVIA_API) {
+      setStatus('Selecione Mont10 no Explorer → Varrer estrutura.', 'info');
+      return Promise.resolve();
+    }
     return loadDemoBom('Carregando demonstração do Drone…');
   }
 
@@ -4084,14 +4106,15 @@ var App = (function () {
 
   function run() {
     if (typeof WidgetRuntime !== 'undefined') WidgetRuntime.markTrusted();
-    var onGithub =
-      typeof location !== 'undefined' &&
-      location.hostname &&
-      location.hostname.indexOf('github.io') >= 0;
-    if (!onGithub) {
-      APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
-    }
+    if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
     stripLegacyUI();
+    var modeLabel =
+      APP_CONFIG.WIDGET_MODE === 'additional_app'
+        ? 'Additional App — API ENOVIA ativa'
+        : APP_CONFIG.WIDGET_MODE === 'web_page_reader'
+          ? 'Web Page Reader — só cola/Varrer (sem API)'
+          : APP_CONFIG.WIDGET_MODE;
+    setStatus('Modo: ' + modeLabel + ' | build ' + (APP_CONFIG.BUILD || ''), 'info');
     var fb = document.getElementById('bom-boot-fallback');
     if (fb && fb.parentNode) fb.parentNode.removeChild(fb);
     bootstrap().catch(function (err) {

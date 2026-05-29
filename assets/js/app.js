@@ -590,6 +590,10 @@ var App = (function () {
   }
 
   function loadDefaultExplorerProduct() {
+    if (APP_CONFIG.CAN_USE_ENOVIA_API) {
+      setStatus('Selecione Mont10 no Explorer → Varrer estrutura.', 'info');
+      return Promise.resolve();
+    }
     return loadDemoBom('Carregando demonstração do Drone…');
   }
 
@@ -733,14 +737,15 @@ var App = (function () {
 
   function run() {
     if (typeof WidgetRuntime !== 'undefined') WidgetRuntime.markTrusted();
-    var onGithub =
-      typeof location !== 'undefined' &&
-      location.hostname &&
-      location.hostname.indexOf('github.io') >= 0;
-    if (!onGithub) {
-      APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
-    }
+    if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
     stripLegacyUI();
+    var modeLabel =
+      APP_CONFIG.WIDGET_MODE === 'additional_app'
+        ? 'Additional App — API ENOVIA ativa'
+        : APP_CONFIG.WIDGET_MODE === 'web_page_reader'
+          ? 'Web Page Reader — só cola/Varrer (sem API)'
+          : APP_CONFIG.WIDGET_MODE;
+    setStatus('Modo: ' + modeLabel + ' | build ' + (APP_CONFIG.BUILD || ''), 'info');
     var fb = document.getElementById('bom-boot-fallback');
     if (fb && fb.parentNode) fb.parentNode.removeChild(fb);
     bootstrap().catch(function (err) {

@@ -12,7 +12,13 @@ var ExplorerScanner = (function () {
   }
 
   function canUseWafApi() {
-    return typeof WAFData !== 'undefined' && typeof EnoviaApi !== 'undefined';
+    if (typeof WAFData === 'undefined' || typeof EnoviaApi === 'undefined') return false;
+    if (APP_CONFIG && APP_CONFIG.CAN_USE_ENOVIA_API) return true;
+    try {
+      if (typeof widget !== 'undefined' && widget) return true;
+      if (typeof require !== 'undefined') return true;
+    } catch (e) { /* */ }
+    return false;
   }
 
   function isValidId(id) {
@@ -71,7 +77,14 @@ var ExplorerScanner = (function () {
   }
 
   function scanViaApi(sel) {
-    return ensureSpaceApi().then(function () {
+    var boot =
+      typeof WafBootstrap !== 'undefined' && WafBootstrap.ensure
+        ? WafBootstrap.ensure()
+        : Promise.resolve();
+    return boot.then(function () {
+      if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
+      return ensureSpaceApi();
+    }).then(function () {
       return BomService.loadRoot(sel.physicalid);
     }).then(function () {
       var rootId = BomService.getRootId();
