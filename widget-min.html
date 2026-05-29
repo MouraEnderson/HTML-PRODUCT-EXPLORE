@@ -1,25 +1,28 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:widget="http://www.netvibes.com/ns/">
 <head>
-  <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+  <meta charset="UTF-8" />
   <title>BOM Test</title>
+  <style>
+    body { font-family: "Segoe UI", sans-serif; margin: 16px; color: #005686; }
+  </style>
   <script type="text/javascript">
   //<![CDATA[
-    function init() {
-      var html = '<div style="padding:16px;font:bold 14px Segoe UI,sans-serif;color:#005686;">' +
-        'BOM Analytics — widget UWA OK</div>';
-      if (typeof widget !== 'undefined' && widget) {
-        widget.addEvent('onLoad', function () {
-          widget.body.innerHTML = html;
-        });
-      } else {
-        document.body.innerHTML = html + '<p>Sem objeto widget (abra no 3DDashboard).</p>';
-      }
+    var BOM_MSG = '<div style="padding:8px 0;font-weight:bold;font-size:15px;">BOM Analytics — widget UWA OK</div>';
+    if (typeof widget !== 'undefined' && widget && widget.addEvent) {
+      widget.addEvent('onLoad', function () {
+        widget.body.innerHTML = BOM_MSG;
+      });
+    } else {
+      document.addEventListener('DOMContentLoaded', function () {
+        document.body.innerHTML = BOM_MSG +
+          '<p>Modo teste no Chrome. No 3DDashboard deve aparecer só a frase verde acima.</p>';
+      });
     }
-    init();
   //]]>
   </script>
 </head>
-<body></body>
+<body>
+  <p>Carregando teste UWA…</p>
+</body>
 </html>

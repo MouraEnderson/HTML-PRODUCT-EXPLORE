@@ -1,96 +1,58 @@
-# O que funciona no seu tenant (sem adivinhação)
+# Passo A e B — corrigido
 
-## Por que GitHub “não funciona”
+## Passo A (Chrome) — use ESTE link
 
-No **3DDashboard**, muitos tenants **bloqueiam** `github.io` na rede ou no iframe.  
-O widget tenta baixar **20+ arquivos** — se um falha, tudo quebra.
+**Não use jsDelivr** — no Chrome aparece código XML (comportamento normal do CDN).
 
-**BOM real (API ENOVIA + Explorer)** só funciona com HTML no **mesmo domínio do 3DSpace**, não no GitHub.
-
----
-
-## Teste 1 — Abra no Chrome (fora do 3DX)
-
-Cole no navegador (logado na rede da empresa):
+Abra:
 
 ```
-https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/widget-min.html
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/teste-link.html
 ```
 
-| Resultado | Significado |
-|-----------|-------------|
-| Página com texto **“BOM Analytics — widget UWA OK”** | Internet OK; problema é só política do dashboard |
-| Não abre / timeout | Rede bloqueia CDN — só 3DSpace resolve |
+Deve aparecer uma **página verde** com o texto **"BOM Analytics — link OK"**.
+
+Alternativa UWA:
+
+```
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-min.html
+```
+
+Deve aparecer **"BOM Analytics — widget UWA OK"** (não XML cru).
 
 ---
 
-## Teste 2 — Additional App (se Teste 1 abriu)
+## Passo B (3DDashboard) — use SÓ GitHub Pages
 
-**Platform Management → Additional App → Create**
+**Additional App → Source code URL:**
 
-| Campo | Valor |
-|-------|--------|
-| Source code URL | `https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/widget-uwa.html` |
+```
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-uwa.html
+```
 
-Ou (GitHub direto):
+| URL | Resultado |
+|-----|-----------|
+| `cdn.jsdelivr.net/gh/...` | **404** no 3DDashboard (servidor DS não acha a página) |
+| `mouraenderson.github.io/...` | Correto para widget externo |
 
-`https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-uwa.html`
+Depois: remover widget antigo → adicionar de novo → **Ctrl+F5**.
 
-Remova o widget antigo, adicione o novo, **Ctrl+F5**.
+Barra deve mostrar **ghpages** e depois **Carregando E-BOM…**.
 
-Barra deve mostrar **bundle-main** e depois **Carregando E-BOM…**
+Se ainda der **404** com github.io → o servidor **3DDashboard da empresa não alcança GitHub**. Aí só **Passo C (3DSpace)**.
 
 ---
 
-## Solução definitiva — 3DSpace (recomendado)
-
-### URL no Web Page Reader ou Additional App
+## Passo C — 3DSpace (definitivo)
 
 ```
 https://r1132100929518-us1-space.3dexperience.3ds.com/enovia/webapps/BomAnalytics/index.html
 ```
 
-Se der erro de DNS no `space`, teste:
-
-```
-https://r1132100929518-us1-ifwe.3dexperience.3ds.com/enovia/webapps/BomAnalytics/index.html
-```
-
-### Pacote para o admin
-
-Na sua máquina:
+Admin instala `BomAnalytics-3DSpace.zip` (ver `DEPLOY-3DSPACE.md`).
 
 ```powershell
 cd C:\Users\Enderson\Projects\3dx-product-explorer-bom-dashboard
 powershell -File scripts\sync-webapps.ps1
 Compress-Archive -Path webapps\BomAnalytics\* -DestinationPath BomAnalytics-3DSpace.zip -Force
 ```
-
-Envie **BomAnalytics-3DSpace.zip** ao admin ENOVIA.  
-Destino no servidor: `webapps/BomAnalytics/` (mesmo nível do ENXScene).
-
----
-
-## O que NÃO funciona
-
-| Tentativa | Por quê |
-|-----------|---------|
-| Documento ENOVIA na pasta DEPLOY | Não é URL web |
-| Web Page Reader só com GitHub | Sem API ENOVIA |
-| URL com typo `mouraanderson` / `3dexerience` | DNS/404 |
-
----
-
-## Physical ID do Drone (referência)
-
-`132FB3CE26D70E006A18D1870000316D`
-
----
-
-## Se ainda falhar
-
-Envie **print** ou texto exato de:
-
-1. Teste 1 no Chrome (abriu ou não?)
-2. URL que colocou no widget
-3. Texto da barra azul do BOM Analytics

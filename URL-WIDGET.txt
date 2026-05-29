@@ -1,13 +1,8 @@
-=== TESTE RÁPIDO (Chrome, fora do 3DX) ===
-https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/widget-min.html
+PASSO A (Chrome — página normal, não XML):
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/teste-link.html
 
-=== Additional App (1 arquivo JS — jsDelivr) ===
-https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/widget-uwa.html
-
-=== GitHub Pages (alternativa) ===
+PASSO B (Additional App — NÃO use jsDelivr):
 https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-uwa.html
 
-=== 3DSpace — SOLUÇÃO DEFINITIVA (admin deploy) ===
+PASSO C (3DSpace — admin):
 https://r1132100929518-us1-space.3dexperience.3ds.com/enovia/webapps/BomAnalytics/index.html
-
-Leia: SOLUCAO-FINAL.md

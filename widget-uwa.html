@@ -4,12 +4,13 @@
 <head>
   <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
   <title>BOM Analytics</title>
-  <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/assets/css/dashboard.css" />
+  <link rel="stylesheet" type="text/css" href="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/css/dashboard.css?v=ghpages" />
   <script type="text/javascript">window.__3DX_TRUSTED_WIDGET__=true;window.__3DX_BOOT_DEFER__=true;</script>
-  <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/assets/vendor/chart.umd.min.js"></script>
-  <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/assets/js/bom-bundle.js"></script>
+  <script type="text/javascript" src="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/vendor/chart.umd.min.js"></script>
+  <script type="text/javascript" src="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/js/bom-bundle.js?v=ghpages"></script>
   <script type="text/javascript">
   //<![CDATA[
+    var BOM_GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
     function bomOnLoad() {
       var tpl = document.getElementById('bom-app-template');
       if (!tpl || !widget || !widget.body) return;
@@ -19,7 +20,9 @@
       window.__3DX_BOOT_DEFER__ = true;
       var bar = widget.body.querySelector('#statusBar');
       if (typeof App === 'undefined') {
-        if (bar) bar.textContent = 'Bundle não carregou. Teste no Chrome: cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/widget-min.html';
+        if (bar) {
+          bar.textContent = 'Scripts não carregaram. Confirme GitHub Pages ou use 3DSpace (SOLUCAO-FINAL.md).';
+        }
         return;
       }
       try { App.run(); } catch (e) {
@@ -43,7 +46,7 @@
     <button type="button" class="ui-hidden" id="btnSyncExplorer">sync</button>
     <button type="button" class="ui-hidden" id="btnRefresh">refresh</button>
   </header>
-  <div id="statusBar" class="status-bar">Preparando… bundle-main</div>
+  <div id="statusBar" class="status-bar">Preparando… ghpages</div>
   <div class="ui-hidden" aria-hidden="true">
     <input type="text" id="explorerObjectId" />
     <input type="text" id="explorerObjectName" />
