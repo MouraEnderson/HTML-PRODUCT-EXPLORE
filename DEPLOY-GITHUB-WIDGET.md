@@ -19,15 +19,30 @@ git remote add origin https://github.com/MouraEnderson/HTML-PRODUCT-EXPLORE.git
 git push -u origin main
 ```
 
-## 3. Ativar GitHub Pages
+## 3. Ativar GitHub Pages (evitar erro 404)
+
+O 404 significa que o Pages **ainda não está publicado**. Faça **uma** das opções:
+
+### Opção A — GitHub Actions (recomendado)
 
 1. Repositório → **Settings** → **Pages**
-2. **Source:** branch `main`, pasta `/ (root)`
-3. Aguarde 1–3 minutos
+2. **Build and deployment** → **Source:** `GitHub Actions`
+3. Aba **Actions** → workflow **Deploy GitHub Pages** → aguarde ficar verde
+4. Volte em **Settings → Pages** e confira a URL exibida
 
-**URL do widget:**
+### Opção B — Branch main
+
+1. **Settings** → **Pages**
+2. **Source:** Deploy from branch → **main** → **/ (root)** → Save
+3. Aguarde 2–5 minutos
+
+### URL correta do widget
 
 `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/index.html`
+
+**Não use:** link com `.git` no final.
+
+Se ainda der 404: repo precisa ser **público** (ou Pages habilitado em repo privado com plano que inclua Pages).
 
 ## 4. Configurar widget no 3DDashboard
 
