@@ -5,37 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <title>3DEXPERIENCE — BOM Analytics | Product Explorer</title>
+  <style>
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; }
+    .boot-fallback { padding: 12px; color: #333; }
+  </style>
   <script>
     (function () {
+      var REPO = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
       var host = (location.hostname || '').toLowerCase();
-      var on3dx = host.indexOf('3dexperience.3ds.com') >= 0;
       var onGithub = host.indexOf('github.io') >= 0;
-      window.__3DX_USE_LOCAL_ASSETS__ = on3dx || onGithub;
-      window.__3DX_ASSET_ROOT__ = 'assets/';
-      if (on3dx || onGithub) return;
-      var CDN = 'https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/';
-      window.__3DX_ASSET_ROOT__ = CDN;
-      var base = document.createElement('base');
-      base.href = CDN;
-      document.head.appendChild(base);
+      var onLocal = host === 'localhost' || host === '127.0.0.1';
+      window.__3DX_REPO_BASE__ = REPO;
+      window.__3DX_USE_LOCAL_ASSETS__ = onGithub || onLocal;
+      if (!onGithub && !onLocal) {
+        var base = document.createElement('base');
+        base.href = REPO;
+        document.head.appendChild(base);
+      }
+      function loadScript(src) {
+        var s = document.createElement('script');
+        s.src = (onGithub || onLocal) ? src : REPO + src;
+        s.async = false;
+        document.head.appendChild(s);
+      }
+      loadScript('assets/vendor/chart.umd.min.js');
+      loadScript('assets/vendor/xlsx.full.min.js');
     })();
   </script>
   <link rel="stylesheet" href="assets/css/dashboard.css" />
-  <script>
-    (function () {
-      var local = window.__3DX_USE_LOCAL_ASSETS__;
-      var chart = local
-        ? 'assets/vendor/chart.umd.min.js'
-        : 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
-      var xlsx = local
-        ? 'assets/vendor/xlsx.full.min.js'
-        : 'https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js';
-      document.write('<script src="' + chart + '"><\/script>');
-      document.write('<script src="' + xlsx + '"><\/script>');
-    })();
-  </script>
 </head>
 <body>
+  <noscript><p class="boot-fallback">Ative JavaScript para o BOM Analytics.</p></noscript>
   <header class="app-header">
     <div>
       <h1>BOM Analytics Dashboard</h1>
@@ -187,13 +187,13 @@
   <div id="loadingOverlay" class="loading-overlay hidden">Carregando estrutura de produto...</div>
 
   <!-- Config -->
-  <script src="assets/js/config.js?v=20260601"></script>
-  <script src="assets/js/platform/widget-runtime.js?v=20260601"></script>
+  <script src="assets/js/config.js?v=20260602"></script>
+  <script src="assets/js/platform/widget-runtime.js?v=20260602"></script>
   <!-- Platform -->
-  <script src="assets/js/platform/platform-bridge.js?v=20260601"></script>
-  <script src="assets/js/platform/context.js?v=20260601"></script>
-  <script src="assets/js/platform/compass.js?v=20260601"></script>
-  <script src="assets/js/platform/waf-client.js?v=20260601"></script>
+  <script src="assets/js/platform/platform-bridge.js?v=20260602"></script>
+  <script src="assets/js/platform/context.js?v=20260602"></script>
+  <script src="assets/js/platform/compass.js?v=20260602"></script>
+  <script src="assets/js/platform/waf-client.js?v=20260602"></script>
   <!-- Integration -->
   <script src="assets/js/integration/3dx-content-parser.js?v=20260528"></script>
   <script src="assets/js/integration/enovia-api.js"></script>
@@ -219,7 +219,7 @@
   <script src="assets/js/ui/explorer-sync-panel.js"></script>
   <script src="assets/js/ui/drop-zone.js?v=20260528"></script>
   <!-- App -->
-  <script src="assets/js/app.js?v=20260601"></script>
+  <script src="assets/js/app.js?v=20260602"></script>
   <script>
     try {
       if (typeof widget !== 'undefined' && widget && typeof WidgetRuntime !== 'undefined') {
