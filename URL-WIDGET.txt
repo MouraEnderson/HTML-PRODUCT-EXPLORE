@@ -11,4 +11,4 @@ Com produto fixo (teste):
 https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/index.html?physicalid=132FB3CE26D70E006A18D1870000316D&displayName=01_SKA_Drone%20Assembly_130520208
 
 Após publicar no GitHub: no dashboard, remova o widget antigo e adicione de novo.
-Ctrl+F5 no navegador. Status deve mostrar "v20260528" (não "Inicializando…").
+Ctrl+F5 no navegador. Status deve mostrar "v20260529" (não "Inicializando…" nem "app.js não carregou").

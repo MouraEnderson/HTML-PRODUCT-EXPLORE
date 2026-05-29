@@ -7,7 +7,7 @@ var BomBoot = (function (global) {
   'use strict';
 
   var REPO = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-  var VER = '20260528';
+  var VER = '20260529';
 
   var SCRIPTS = [
     'assets/js/config.js',
@@ -110,7 +110,13 @@ var BomBoot = (function (global) {
       }
 
       if (typeof App === 'undefined') {
-        setBootStatus('Erro: app.js não carregou. Verifique URL do Additional App (widget-uwa.html).');
+        var miss = [];
+        if (typeof APP_CONFIG === 'undefined') miss.push('config.js');
+        if (typeof BomService === 'undefined') miss.push('bom-service.js');
+        miss.push('app.js');
+        setBootStatus(
+          'Scripts bloqueados (' + miss.join(', ') + '). Use widget-uwa.html com tags estáticas ou DEPLOY-3DSPACE.md.'
+        );
         return;
       }
 
