@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "productName": "Mont10",
+  "exportedAt": "2026-05-28T12:00:00.000Z",
+  "rootPhysicalId": "mont10_root",
+  "items": [
+    {
+      "level": 0,
+      "physicalid": "mont10_root",
+      "name": "Mont10",
+      "title": "Mont10",
+      "type": "Physical Product",
+      "displayType": "Physical Product",
+      "revision": "1.1",
+      "state": "Aprovado",
+      "maturity": "Aprovado",
+      "owner": "Enderson Moura",
+      "approval": "Approved"
+    },
+    {
+      "level": 1,
+      "physicalid": "mont10_m1",
+      "name": "M1",
+      "title": "M1",
+      "type": "Physical Product",
+      "displayType": "Physical Product",
+      "revision": "1.1",
+      "state": "Aprovado",
+      "maturity": "Aprovado",
+      "owner": "Enderson Moura",
+      "approval": "Approved"
+    },
+    {
+      "level": 1,
+      "physicalid": "mont10_m2",
+      "name": "M2",
+      "title": "M2",
+      "type": "Physical Product",
+      "displayType": "Physical Product",
+      "revision": "1.1",
+      "state": "Aprovado",
+      "maturity": "Aprovado",
+      "owner": "Enderson Moura",
+      "approval": "Approved"
+    }
+  ]
+}
