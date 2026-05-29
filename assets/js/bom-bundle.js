@@ -10,7 +10,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260601a',
+    BUILD: 'bom20260601b',
 
     /** Tenant cloud: objetos usam prefixo prd- (ex. prd-R1132100929518-00511496) */
     PHYSICAL_ID_PREFIX: 'prd-',
@@ -148,8 +148,6 @@
       SEARCH_APP_IDS: ['ENX3DSEARCH_AP', '3DSEARCH_AP', 'SEARCH_AP'],
       EXPLORER_APP_IDS: ['ENOSCEN_AP', 'ENOPSTR_AP', 'ENX3DSEARCH_AP']
     },
-    /** Se API falhar no GitHub, mostra BOM demo (~20 itens) em vez de 1 linha */
-    DEMO_ON_API_FAIL: true,
 
     CHART_COLORS: {
       primary: '#005686',
@@ -4217,6 +4215,39 @@ var App = (function () {
     if (overlay) overlay.classList.toggle('hidden', !on);
   }
 
+  /** URL ou registro pede produto real (Mont10 etc.) — nunca substituir por demo Drone. */
+  function userRequestedRealProduct() {
+    var q = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
+    if (q.physicalid || q.structure || q.rootName || APP_CONFIG.URL_PHYSICAL_ID) return true;
+    var idEl = byId('explorerObjectId');
+    if (idEl && idEl.value && String(idEl.value).trim().length >= 8) return true;
+    return false;
+  }
+
+  function allowDemoOnApiFail() {
+    if (APP_CONFIG.DEMO_ON_API_FAIL === false) return false;
+    if (userRequestedRealProduct()) return false;
+    if (APP_CONFIG.WAIT_FOR_USER_SCAN) return false;
+    return true;
+  }
+
+  function structureLabelForId(id) {
+    var reg = APP_CONFIG.STRUCTURE_IDS || {};
+    var key;
+    for (key in reg) {
+      if (reg.hasOwnProperty(key) && reg[key] === id) return key;
+    }
+    return null;
+  }
+
+  function githubApiBlockedMessage(id, name) {
+    var label = name || structureLabelForId(id) || id || 'E-BOM';
+    return (
+      label + ' (' + (id || '?') + ') — API ENOVIA só no 3DDashboard (Additional App). ' +
+      'GitHub não tem WAFData; aqui não carrega BOM real.'
+    );
+  }
+
   function refreshUI() {
     var index = BomService.getIndex();
     var rootId = BomService.getRootId();
@@ -4441,10 +4472,21 @@ var App = (function () {
       })
       .catch(function (err) {
         console.error(err);
-        if (APP_CONFIG.DEMO_ON_API_FAIL !== false) {
+        if (allowDemoOnApiFail()) {
           return loadDemoBom(
             'GitHub não acessa API ENOVIA. Demo com ~20 itens. Estrutura real: deploy 3DSpace.'
           );
+        }
+        if (typeof BomService !== 'undefined' && BomService.reset) {
+          BomService.reset();
+          lastLoadedId = null;
+          refreshUI();
+        }
+        if (APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.CAN_USE_ENOVIA_API && userRequestedRealProduct()) {
+          var q = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
+          var pid = physicalId || q.physicalid || APP_CONFIG.URL_PHYSICAL_ID;
+          setStatus(githubApiBlockedMessage(pid, q.structure || q.rootName), 'warn');
+          return;
         }
         setStatus('Erro: ' + (err.message || err), 'error');
       })
@@ -4460,6 +4502,9 @@ var App = (function () {
     var label = byId('selectionLabel');
     if (label) {
       label.textContent = (sel.displayName || sel.name || sel.physicalid);
+    }
+    if (APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.CAN_USE_ENOVIA_API) {
+      return;
     }
     if (
       APP_CONFIG.AUTO_SCAN_ON_SELECTION &&
@@ -4519,7 +4564,9 @@ var App = (function () {
     var idEl = byId('explorerObjectId');
     if (idEl) idEl.value = id;
     var lbl = byId('selectionLabel');
-    var name = q.displayName || q.name || q.structure || q.rootName || id;
+    var name =
+      q.structure || q.rootName || structureLabelForId(id) ||
+      q.displayName || q.name || id;
     if (lbl) lbl.textContent = name;
     if (typeof ProductExplorerBridge !== 'undefined' && isValidPhysicalId(id)) {
       ProductExplorerBridge.setSelection({
@@ -4858,9 +4905,16 @@ var App = (function () {
 
   function loadDefaultExplorerProduct() {
     if (APP_CONFIG.CAN_USE_ENOVIA_API) {
-      setStatus('Selecione Mont10 no Explorer → Varrer estrutura.', 'info');
+      setStatus('Selecione a raiz no Explorer → Varrer estrutura.', 'info');
       return Promise.resolve();
     }
+    if (userRequestedRealProduct()) {
+      applyUrlParamsToUI();
+      var q = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
+      setStatus(githubApiBlockedMessage(q.physicalid, q.structure), 'warn');
+      return Promise.resolve();
+    }
+    if (!allowDemoOnApiFail()) return Promise.resolve();
     return loadDemoBom('Carregando demonstração do Drone…');
   }
 
@@ -4881,7 +4935,22 @@ var App = (function () {
     }
     var sel = ProductExplorerBridge.getSelection();
     if (sel && isValidPhysicalId(sel.physicalid)) {
+      if (APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.CAN_USE_ENOVIA_API) {
+        var q2 = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
+        setStatus(
+          githubApiBlockedMessage(sel.physicalid, sel.displayName || q2.structure),
+          'warn'
+        );
+        return;
+      }
       loadBom(sel.physicalid);
+      return;
+    }
+    if (userRequestedRealProduct()) {
+      applyUrlParamsToUI();
+      var q3 = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
+      var pid3 = q3.physicalid || APP_CONFIG.URL_PHYSICAL_ID;
+      setStatus(githubApiBlockedMessage(pid3, q3.structure || q3.rootName), 'warn');
       return;
     }
     setStatus(
@@ -4892,6 +4961,7 @@ var App = (function () {
       pullExplorerSelection();
       var later = ProductExplorerBridge.getSelection();
       if (later && later.physicalid && later.physicalid !== lastLoadedId) {
+        if (APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.CAN_USE_ENOVIA_API) return;
         loadBom(later.physicalid);
       }
     }, APP_CONFIG.EXPLORER_FALLBACK_MS || 800);
