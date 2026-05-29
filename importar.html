@@ -38,14 +38,14 @@
 <body>
   <header>
     <h1>Importar estrutura — modo simples</h1>
-    <div class="sub">Funciona no Web Page Reader mesmo com CDN bloqueado. Use CSV (ou Excel salvo como CSV).</div>
+    <div class="sub">XLS/XLSX/CSV — corrige acentos e junta linhas Crítico/Atenção ao item acima.</div>
   </header>
   <main>
     <div id="status">Arraste um CSV ou clique em &quot;Testar com exemplo&quot;.</div>
     <div id="zone" class="zone">
-      <p><strong>Solte o arquivo aqui</strong> (.csv ou .txt)</p>
-      <p class="note">No Excel: Arquivo → Salvar como → CSV (delimitado por ponto e vírgula).</p>
-      <label class="btn">Escolher arquivo<input type="file" id="file" accept=".csv,.txt" hidden /></label>
+      <p><strong>Solte o arquivo aqui</strong> (.xls, .xlsx, .csv)</p>
+      <p class="note">Planilha em uma coluna (nome + status em linhas alternadas) também funciona.</p>
+      <label class="btn">Escolher arquivo<input type="file" id="file" accept=".xlsx,.xls,.csv,.txt" hidden /></label>
       <button type="button" class="btn secondary" id="btnSample">Testar com exemplo</button>
     </div>
     <div class="kpis" id="kpis"></div>
@@ -56,6 +56,8 @@
       <table><thead id="thead"></thead><tbody id="tbody"></tbody></table>
     </div>
   </main>
+  <script src="assets/vendor/xlsx.full.min.js"></script>
+  <script src="assets/js/services/file-import-service.js"></script>
   <script>
 (function () {
   var SAMPLE = 'Nível;Nome;Title;Tipo;Revisão;Estado;Qtd;Owner\n' +
@@ -69,47 +71,6 @@
     var el = document.getElementById('status');
     el.textContent = msg;
     el.className = ok === true ? 'ok' : (ok === false ? 'err' : '');
-  }
-
-  function parseCsv(text) {
-    var lines = text.split(/\r?\n/).filter(function (l) { return l.trim(); });
-    if (lines.length < 2) throw new Error('CSV vazio ou só cabeçalho.');
-    var sep = lines[0].indexOf(';') >= 0 ? ';' : (lines[0].indexOf('\t') >= 0 ? '\t' : ',');
-    var rows = lines.map(function (line) {
-      return line.split(sep).map(function (c) { return c.replace(/^"|"$/g, '').trim(); });
-    });
-    var headers = rows[0].map(function (h) { return h.toLowerCase(); });
-    function col(names) {
-      for (var i = 0; i < headers.length; i++) {
-        for (var n = 0; n < names.length; n++) {
-          if (headers[i].indexOf(names[n]) >= 0) return i;
-        }
-      }
-      return -1;
-    }
-    var iLevel = col(['nível', 'nivel', 'level']);
-    var iName = col(['nome', 'name', 'title']);
-    var iTitle = col(['title', 'título', 'titulo']);
-    if (iName < 0) iName = 0;
-    var items = [];
-    for (var r = 1; r < rows.length; r++) {
-      var row = rows[r];
-      var name = row[iName] || '';
-      if (!name && iTitle >= 0) name = row[iTitle];
-      if (!name) continue;
-      var level = iLevel >= 0 ? parseInt(row[iLevel], 10) : 0;
-      if (isNaN(level)) level = 0;
-      items.push({
-        level: level,
-        name: name,
-        title: (iTitle >= 0 ? row[iTitle] : '') || name,
-        type: row[col(['tipo', 'type'])] || '',
-        revision: row[col(['rev', 'revis'])] || '',
-        state: row[col(['estado', 'state', 'matur'])] || ''
-      });
-    }
-    if (!items.length) throw new Error('Nenhuma linha de dados. Verifique separador ; ou ,');
-    return items;
   }
 
   function buildTree(items) {
@@ -144,18 +105,22 @@
     setStatus('OK — ' + items.length + ' itens importados.', true);
   }
 
-  function processText(text, label) {
-    try {
-      var items = parseCsv(text);
-      render(items);
-    } catch (e) {
-      setStatus((label || 'Erro') + ': ' + e.message, false);
-    }
+  function processItems(promise, label) {
+    promise.then(render).catch(function (e) {
+      setStatus((label || 'Erro') + ': ' + (e.message || e), false);
+    });
   }
 
   function readFile(file) {
+    var n = (file.name || '').toLowerCase();
+    if (n.endsWith('.xlsx') || n.endsWith('.xls')) {
+      processItems(FileImportService.parseFile(file), file.name);
+      return;
+    }
     var reader = new FileReader();
-    reader.onload = function (e) { processText(e.target.result, file.name); };
+    reader.onload = function (e) {
+      processItems(FileImportService.parseTextAsync(e.target.result), file.name);
+    };
     reader.onerror = function () { setStatus('Falha ao ler arquivo.', false); };
     reader.readAsText(file, 'UTF-8');
   }
@@ -175,7 +140,7 @@
     if (e.target.files[0]) readFile(e.target.files[0]);
   });
   document.getElementById('btnSample').addEventListener('click', function () {
-    processText(SAMPLE, 'exemplo embutido');
+    processItems(FileImportService.parseTextAsync(SAMPLE), 'exemplo embutido');
   });
 })();
   </script>

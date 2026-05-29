@@ -21,8 +21,42 @@ var FileImportService = (function () {
     parent: ['parent', 'pai', 'parentid', 'parent id', 'parent name']
   };
 
+  var STATUS_LABELS = [
+    'crítico', 'critico', 'atenção', 'atencao', 'ok', 'alerta', 'warning', 'info',
+    'released', 'in work', 'aprovado', 'pendente', 'bloqueado', 'normal'
+  ];
+
+  /** Corrige MÃ¡quinas → Máquinas (UTF-8 lido como Latin-1). */
+  function fixMojibake(s) {
+    var str = String(s == null ? '' : s);
+    if (!str || str.indexOf('Ã') < 0) return str;
+    try {
+      var bytes = new Uint8Array(str.length);
+      for (var i = 0; i < str.length; i++) bytes[i] = str.charCodeAt(i) & 0xff;
+      var fixed = new TextDecoder('utf-8').decode(bytes);
+      if (fixed.indexOf('Ã') < 0 && fixed.indexOf('\uFFFD') < 0) return fixed;
+    } catch (e) { /* ignore */ }
+    return str
+      .replace(/Ã¡/g, 'á').replace(/Ã©/g, 'é').replace(/Ã­/g, 'í')
+      .replace(/Ã³/g, 'ó').replace(/Ãº/g, 'ú').replace(/Ã§/g, 'ç')
+      .replace(/Ã£/g, 'ã').replace(/Ãµ/g, 'õ').replace(/Ã‰/g, 'É')
+      .replace(/Ã‡/g, 'Ç').replace(/Ãƒ/g, 'ã').replace(/Ã"/g, 'Ó');
+  }
+
+  function cleanCell(v) {
+    return fixMojibake(String(v == null ? '' : v)).trim();
+  }
+
+  function isStatusLabel(name) {
+    var t = cleanCell(name).toLowerCase();
+    if (!t || t.length > 48) return false;
+    if (t.indexOf('|') >= 0 || t.indexOf('3dexperience') >= 0) return false;
+    if (STATUS_LABELS.indexOf(t) >= 0) return true;
+    return /^(cr[ií]tico|aten[cç][aã]o|alerta)$/i.test(t);
+  }
+
   function normHeader(h) {
-    return String(h || '').toLowerCase().trim().replace(/\s+/g, ' ');
+    return cleanCell(h).toLowerCase().replace(/\s+/g, ' ');
   }
 
   function mapColumns(headers) {
@@ -75,14 +109,90 @@ var FileImportService = (function () {
     return lines.map(splitLine);
   }
 
-  /** Colar da grade/árvore do Explorer (TSV, com ou sem cabeçalho). */
-  function parseText(text) {
-    var rows = textToRows(text);
-    if (rows.length === 1 && rows[0].length === 1) {
-      throw new Error('Só uma célula detectada. Selecione várias linhas na estrutura E-BOM antes de copiar.');
+  function normalizeSheetRows(rows) {
+    return rows
+      .map(function (row) {
+        return row.map(function (c) { return cleanCell(c); });
+      })
+      .filter(function (row) {
+        return row.some(function (c) { return c; });
+      });
+  }
+
+  /** Lista vertical (1 coluna): empresa na linha N, status na N+1. */
+  function buildItemsFromSingleColumn(lines) {
+    var items = [];
+    var start = 0;
+    if (lines.length && looksLikeHeader([lines[0]])) start = 1;
+
+    for (var i = start; i < lines.length; i++) {
+      var name = cleanCell(lines[i]);
+      if (!name) continue;
+      if (isStatusLabel(name) && items.length) {
+        items[items.length - 1].state = name;
+        items[items.length - 1].maturity = name;
+        continue;
+      }
+      items.push({
+        physicalid: 'IMP_' + (items.length + 1) + '_' + name.replace(/\W/g, '_').slice(0, 36),
+        name: name,
+        title: name,
+        type: '',
+        displayType: '',
+        revision: '',
+        state: '',
+        maturity: '',
+        quantity: 1,
+        owner: '',
+        organization: '',
+        collabSpace: '',
+        approval: 'Unknown',
+        level: 0,
+        parentKey: '',
+        rowIndex: items.length + 1
+      });
     }
+    if (!items.length) {
+      throw new Error('Nenhuma linha reconhecida no arquivo.');
+    }
+    return items;
+  }
+
+  function isMostlySingleColumn(rows) {
+    if (!rows.length) return false;
+    var oneCol = 0;
+    rows.forEach(function (row) {
+      var filled = row.filter(function (c) { return c; });
+      if (filled.length <= 1) oneCol++;
+    });
+    return oneCol >= rows.length * 0.85;
+  }
+
+  function smartParseRows(rows) {
+    rows = normalizeSheetRows(rows);
+    if (!rows.length) throw new Error('Arquivo vazio.');
+
+    if (isMostlySingleColumn(rows)) {
+      var lines = rows.map(function (row) {
+        var filled = row.filter(function (c) { return c; });
+        return filled[0] || '';
+      });
+      return buildItemsFromSingleColumn(lines);
+    }
+
     if (looksLikeHeader(rows[0])) return parseRows(rows);
     return parseRowsWithoutHeader(rows);
+  }
+
+  /** Colar da grade/árvore do Explorer (TSV, com ou sem cabeçalho). */
+  function parseText(text) {
+    var rows = textToRows(text).map(function (row) {
+      return row.map(function (c) { return cleanCell(c); });
+    });
+    if (rows.length === 1 && rows[0].length === 1) {
+      return buildItemsFromSingleColumn([rows[0][0]]);
+    }
+    return smartParseRows(rows);
   }
 
   function parseRowsWithoutHeader(rows) {
@@ -140,8 +250,13 @@ var FileImportService = (function () {
         if (isNaN(level)) level = stackLevel;
       }
 
-      if (!name) name = cell(row, colMap, 'name', '') || cell(row, colMap, 'title', '');
+      if (!name) name = cleanCell(cell(row, colMap, 'name', '')) || cleanCell(cell(row, colMap, 'title', ''));
       if (!name) continue;
+      if (isStatusLabel(name) && items.length) {
+        items[items.length - 1].state = name;
+        items[items.length - 1].maturity = name;
+        continue;
+      }
       stackLevel = level;
 
       var pid = cell(row, colMap, 'physicalid', '') || ('IMP_' + (r + 1) + '_' + name.replace(/\W/g, '_').slice(0, 40));
@@ -182,7 +297,7 @@ var FileImportService = (function () {
           var wb = XLSX.read(e.target.result, { type: 'array' });
           var sheet = wb.Sheets[wb.SheetNames[0]];
           var rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-          resolve(parseRows(rows));
+          resolve(smartParseRows(rows));
         } catch (err) {
           reject(err);
         }
@@ -203,7 +318,7 @@ var FileImportService = (function () {
         }
       };
       reader.onerror = function () { reject(new Error('Falha ao ler arquivo.')); };
-      reader.readAsText(file);
+      reader.readAsText(file, 'UTF-8');
     });
   }
 
