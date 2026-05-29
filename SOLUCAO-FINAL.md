@@ -37,7 +37,14 @@ https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-uwa.html
 
 Depois: remover widget antigo → adicionar de novo → **Ctrl+F5**.
 
-Barra deve mostrar **ghpages** e depois **Carregando E-BOM…**.
+Barra deve mostrar **waf20260530** e depois **Carregando E-BOM…**.
+
+### Se aparecer "Failed to fetch"
+
+O widget **abriu**, mas o HTML no GitHub **não pode** chamar o 3DSpace direto. A correção carrega **WAFData** via `require` do 3DDashboard.
+
+1. Remova o widget → adicione de novo → **Ctrl+F5**
+2. Se continuar: use **Passo C (3DSpace)** — é o caminho industrial
 
 Se ainda der **404** com github.io → o servidor **3DDashboard da empresa não alcança GitHub**. Aí só **Passo C (3DSpace)**.
 

@@ -4,16 +4,20 @@
   <meta charset="UTF-8" />
   <title>BOM Analytics — teste de link</title>
   <style>
-    body { font-family: "Segoe UI", sans-serif; margin: 24px; color: #1a1a1a; }
+    body { font-family: "Segoe UI", sans-serif; margin: 24px; color: #1a1a1a; max-width: 720px; }
     h1 { color: #005686; }
     .ok { background: #e8f5e9; border: 1px solid #2e7d32; padding: 12px; border-radius: 6px; }
+    .warn { background: #fff3e0; border: 1px solid #ed6c02; padding: 12px; border-radius: 6px; margin-top: 16px; }
+    code { background: #f5f5f5; padding: 2px 6px; word-break: break-all; }
   </style>
 </head>
 <body>
-  <h1>BOM Analytics — link OK</h1>
-  <p class="ok">Se você vê esta página (não código XML), o GitHub Pages está funcionando.</p>
-  <p><strong>Additional App — cole esta URL:</strong></p>
+  <h1>BOM Analytics — Passo A OK</h1>
+  <p class="ok">GitHub Pages funciona. Use as URLs abaixo no 3DDashboard.</p>
+  <p class="warn"><strong>Não use jsDelivr</strong> no Chrome (mostra código XML) nem no Additional App (erro 404).</p>
+  <p><strong>Additional App:</strong></p>
   <p><code>https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-uwa.html</code></p>
-  <p>Não use jsDelivr no 3DDashboard (dá erro 404).</p>
+  <p>No dashboard: abra o Drone no Explorer → clique <strong>↻ Sincronizar Explorer</strong> no widget BOM.</p>
+  <p><strong>BOM real (20+ itens da API):</strong> admin publica no 3DSpace — <code>DEPLOY-3DSPACE.md</code></p>
 </body>
 </html>

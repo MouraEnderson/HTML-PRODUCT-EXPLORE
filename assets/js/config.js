@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'waf20260530',
+    BUILD: 'sync20260530',
 
     /** Somente Explorer → gráficos + tabela */
     EXPLORER_ONLY: true,
@@ -121,8 +121,11 @@
     },
 
     PLATFORM: {
-      SEARCH_APP_IDS: ['ENX3DSEARCH_AP', '3DSEARCH_AP', 'SEARCH_AP']
+      SEARCH_APP_IDS: ['ENX3DSEARCH_AP', '3DSEARCH_AP', 'SEARCH_AP'],
+      EXPLORER_APP_IDS: ['ENOSCEN_AP', 'ENOPSTR_AP', 'ENX3DSEARCH_AP']
     },
+    /** Se API falhar no GitHub, mostra BOM demo (~20 itens) em vez de 1 linha */
+    DEMO_ON_API_FAIL: true,
 
     CHART_COLORS: {
       primary: '#005686',

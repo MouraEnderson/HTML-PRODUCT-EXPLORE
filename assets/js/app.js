@@ -139,12 +139,22 @@ var App = (function () {
         console.error(err);
         var msg = err.message || String(err);
         var sel = ProductExplorerBridge.getSelection();
-        if (sel && (msg.indexOf('Failed to fetch') >= 0 || msg.indexOf('WAF') >= 0)) {
+        if (sel && (msg.indexOf('Failed to fetch') >= 0 || msg.indexOf('WAF') >= 0 || msg.indexOf('API') >= 0)) {
+          if (APP_CONFIG.DEMO_ON_API_FAIL) {
+            APP_CONFIG.DEMO_MODE = true;
+            return BomService.loadRoot(sel.physicalid).then(function () {
+              refreshUI();
+              setStatus(
+                'Demo (~20 itens) — BOM real: publique no 3DSpace. Explorer: ' +
+                (sel.displayName || sel.physicalid),
+                'warn'
+              );
+            });
+          }
           return BomService.loadRootFromSelection(sel).then(function () {
             refreshUI();
             setStatus(
-              'Preview local (sem API). Deploy 3DSpace para BOM completa: ' +
-              (sel.displayName || sel.physicalid),
+              'Preview 1 item (sem API). Deploy 3DSpace: ' + (sel.displayName || sel.physicalid),
               'warn'
             );
           });
@@ -225,12 +235,28 @@ var App = (function () {
       }
     );
 
+    var btnSync = byId('btnSyncExplorer');
+    if (btnSync) {
+      btnSync.addEventListener('click', function () {
+        pullExplorerSelection();
+        var fromHash = ProductExplorerBridge.readHashSelection && ProductExplorerBridge.readHashSelection();
+        var sel = fromHash || ProductExplorerBridge.getSelection();
+        if (sel && sel.physicalid) {
+          lastLoadedId = null;
+          var lbl = byId('selectionLabel');
+          if (lbl) lbl.textContent = sel.displayName || sel.physicalid;
+          loadBom(sel.physicalid);
+          setStatus('Explorer: ' + (sel.displayName || sel.physicalid), 'ok');
+        } else {
+          setStatus('Abra o assembly no Explorer (esquerda), depois clique Sincronizar.', 'warn');
+        }
+      });
+    }
+
     var btnRef = byId('btnRefresh');
     if (btnRef) {
       btnRef.addEventListener('click', function () {
-        var sel = ProductExplorerBridge.getSelection();
-        if (sel) loadBom(sel.physicalid);
-        else setStatus('Abra um produto no Product Structure Explorer.', 'warn');
+        reloadFromExplorer();
       });
     }
 
@@ -311,11 +337,12 @@ var App = (function () {
   }
 
   function pullExplorerSelection() {
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.pollSelection) {
+      ProductExplorerBridge.pollSelection();
+    }
     if (typeof PlatformBridge !== 'undefined') {
       PlatformBridge.requestDashboardSelection();
     }
-    var btn = byId('btnSyncExplorer');
-    if (btn) btn.click();
   }
 
   function scheduleExplorerSync() {
@@ -425,15 +452,19 @@ var App = (function () {
   }
 
   function trySyncThenLoad() {
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.pollSelection) {
+      ProductExplorerBridge.pollSelection();
+    }
     pullExplorerSelection();
-    if (typeof ThreeDXContentParser !== 'undefined') {
-      var content = ThreeDXContentParser.parseLocations();
-      var fromHash = content ? ThreeDXContentParser.toSelection(content) : null;
-      if (fromHash && fromHash.physicalid) {
-        ProductExplorerBridge.setSelection(fromHash, { silent: true });
-        loadBom(fromHash.physicalid);
-        return;
-      }
+    var fromHash = typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.readHashSelection
+      ? ProductExplorerBridge.readHashSelection()
+      : null;
+    if (fromHash && fromHash.physicalid) {
+      ProductExplorerBridge.setSelection(fromHash, { silent: true });
+      var lbl = byId('selectionLabel');
+      if (lbl) lbl.textContent = fromHash.displayName || fromHash.physicalid;
+      loadBom(fromHash.physicalid);
+      return;
     }
     var sel = ProductExplorerBridge.getSelection();
     if (sel && sel.physicalid) {

@@ -595,6 +595,29 @@ body.ui-explorer-only .explorer-product {
   color: var(--text-muted);
 }
 
+body.ui-explorer-only .explorer-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+body.ui-explorer-only .btn-sync-explorer {
+  margin-left: auto;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  border: 1px solid var(--primary);
+  background: #fff;
+  color: var(--primary);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+body.ui-explorer-only .btn-sync-explorer:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
 body.ui-explorer-only .charts-main {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

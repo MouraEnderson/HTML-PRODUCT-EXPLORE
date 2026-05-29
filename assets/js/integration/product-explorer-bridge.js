@@ -1,6 +1,6 @@
 /**
  * @file integration/product-explorer-bridge.js
- * Ponte de seleção com Product Explorer / widgets 3DDashboard.
+ * Ponte de seleção com Product Structure Explorer / widgets 3DDashboard.
  */
 var ProductExplorerBridge = (function () {
   'use strict';
@@ -16,24 +16,45 @@ var ProductExplorerBridge = (function () {
     'productexplorer.selection',
     'DS/Selection/selected',
     'objectSelected',
-    'selectedObjectChanged'
+    'selectedObjectChanged',
+    'ENOSCEN_selection',
+    'ENOPSTR_selection',
+    '3DXContent',
+    'selection'
   ];
+
+  function isValidId(id) {
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.isValidPhysicalId) {
+      return ThreeDXContentParser.isValidPhysicalId(id);
+    }
+    return id && String(id).length >= 16;
+  }
 
   function normalizeSelection(payload) {
     if (!payload) return null;
-    var obj = payload.data || payload.object || payload.item || payload;
-    var physicalid = obj.physicalid || obj.id || obj.objectId || obj['dseno:physicalid'];
-    if (!physicalid) return null;
+    var obj = payload.data || payload.object || payload.item || payload.selection || payload;
+    if (obj.items && obj.items.length && typeof ThreeDXContentParser !== 'undefined') {
+      var fromItems = ThreeDXContentParser.toSelection({ data: { items: obj.items } });
+      if (fromItems) return fromItems;
+    }
+    var physicalid = obj.physicalid || obj.objectId || obj.id || obj.resourceid || obj['dseno:physicalid'];
+    if (!isValidId(physicalid)) return null;
+    var displayName = obj.displayName || obj.title || obj.name || obj['dseno:name'] || '';
+    if (displayName.length <= 2 && !isNaN(displayName)) {
+      displayName = obj.title || obj.name || physicalid;
+    }
     return {
       physicalid: physicalid,
       type: obj.type || obj.objectType || obj['dseno:type'] || 'VPMReference',
-      name: obj.name || obj.title || obj['dseno:name'] || '',
-      displayName: obj.displayName || obj.title || obj.name || physicalid
+      name: displayName || physicalid,
+      displayName: displayName || physicalid,
+      displayType: obj.displayType || 'Physical Product',
+      source: obj.source || 'normalize'
     };
   }
 
   function setSelection(sel, opts) {
-    if (!sel || !sel.physicalid) return;
+    if (!sel || !isValidId(sel.physicalid)) return;
     currentSelection = sel;
     if (opts && opts.silent) return;
     listeners.forEach(function (fn) {
@@ -64,6 +85,12 @@ var ProductExplorerBridge = (function () {
       try { data = JSON.parse(data); } catch (e) { return; }
     }
 
+    if (data.protocol === '3DXContent' && data.data && data.data.items) {
+      var sel3dx = ThreeDXContentParser.toSelection(data);
+      if (sel3dx) setSelection(sel3dx);
+      return;
+    }
+
     if (data.physicalid || data.objectId || data.resourceid) {
       var direct = normalizeSelection(data);
       if (direct) {
@@ -71,17 +98,17 @@ var ProductExplorerBridge = (function () {
         return;
       }
     }
-    if (data.protocol === '3DXContent' && data.data && data.data.items) {
-      var sel3dx = ThreeDXContentParser.toSelection(data);
-      if (sel3dx) setSelection(sel3dx);
-      return;
-    }
     if (data.items && data.items.length) {
-      var selItems = normalizeSelection(data.items[0]);
+      var selItems = normalizeSelection({ items: data.items });
       if (selItems) setSelection(selItems);
       return;
     }
-    var type = data.type || data.event || data.name;
+    if (data.data && data.data.items) {
+      var selData = ThreeDXContentParser.toSelection(data);
+      if (selData) setSelection(selData);
+      return;
+    }
+    var type = data.type || data.event || data.name || data.messageName;
     if (MESSAGE_TYPES.indexOf(type) === -1 && !data.physicalid && !data.object && !data.objectId) return;
     var sel = normalizeSelection(data);
     if (sel) setSelection(sel);
@@ -95,8 +122,14 @@ var ProductExplorerBridge = (function () {
     };
   }
 
+  function readHashSelection() {
+    if (typeof ThreeDXContentParser === 'undefined') return null;
+    var content = ThreeDXContentParser.parseLocations();
+    return content ? ThreeDXContentParser.toSelection(content) : null;
+  }
+
   function initFromQuery() {
-    if (APP_QUERY.physicalid) {
+    if (APP_QUERY.physicalid && isValidId(APP_QUERY.physicalid)) {
       setSelection({
         physicalid: APP_QUERY.physicalid,
         type: APP_QUERY.type || 'VPMReference',
@@ -107,28 +140,8 @@ var ProductExplorerBridge = (function () {
   }
 
   function initFrom3DXDeepLink() {
-    if (typeof ThreeDXContentParser === 'undefined') return;
-    var content = ThreeDXContentParser.parseLocations();
-    var sel = ThreeDXContentParser.toSelection(content);
+    var sel = readHashSelection();
     if (sel) setSelection(sel);
-  }
-
-  function initWidgetEvents() {
-    if (typeof widget === 'undefined') return;
-    if (widget.addEvent) {
-      widget.addEvent('onLoad', function () {
-        var val = widget.getValue && widget.getValue('selectedObject');
-        if (val) setSelection(normalizeSelection(val));
-      });
-    }
-    if (widget.addEvents) {
-      widget.addEvents({
-        onRefresh: function () {
-          var val = widget.getValue && widget.getValue('selectedObject');
-          if (val) setSelection(normalizeSelection(val));
-        }
-      });
-    }
   }
 
   function initPlatformSelection() {
@@ -138,14 +151,29 @@ var ProductExplorerBridge = (function () {
       req(['DS/Selection/Selection'], function (Selection) {
         if (Selection && Selection.getSelection) {
           Selection.getSelection().then(function (items) {
-            if (items && items.length) setSelection(normalizeSelection(items[0]));
-          });
+            if (!items || !items.length) return;
+            var sel = normalizeSelection(items[0]);
+            if (sel) setSelection(sel);
+          }).catch(function () { /* */ });
         }
       });
-    } catch (e) { /* opcional */ }
+    } catch (e) { /* */ }
+    try {
+      req(['DS/PlatformAPI/PlatformAPI'], function (PlatformAPI) {
+        if (PlatformAPI && PlatformAPI.getSelection) {
+          PlatformAPI.getSelection().then(function (items) {
+            if (!items || !items.length) return;
+            var sel2 = normalizeSelection(items[0]);
+            if (sel2) setSelection(sel2);
+          }).catch(function () { /* */ });
+        }
+      });
+    } catch (e2) { /* */ }
   }
 
   function pollSelection() {
+    var fromHash = readHashSelection();
+    if (fromHash) setSelection(fromHash);
     initPlatformSelection();
     if (typeof PlatformBridge !== 'undefined') {
       PlatformBridge.requestDashboardSelection();
@@ -153,28 +181,20 @@ var ProductExplorerBridge = (function () {
   }
 
   function startContentPoll() {
-    window.setInterval(function () {
-      if (typeof ThreeDXContentParser === 'undefined') return;
-      var content = ThreeDXContentParser.parseLocations();
-      var sel = content ? ThreeDXContentParser.toSelection(content) : null;
-      if (!sel || !sel.physicalid) return;
-      if (!currentSelection || currentSelection.physicalid !== sel.physicalid) {
-        setSelection(sel);
-      }
-    }, 2500);
+    window.setInterval(pollSelection, 2000);
   }
 
   function init() {
     window.addEventListener('message', onMessage, false);
     initFromQuery();
     initFrom3DXDeepLink();
-    initWidgetEvents();
-    initPlatformSelection();
+    pollSelection();
     startContentPoll();
     return {
       getSelection: function () { return currentSelection; },
       subscribe: subscribe,
-      setSelection: setSelection
+      setSelection: setSelection,
+      pollSelection: pollSelection
     };
   }
 
@@ -183,6 +203,8 @@ var ProductExplorerBridge = (function () {
     subscribe: subscribe,
     setSelection: setSelection,
     getSelection: function () { return currentSelection; },
-    normalizeSelection: normalizeSelection
+    normalizeSelection: normalizeSelection,
+    pollSelection: pollSelection,
+    readHashSelection: readHashSelection
   };
 })();
