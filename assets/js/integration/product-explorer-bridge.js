@@ -10,10 +10,13 @@ var ProductExplorerBridge = (function () {
 
   var MESSAGE_TYPES = [
     '3DX_SELECTION',
+    '3DX_SELECTION_RESPONSE',
     'selectionChanged',
     'onSelectedObject',
     'productexplorer.selection',
-    'DS/Selection/selected'
+    'DS/Selection/selected',
+    'objectSelected',
+    'selectedObjectChanged'
   ];
 
   function normalizeSelection(payload) {
@@ -39,6 +42,10 @@ var ProductExplorerBridge = (function () {
 
   function onMessage(event) {
     if (!event.data) return;
+    if (event.origin && event.origin.indexOf('3dexperience.3ds.com') < 0 &&
+        event.origin.indexOf('github') < 0 && event.origin !== location.origin) {
+      return;
+    }
     var data = event.data;
     if (typeof data === 'string') {
       try { data = JSON.parse(data); } catch (e) { return; }

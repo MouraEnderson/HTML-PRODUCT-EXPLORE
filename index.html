@@ -39,11 +39,35 @@
 
   <div id="statusBar" class="status-bar">Inicializando...</div>
 
-  <section class="platform-search panel" aria-label="Busca Physical Product">
-    <div class="panel-header">Buscar Physical Product na 3DEXPERIENCE</div>
+  <section class="panel explorer-sync-panel" aria-label="Sincronizar Product Explorer">
+    <div class="panel-header">Vincular ao Product Explorer (aba EXPLORE)</div>
+    <div class="explorer-sync-body">
+      <p class="sync-intro">Carregue o produto no <strong>Product Structure Explorer</strong> (aba EXPLORE), depois vincule aqui.</p>
+      <div class="sync-row">
+        <button type="button" class="btn btn-primary" id="btnSyncExplorer">Sincronizar com Explorer</button>
+        <button type="button" class="btn" id="btnCopyHelp">Como funciona?</button>
+      </div>
+      <div id="syncHelpText" class="sync-help">
+        <ol>
+          <li>Abra a aba <strong>EXPLORE</strong> e carregue o Physical Product (ex.: Drone).</li>
+          <li>Volte à aba <strong>PRODUCTEXPLORE</strong> e clique <strong>Sincronizar</strong>.</li>
+          <li>Se não atualizar: copie o <strong>Physical ID</strong> do Explorer e cole abaixo → <strong>Carregar objeto</strong>.</li>
+          <li>Para BOM completa no HTML: coloque os dois widgets na <strong>mesma aba</strong> ou publique o HTML no 3DSpace.</li>
+        </ol>
+      </div>
+      <div class="sync-manual">
+        <input type="text" id="explorerObjectId" placeholder="Physical ID (ex.: 132FB3CE26D70E006A18D1870000316D)" />
+        <input type="text" id="explorerObjectName" placeholder="Nome (opcional, ex.: 01_SKA_Drone Assembly)" />
+        <button type="button" class="btn btn-primary" id="btnLoadObjectId">Carregar objeto</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="platform-search panel hidden-cross-origin" aria-label="Busca Physical Product">
+    <div class="panel-header">Buscar na barra Pesquisar (alternativa)</div>
     <div class="platform-search-body">
-      <input type="search" id="platformSearchInput" placeholder="Nome do produto (ex.: Drone, SKA, Assembly)..." autocomplete="off" />
-      <button type="button" class="btn btn-primary" id="btnPlatformSearch">Buscar</button>
+      <input type="search" id="platformSearchInput" placeholder="Termo para copiar na Pesquisar do topo..." autocomplete="off" />
+      <button type="button" class="btn" id="btnPlatformSearch">Enviar ao Pesquisar</button>
     </div>
     <div id="platformSearchResults" class="platform-search-results"></div>
   </section>
@@ -134,6 +158,7 @@
   <script src="assets/js/ui/data-table.js"></script>
   <script src="assets/js/ui/bom-tree.js"></script>
   <script src="assets/js/ui/product-search-panel.js"></script>
+  <script src="assets/js/ui/explorer-sync-panel.js"></script>
   <!-- App -->
   <script src="assets/js/app.js"></script>
 </body>

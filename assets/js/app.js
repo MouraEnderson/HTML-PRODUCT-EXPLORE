@@ -65,18 +65,31 @@ var App = (function () {
     return d.innerHTML;
   }
 
+  function loadBomFromSelectionOnly(physicalId) {
+    var sel = ProductExplorerBridge.getSelection() || {};
+    return BomService.loadRootFromSelection({
+      physicalid: physicalId,
+      name: sel.name || sel.displayName || physicalId,
+      title: sel.displayName || sel.name || physicalId,
+      displayType: sel.displayType || 'Physical Product',
+      type: sel.type || 'VPMReference',
+      displayName: sel.displayName || sel.name || physicalId
+    }).then(function () {
+      refreshUI();
+      setStatus(
+        'Objeto do Explorer vinculado. Estrutura filha completa exige HTML no 3DSpace (mesmo domínio).',
+        'warn'
+      );
+    });
+  }
+
   function loadBom(physicalId) {
     if (!physicalId || loading) return Promise.resolve();
     setLoading(true);
     setStatus('Carregando E-BOM...', 'info');
 
     if (APP_CONFIG.CROSS_ORIGIN_WIDGET) {
-      setStatus(
-        'API ENOVIA bloqueada no GitHub (cross-origin). Selecione no Product Explorer e use os dados da seleção.',
-        'warn'
-      );
-      setLoading(false);
-      return Promise.resolve();
+      return loadBomFromSelectionOnly(physicalId);
     }
 
     return BomService.loadRoot(physicalId)
@@ -145,6 +158,18 @@ var App = (function () {
     ProductExplorerBridge.subscribe(onSelection);
     initUI();
     ProductSearchPanel.init({ onSelect: onSelection });
+    ExplorerSyncPanel.init({
+      onSelect: onSelection,
+      onStatus: setStatusPublic
+    });
+    toggleCrossOriginUI();
+  }
+
+  function toggleCrossOriginUI() {
+    if (!APP_CONFIG.CROSS_ORIGIN_WIDGET) return;
+    document.querySelectorAll('.hidden-cross-origin').forEach(function (el) {
+      el.style.display = 'none';
+    });
   }
 
   function bootstrap() {

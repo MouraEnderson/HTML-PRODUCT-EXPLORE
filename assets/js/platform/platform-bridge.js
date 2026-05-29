@@ -73,6 +73,25 @@ var PlatformBridge = (function () {
     return { ok: true, mode: 'postMessage', query: q };
   }
 
+  /**
+   * Pede ao 3DDashboard o objeto atual (Product Explorer / seleção global).
+   */
+  function requestDashboardSelection() {
+    var origin = getPlatformOrigin();
+    var requests = [
+      { type: '3DX_GET_SELECTION' },
+      { type: '3DX_SELECTION_REQUEST' },
+      { event: 'getSelection' },
+      { protocol: '3DXWidgetMessage', action: 'getSelection' },
+      { method: 'Selection.getSelection' }
+    ];
+    requests.forEach(function (msg) {
+      try { window.top.postMessage(msg, origin); } catch (e1) { /* */ }
+      try { window.top.postMessage(msg, '*'); } catch (e2) { /* */ }
+    });
+    return true;
+  }
+
   function safeGetRequire() {
     if (typeof require !== 'undefined') return require;
     return null;
@@ -83,6 +102,7 @@ var PlatformBridge = (function () {
     getPlatformOrigin: getPlatformOrigin,
     getSpaceUrl: getSpaceUrl,
     launchPlatformSearch: launchPlatformSearch,
+    requestDashboardSelection: requestDashboardSelection,
     safeGetRequire: safeGetRequire
   };
 })();

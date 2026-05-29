@@ -107,6 +107,30 @@ var BomService = (function () {
     });
   }
 
+  /** Modo cross-origin: só raiz com dados da seleção (sem API). */
+  function loadRootFromSelection(attrs) {
+    reset();
+    rootId = attrs.physicalid;
+    var node = addNode({
+      physicalid: attrs.physicalid,
+      name: attrs.name,
+      title: attrs.title || attrs.name,
+      displayType: attrs.displayType || 'Physical Product',
+      type: attrs.type || 'VPMReference',
+      state: attrs.state || '—',
+      revision: attrs.revision || '—',
+      owner: attrs.owner || '—',
+      approval: attrs.approval || '—'
+    }, null, 0, 1);
+    if (node) {
+      node.hasPhysicalProduct = true;
+      node.isAssembly = true;
+      node.loaded = true;
+      node.expanded = false;
+    }
+    return Promise.resolve(index);
+  }
+
   function loadRoot(physicalId) {
     reset();
     rootId = physicalId;
@@ -206,6 +230,7 @@ var BomService = (function () {
   return {
     reset: reset,
     loadRoot: loadRoot,
+    loadRootFromSelection: loadRootFromSelection,
     expandNode: expandNode,
     collapseNode: collapseNode,
     getIndex: function () { return index; },
