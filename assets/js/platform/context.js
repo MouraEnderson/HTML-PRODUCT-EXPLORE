@@ -16,12 +16,15 @@ var PlatformContext = (function () {
   };
 
   function getRequire() {
-    if (typeof require !== 'undefined') return require;
-    if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
-      try {
-        if (window.parent.require) return window.parent.require;
-      } catch (e) { /* cross-origin */ }
+    if (typeof PlatformBridge !== 'undefined' && PlatformBridge.isExternalWidget()) {
+      return PlatformBridge.safeGetRequire();
     }
+    if (typeof require !== 'undefined') return require;
+    try {
+      if (window.parent && window.parent !== window) {
+        return window.parent['require'];
+      }
+    } catch (e) { /* cross-origin: não acessar parent */ }
     return null;
   }
 

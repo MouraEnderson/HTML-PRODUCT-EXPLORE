@@ -70,6 +70,15 @@ var App = (function () {
     setLoading(true);
     setStatus('Carregando E-BOM...', 'info');
 
+    if (APP_CONFIG.CROSS_ORIGIN_WIDGET) {
+      setStatus(
+        'API ENOVIA bloqueada no GitHub (cross-origin). Selecione no Product Explorer e use os dados da seleção.',
+        'warn'
+      );
+      setLoading(false);
+      return Promise.resolve();
+    }
+
     return BomService.loadRoot(physicalId)
       .then(function (index) {
         return PhysicalProductService.enrichNodes(index, { batchSize: 25 });
@@ -79,7 +88,7 @@ var App = (function () {
       })
       .catch(function (err) {
         console.error(err);
-        setStatus('Erro: ' + (err.message || err), 'error');
+        setStatus('Erro ao carregar BOM: ' + (err.message || err), 'error');
       })
       .finally(function () {
         setLoading(false);
@@ -127,9 +136,35 @@ var App = (function () {
     });
   }
 
+  function initAppCore(spaceUrl) {
+    if (spaceUrl && spaceUrl !== 'demo') {
+      EnoviaApi.init(spaceUrl);
+      SearchApi.init(spaceUrl);
+    }
+    ProductExplorerBridge.init();
+    ProductExplorerBridge.subscribe(onSelection);
+    initUI();
+    ProductSearchPanel.init({ onSelect: onSelection });
+  }
+
   function bootstrap() {
     setLoading(true);
-    setStatus('Inicializando plataforma...', 'info');
+    setStatus('Inicializando...', 'info');
+
+    if (APP_CONFIG.CROSS_ORIGIN_WIDGET) {
+      try {
+        initAppCore(null);
+        setStatus(
+          'Widget Web Page Reader: clique Buscar → selecione no Product Explorer → Atualizar.',
+          'warn'
+        );
+      } catch (err) {
+        console.error(err);
+        setStatus('Erro: ' + (err.message || err), 'error');
+      }
+      setLoading(false);
+      return Promise.resolve();
+    }
 
     return PlatformContext.init()
       .then(function () {
@@ -140,35 +175,32 @@ var App = (function () {
         return CompassServices.get3DSpaceUrl(PlatformContext.getState().platformId);
       })
       .then(function (spaceUrl) {
-        if (spaceUrl !== 'demo') {
-          EnoviaApi.init(spaceUrl);
-          SearchApi.init(spaceUrl);
-        }
-        ProductExplorerBridge.init();
-        ProductExplorerBridge.subscribe(onSelection);
-        initUI();
-        ProductSearchPanel.init({ onSelect: onSelection });
-
+        initAppCore(spaceUrl);
         var sel = ProductExplorerBridge.getSelection();
-        if (sel) return loadBom(sel.physicalid);
-        if (APP_CONFIG.DEMO_MODE) {
-          return loadBom('DEMO_ROOT_001');
-        }
-        setStatus('Busque um Physical Product acima ou selecione no Product Explorer.', 'info');
+        if (sel && !APP_CONFIG.CROSS_ORIGIN_WIDGET) return loadBom(sel.physicalid);
+        if (APP_CONFIG.DEMO_MODE) return loadBom('DEMO_ROOT_001');
+        setStatus('Busque um Physical Product ou selecione no Product Explorer.', 'info');
       })
       .catch(function (err) {
         console.error(err);
         if (APP_CONFIG.DEMO_MODE) {
-          EnoviaApi.init('demo');
-          ProductExplorerBridge.init();
-          initUI();
+          initAppCore('demo');
           return loadBom('DEMO_ROOT_001');
         }
-        setStatus('Falha na inicialização: ' + err.message, 'error');
+        try {
+          initAppCore(null);
+          setStatus('Modo limitado (sem require). Use Buscar + Product Explorer + Atualizar.', 'warn');
+        } catch (e2) {
+          setStatus('Falha na inicialização: ' + err.message, 'error');
+        }
       })
       .finally(function () {
         setLoading(false);
       });
+  }
+
+  function setStatusPublic(msg, type) {
+    setStatus(msg, type);
   }
 
   function start() {
@@ -192,5 +224,5 @@ var App = (function () {
     }
   });
 
-  return { loadBom: loadBom, refreshUI: refreshUI };
+  return { loadBom: loadBom, refreshUI: refreshUI, setStatus: setStatusPublic };
 })();

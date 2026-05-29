@@ -96,7 +96,12 @@
     TENANT_DEFAULTS: {
       envId: 'R1132100929518',
       securityContext: 'ctx::VPLMProjectLeader.Company Name.CS_IMPLANTACAO',
-      platformHost: 'r1132100929518-us1-ifwe.3dexperience.3ds.com'
+      platformHost: 'r1132100929518-us1-ifwe.3dexperience.3ds.com',
+      spaceHost: 'r1132100929518-us1-space.3dexperience.3ds.com'
+    },
+
+    PLATFORM: {
+      SEARCH_APP_IDS: ['ENX3DSEARCH_AP', '3DSEARCH_AP', 'SEARCH_AP']
     },
 
     CHART_COLORS: {
@@ -127,6 +132,12 @@
   if (query.maxNodes) {
     APP_CONFIG.BOM_MAX_NODES = parseInt(query.maxNodes, 10) || APP_CONFIG.BOM_MAX_NODES;
   }
+
+  var _host = (global.location && global.location.hostname) ? global.location.hostname.toLowerCase() : '';
+  APP_CONFIG.CROSS_ORIGIN_WIDGET =
+    _host.indexOf('github.io') >= 0 ||
+    _host.indexOf('jsdelivr.net') >= 0 ||
+    _host.indexOf('githubusercontent.com') >= 0;
 
   global.APP_CONFIG = APP_CONFIG;
   global.APP_QUERY = query;

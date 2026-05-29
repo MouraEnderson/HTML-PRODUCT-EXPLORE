@@ -43,8 +43,18 @@ var ProductExplorerBridge = (function () {
     if (typeof data === 'string') {
       try { data = JSON.parse(data); } catch (e) { return; }
     }
+    if (data.protocol === '3DXContent' && data.data && data.data.items) {
+      var sel3dx = ThreeDXContentParser.toSelection(data);
+      if (sel3dx) setSelection(sel3dx);
+      return;
+    }
+    if (data.items && data.items.length) {
+      var selItems = normalizeSelection(data.items[0]);
+      if (selItems) setSelection(selItems);
+      return;
+    }
     var type = data.type || data.event || data.name;
-    if (MESSAGE_TYPES.indexOf(type) === -1 && !data.physicalid && !data.object) return;
+    if (MESSAGE_TYPES.indexOf(type) === -1 && !data.physicalid && !data.object && !data.objectId) return;
     var sel = normalizeSelection(data);
     if (sel) setSelection(sel);
   }

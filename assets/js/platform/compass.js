@@ -11,16 +11,25 @@ var CompassServices = (function () {
   };
 
   function getRequire() {
-    if (typeof require !== 'undefined') return require;
-    if (window.parent && window.parent.require) {
-      try { return window.parent.require; } catch (e) { return null; }
+    if (typeof PlatformBridge !== 'undefined' && PlatformBridge.isExternalWidget()) {
+      return PlatformBridge.safeGetRequire();
     }
+    if (typeof require !== 'undefined') return require;
+    try {
+      if (window.parent && window.parent !== window) {
+        return window.parent['require'];
+      }
+    } catch (e) { return null; }
     return null;
   }
 
   function get3DSpaceUrl(platformId) {
     if (APP_CONFIG.DEMO_MODE) {
       cache.spaceUrl = 'https://demo-3dspace.example.com/3dspace';
+      return Promise.resolve(cache.spaceUrl);
+    }
+    if (typeof PlatformBridge !== 'undefined' && PlatformBridge.isExternalWidget()) {
+      cache.spaceUrl = PlatformBridge.getSpaceUrl();
       return Promise.resolve(cache.spaceUrl);
     }
     if (cache.spaceUrl) return Promise.resolve(cache.spaceUrl);

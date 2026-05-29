@@ -157,6 +157,13 @@ body {
   background: #e8f4fc;
 }
 
+.search-hint {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
 .table-scroll-wide {
   max-height: 420px;
 }
