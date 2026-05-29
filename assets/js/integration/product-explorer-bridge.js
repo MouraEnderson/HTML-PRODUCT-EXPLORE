@@ -72,9 +72,12 @@ var ProductExplorerBridge = (function () {
 
   function isBadDashboardSelection(sel) {
     if (!sel) return true;
-    var name = String(sel.displayName || sel.name || '');
+    var name = labelText(sel.displayName || sel.name || '');
+    if (!name) return true;
     if (name.charAt(0) === '{' && name.indexOf('"icon"') >= 0) return true;
     if (name.indexOf('getpicture') >= 0) return true;
+    if (/^(enderson|moura|login|user)/i.test(name)) return true;
+    if (/moura/i.test(name) && !/mont|assembly|^m\d+$/i.test(name)) return true;
     return false;
   }
 

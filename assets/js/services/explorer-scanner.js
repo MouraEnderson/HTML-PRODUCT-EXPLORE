@@ -174,14 +174,31 @@ var ExplorerScanner = (function () {
   }
 
   function productNameFromItems(items) {
-    var root = items[0];
-    for (var i = 0; i < items.length; i++) {
-      if ((items[i].level === 0 || i === 0) && items[i].name) {
-        root = items[i];
-        break;
-      }
+    var i;
+    for (i = 0; i < items.length; i++) {
+      var n = String(items[i].name || items[i].title || '');
+      if (/^mont\d*$/i.test(n)) return n;
     }
-    return root.title || root.name || 'E-BOM';
+    for (i = 0; i < items.length; i++) {
+      if (items[i].level === 0) return items[i].title || items[i].name || 'E-BOM';
+    }
+    return items[0].title || items[0].name || 'E-BOM';
+  }
+
+  function isProductSelection(sel) {
+    if (!sel) return false;
+    if (
+      typeof ProductExplorerBridge !== 'undefined' &&
+      ProductExplorerBridge.isBadDashboardSelection &&
+      ProductExplorerBridge.isBadDashboardSelection(sel)
+    ) {
+      return false;
+    }
+    var n = String(sel.displayName || sel.name || '');
+    if (/^mont\d*$/i.test(n)) return true;
+    if (/^m\d+$/i.test(n)) return true;
+    if (/moura/i.test(n) && !/mont/i.test(n)) return false;
+    return isValidId(sel.physicalid);
   }
 
   function scanViaText(text, sourceLabel) {
@@ -224,10 +241,10 @@ var ExplorerScanner = (function () {
 
   function scanViaApiOrSelection() {
     return resolveSelection().then(function (sel) {
-      if (canUseWafApi() && sel) {
+      if (canUseWafApi() && sel && isProductSelection(sel)) {
         return scanViaApi(sel);
       }
-      return Promise.reject(new Error('Sem seleção/API'));
+      return Promise.reject(new Error('Sem seleção de produto (use cola na caixa azul)'));
     });
   }
 

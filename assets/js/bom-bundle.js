@@ -10,7 +10,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260529d',
+    BUILD: 'bom20260530a',
     /** Evita varredura automática com seleção errada do dashboard */
     AUTO_SCAN_ON_SELECTION: false,
     /** Nome raiz no Explorer quando seleção automática falha (busca 3DSpace) */
@@ -1410,9 +1410,12 @@ var ProductExplorerBridge = (function () {
 
   function isBadDashboardSelection(sel) {
     if (!sel) return true;
-    var name = String(sel.displayName || sel.name || '');
+    var name = labelText(sel.displayName || sel.name || '');
+    if (!name) return true;
     if (name.charAt(0) === '{' && name.indexOf('"icon"') >= 0) return true;
     if (name.indexOf('getpicture') >= 0) return true;
+    if (/^(enderson|moura|login|user)/i.test(name)) return true;
+    if (/moura/i.test(name) && !/mont|assembly|^m\d+$/i.test(name)) return true;
     return false;
   }
 
@@ -1987,6 +1990,24 @@ var FileImportService = (function () {
     return lines.length >= 2;
   }
 
+  function validateImportedItems(items) {
+    if (!items || !items.length) return;
+    var names = items.map(function (it) {
+      return cleanCell(it.name || it.title || '').toLowerCase();
+    }).filter(Boolean);
+    var hasProduct = names.some(function (n) {
+      return /^mont\d*$/i.test(n) || /^m\d+$/i.test(n) || n.indexOf('assembly') >= 0;
+    });
+    var onlyOwner = names.every(function (n) {
+      return n.indexOf('enderson') >= 0 || n.indexOf('moura') >= 0 || n.indexOf('propriet') >= 0;
+    });
+    if (!hasProduct && (onlyOwner || names.length <= 2)) {
+      throw new Error(
+        'Parece coluna Proprietário (Enderson Moura), não a estrutura. Ctrl+A na grade inteira → Ctrl+C → cole na caixa azul.'
+      );
+    }
+  }
+
   function parseText(text) {
     if (!looksLikeExplorerPaste(text)) {
       throw new Error(
@@ -2004,9 +2025,11 @@ var FileImportService = (function () {
       it.name = stripIconNoise(it.name) || it.name;
       it.title = stripIconNoise(it.title) || it.title;
     });
-    return inferAssemblyLevels(items.filter(function (it) {
+    items = inferAssemblyLevels(items.filter(function (it) {
       return it.name && it.name.length > 0;
     }));
+    validateImportedItems(items);
+    return items;
   }
 
   function parseRowsWithoutHeader(rows) {
@@ -2510,14 +2533,31 @@ var ExplorerScanner = (function () {
   }
 
   function productNameFromItems(items) {
-    var root = items[0];
-    for (var i = 0; i < items.length; i++) {
-      if ((items[i].level === 0 || i === 0) && items[i].name) {
-        root = items[i];
-        break;
-      }
+    var i;
+    for (i = 0; i < items.length; i++) {
+      var n = String(items[i].name || items[i].title || '');
+      if (/^mont\d*$/i.test(n)) return n;
     }
-    return root.title || root.name || 'E-BOM';
+    for (i = 0; i < items.length; i++) {
+      if (items[i].level === 0) return items[i].title || items[i].name || 'E-BOM';
+    }
+    return items[0].title || items[0].name || 'E-BOM';
+  }
+
+  function isProductSelection(sel) {
+    if (!sel) return false;
+    if (
+      typeof ProductExplorerBridge !== 'undefined' &&
+      ProductExplorerBridge.isBadDashboardSelection &&
+      ProductExplorerBridge.isBadDashboardSelection(sel)
+    ) {
+      return false;
+    }
+    var n = String(sel.displayName || sel.name || '');
+    if (/^mont\d*$/i.test(n)) return true;
+    if (/^m\d+$/i.test(n)) return true;
+    if (/moura/i.test(n) && !/mont/i.test(n)) return false;
+    return isValidId(sel.physicalid);
   }
 
   function scanViaText(text, sourceLabel) {
@@ -2560,10 +2600,10 @@ var ExplorerScanner = (function () {
 
   function scanViaApiOrSelection() {
     return resolveSelection().then(function (sel) {
-      if (canUseWafApi() && sel) {
+      if (canUseWafApi() && sel && isProductSelection(sel)) {
         return scanViaApi(sel);
       }
-      return Promise.reject(new Error('Sem seleção/API'));
+      return Promise.reject(new Error('Sem seleção de produto (use cola na caixa azul)'));
     });
   }
 

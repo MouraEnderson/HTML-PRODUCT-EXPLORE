@@ -248,6 +248,24 @@ var FileImportService = (function () {
     return lines.length >= 2;
   }
 
+  function validateImportedItems(items) {
+    if (!items || !items.length) return;
+    var names = items.map(function (it) {
+      return cleanCell(it.name || it.title || '').toLowerCase();
+    }).filter(Boolean);
+    var hasProduct = names.some(function (n) {
+      return /^mont\d*$/i.test(n) || /^m\d+$/i.test(n) || n.indexOf('assembly') >= 0;
+    });
+    var onlyOwner = names.every(function (n) {
+      return n.indexOf('enderson') >= 0 || n.indexOf('moura') >= 0 || n.indexOf('propriet') >= 0;
+    });
+    if (!hasProduct && (onlyOwner || names.length <= 2)) {
+      throw new Error(
+        'Parece coluna Proprietário (Enderson Moura), não a estrutura. Ctrl+A na grade inteira → Ctrl+C → cole na caixa azul.'
+      );
+    }
+  }
+
   function parseText(text) {
     if (!looksLikeExplorerPaste(text)) {
       throw new Error(
@@ -265,9 +283,11 @@ var FileImportService = (function () {
       it.name = stripIconNoise(it.name) || it.name;
       it.title = stripIconNoise(it.title) || it.title;
     });
-    return inferAssemblyLevels(items.filter(function (it) {
+    items = inferAssemblyLevels(items.filter(function (it) {
       return it.name && it.name.length > 0;
     }));
+    validateImportedItems(items);
+    return items;
   }
 
   function parseRowsWithoutHeader(rows) {
