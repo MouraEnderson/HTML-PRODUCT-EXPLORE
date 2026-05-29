@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260529c',
+    BUILD: 'bom20260529d',
     /** Evita varredura automática com seleção errada do dashboard */
     AUTO_SCAN_ON_SELECTION: false,
     /** Nome raiz no Explorer quando seleção automática falha (busca 3DSpace) */

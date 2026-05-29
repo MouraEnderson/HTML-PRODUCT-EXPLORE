@@ -237,7 +237,23 @@ var FileImportService = (function () {
     return items;
   }
 
+  function looksLikeExplorerPaste(text) {
+    var t = String(text || '').trim();
+    if (!t || t.length < 4) return false;
+    if (t.indexOf('\t') >= 0) return true;
+    if (/mont10|\tm1\t|\tm2\t|^m1\t|^m2\t/i.test(t)) return true;
+    if (t.indexOf('Physical Product') >= 0 || t.indexOf('Produto físico') >= 0) return true;
+    if (isJsonBlob(t) && t.indexOf('getpicture') >= 0 && t.indexOf('Mont') < 0) return false;
+    var lines = t.split(/\r?\n/).filter(function (l) { return l.trim(); });
+    return lines.length >= 2;
+  }
+
   function parseText(text) {
+    if (!looksLikeExplorerPaste(text)) {
+      throw new Error(
+        'Clipboard não tem a grade do Explorer. No Explorer: clique na tabela → Ctrl+A → Ctrl+C → cole na caixa azul → Varrer.'
+      );
+    }
     var rows = textToRows(text).map(function (row) {
       return row.map(function (c) { return cleanCell(c); });
     });
@@ -411,6 +427,7 @@ var FileImportService = (function () {
 
   return {
     parseFile: parseFile,
+    looksLikeExplorerPaste: looksLikeExplorerPaste,
     parseText: parseText,
     parseTextAsync: parseTextAsync,
     parseRows: parseRows

@@ -70,8 +70,20 @@ var ProductExplorerBridge = (function () {
     };
   }
 
+  function isBadDashboardSelection(sel) {
+    if (!sel) return true;
+    var name = String(sel.displayName || sel.name || '');
+    if (name.charAt(0) === '{' && name.indexOf('"icon"') >= 0) return true;
+    if (name.indexOf('getpicture') >= 0) return true;
+    return false;
+  }
+
+  function clearSelection() {
+    currentSelection = null;
+  }
+
   function setSelection(sel, opts) {
-    if (!sel || !isValidId(sel.physicalid)) return;
+    if (!sel || !isValidId(sel.physicalid) || isBadDashboardSelection(sel)) return;
     currentSelection = sel;
     if (opts && opts.silent) return;
     listeners.forEach(function (fn) {
@@ -220,6 +232,8 @@ var ProductExplorerBridge = (function () {
     subscribe: subscribe,
     setSelection: setSelection,
     getSelection: function () { return currentSelection; },
+    clearSelection: clearSelection,
+    isBadDashboardSelection: isBadDashboardSelection,
     normalizeSelection: normalizeSelection,
     pollSelection: pollSelection,
     readHashSelection: readHashSelection

@@ -1,15 +1,9 @@
 /**
  * @file services/explorer-scanner.js
- * Botão "Varrer estrutura" — API (WAF), clipboard ou cola na caixa.
+ * Botão "Varrer estrutura" — cola/clipboard, API (WAF).
  */
 var ExplorerScanner = (function () {
   'use strict';
-
-  function wait(ms) {
-    return new Promise(function (resolve) {
-      window.setTimeout(resolve, ms || 400);
-    });
-  }
 
   function canUseWafApi() {
     if (typeof WAFData !== 'undefined' && WAFData.authenticatedRequest) return true;
@@ -28,10 +22,22 @@ var ExplorerScanner = (function () {
     return id && String(id).length >= 16;
   }
 
+  function clearBadSelection() {
+    if (typeof ProductExplorerBridge === 'undefined') return;
+    var sel = ProductExplorerBridge.getSelection();
+    if (ProductExplorerBridge.isBadDashboardSelection && ProductExplorerBridge.isBadDashboardSelection(sel)) {
+      ProductExplorerBridge.clearSelection();
+    }
+  }
+
   function getSelection() {
     if (typeof ProductExplorerBridge === 'undefined') return null;
     ProductExplorerBridge.pollSelection();
     var sel = ProductExplorerBridge.getSelection();
+    if (sel && ProductExplorerBridge.isBadDashboardSelection && ProductExplorerBridge.isBadDashboardSelection(sel)) {
+      ProductExplorerBridge.clearSelection();
+      sel = null;
+    }
     if (sel && isValidId(sel.physicalid)) return sel;
     var fromHash = ProductExplorerBridge.readHashSelection && ProductExplorerBridge.readHashSelection();
     if (fromHash && isValidId(fromHash.physicalid)) return fromHash;
@@ -90,21 +96,15 @@ var ExplorerScanner = (function () {
     });
   }
 
-  /**
-   * Seleção Explorer → campo manual → busca ENOVIA (ex.: Mont10).
-   */
   function resolveSelection() {
+    clearBadSelection();
     var sel = getSelection();
     if (sel) return Promise.resolve(sel);
 
     var manual = readManualPhysicalId();
     if (manual) return Promise.resolve(manual);
 
-    var term =
-      (APP_CONFIG.EXPLORER_DEFAULT_NAME || 'Mont10').trim() ||
-      (APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.defaultDisplayName) ||
-      'Mont10';
-
+    var term = (APP_CONFIG.EXPLORER_DEFAULT_NAME || 'Mont10').trim();
     return resolveSelectionBySearch(term);
   }
 
@@ -173,6 +173,17 @@ var ExplorerScanner = (function () {
     });
   }
 
+  function productNameFromItems(items) {
+    var root = items[0];
+    for (var i = 0; i < items.length; i++) {
+      if ((items[i].level === 0 || i === 0) && items[i].name) {
+        root = items[i];
+        break;
+      }
+    }
+    return root.title || root.name || 'E-BOM';
+  }
+
   function scanViaText(text, sourceLabel) {
     if (!text || !String(text).trim()) {
       return Promise.reject(new Error('Nenhum dado para varrer'));
@@ -181,29 +192,23 @@ var ExplorerScanner = (function () {
       if (!items || !items.length) {
         throw new Error('Nenhuma linha reconhecida na cópia do Explorer');
       }
-      var root = items[0];
-      for (var i = 0; i < items.length; i++) {
-        if (items[i].level === 0 || i === 0) {
-          root = items[i];
-          break;
-        }
-      }
-      var name = root.title || root.name || 'E-BOM';
+      var name = productNameFromItems(items);
       var payload = BomSnapshot.buildFromImported(items, name);
       return BomSnapshot.applyPayload(payload).then(function (meta) {
         return {
           ok: true,
           mode: sourceLabel || 'text',
           meta: meta,
-          message: 'Varredura concluída: ' + meta.itemCount + ' itens'
+          message: 'Varredura concluída: ' + meta.itemCount + ' itens — ' + meta.productName
         };
       });
     });
   }
 
-  function scanViaClipboard() {
+  /** Lê clipboard no mesmo clique (sem setTimeout — senão o iframe perde permissão). */
+  function scanViaClipboardNow() {
     if (!navigator.clipboard || !navigator.clipboard.readText) {
-      return Promise.reject(new Error('Leitura da área de transferência bloqueada'));
+      return Promise.reject(new Error('Clipboard bloqueado no widget'));
     }
     return navigator.clipboard.readText().then(function (text) {
       return scanViaText(text, 'clipboard');
@@ -227,29 +232,23 @@ var ExplorerScanner = (function () {
   }
 
   /**
-   * Ordem: clipboard (Ctrl+C) → API/seleção → caixa de cola.
+   * Ordem: caixa de cola → clipboard (gesto do clique) → API.
    */
   function scan() {
-    if (typeof PlatformBridge !== 'undefined' && PlatformBridge.requestDashboardSelection) {
-      PlatformBridge.requestDashboardSelection();
-    }
-    return wait(200).then(function () {
-      return scanViaClipboard()
-        .catch(function () {
-          return scanViaApiOrSelection();
-        })
-        .catch(function () {
-          return scanViaPasteArea();
-        })
-        .catch(function (apiErr) {
-          var hint =
-            'Varredura falhou: no Explorer selecione Mont10 + filhos (Ctrl+A na grade), Ctrl+C, depois Varrer.';
-          if (apiErr && apiErr.message && apiErr.message.indexOf('Sem seleção') < 0) {
-            hint = apiErr.message + ' ' + hint;
-          }
-          throw new Error(hint);
-        });
-    });
+    clearBadSelection();
+    return scanViaPasteArea()
+      .catch(function () {
+        return scanViaClipboardNow();
+      })
+      .catch(function () {
+        return scanViaApiOrSelection();
+      })
+      .catch(function (err) {
+        var hint =
+          'No Explorer: clique na grade → Ctrl+A → Ctrl+C → cole na caixa azul → Varrer.';
+        if (err && err.message) hint = err.message + ' ' + hint;
+        throw new Error(hint);
+      });
   }
 
   return {

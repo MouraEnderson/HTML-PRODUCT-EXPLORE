@@ -21,13 +21,15 @@
     .bom-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     .bom-table th, .bom-table td { border: 1px solid #e0e0e0; padding: 4px 6px; }
     .bom-hidden { display: none; }
+    .bom-paste-hint { margin: 8px 0 4px; font-size: 12px; color: #1565c0; }
+    .bom-paste { display: block; width: 100%; min-height: 56px; margin-top: 4px; padding: 8px; border: 2px solid #1976d2; border-radius: 6px; background: #e3f2fd; font-size: 12px; font-family: Consolas, monospace; box-sizing: border-box; }
   </style>
   <script type="text/javascript">
   //<![CDATA[
     window.__3DX_TRUSTED_WIDGET__ = true;
     window.__3DX_BOOT_DEFER__ = true;
 
-    var BOM_BUILD = 'bom20260529c';
+    var BOM_BUILD = 'bom20260529d';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
 
     var UI_HTML =
@@ -36,10 +38,11 @@
       '<div class="bom-h1">BOM Analytics — Estrutura: <strong id="selectionLabel">-</strong></div>' +
       '<div id="statusBar" class="bom-st">Montando widget...</div>' +
       '<div class="bom-panel">' +
-      '<button type="button" id="btnScanExplorer" class="bom-btn">Varrer estrutura Explorer</button>' +
-      '<p style="margin:8px 0 0;font-size:13px;color:#0d47a1;">Mont10 no Explorer, depois Varrer</p></div>' +
+      '<p class="bom-paste-hint">Explorer: clique na grade → Ctrl+A → Ctrl+C → cole abaixo (Ctrl+V)</p>' +
+      '<textarea id="pasteArea" class="bom-paste" placeholder="Cole aqui a estrutura copiada do Explorer…"></textarea>' +
+      '<button type="button" id="btnScanExplorer" class="bom-btn" style="margin-top:10px">Varrer estrutura Explorer</button>' +
+      '</div>' +
       '<div class="bom-hidden" id="hiddenFields">' +
-      '<textarea id="pasteArea"></textarea>' +
       '<button type="button" id="btnImportPaste"></button>' +
       '<button type="button" id="btnLoadExample"></button>' +
       '<button type="button" id="btnSyncExplorer"></button>' +
