@@ -2,27 +2,43 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:widget="http://www.netvibes.com/ns/">
 <head>
   <meta charset="UTF-8" />
-  <title>BOM Test</title>
+  <title>BOM Analytics — teste UWA</title>
   <style>
-    body { font-family: "Segoe UI", sans-serif; margin: 16px; color: #005686; }
+    body { font-family: "Segoe UI", sans-serif; margin: 0; }
+    .ok { padding: 16px; color: #1b5e20; font-weight: bold; font-size: 15px; background: #e8f5e9; }
+    .hint { padding: 12px; font-size: 12px; color: #005686; background: #e3f2fd; }
   </style>
   <script type="text/javascript">
   //<![CDATA[
-    var BOM_MSG = '<div style="padding:8px 0;font-weight:bold;font-size:15px;">BOM Analytics — widget UWA OK</div>';
-    if (typeof widget !== 'undefined' && widget && widget.addEvent) {
-      widget.addEvent('onLoad', function () {
-        widget.body.innerHTML = BOM_MSG;
-      });
-    } else {
-      document.addEventListener('DOMContentLoaded', function () {
-        document.body.innerHTML = BOM_MSG +
-          '<p>Modo teste no Chrome. No 3DDashboard deve aparecer só a frase verde acima.</p>';
-      });
+    var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
+    var HTML =
+      '<div class="ok">BOM Analytics — widget UWA OK</div>' +
+      '<div class="hint">Carregando dashboard completo em 2s…<br/>' +
+      'Se ficar aqui, troque a URL do app para <b>widget-uwa.html</b></div>';
+
+    function goFull() {
+      if (typeof widget === 'undefined' || !widget || !widget.body) return;
+      widget.body.innerHTML =
+        '<div class="hint" style="background:#fff3e0;">Carregando widget-uwa…</div>';
+      window.location.replace(GH + 'widget-uwa.html');
     }
+
+    function onLoad() {
+      if (!widget || !widget.body) return;
+      widget.body.innerHTML = HTML;
+      window.setTimeout(goFull, 2000);
+    }
+
+    function wait() {
+      if (typeof widget !== 'undefined' && widget && widget.addEvent) {
+        widget.addEvent('onLoad', onLoad);
+        return;
+      }
+      setTimeout(wait, 100);
+    }
+    wait();
   //]]>
   </script>
 </head>
-<body>
-  <p>Carregando teste UWA…</p>
-</body>
+<body><p class="hint">Aguardando widget…</p></body>
 </html>
