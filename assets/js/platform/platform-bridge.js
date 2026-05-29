@@ -87,6 +87,32 @@ var PlatformBridge = (function () {
   /**
    * Pede ao 3DDashboard o objeto atual (Product Explorer / seleção global).
    */
+  function requestExplorerStructure() {
+    var origin = getPlatformOrigin();
+    var appIds = APP_CONFIG.PLATFORM.EXPLORER_APP_IDS || [];
+    var requests = [
+      { type: '3DX_GET_STRUCTURE' },
+      { type: '3DX_STRUCTURE_REQUEST' },
+      { event: 'getStructureRoot' },
+      { protocol: '3DXWidgetMessage', action: 'getStructureRoot' },
+      { method: 'ProductExplorer.getRoot' }
+    ];
+    requests.forEach(function (msg) {
+      try { window.top.postMessage(msg, origin); } catch (e1) { /* */ }
+      try { window.top.postMessage(msg, '*'); } catch (e2) { /* */ }
+    });
+    appIds.forEach(function (appId) {
+      try {
+        window.top.postMessage({
+          protocol: '3DXContent',
+          action: 'getStructure',
+          appId: appId
+        }, origin);
+      } catch (e) { /* */ }
+    });
+    return true;
+  }
+
   function requestDashboardSelection() {
     var origin = getPlatformOrigin();
     var requests = [
@@ -115,6 +141,7 @@ var PlatformBridge = (function () {
     getSpaceUrl: getSpaceUrl,
     launchPlatformSearch: launchPlatformSearch,
     requestDashboardSelection: requestDashboardSelection,
+    requestExplorerStructure: requestExplorerStructure,
     safeGetRequire: safeGetRequire
   };
 })();

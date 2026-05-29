@@ -125,10 +125,14 @@ var App = (function () {
       btnEl.textContent = 'Varrendo…';
     }
     setStatus('Varredura em andamento…', 'info');
-    apiTimeout(ExplorerScanner.scan(), 12000, 'Varredura cancelada (timeout). Cole na caixa azul e Varrer de novo.')
+    apiTimeout(
+      ExplorerScanner.scan(),
+      APP_CONFIG.SCAN_TIMEOUT_MS || 90000,
+      'Varredura cancelada (timeout). Selecione a raiz no Explorer e Varrer de novo.'
+    )
       .then(function (res) {
-        APP_CONFIG.IMPORT_MODE = true;
         APP_CONFIG.DEMO_MODE = false;
+        APP_CONFIG.IMPORT_MODE = res.mode !== 'api';
         if (res.meta) {
           lastLoadedId = res.meta.rootPhysicalId;
           var lbl = byId('selectionLabel');
@@ -643,8 +647,8 @@ var App = (function () {
       return;
     }
     setStatus(
-      'PASSO: grade Explorer (Mont,M1,M2) → Ctrl+C → cole na caixa azul → Importar estrutura',
-      'warn'
+      'Selecione a raiz no Product Explorer → clique Varrer estrutura (API ENOVIA).',
+      'info'
     );
     window.setTimeout(function () {
       pullExplorerSelection();

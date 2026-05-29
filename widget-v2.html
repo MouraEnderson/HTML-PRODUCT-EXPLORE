@@ -4,205 +4,178 @@
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <title>BOM Analytics v2</title>
+  <title>BOM Analytics</title>
   <style type="text/css">
     html, body { margin: 0; padding: 0; min-height: 100%; background: #f0f6fa; font-family: "Segoe UI", sans-serif; }
-    .bom-ver { margin: 0; padding: 10px 12px; background: #0d47a1; color: #fff; font-size: 14px; font-weight: bold; }
+    .bom-ver { margin: 0; padding: 10px 12px; background: #0d47a1; color: #fff; font-size: 13px; font-weight: bold; }
     .bom-h1 { margin: 0; padding: 10px 14px; background: #fff; font-size: 16px; color: #005686; }
-    .bom-st { padding: 10px 14px; font-size: 14px; background: #e3f2fd; color: #0d47a1; font-weight: bold; }
+    .bom-st { padding: 10px 14px; font-size: 13px; background: #e3f2fd; color: #0d47a1; }
     .bom-st-ok { background: #c8e6c9; color: #1b5e20; }
-    .bom-st-err { background: #ffcdd2; color: #b71c1c; }
-    .bom-panel { margin: 10px 14px; padding: 12px; background: #fff; }
-    .bom-btn { display: block; width: 100%; padding: 14px; margin-top: 10px; background: #2e7d32; color: #fff; border: 0; font-size: 16px; font-weight: bold; cursor: pointer; }
+    .bom-st-err { background: #ffebee; color: #b71c1c; }
+    .bom-panel { margin: 10px 14px; padding: 12px; background: #fff; border-radius: 8px; }
+    .bom-btn { display: block; width: 100%; padding: 14px; background: #2e7d32; color: #fff; border: 0; font-size: 16px; font-weight: bold; cursor: pointer; }
     .bom-btn:disabled { background: #757575; }
-    .bom-hint { margin: 0 0 8px; font-size: 13px; color: #1565c0; font-weight: bold; }
-    #pasteArea { display: block; width: 100%; height: 80px; padding: 8px; border: 4px solid #1565c0; background: #bbdefb; font: 12px Consolas, monospace; box-sizing: border-box; }
-    .bom-kpi { padding: 10px 14px; font-size: 14px; line-height: 1.6; background: #fff; margin: 8px 14px; border: 1px solid #ccc; }
-    .bom-table-wrap { margin: 8px 14px; background: #fff; border: 1px solid #ccc; max-height: 140px; overflow: auto; }
+    .bom-hint { margin: 0 0 10px; font-size: 13px; color: #1565c0; }
+    .bom-fallback { margin-top: 12px; font-size: 12px; color: #666; }
+    .bom-fallback textarea { width: 100%; height: 48px; margin-top: 6px; font-size: 11px; }
+    .bom-charts { padding: 8px 14px; }
+    .bom-chart { display: inline-block; width: 48%; min-height: 90px; margin: 1%; background: #fff; border: 1px solid #dde3ea; }
+    .bom-table-wrap { margin: 8px 14px; background: #fff; border: 1px solid #dde3ea; max-height: 200px; overflow: auto; }
     .bom-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .bom-table th, .bom-table td { border: 1px solid #ddd; padding: 4px 8px; }
+    .bom-table th, .bom-table td { border: 1px solid #e0e0e0; padding: 4px 6px; }
+    .bom-hidden { display: none; }
   </style>
-</head>
-<body>
-  <noscript>Ative JavaScript para usar o BOM Analytics.</noscript>
   <script type="text/javascript">
   //<![CDATA[
-    var BOM_V2 = 'bom20260530e';
+    window.__3DX_TRUSTED_WIDGET__ = true;
+    window.__3DX_BOOT_DEFER__ = true;
 
-    function mountEl() {
+    var BOM_BUILD = 'bom20260531a';
+    var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
+
+    var UI_HTML =
+      '<div class="bom-root">' +
+      '<p class="bom-ver">BOM Analytics — Sprint 1 API — build ' + BOM_BUILD + '</p>' +
+      '<div class="bom-h1">Estrutura: <strong id="selectionLabel">-</strong></div>' +
+      '<div id="statusBar" class="bom-st">Carregando…</div>' +
+      '<div class="bom-panel">' +
+      '<p class="bom-hint">Abra a estrutura no Explorer → selecione a <b>raiz</b> (1ª linha) → Varrer</p>' +
+      '<button type="button" id="btnScanExplorer" class="bom-btn">Varrer estrutura Explorer</button>' +
+      '<details class="bom-fallback"><summary>Modo avançado (cola manual — não usar em produção)</summary>' +
+      '<textarea id="pasteArea" placeholder="Só se API falhar"></textarea></details>' +
+      '</div>' +
+      '<div id="kpiGrid" style="padding:8px 14px;"></div>' +
+      '<div class="bom-charts">' +
+      '<div class="bom-chart"><canvas id="chartMaturity"></canvas></div>' +
+      '<div class="bom-chart"><canvas id="chartType"></canvas></div>' +
+      '<div class="bom-chart"><canvas id="chartRevision"></canvas></div>' +
+      '<div class="bom-chart"><canvas id="chartApproval"></canvas></div></div>' +
+      '<div class="bom-table-wrap"><div style="padding:8px;font-weight:bold;">E-BOM — <span id="tableProductLabel">-</span></div>' +
+      '<table id="bomTable" class="bom-table"><thead><tr></tr></thead><tbody></tbody></table></div>' +
+      '<div id="loadingOverlay" class="bom-hidden">Varrendo…</div>' +
+      '<div class="bom-hidden" id="hiddenFields">' +
+      '<input type="text" id="explorerObjectId" />' +
+      '<input type="text" id="explorerObjectName" />' +
+      '<input type="search" id="searchInput" />' +
+      '<select id="filterMaturity"><option value="all">all</option></select>' +
+      '<select id="filterType"><option value="all">all</option></select>' +
+      '<select id="filterApproval"><option value="all">all</option></select>' +
+      '<select id="filterPP"><option value="all">all</option></select>' +
+      '</div></div>';
+
+    function mountTarget() {
       if (typeof widget !== 'undefined' && widget && widget.body) return widget.body;
       return document.body;
     }
 
-    function rootEl() {
-      return window.__3DX_UI_ROOT__ || mountEl();
+    function uiRoot() {
+      return window.__3DX_UI_ROOT__ || mountTarget();
     }
 
-    function $(id) {
-      var r = rootEl();
-      return r ? r.querySelector('#' + id) : null;
-    }
-
-    function status(msg, ok, err) {
-      var el = $('statusBar');
+    function setBar(msg, kind) {
+      var el = uiRoot() && uiRoot().querySelector('#statusBar');
       if (!el) return;
       el.textContent = msg;
       el.className = 'bom-st';
-      if (ok) el.className = 'bom-st bom-st-ok';
-      if (err) el.className = 'bom-st bom-st-err';
+      if (kind === 'ok') el.className = 'bom-st bom-st-ok';
+      if (kind === 'error') el.className = 'bom-st bom-st-err';
     }
-
-    function parseExplorerPaste(text) {
-      var lines = String(text || '').split(/\r?\n/);
-      var items = [];
-      var seen = {};
-      lines.forEach(function (line) {
-        var raw = line.trim();
-        if (!raw) return;
-        if (/^(t[ií]tulo|title|nome|revision|tipo|propriet)/i.test(raw)) return;
-        var m = raw.match(/\b(Mont\d*|M\d+)\b/gi);
-        if (!m) return;
-        m.forEach(function (token) {
-          var name = token.replace(/\s/g, '');
-          var key = name.toLowerCase();
-          if (seen[key]) return;
-          seen[key] = true;
-          var revM = raw.match(/([\d]+\.[\d]+)/);
-          var ok = /Aprovado/i.test(raw);
-          items.push({
-            name: name,
-            revision: revM ? revM[1] : '',
-            state: ok ? 'Aprovado' : ''
-          });
-        });
-      });
-      items.sort(function (a, b) {
-        if (/^mont/i.test(a.name)) return -1;
-        if (/^mont/i.test(b.name)) return 1;
-        return a.name.localeCompare(b.name);
-      });
-      return items.length >= 2 ? items : null;
-    }
-
-    function render(items) {
-      var mont = items[0];
-      items.forEach(function (it) {
-        if (/^mont/i.test(it.name)) mont = it;
-      });
-      var appr = items.filter(function (it) { return it.state === 'Aprovado'; }).length;
-      var lbl = $('selectionLabel');
-      if (lbl) lbl.textContent = mont.name;
-      var kpi = $('kpiGrid');
-      if (kpi) {
-        kpi.innerHTML =
-          '<div><b>' + items.length + '</b> Total de itens</div>' +
-          '<div><b>' + appr + '</b> Aprovados</div>' +
-          '<div><b>' + items.length + '</b> Physical Products</div>';
-      }
-      var thead = rootEl() && rootEl().querySelector('#bomTable thead tr');
-      var tbody = rootEl() && rootEl().querySelector('#bomTable tbody');
-      if (thead) thead.innerHTML = '<th>Nome</th><th>Rev</th><th>Estado</th>';
-      if (tbody) {
-        tbody.innerHTML = items.map(function (it) {
-          return '<tr><td>' + it.name + '</td><td>' + it.revision + '</td><td>' + it.state + '</td></tr>';
-        }).join('');
-      }
-    }
-
-    function onVarrerClick() {
-      status('Processando…', false, false);
-      var btn = $('btnScanExplorer');
-      var area = $('pasteArea');
-      var text = area ? area.value : '';
-      if (!text || !text.trim()) {
-        status('ERRO: cole na caixa azul (Ctrl+V) primeiro.', false, true);
-        return;
-      }
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Varrendo…';
-      }
-      try {
-        var items = parseExplorerPaste(text);
-        if (!items) {
-          status('ERRO: não achei Mont10/M1/M2. Ctrl+A na grade → Ctrl+C → cole de novo.', false, true);
-        } else {
-          render(items);
-          status('OK: ' + items.length + ' itens — ' + items[0].name, true, false);
-        }
-      } catch (ex) {
-        status('ERRO: ' + (ex.message || ex), false, true);
-      }
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = 'Varrer estrutura Explorer';
-      }
-    }
-
-    function bindButton() {
-      var btn = $('btnScanExplorer');
-      if (!btn) return;
-      if (btn.getAttribute('data-bom-bound') === '1') return;
-      btn.setAttribute('data-bom-bound', '1');
-      if (btn.addEventListener) {
-        btn.addEventListener('click', onVarrerClick, false);
-      } else {
-        btn.onclick = onVarrerClick;
-      }
-    }
-
-    var UI_HTML =
-      '<p class="bom-ver">BOM v2 SOLO — ' + BOM_V2 + '</p>' +
-      '<div class="bom-h1">Estrutura: <strong id="selectionLabel">-</strong></div>' +
-      '<div id="statusBar" class="bom-st">Clique Varrer após colar na caixa azul</div>' +
-      '<div class="bom-panel">' +
-      '<p class="bom-hint">Explorer: Ctrl+A → Ctrl+C → Ctrl+V na caixa → Varrer</p>' +
-      '<textarea id="pasteArea" placeholder="CAIXA AZUL — cole aqui"></textarea>' +
-      '<button type="button" id="btnScanExplorer" class="bom-btn">Varrer estrutura Explorer</button>' +
-      '</div>' +
-      '<div id="kpiGrid" class="bom-kpi"></div>' +
-      '<div class="bom-table-wrap">' +
-      '<table id="bomTable" class="bom-table"><thead><tr></tr></thead><tbody></tbody></table>' +
-      '</div>';
 
     function paint() {
-      var b = mountEl();
+      var b = mountTarget();
       if (!b) return;
       b.innerHTML = UI_HTML;
-      b.style.minHeight = '400px';
+      b.style.minHeight = '420px';
       window.__3DX_UI_ROOT__ = b;
-      bindButton();
-      status('Pronto. Cole e clique Varrer.', false, false);
     }
 
-    function init() {
-      paint();
+    function getRequire() {
+      if (typeof widget !== 'undefined' && widget && widget.requirejs) return widget.requirejs;
+      if (typeof require !== 'undefined') return require;
+      return null;
     }
 
-    function bootUwa() {
-      if (typeof widget === 'undefined' || !widget) {
-        bootBrowser();
+    function loadScript(url, optional, next) {
+      var s = document.createElement('script');
+      s.type = 'text/javascript';
+      s.charset = 'UTF-8';
+      s.src = url;
+      s.onload = function () { if (next) next(null); };
+      s.onerror = function () { if (optional) { if (next) next(null); } else if (next) next('erro'); };
+      document.getElementsByTagName('head')[0].appendChild(s);
+    }
+
+    function loadWaf(next) {
+      if (typeof WAFData !== 'undefined' && WAFData.authenticatedRequest) {
+        next(null);
         return;
       }
-      if (widget.addEvent) {
-        widget.addEvent('onLoad', init);
-        widget.addEvent('onRefresh', init);
+      var req = getRequire();
+      if (!req) {
+        next(null);
+        return;
       }
-      if (widget.body) init();
-      else window.setTimeout(bootUwa, 80);
+      req(
+        ['DS/WAFData/WAFData', 'DS/i3DXCompassServices/i3DXCompassServices', 'DS/PlatformAPI/PlatformAPI'],
+        function (WAF, Compass, PAPI) {
+          window.WAFData = WAF;
+          window.__3DX_COMPASS__ = Compass;
+          window.__3DX_PLATFORM_API__ = PAPI;
+          next(null);
+        },
+        function () { next(null); }
+      );
     }
 
-    function bootBrowser() {
-      if (document.body) init();
-      else if (document.addEventListener) {
-        document.addEventListener('DOMContentLoaded', init);
+    function startBundle() {
+      loadScript(GH + 'assets/vendor/chart.umd.min.js?v=' + BOM_BUILD, true, function () {
+        loadScript(GH + 'assets/js/bom-bundle.js?v=' + BOM_BUILD, false, function (err) {
+          if (err) {
+            setBar('Erro ao carregar bundle. Verifique GitHub Pages.', 'error');
+            return;
+          }
+          try {
+            if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
+            if (typeof App !== 'undefined' && App.run) {
+              App.run();
+              setBar('Pronto — selecione a raiz no Explorer e clique Varrer.', 'ok');
+            } else {
+              setBar('App não iniciou. Ver Console (F12).', 'error');
+            }
+          } catch (ex) {
+            setBar('Erro: ' + (ex.message || ex), 'error');
+          }
+        });
+      });
+    }
+
+    function executeInit() {
+      paint();
+      setBar('Carregando WAFData e API…', 'info');
+      loadWaf(function () {
+        startBundle();
+      });
+    }
+
+    function boot() {
+      if (typeof widget !== 'undefined' && widget) {
+        if (widget.addEvent) widget.addEvent('onLoad', executeInit);
+        if (widget.addEvent) widget.addEvent('onRefresh', executeInit);
+        if (widget.body) executeInit();
+        else window.setTimeout(boot, 80);
+      } else if (document.body) {
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', executeInit);
+        } else {
+          executeInit();
+        }
       } else {
-        window.onload = init;
+        window.setTimeout(boot, 80);
       }
     }
-
-    bootUwa();
+    boot();
   //]]>
   </script>
-</body>
+</head>
+<body></body>
 </html>

@@ -8,11 +8,12 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260530c',
-    /** Evita varredura automática com seleção errada do dashboard */
+    BUILD: 'bom20260531a',
+    /** Sprint 1: API primeiro; cola só com ALLOW_PASTE_FALLBACK true */
+    USE_API_SCAN_FIRST: true,
+    ALLOW_PASTE_FALLBACK: false,
+    SCAN_TIMEOUT_MS: 90000,
     AUTO_SCAN_ON_SELECTION: false,
-    /** Nome raiz no Explorer quando seleção automática falha (busca 3DSpace) */
-    EXPLORER_DEFAULT_NAME: 'Mont10',
     CAN_USE_ENOVIA_API: false,
 
     /** Somente Explorer → gráficos + tabela */

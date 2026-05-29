@@ -20,7 +20,10 @@ var ProductExplorerBridge = (function () {
     'ENOSCEN_selection',
     'ENOPSTR_selection',
     '3DXContent',
-    'selection'
+    'selection',
+    '3DX_STRUCTURE',
+    'structureRoot',
+    'getStructureRoot'
   ];
 
   function isValidId(id) {
@@ -123,6 +126,15 @@ var ProductExplorerBridge = (function () {
       return;
     }
 
+    if (data.rootPhysicalId || data.rootId) {
+      var rootSel = normalizeSelection({
+        physicalid: data.rootPhysicalId || data.rootId,
+        displayName: data.rootName || data.structureName || data.name,
+        type: data.type || 'VPMReference'
+      });
+      if (rootSel) setSelection(rootSel);
+      return;
+    }
     if (data.physicalid || data.objectId || data.resourceid) {
       var direct = normalizeSelection(data);
       if (direct) {
