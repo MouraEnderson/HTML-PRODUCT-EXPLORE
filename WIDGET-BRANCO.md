@@ -30,6 +30,12 @@ Salvar → F5 no dashboard.
 | Texto **"widget UWA OK"** | UWA funciona → vá para Passo B |
 | Branco | URL errada, GitHub bloqueado, ou 3DDashboard não alcança github.io (TI) |
 
+### Chrome OK mas 3DDashboard branco
+
+Causa corrigida: só montar UI em **`widget.onLoad`** (não antes). Atualize `widget-uwa.html` e Ctrl+F5.
+
+Deve aparecer primeiro **"carregando módulos…"** (azul), depois o botão verde **Varrer**.
+
 ### Passo B — dashboard completo
 
 URL definitiva:

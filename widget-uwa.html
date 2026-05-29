@@ -1,18 +1,106 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:widget="http://www.netvibes.com/ns/">
 <head>
   <meta charset="UTF-8" />
   <title>BOM Analytics</title>
-  <link rel="stylesheet" href="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/css/dashboard.css?v=scan2" />
-  <style type="text/css">
-    html, body { margin: 0; padding: 0; min-height: 420px; background: #f0f6fa; font-family: "Segoe UI", sans-serif; }
-    #boot-msg { padding: 12px; color: #005686; font-size: 13px; }
-  </style>
   <script type="text/javascript">window.__3DX_TRUSTED_WIDGET__ = true; window.__3DX_BOOT_DEFER__ = true;</script>
+  <link rel="stylesheet" href="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/css/dashboard.css?v=scan3" />
+  <style type="text/css">
+    /* Visível mesmo antes do bundle */
+    .boot-splash { padding: 14px; font: 13px "Segoe UI", sans-serif; color: #005686; background: #e3f2fd; }
+  </style>
+  <script type="text/javascript">
+  //<![CDATA[
+    var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
+    var VER = 'trustedapi20260602c';
+
+    function mountHtml(html) {
+      if (typeof widget === 'undefined' || !widget || !widget.body) return false;
+      widget.body.innerHTML = html;
+      widget.body.className = 'ui-explorer-only';
+      widget.body.style.minHeight = '420px';
+      widget.body.style.background = '#f0f6fa';
+      return true;
+    }
+
+    function getAppHtml() {
+      var el = document.getElementById('app-root');
+      return el ? el.innerHTML : '';
+    }
+
+    function loadScript(url, next) {
+      var s = document.createElement('script');
+      s.type = 'text/javascript';
+      s.src = url;
+      s.onload = function () { if (next) next(); };
+      s.onerror = function () {
+        mountHtml(
+          '<div class="boot-splash" style="background:#ffebee;color:#b71c1c;">' +
+          'Falha ao carregar: ' + url + '<br/>TI pode bloquear github.io no 3DDashboard.</div>'
+        );
+      };
+      document.head.appendChild(s);
+    }
+
+    function startApp() {
+      if (!mountHtml(getAppHtml())) return;
+      var bar = widget.body.querySelector('#statusBar');
+      if (typeof App === 'undefined') {
+        if (bar) bar.textContent = 'Bundle não carregou — menu ⋮ → Atualizar';
+        return;
+      }
+      try {
+        if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
+        App.run();
+      } catch (e) {
+        if (bar) bar.textContent = 'Erro: ' + (e.message || e);
+      }
+    }
+
+    function onWidgetLoad() {
+      mountHtml('<div class="boot-splash">BOM Analytics — carregando módulos…</div>');
+      loadScript(GH + 'assets/vendor/chart.umd.min.js', function () {
+        loadScript(GH + 'assets/js/bom-bundle.js?v=' + VER, function () {
+          if (typeof require !== 'undefined') {
+            require(
+              ['DS/WAFData/WAFData', 'DS/i3DXCompassServices/i3DXCompassServices', 'DS/PlatformAPI/PlatformAPI'],
+              function (WAF, Compass, PAPI) {
+                window.WAFData = WAF;
+                window.__3DX_COMPASS__ = Compass;
+                window.__3DX_PLATFORM_API__ = PAPI;
+                startApp();
+              },
+              function () { startApp(); }
+            );
+          } else {
+            startApp();
+          }
+        });
+      });
+    }
+
+    function waitForWidgetObject() {
+      if (typeof widget !== 'undefined' && widget && widget.addEvent) {
+        widget.addEvent('onLoad', onWidgetLoad);
+        if (widget.addEvent) {
+          widget.addEvent('onRefresh', function () {
+            if (typeof App !== 'undefined' && App.runExplorerScan) {
+              var b = widget.body && widget.body.querySelector('#btnScanExplorer');
+              App.runExplorerScan(b);
+            }
+          });
+        }
+        return;
+      }
+      setTimeout(waitForWidgetObject, 100);
+    }
+
+    waitForWidgetObject();
+  //]]>
+  </script>
 </head>
 <body>
-  <div id="boot-msg">BOM Analytics — aguardando widget UWA…</div>
-
+  <p class="boot-splash">Aguardando objeto <code>widget</code>… (no Chrome é normal ver isto)</p>
   <div id="app-root" style="display:none">
     <header class="app-header explorer-header">
       <h1>BOM Analytics</h1>
@@ -21,8 +109,8 @@
     <div id="statusBar" class="status-bar status-warn">Iniciando…</div>
     <section class="snapshot-panel snapshot-panel-focus">
       <button type="button" id="btnScanExplorer" class="btn-scan-main">Varrer estrutura Explorer</button>
-      <p class="snapshot-steps">① Grade Explorer (Mont10, M1, M2) → ② <strong>Ctrl+C</strong> → ③ <strong>Varrer</strong></p>
-      <textarea id="pasteArea" class="paste-area" rows="3" placeholder="Ou cole aqui (Ctrl+V)…"></textarea>
+      <p class="snapshot-steps">① Grade Explorer (Mont10…) → ② <strong>Ctrl+C</strong> → ③ <strong>Varrer</strong></p>
+      <textarea id="pasteArea" class="paste-area" rows="3" placeholder="Ou cole aqui…"></textarea>
       <div class="snapshot-actions">
         <button type="button" id="btnImportPaste" class="btn-primary">Importar cola</button>
         <button type="button" id="btnLoadExample" class="btn-secondary">Teste 3 itens</button>
@@ -59,100 +147,5 @@
     </main>
     <div id="loadingOverlay" class="loading-overlay hidden">Varrendo…</div>
   </div>
-
-  <script type="text/javascript" src="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/vendor/chart.umd.min.js"></script>
-  <script type="text/javascript" src="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/js/bom-bundle.js?v=trustedapi20260602b"></script>
-  <script type="text/javascript">
-  (function () {
-    var mounted = false;
-
-    function mountTarget() {
-      try {
-        if (typeof widget !== 'undefined' && widget && widget.body) return widget.body;
-      } catch (e1) { /* */ }
-      return document.body;
-    }
-
-    function mountApp() {
-      if (mounted) return true;
-      var root = document.getElementById('app-root');
-      var target = mountTarget();
-      if (!root || !target) return false;
-      target.innerHTML = root.innerHTML;
-      target.className = 'ui-explorer-only';
-      target.style.minHeight = '420px';
-      target.style.background = '#f0f6fa';
-      mounted = true;
-      var boot = document.getElementById('boot-msg');
-      if (boot) boot.style.display = 'none';
-      return true;
-    }
-
-    function startApp() {
-      if (!mountApp()) return;
-      var bar = mountTarget().querySelector('#statusBar');
-      if (typeof App === 'undefined') {
-        if (bar) bar.textContent = 'Erro: bundle não carregou. Abra menu widget → Atualizar.';
-        return;
-      }
-      try {
-        if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
-        App.run();
-      } catch (err) {
-        if (bar) bar.textContent = 'Erro: ' + (err.message || err);
-      }
-    }
-
-    function onReady() {
-      mountApp();
-      if (typeof require !== 'undefined') {
-        require(
-          ['DS/WAFData/WAFData', 'DS/i3DXCompassServices/i3DXCompassServices', 'DS/PlatformAPI/PlatformAPI'],
-          function (WAF, Compass, PAPI) {
-            window.WAFData = WAF;
-            window.__3DX_COMPASS__ = Compass;
-            window.__3DX_PLATFORM_API__ = PAPI;
-            startApp();
-          },
-          function () { startApp(); }
-        );
-      } else {
-        startApp();
-      }
-    }
-
-    function waitWidget() {
-      mountApp();
-      if (typeof widget !== 'undefined' && widget) {
-        try {
-          if (widget.addEvent) {
-            widget.addEvent('onLoad', onReady);
-            widget.addEvent('onRefresh', function () {
-              if (typeof App !== 'undefined' && App.runExplorerScan) {
-                var b = mountTarget().querySelector('#btnScanExplorer');
-                App.runExplorerScan(b);
-              }
-            });
-          }
-        } catch (e2) { /* */ }
-        onReady();
-        return;
-      }
-      setTimeout(waitWidget, 100);
-    }
-
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', waitWidget);
-    } else {
-      waitWidget();
-    }
-    setTimeout(function () {
-      if (!mounted) {
-        var boot = document.getElementById('boot-msg');
-        if (boot) boot.textContent = 'Widget UWA não injetou — verifique URL widget-uwa.html (com uwa).';
-      }
-    }, 8000);
-  })();
-  </script>
 </body>
 </html>
