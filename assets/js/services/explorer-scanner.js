@@ -122,22 +122,40 @@ var ExplorerScanner = (function () {
   }
 
   function waitForSelection(maxAttempts, intervalMs) {
-    maxAttempts = maxAttempts || 12;
+    maxAttempts = maxAttempts || 20;
     intervalMs = intervalMs || 400;
     return new Promise(function (resolve) {
       var n = 0;
       function tick() {
-        if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.pollSelection) {
-          ProductExplorerBridge.pollSelection();
+        if (typeof ProductExplorerBridge !== 'undefined') {
+          if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
+          if (ProductExplorerBridge.pollSelection) ProductExplorerBridge.pollSelection();
+        }
+        if (typeof PlatformBridge !== 'undefined' && PlatformBridge.requestExplorerStructure) {
+          PlatformBridge.requestExplorerStructure();
         }
         var sel = getSelection();
         if (sel) return resolve(sel);
+        var term = getExplorerRootSearchTerm();
+        if (term) {
+          var regHit = resolveFromStructureRegistry(term);
+          if (regHit) return resolve(regHit);
+        }
         n++;
         if (n >= maxAttempts) return resolve(null);
         window.setTimeout(tick, intervalMs);
       }
       tick();
     });
+  }
+
+  function resolveSingleRegistryStructure() {
+    var reg = APP_CONFIG.STRUCTURE_IDS || {};
+    var keys = Object.keys(reg).filter(function (k) {
+      return reg[k] && String(reg[k]).trim();
+    });
+    if (keys.length !== 1) return null;
+    return resolveFromStructureRegistry(keys[0]);
   }
 
   function resolveFromStructureRegistry(term) {
@@ -237,14 +255,18 @@ var ExplorerScanner = (function () {
           if (found) return found;
           return Promise.reject(new Error(
             'Não encontrei "' + term + '" no 3DSpace. ' +
-            'Cole o ID físico (32 hex) em Modo avançado ou use ?physicalid=... na URL do Additional App. ' +
-            'Ou cadastre em config STRUCTURE_IDS.'
+            'Cole o ID físico em Modo avançado ou use ?physicalid=prd-... na URL do Additional App.'
           ));
         });
       }
 
+      if (canUseWafApi()) {
+        var singleReg = resolveSingleRegistryStructure();
+        if (singleReg) return singleReg;
+      }
+
       return Promise.reject(new Error(
-        'Sem seleção do Explorer. Clique na raiz (1ª linha), cole ID físico em Modo avançado, ou URL: ?physicalid=...'
+        'Sem seleção do Explorer. Clique na raiz Mont10 (1ª linha) → Varrer, ou URL: ?physicalid=prd-R1132100929518-00511496'
       ));
     });
   }

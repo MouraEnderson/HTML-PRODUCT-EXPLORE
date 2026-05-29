@@ -157,6 +157,10 @@ var App = (function () {
       btnEl.disabled = true;
       btnEl.textContent = 'Varrendo…';
     }
+    if (typeof ProductExplorerBridge !== 'undefined') {
+      if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
+      if (ProductExplorerBridge.pollSelection) ProductExplorerBridge.pollSelection();
+    }
     setStatus('Varredura em andamento…', 'info');
     apiTimeout(
       ExplorerScanner.scan(),

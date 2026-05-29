@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260601b',
+    BUILD: 'bom20260601c',
 
     /** Tenant cloud: objetos usam prefixo prd- (ex. prd-R1132100929518-00511496) */
     PHYSICAL_ID_PREFIX: 'prd-',

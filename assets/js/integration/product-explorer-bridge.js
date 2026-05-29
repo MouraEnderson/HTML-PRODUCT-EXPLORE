@@ -68,8 +68,17 @@ var ProductExplorerBridge = (function () {
     var physicalid = normalizeId(
       obj.physicalid || obj.objectId || obj.id || obj.resourceid || obj['dseno:physicalid']
     );
-    if (!isValidId(physicalid)) return null;
     var displayName = labelText(obj.displayName) || labelText(obj.title) || labelText(obj.name) || labelText(obj['dseno:name']);
+    if (!isValidId(physicalid) && displayName) {
+      setStructureNameHint(displayName);
+      var reg = APP_CONFIG.STRUCTURE_IDS || {};
+      var rid = reg[displayName] || reg[displayName.toLowerCase()] || reg[displayName.toUpperCase()];
+      if (rid) physicalid = normalizeId(rid);
+    }
+    if (!isValidId(physicalid)) return null;
+    if (!displayName) {
+      displayName = labelText(obj.title) || labelText(obj.name) || physicalid;
+    }
     if (displayName.length <= 2 && !isNaN(displayName)) {
       displayName = labelText(obj.title) || labelText(obj.name) || physicalid;
     }
@@ -259,9 +268,26 @@ var ProductExplorerBridge = (function () {
     } catch (e2) { /* */ }
   }
 
+  function pollStructureHint() {
+    if (typeof PlatformBridge !== 'undefined' && PlatformBridge.requestExplorerStructure) {
+      PlatformBridge.requestExplorerStructure();
+    }
+    try {
+      var titles = [document.title || ''];
+      if (window.widget && window.widget.getTitle) {
+        try { titles.push(String(window.widget.getTitle())); } catch (eW) { /* */ }
+      }
+      titles.forEach(function (t) {
+        var n = extractStructureNameFromText(t);
+        if (n) setStructureNameHint(n);
+      });
+    } catch (e) { /* */ }
+  }
+
   function pollSelection() {
     var fromHash = readHashSelection();
     if (fromHash) setSelection(fromHash);
+    pollStructureHint();
     initPlatformSelection();
     if (typeof PlatformBridge !== 'undefined') {
       PlatformBridge.requestDashboardSelection();
@@ -298,6 +324,7 @@ var ProductExplorerBridge = (function () {
     isBadDashboardSelection: isBadDashboardSelection,
     normalizeSelection: normalizeSelection,
     pollSelection: pollSelection,
+    pollStructureHint: pollStructureHint,
     readHashSelection: readHashSelection
   };
 })();
