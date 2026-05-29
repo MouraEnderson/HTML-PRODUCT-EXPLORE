@@ -1,232 +1,77 @@
-<!DOCTYPE html>
-<html lang="pt-BR" xmlns:widget="http://www.netvibes.com/ns/">
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:widget="http://www.netvibes.com/ns/">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <title>BOM Analytics — Additional App (UWA)</title>
-  <!-- Entrada recomendada para Additional App no 3DDashboard -->
-  <script>
-    (function () {
-      var host = (location.hostname || '').toLowerCase();
-      var on3dx = host.indexOf('3dexperience.3ds.com') >= 0;
-      var onGithub = host.indexOf('github.io') >= 0;
-      window.__3DX_USE_LOCAL_ASSETS__ = on3dx || onGithub;
-      window.__3DX_ASSET_ROOT__ = 'assets/';
-      if (on3dx || onGithub) return;
-      var CDN = 'https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/';
-      window.__3DX_ASSET_ROOT__ = CDN;
-      var base = document.createElement('base');
-      base.href = CDN;
-      document.head.appendChild(base);
-    })();
-  </script>
-  <link rel="stylesheet" href="assets/css/dashboard.css" />
-  <script>
-    (function () {
-      var local = window.__3DX_USE_LOCAL_ASSETS__;
-      var chart = local
-        ? 'assets/vendor/chart.umd.min.js'
-        : 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
-      var xlsx = local
-        ? 'assets/vendor/xlsx.full.min.js'
-        : 'https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js';
-      document.write('<script src="' + chart + '"><\/script>');
-      document.write('<script src="' + xlsx + '"><\/script>');
-    })();
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+  <title>BOM Analytics</title>
+  <style type="text/css">
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+    #bom-root { height: 100%; min-height: 320px; }
+    .boot-msg { padding: 14px; font-family: "Segoe UI", Arial, sans-serif; color: #333; }
+    .boot-err { color: #b71c1c; }
+  </style>
+  <script type="text/javascript">
+  //<![CDATA[
+    var BOM_REPO = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
+    var BOM_APP = BOM_REPO + 'index.html';
+
+    function bomMsg(text, isErr) {
+      try {
+        if (typeof widget !== 'undefined' && widget && widget.body) {
+          widget.body.innerHTML = '<div class="boot-msg' + (isErr ? ' boot-err' : '') + '">' + text + '</div>';
+        } else {
+          document.body.innerHTML = '<div class="boot-msg">' + text + '</div>';
+        }
+      } catch (e) { /* */ }
+    }
+
+    function bomLoadIframe() {
+      var root = document.getElementById('bom-root');
+      if (!root && typeof widget !== 'undefined' && widget.body) {
+        widget.body.innerHTML = '<div id="bom-root"></div>';
+        root = widget.body.firstChild;
+      }
+      if (!root) return;
+      var q = '';
+      try { q = window.location.search || ''; } catch (e1) { /* */ }
+      var iframe = document.createElement('iframe');
+      iframe.id = 'bomFrame';
+      iframe.title = 'BOM Analytics';
+      iframe.setAttribute('src', BOM_APP + q);
+      iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;';
+      root.innerHTML = '';
+      root.appendChild(iframe);
+      try {
+        if (widget.setBodySize) widget.setBodySize();
+        if (widget.setViewport) widget.setViewport({ height: '100%' });
+      } catch (e2) { /* */ }
+    }
+
+    function bomInit() {
+      bomMsg('BOM Analytics — iniciando UWA…');
+      if (typeof widget === 'undefined') {
+        bomMsg('Abra pelo 3DDashboard (Additional App Widget). URL: ' + BOM_APP, true);
+        return;
+      }
+      widget.addEvent('onLoad', function () {
+        bomLoadIframe();
+      });
+      widget.addEvent('onRefresh', function () {
+        var f = document.getElementById('bomFrame');
+        if (f) f.src = f.src;
+      });
+      try {
+        if (widget.body) {
+          widget.body.innerHTML = '<div id="bom-root"></div>';
+        }
+      } catch (e3) { /* */ }
+    }
+
+    bomInit();
+  //]]>
   </script>
 </head>
 <body>
-  <header class="app-header">
-    <div>
-      <h1>BOM Analytics Dashboard</h1>
-      <div class="subtitle">3DEXPERIENCE · Product Explorer · E-BOM · ENOVIA</div>
-    </div>
-    <div class="selection-info">
-      Seleção: <strong id="selectionLabel">—</strong>
-    </div>
-    <div class="toolbar">
-      <button type="button" class="btn btn-primary" id="btnRefresh">Atualizar</button>
-      <button type="button" class="btn" id="btnExport">Exportar Excel</button>
-      <button type="button" class="btn" id="btnExpandAll" title="Use expansão na árvore por performance">Expandir</button>
-    </div>
-  </header>
-
-  <div id="externalBanner" class="external-banner hidden">
-    <strong>Admin da plataforma:</strong> não use Web Page Reader para BOM real. Crie
-    <strong>Additional App</strong> com a mesma URL GitHub — passo a passo em
-    <code>GUIA-ADMIN-ADDITIONAL-APP.md</code> (sem publicar no 3DSpace).
-  </div>
-
-  <section class="panel goal-panel" aria-label="Objetivo">
-    <div class="panel-header">Para admin: Additional App (recomendado)</div>
-    <p class="goal-text">
-      Você é admin: registre este HTML como <strong>Additional App</strong> no Platform Management (URL GitHub igual à do Web Page Reader).
-      Assim o dashboard usa <strong>WAFData</strong> e lê a E-BOM do Product Explorer. Web Page Reader sozinho não acessa ENOVIA (limitação DS).
-    </p>
-  </section>
-
-  <section id="dropZone" class="drop-zone panel paste-panel collapsed-fallback" aria-label="Fallback manual">
-    <div class="panel-header">Fallback manual (não substitui o Explorer)</div>
-    <div class="drop-zone-inner">
-      <p id="dropZoneLabel" class="drop-label">Arraste o <strong>Physical Product</strong> do Explorer para a caixa — ou cole linhas da E-BOM</p>
-      <details class="paste-details" open>
-        <summary>Arrastar produto ou colar E-BOM</summary>
-      <ol class="paste-steps">
-        <li><strong>Produto:</strong> arraste o assembly (ex.: Drone) da árvore do Explorer para a caixa → <strong>Importar estrutura</strong>.</li>
-        <li><strong>E-BOM completa:</strong> selecione linhas na grade → Ctrl+C → Ctrl+V → Importar.</li>
-      </ol>
-      <textarea id="pasteArea" class="paste-area" rows="8" placeholder="Cole aqui (Ctrl+V) o texto copiado do Product Explorer..."></textarea>
-      <div class="paste-actions">
-        <button type="button" class="btn btn-primary" id="btnLoadDrone">Carregar Drone (teste)</button>
-        <button type="button" class="btn btn-primary" id="btnImportPaste">Importar da caixa</button>
-        <button type="button" class="btn" id="btnSampleImport">Testar exemplo E-BOM</button>
-      </div>
-      </details>
-      <details class="file-import-optional">
-        <summary>Arquivo (opcional)</summary>
-        <div id="fileDropOptional" class="file-drop-mini">
-          <label class="btn file-btn">
-            Escolher arquivo
-            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.txt" hidden />
-          </label>
-        </div>
-      </details>
-    </div>
-  </section>
-  <div id="statusBar" class="status-bar">Inicializando...</div>
-
-  <section class="panel explorer-sync-panel" aria-label="Sincronizar Product Explorer">
-    <div class="panel-header">Vincular ao Product Explorer (aba EXPLORE)</div>
-    <div class="explorer-sync-body">
-      <p class="sync-intro">Carregue o produto no <strong>Product Structure Explorer</strong> (aba EXPLORE), depois vincule aqui.</p>
-      <div class="sync-row">
-        <button type="button" class="btn btn-primary" id="btnSyncExplorer">Sincronizar com Explorer</button>
-        <button type="button" class="btn" id="btnCopyHelp">Como funciona?</button>
-      </div>
-      <div id="syncHelpText" class="sync-help">
-        <ol>
-          <li>Abra a aba <strong>EXPLORE</strong> e carregue o Physical Product (ex.: Drone).</li>
-          <li>Volte à aba <strong>PRODUCTEXPLORE</strong> e clique <strong>Sincronizar</strong>.</li>
-          <li>Se não atualizar: copie o <strong>Physical ID</strong> do Explorer e cole abaixo → <strong>Carregar objeto</strong>.</li>
-          <li>Para BOM completa no HTML: coloque os dois widgets na <strong>mesma aba</strong> ou publique o HTML no 3DSpace.</li>
-        </ol>
-      </div>
-      <div class="sync-manual">
-        <input type="text" id="explorerObjectId" value="132FB3CE26D70E006A18D1870000316D" placeholder="Physical ID" />
-        <input type="text" id="explorerObjectName" value="01_SKA_Drone Assembly_130520206" placeholder="Nome (opcional)" />
-        <button type="button" class="btn btn-primary" id="btnLoadObjectId">Carregar objeto</button>
-      </div>
-    </div>
-  </section>
-
-  <section class="platform-search panel hidden-cross-origin" aria-label="Busca Physical Product">
-    <div class="panel-header">Buscar na barra Pesquisar (alternativa)</div>
-    <div class="platform-search-body">
-      <input type="search" id="platformSearchInput" placeholder="Termo para copiar na Pesquisar do topo..." autocomplete="off" />
-      <button type="button" class="btn" id="btnPlatformSearch">Enviar ao Pesquisar</button>
-    </div>
-    <div id="platformSearchResults" class="platform-search-results"></div>
-  </section>
-
-  <main class="main-grid">
-    <section id="kpiGrid" class="kpi-grid" aria-label="Indicadores KPI"></section>
-
-    <section class="filters-bar" aria-label="Filtros">
-      <input type="search" id="searchInput" placeholder="Pesquisa rápida (nome, ID, owner...)" />
-      <select id="filterMaturity" aria-label="Maturidade">
-        <option value="all">Todas maturidades</option>
-        <option value="released">Released</option>
-        <option value="in_work">In Work</option>
-        <option value="obsolete">Obsolete</option>
-        <option value="other">Outros</option>
-      </select>
-      <select id="filterType" aria-label="Tipo">
-        <option value="all">Todos os tipos</option>
-      </select>
-      <select id="filterApproval" aria-label="Aprovação">
-        <option value="all">Aprovação — todos</option>
-        <option value="approved">Aprovados</option>
-        <option value="pending">Pendentes</option>
-      </select>
-      <select id="filterPP" aria-label="Physical Product">
-        <option value="all">Physical Product — todos</option>
-        <option value="yes">Com PP</option>
-        <option value="no">Sem PP</option>
-      </select>
-    </section>
-
-    <section class="charts-grid" aria-label="Gráficos">
-      <div class="chart-card"><canvas id="chartMaturity"></canvas></div>
-      <div class="chart-card"><canvas id="chartType"></canvas></div>
-      <div class="chart-card"><canvas id="chartRevision"></canvas></div>
-      <div class="chart-card"><canvas id="chartApproval"></canvas></div>
-    </section>
-
-    <section class="split-panel">
-      <div class="panel">
-        <div class="panel-header">Estrutura E-BOM</div>
-        <div id="bomTree" class="bom-tree"></div>
-      </div>
-      <div class="panel">
-        <div class="panel-header">Colunas Product Explorer (E-BOM)</div>
-        <div class="table-scroll table-scroll-wide">
-          <table id="bomTable" class="data-table">
-            <thead><tr></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <section class="panel issues-panel">
-      <div class="panel-header">Anomalias e Governança</div>
-      <ul id="issuesList"></ul>
-    </section>
-  </main>
-
-  <div id="loadingOverlay" class="loading-overlay hidden">Carregando estrutura de produto...</div>
-
-  <!-- Config -->
-  <script src="assets/js/config.js?v=20260601"></script>
-  <script src="assets/js/platform/widget-runtime.js?v=20260601"></script>
-  <!-- Platform -->
-  <script src="assets/js/platform/platform-bridge.js?v=20260601"></script>
-  <script src="assets/js/platform/context.js"></script>
-  <script src="assets/js/platform/compass.js"></script>
-  <script src="assets/js/platform/waf-client.js"></script>
-  <!-- Integration -->
-  <script src="assets/js/integration/3dx-content-parser.js?v=20260528"></script>
-  <script src="assets/js/integration/enovia-api.js"></script>
-  <script src="assets/js/integration/search-api.js"></script>
-  <script src="assets/js/integration/product-explorer-bridge.js?v=20260528"></script>
-  <!-- Services -->
-  <script src="assets/js/services/file-import-service.js"></script>
-  <script src="assets/js/services/product-search-service.js"></script>
-  <script src="assets/js/services/attribute-service.js"></script>
-  <script src="assets/js/services/physical-product-service.js"></script>
-  <script src="assets/js/services/bom-service.js?v=20260528"></script>
-  <!-- Processing -->
-  <script src="assets/js/processing/bom-normalizer.js"></script>
-  <script src="assets/js/processing/metrics-engine.js"></script>
-  <script src="assets/js/processing/anomaly-detector.js"></script>
-  <!-- UI -->
-  <script src="assets/js/ui/kpi-cards.js"></script>
-  <script src="assets/js/ui/charts-manager.js"></script>
-  <script src="assets/js/ui/filters.js"></script>
-  <script src="assets/js/ui/data-table.js"></script>
-  <script src="assets/js/ui/bom-tree.js"></script>
-  <script src="assets/js/ui/product-search-panel.js"></script>
-  <script src="assets/js/ui/explorer-sync-panel.js"></script>
-  <script src="assets/js/ui/drop-zone.js?v=20260528"></script>
-  <!-- App -->
-  <script src="assets/js/app.js?v=20260601"></script>
-  <script>
-    try {
-      if (typeof widget !== 'undefined' && widget && typeof WidgetRuntime !== 'undefined') {
-        WidgetRuntime.bindWidgetEvents();
-      }
-    } catch (e) { /* UWA inline only */ }
-  </script>
+  <div id="bom-root" class="boot-msg">BOM Analytics — aguardando 3DDashboard…</div>
 </body>
 </html>

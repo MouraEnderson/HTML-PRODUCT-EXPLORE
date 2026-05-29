@@ -1,47 +1,66 @@
 # Widget BOM Analytics em branco
 
-## Causa (corrigida no GitHub)
+## 1. Typo na URL (causa mais comum)
 
-No **Additional App**, o HTML roda no domínio **3DEXPERIENCE** (`*.3dexperience.3ds.com`), mas CSS/JS estavam em caminhos relativos `assets/` **só no GitHub** → página branca.
-
-Correção: `<base href="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/">` quando não está em `github.io`.
-
----
-
-## O que fazer agora
-
-1. Aguarde **1–2 min** após o push no GitHub (Pages).
-2. No dashboard: **F5** ou feche e reabra o widget **BOM Analytics**.
-3. Deve aparecer o cabeçalho azul **BOM Analytics Dashboard** e barra **Inicializando...**.
-
----
-
-## Se continuar branco
-
-### A) Conferir URL no app (Platform Management → Members → editar)
-
-```
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/index.html
-```
-
-Sem espaço no final. Deve abrir o dashboard numa aba do navegador (logado na 3DX).
-
-### B) F12 no widget
-
-Clique no widget → **F12** → aba **Console** → erros 404 em `assets/` = cache antigo → **Ctrl+F5**.
-
-### C) Preferências do widget no dashboard
-
-Editar widget → URL do código-fonte = mesma URL acima.
-
-### D) Testar URL UWA
+**Errado:** `mouraanderson.github.io`  
+**Certo:** `mouraenderson.github.io`
 
 ```
 https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-uwa.html
 ```
 
+Use **`widget-uwa.html`** no Additional App (template UWA exigido pela Dassault), não só `index.html`.
+
 ---
 
-## Branco total (sem texto)
+## 2. Teste em 2 passos
 
-URL vazia no cadastro do widget → edite o **Additional App** e cole a URL completa.
+### Passo A — widget mínimo
+
+No Additional App, URL temporária:
+
+```
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-min.html
+```
+
+Salvar → F5 no dashboard.
+
+| Resultado | Significado |
+|-----------|-------------|
+| Texto **"widget UWA OK"** | UWA funciona → vá para Passo B |
+| Branco | URL errada, GitHub bloqueado, ou 3DDashboard não alcança github.io (TI) |
+
+### Passo B — dashboard completo
+
+URL definitiva:
+
+```
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-uwa.html
+```
+
+Deve carregar o dashboard dentro do iframe.
+
+---
+
+## 3. Formulário (editar aplicativo adicional)
+
+| Campo | Valor |
+|--------|--------|
+| Tipo | Widget |
+| Armazenamento | Externo |
+| URL do código-fonte | `.../widget-uwa.html` |
+| URL configuração | vazio |
+
+---
+
+## 4. index.html direto no Widget
+
+O `index.html` não segue o template UWA (body vazio + `widget.onLoad`). Pode ficar branco no Additional App. Use **`widget-uwa.html`**.
+
+---
+
+## 5. Ainda branco
+
+- Abra a URL numa aba: deve carregar (não 404).
+- F12 → Console no widget.
+- Peça à TI: servidor **3DDashboard** precisa acessar **github.io** (cloud DS).
