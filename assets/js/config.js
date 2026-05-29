@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260531c',
+    BUILD: 'bom20260531d',
     /** Não carrega BOM automático no boot — só após Varrer */
     WAIT_FOR_USER_SCAN: true,
     /** Sprint 1: API primeiro; cola só com ALLOW_PASTE_FALLBACK true */
@@ -128,6 +128,13 @@
       spaceHost: 'r1132100929518-us1-space.3dexperience.3ds.com',
       defaultPhysicalId: '132FB3CE26D70E006A18D1870000316D',
       defaultDisplayName: '01_SKA_Drone Assembly_130520208'
+    },
+
+    /**
+     * Nome da estrutura (Explorer) → physicalId (32 hex).
+     * Preencha Mont10: Explorer → raiz → Propriedades → ID físico.
+     */
+    STRUCTURE_IDS: {
     },
 
     PLATFORM: {

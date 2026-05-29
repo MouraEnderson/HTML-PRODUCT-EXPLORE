@@ -117,6 +117,22 @@ var ExplorerScanner = (function () {
     });
   }
 
+  function resolveFromStructureRegistry(term) {
+    var reg = APP_CONFIG.STRUCTURE_IDS || {};
+    var key = String(term || '').trim();
+    if (!key) return null;
+    var id = reg[key] || reg[key.toLowerCase()] || reg[key.toUpperCase()];
+    if (!id || !isValidId(id)) return null;
+    return {
+      physicalid: id,
+      type: 'VPMReference',
+      name: key,
+      displayName: key,
+      displayType: 'Physical Product',
+      source: 'structure-registry'
+    };
+  }
+
   function pickSearchHit(term, hits) {
     if (!hits || !hits.length) return null;
     var t = String(term || '').toLowerCase();
@@ -184,16 +200,20 @@ var ExplorerScanner = (function () {
 
       var term = getExplorerRootSearchTerm();
       if (term) {
+        var regHit = resolveFromStructureRegistry(term);
+        if (regHit) return regHit;
         return resolveSelectionBySearch(term).then(function (found) {
           if (found) return found;
           return Promise.reject(new Error(
-            'Não encontrei "' + term + '" no 3DSpace. Selecione a raiz no Explorer e clique Varrer.'
+            'Não encontrei "' + term + '" no 3DSpace. ' +
+            'Cole o ID físico (32 hex) em Modo avançado ou use ?physicalid=... na URL do Additional App. ' +
+            'Ou cadastre em config STRUCTURE_IDS.'
           ));
         });
       }
 
       return Promise.reject(new Error(
-        'Sem seleção do Explorer. Clique na raiz (1ª linha) ou use URL: widget-v2.html?structure=NomeDaEstrutura'
+        'Sem seleção do Explorer. Clique na raiz (1ª linha), cole ID físico em Modo avançado, ou URL: ?physicalid=...'
       ));
     });
   }

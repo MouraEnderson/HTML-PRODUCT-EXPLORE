@@ -30,7 +30,7 @@
     window.__3DX_TRUSTED_WIDGET__ = true;
     window.__3DX_BOOT_DEFER__ = true;
 
-    var BOM_BUILD = 'bom20260531c';
+    var BOM_BUILD = 'bom20260531d';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
 
     var UI_HTML =
@@ -41,8 +41,11 @@
       '<div class="bom-panel">' +
       '<p class="bom-hint">Explorer: selecione a <b>raiz</b> (1ª linha) → Varrer. Ou URL: ?structure=NomeRaiz</p>' +
       '<button type="button" id="btnScanExplorer" class="bom-btn">Varrer estrutura Explorer</button>' +
-      '<details class="bom-fallback"><summary>Modo avançado (cola manual — não usar em produção)</summary>' +
-      '<textarea id="pasteArea" placeholder="Só se API falhar"></textarea></details>' +
+      '<details class="bom-fallback"><summary>Modo avançado (ID físico ou cola — não usar cola em produção)</summary>' +
+      '<p style="margin:6px 0;font-size:12px;">Explorer → raiz Mont10 → Propriedades → <b>ID físico</b> (32 caracteres):</p>' +
+      '<input type="text" id="explorerObjectId" placeholder="Cole o physicalId aqui" style="width:100%;padding:8px;font-size:12px;box-sizing:border-box;" />' +
+      '<button type="button" id="btnLoadPhysicalId" class="bom-btn" style="margin-top:8px;background:#1565c0;">Varrer por ID físico</button>' +
+      '<textarea id="pasteArea" placeholder="Cola da grade (só teste)"></textarea></details>' +
       '</div>' +
       '<div id="kpiGrid" style="padding:8px 14px;"></div>' +
       '<div class="bom-charts">' +
@@ -54,7 +57,6 @@
       '<table id="bomTable" class="bom-table"><thead><tr></tr></thead><tbody></tbody></table></div>' +
       '<div id="loadingOverlay" class="bom-hidden">Varrendo…</div>' +
       '<div class="bom-hidden" id="hiddenFields">' +
-      '<input type="text" id="explorerObjectId" />' +
       '<input type="text" id="explorerObjectName" />' +
       '<input type="search" id="searchInput" />' +
       '<select id="filterMaturity"><option value="all">all</option></select>' +

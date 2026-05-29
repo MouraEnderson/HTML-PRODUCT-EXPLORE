@@ -354,6 +354,28 @@ var App = (function () {
       });
     }
 
+    var btnLoadId = byId('btnLoadPhysicalId');
+    if (btnLoadId) {
+      btnLoadId.addEventListener('click', function () {
+        var idEl = byId('explorerObjectId');
+        var id = idEl && idEl.value ? String(idEl.value).trim() : '';
+        if (!id || id.length < 16) {
+          setStatus('Cole o ID físico (32 hex) da raiz no Explorer.', 'error');
+          return;
+        }
+        if (typeof ProductExplorerBridge !== 'undefined') {
+          ProductExplorerBridge.setSelection({
+            physicalid: id,
+            type: 'VPMReference',
+            name: byId('selectionLabel') ? byId('selectionLabel').textContent : id,
+            displayName: byId('selectionLabel') ? byId('selectionLabel').textContent : id,
+            source: 'manual-id'
+          }, { silent: true });
+        }
+        runExplorerScan(btnLoadId);
+      });
+    }
+
     var btnExample = byId('btnLoadExample');
     if (btnExample) {
       btnExample.addEventListener('click', function () {

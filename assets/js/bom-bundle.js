@@ -10,7 +10,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260531c',
+    BUILD: 'bom20260531d',
     /** Não carrega BOM automático no boot — só após Varrer */
     WAIT_FOR_USER_SCAN: true,
     /** Sprint 1: API primeiro; cola só com ALLOW_PASTE_FALLBACK true */
@@ -130,6 +130,13 @@
       spaceHost: 'r1132100929518-us1-space.3dexperience.3ds.com',
       defaultPhysicalId: '132FB3CE26D70E006A18D1870000316D',
       defaultDisplayName: '01_SKA_Drone Assembly_130520208'
+    },
+
+    /**
+     * Nome da estrutura (Explorer) → physicalId (32 hex).
+     * Preencha Mont10: Explorer → raiz → Propriedades → ID físico.
+     */
+    STRUCTURE_IDS: {
     },
 
     PLATFORM: {
@@ -1234,11 +1241,17 @@ var SearchApi = (function () {
     var m = APP_CONFIG.MODELERS || {};
     var eng = m.ENG_ITEM || 'dseng';
     var engType = m.ENG_ITEM_TYPE || 'dseng:EngItem';
+    var titleFilter = encodeURIComponent("title co '" + term.replace(/'/g, "''") + "'");
+    var nameFilter = encodeURIComponent("name co '" + term.replace(/'/g, "''") + "'");
     return [
       modelerBase + '/search?searchStr=' + enc + '&$top=' + top,
       modelerBase + '/search?q=' + enc + '&$top=' + top,
       modelerBase + '/' + eng + '/' + engType + '/search?searchStr=' + enc + '&$top=' + top,
+      modelerBase + '/' + eng + '/' + engType + '?$searchStr=' + enc + '&$top=' + top,
+      modelerBase + '/' + eng + '/' + engType + '?$filter=' + titleFilter + '&$top=' + top,
+      modelerBase + '/' + eng + '/' + engType + '?$filter=' + nameFilter + '&$top=' + top,
       modelerBase + '/dsxcad/dsxcad:VPMReference/search?searchStr=' + enc + '&$top=' + top,
+      modelerBase + '/dsxcad/dsxcad:VPMReference?$searchStr=' + enc + '&$top=' + top,
       modelerBase + '/dspfl/dspfl:PhysicalProduct/search?searchStr=' + enc + '&$top=' + top,
       spaceUrl + '/resources/v1/modeler/search?searchStr=' + enc + '&$top=' + top,
       spaceUrl + '/resources/v1/federated/search?searchStr=' + enc + '&$top=' + top,
@@ -1246,12 +1259,29 @@ var SearchApi = (function () {
     ];
   }
 
+  function responseHitCount(data) {
+    if (!data) return 0;
+    if (typeof EnoviaApi !== 'undefined' && EnoviaApi.extractMembers) {
+      return EnoviaApi.extractMembers(data).length;
+    }
+    if (Array.isArray(data)) return data.length;
+    if (Array.isArray(data.member)) return data.member.length;
+    if (Array.isArray(data.infos)) return data.infos.length;
+    if (Array.isArray(data.results)) return data.results.length;
+    return 0;
+  }
+
   function trySearch(urls, index) {
     index = index || 0;
     if (index >= urls.length) {
       return Promise.reject(new Error('Nenhum endpoint de busca respondeu no tenant.'));
     }
-    return WafClient.get(urls[index]).catch(function () {
+    return WafClient.get(urls[index]).then(function (data) {
+      if (responseHitCount(data) === 0 && index + 1 < urls.length) {
+        return trySearch(urls, index + 1);
+      }
+      return data;
+    }).catch(function () {
       return trySearch(urls, index + 1);
     });
   }
@@ -2652,6 +2682,22 @@ var ExplorerScanner = (function () {
     });
   }
 
+  function resolveFromStructureRegistry(term) {
+    var reg = APP_CONFIG.STRUCTURE_IDS || {};
+    var key = String(term || '').trim();
+    if (!key) return null;
+    var id = reg[key] || reg[key.toLowerCase()] || reg[key.toUpperCase()];
+    if (!id || !isValidId(id)) return null;
+    return {
+      physicalid: id,
+      type: 'VPMReference',
+      name: key,
+      displayName: key,
+      displayType: 'Physical Product',
+      source: 'structure-registry'
+    };
+  }
+
   function pickSearchHit(term, hits) {
     if (!hits || !hits.length) return null;
     var t = String(term || '').toLowerCase();
@@ -2719,16 +2765,20 @@ var ExplorerScanner = (function () {
 
       var term = getExplorerRootSearchTerm();
       if (term) {
+        var regHit = resolveFromStructureRegistry(term);
+        if (regHit) return regHit;
         return resolveSelectionBySearch(term).then(function (found) {
           if (found) return found;
           return Promise.reject(new Error(
-            'Não encontrei "' + term + '" no 3DSpace. Selecione a raiz no Explorer e clique Varrer.'
+            'Não encontrei "' + term + '" no 3DSpace. ' +
+            'Cole o ID físico (32 hex) em Modo avançado ou use ?physicalid=... na URL do Additional App. ' +
+            'Ou cadastre em config STRUCTURE_IDS.'
           ));
         });
       }
 
       return Promise.reject(new Error(
-        'Sem seleção do Explorer. Clique na raiz (1ª linha) ou use URL: widget-v2.html?structure=NomeDaEstrutura'
+        'Sem seleção do Explorer. Clique na raiz (1ª linha), cole ID físico em Modo avançado, ou URL: ?physicalid=...'
       ));
     });
   }
@@ -4390,6 +4440,28 @@ var App = (function () {
     if (btnScan) {
       btnScan.addEventListener('click', function () {
         runExplorerScan(btnScan);
+      });
+    }
+
+    var btnLoadId = byId('btnLoadPhysicalId');
+    if (btnLoadId) {
+      btnLoadId.addEventListener('click', function () {
+        var idEl = byId('explorerObjectId');
+        var id = idEl && idEl.value ? String(idEl.value).trim() : '';
+        if (!id || id.length < 16) {
+          setStatus('Cole o ID físico (32 hex) da raiz no Explorer.', 'error');
+          return;
+        }
+        if (typeof ProductExplorerBridge !== 'undefined') {
+          ProductExplorerBridge.setSelection({
+            physicalid: id,
+            type: 'VPMReference',
+            name: byId('selectionLabel') ? byId('selectionLabel').textContent : id,
+            displayName: byId('selectionLabel') ? byId('selectionLabel').textContent : id,
+            source: 'manual-id'
+          }, { silent: true });
+        }
+        runExplorerScan(btnLoadId);
       });
     }
 
