@@ -8,7 +8,9 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260531a',
+    BUILD: 'bom20260531b',
+    /** Não carrega BOM automático no boot — só após Varrer */
+    WAIT_FOR_USER_SCAN: true,
     /** Sprint 1: API primeiro; cola só com ALLOW_PASTE_FALLBACK true */
     USE_API_SCAN_FIRST: true,
     ALLOW_PASTE_FALLBACK: false,
@@ -25,7 +27,7 @@
     SHOW_PLATFORM_SEARCH: false,
     AUTO_LOAD_DEMO_DRONE: false,
     DEMO_ON_API_FAIL: false,
-    SNAPSHOT_FIRST: true,
+    SNAPSHOT_FIRST: false,
     AUTO_SYNC_EXPLORER_MS: 15000,
     SKIP_PP_ENRICH: true,
     BOM_FAST_DEPTH: 3,

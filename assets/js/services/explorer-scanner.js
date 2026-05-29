@@ -66,11 +66,27 @@ var ExplorerScanner = (function () {
     };
   }
 
+  function getLabelStructureName() {
+    var el = document.getElementById('selectionLabel');
+    var t = el && el.textContent ? String(el.textContent).trim() : '';
+    if (!t || t === '-') return null;
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.isBadDashboardSelection) {
+      if (ProductExplorerBridge.isBadDashboardSelection({ name: t, displayName: t })) return null;
+    }
+    return t;
+  }
+
   function getExplorerRootSearchTerm() {
     var q = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
     if (q.structure) return String(q.structure).trim();
     if (q.rootName) return String(q.rootName).trim();
     if (q.name && !isValidId(q.name)) return String(q.name).trim();
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getStructureNameHint) {
+      var hint = ProductExplorerBridge.getStructureNameHint();
+      if (hint) return hint;
+    }
+    var fromLabel = getLabelStructureName();
+    if (fromLabel) return fromLabel;
     var nameEl = document.getElementById('explorerObjectName');
     if (nameEl && nameEl.value && String(nameEl.value).trim()) {
       return String(nameEl.value).trim();
@@ -80,6 +96,25 @@ var ExplorerScanner = (function () {
       if (last) return last;
     } catch (e) { /* */ }
     return null;
+  }
+
+  function waitForSelection(maxAttempts, intervalMs) {
+    maxAttempts = maxAttempts || 12;
+    intervalMs = intervalMs || 400;
+    return new Promise(function (resolve) {
+      var n = 0;
+      function tick() {
+        if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.pollSelection) {
+          ProductExplorerBridge.pollSelection();
+        }
+        var sel = getSelection();
+        if (sel) return resolve(sel);
+        n++;
+        if (n >= maxAttempts) return resolve(null);
+        window.setTimeout(tick, intervalMs);
+      }
+      tick();
+    });
   }
 
   function pickSearchHit(term, hits) {
@@ -131,25 +166,26 @@ var ExplorerScanner = (function () {
       PlatformBridge.requestExplorerStructure();
     }
 
-    var sel = getSelection();
-    if (sel) return Promise.resolve(sel);
+    return waitForSelection(12, 400).then(function (sel) {
+      if (sel) return sel;
 
-    var manual = readManualPhysicalId();
-    if (manual) return Promise.resolve(manual);
+      var manual = readManualPhysicalId();
+      if (manual) return manual;
 
-    var term = getExplorerRootSearchTerm();
-    if (term) {
-      return resolveSelectionBySearch(term).then(function (found) {
-        if (found) return found;
-        return Promise.reject(new Error(
-          'Não encontrei "' + term + '" no 3DSpace. Selecione a raiz no Explorer e clique Varrer.'
-        ));
-      });
-    }
+      var term = getExplorerRootSearchTerm();
+      if (term) {
+        return resolveSelectionBySearch(term).then(function (found) {
+          if (found) return found;
+          return Promise.reject(new Error(
+            'Não encontrei "' + term + '" no 3DSpace. Selecione a raiz no Explorer e clique Varrer.'
+          ));
+        });
+      }
 
-    return Promise.reject(new Error(
-      'Selecione a raiz da estrutura no Product Explorer (1ª linha da árvore) e clique Varrer.'
-    ));
+      return Promise.reject(new Error(
+        'Sem seleção do Explorer. Clique na raiz (1ª linha) ou use URL: widget-v2.html?structure=NomeDaEstrutura'
+      ));
+    });
   }
 
   function ensureSpaceApi() {
@@ -279,6 +315,9 @@ var ExplorerScanner = (function () {
    */
   function scan() {
     clearBadSelection();
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.pollSelection) {
+      ProductExplorerBridge.pollSelection();
+    }
     var timeout = APP_CONFIG.SCAN_TIMEOUT_MS || 90000;
     var apiChain = scanViaApiOrSelection();
 

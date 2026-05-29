@@ -10,7 +10,9 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260531a',
+    BUILD: 'bom20260531b',
+    /** Não carrega BOM automático no boot — só após Varrer */
+    WAIT_FOR_USER_SCAN: true,
     /** Sprint 1: API primeiro; cola só com ALLOW_PASTE_FALLBACK true */
     USE_API_SCAN_FIRST: true,
     ALLOW_PASTE_FALLBACK: false,
@@ -27,7 +29,7 @@
     SHOW_PLATFORM_SEARCH: false,
     AUTO_LOAD_DEMO_DRONE: false,
     DEMO_ON_API_FAIL: false,
-    SNAPSHOT_FIRST: true,
+    SNAPSHOT_FIRST: false,
     AUTO_SYNC_EXPLORER_MS: 15000,
     SKIP_PP_ENRICH: true,
     BOM_FAST_DEPTH: 3,
@@ -1373,6 +1375,7 @@ var ProductExplorerBridge = (function () {
 
   var listeners = [];
   var currentSelection = null;
+  var structureNameHint = null;
 
   var MESSAGE_TYPES = [
     '3DX_SELECTION',
@@ -1454,6 +1457,26 @@ var ProductExplorerBridge = (function () {
     currentSelection = null;
   }
 
+  function extractStructureNameFromText(text) {
+    var s = String(text || '');
+    var m =
+      s.match(/Product Structure Explorer\s*[-–]\s*([^\s<]+)/i) ||
+      s.match(/Structure Explorer\s*[-–]\s*([^\s<]+)/i) ||
+      s.match(/Explorer\s*[-–]\s*([^\s<]+)/i);
+    return m ? m[1].trim() : null;
+  }
+
+  function setStructureNameHint(name) {
+    var n = String(name || '').trim();
+    if (!n || n === '-') return;
+    if (/^(enderson|moura|login|user)/i.test(n)) return;
+    structureNameHint = n;
+  }
+
+  function getStructureNameHint() {
+    return structureNameHint;
+  }
+
   function setSelection(sel, opts) {
     if (!sel || !isValidId(sel.physicalid) || isBadDashboardSelection(sel)) return;
     currentSelection = sel;
@@ -1490,6 +1513,14 @@ var ProductExplorerBridge = (function () {
       var sel3dx = ThreeDXContentParser.toSelection(data);
       if (sel3dx) setSelection(sel3dx);
       return;
+    }
+
+    if (data.structureName || data.rootName || data.structure || data.productName) {
+      setStructureNameHint(data.structureName || data.rootName || data.structure || data.productName);
+    }
+    if (data.widgetTitle || data.title || data.caption) {
+      var fromTitle = extractStructureNameFromText(data.widgetTitle || data.title || data.caption);
+      if (fromTitle) setStructureNameHint(fromTitle);
     }
 
     if (data.rootPhysicalId || data.rootId) {
@@ -1539,6 +1570,9 @@ var ProductExplorerBridge = (function () {
   }
 
   function initFromQuery() {
+    if (APP_QUERY.structure || APP_QUERY.rootName) {
+      setStructureNameHint(APP_QUERY.structure || APP_QUERY.rootName);
+    }
     if (APP_QUERY.physicalid && isValidId(APP_QUERY.physicalid)) {
       setSelection({
         physicalid: APP_QUERY.physicalid,
@@ -1613,6 +1647,9 @@ var ProductExplorerBridge = (function () {
     subscribe: subscribe,
     setSelection: setSelection,
     getSelection: function () { return currentSelection; },
+    getStructureNameHint: getStructureNameHint,
+    setStructureNameHint: setStructureNameHint,
+    extractStructureNameFromText: extractStructureNameFromText,
     clearSelection: clearSelection,
     isBadDashboardSelection: isBadDashboardSelection,
     normalizeSelection: normalizeSelection,
@@ -2527,11 +2564,27 @@ var ExplorerScanner = (function () {
     };
   }
 
+  function getLabelStructureName() {
+    var el = document.getElementById('selectionLabel');
+    var t = el && el.textContent ? String(el.textContent).trim() : '';
+    if (!t || t === '-') return null;
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.isBadDashboardSelection) {
+      if (ProductExplorerBridge.isBadDashboardSelection({ name: t, displayName: t })) return null;
+    }
+    return t;
+  }
+
   function getExplorerRootSearchTerm() {
     var q = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
     if (q.structure) return String(q.structure).trim();
     if (q.rootName) return String(q.rootName).trim();
     if (q.name && !isValidId(q.name)) return String(q.name).trim();
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getStructureNameHint) {
+      var hint = ProductExplorerBridge.getStructureNameHint();
+      if (hint) return hint;
+    }
+    var fromLabel = getLabelStructureName();
+    if (fromLabel) return fromLabel;
     var nameEl = document.getElementById('explorerObjectName');
     if (nameEl && nameEl.value && String(nameEl.value).trim()) {
       return String(nameEl.value).trim();
@@ -2541,6 +2594,25 @@ var ExplorerScanner = (function () {
       if (last) return last;
     } catch (e) { /* */ }
     return null;
+  }
+
+  function waitForSelection(maxAttempts, intervalMs) {
+    maxAttempts = maxAttempts || 12;
+    intervalMs = intervalMs || 400;
+    return new Promise(function (resolve) {
+      var n = 0;
+      function tick() {
+        if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.pollSelection) {
+          ProductExplorerBridge.pollSelection();
+        }
+        var sel = getSelection();
+        if (sel) return resolve(sel);
+        n++;
+        if (n >= maxAttempts) return resolve(null);
+        window.setTimeout(tick, intervalMs);
+      }
+      tick();
+    });
   }
 
   function pickSearchHit(term, hits) {
@@ -2592,25 +2664,26 @@ var ExplorerScanner = (function () {
       PlatformBridge.requestExplorerStructure();
     }
 
-    var sel = getSelection();
-    if (sel) return Promise.resolve(sel);
+    return waitForSelection(12, 400).then(function (sel) {
+      if (sel) return sel;
 
-    var manual = readManualPhysicalId();
-    if (manual) return Promise.resolve(manual);
+      var manual = readManualPhysicalId();
+      if (manual) return manual;
 
-    var term = getExplorerRootSearchTerm();
-    if (term) {
-      return resolveSelectionBySearch(term).then(function (found) {
-        if (found) return found;
-        return Promise.reject(new Error(
-          'Não encontrei "' + term + '" no 3DSpace. Selecione a raiz no Explorer e clique Varrer.'
-        ));
-      });
-    }
+      var term = getExplorerRootSearchTerm();
+      if (term) {
+        return resolveSelectionBySearch(term).then(function (found) {
+          if (found) return found;
+          return Promise.reject(new Error(
+            'Não encontrei "' + term + '" no 3DSpace. Selecione a raiz no Explorer e clique Varrer.'
+          ));
+        });
+      }
 
-    return Promise.reject(new Error(
-      'Selecione a raiz da estrutura no Product Explorer (1ª linha da árvore) e clique Varrer.'
-    ));
+      return Promise.reject(new Error(
+        'Sem seleção do Explorer. Clique na raiz (1ª linha) ou use URL: widget-v2.html?structure=NomeDaEstrutura'
+      ));
+    });
   }
 
   function ensureSpaceApi() {
@@ -2740,6 +2813,9 @@ var ExplorerScanner = (function () {
    */
   function scan() {
     clearBadSelection();
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.pollSelection) {
+      ProductExplorerBridge.pollSelection();
+    }
     var timeout = APP_CONFIG.SCAN_TIMEOUT_MS || 90000;
     var apiChain = scanViaApiOrSelection();
 
@@ -4610,6 +4686,10 @@ var App = (function () {
       .then(function () {
         return tryLoadSnapshotFirst().then(function () {
           if (BomService.getNodeCount() > 1) return;
+          if (APP_CONFIG.WAIT_FOR_USER_SCAN) {
+            setStatus('Selecione a raiz no Explorer → clique Varrer estrutura.', 'info');
+            return;
+          }
           setStatus('Carregando E-BOM…', 'info');
           trySyncThenLoad();
         });

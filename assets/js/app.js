@@ -694,6 +694,10 @@ var App = (function () {
       .then(function () {
         return tryLoadSnapshotFirst().then(function () {
           if (BomService.getNodeCount() > 1) return;
+          if (APP_CONFIG.WAIT_FOR_USER_SCAN) {
+            setStatus('Selecione a raiz no Explorer → clique Varrer estrutura.', 'info');
+            return;
+          }
           setStatus('Carregando E-BOM…', 'info');
           trySyncThenLoad();
         });

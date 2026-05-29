@@ -7,6 +7,7 @@ var ProductExplorerBridge = (function () {
 
   var listeners = [];
   var currentSelection = null;
+  var structureNameHint = null;
 
   var MESSAGE_TYPES = [
     '3DX_SELECTION',
@@ -88,6 +89,26 @@ var ProductExplorerBridge = (function () {
     currentSelection = null;
   }
 
+  function extractStructureNameFromText(text) {
+    var s = String(text || '');
+    var m =
+      s.match(/Product Structure Explorer\s*[-–]\s*([^\s<]+)/i) ||
+      s.match(/Structure Explorer\s*[-–]\s*([^\s<]+)/i) ||
+      s.match(/Explorer\s*[-–]\s*([^\s<]+)/i);
+    return m ? m[1].trim() : null;
+  }
+
+  function setStructureNameHint(name) {
+    var n = String(name || '').trim();
+    if (!n || n === '-') return;
+    if (/^(enderson|moura|login|user)/i.test(n)) return;
+    structureNameHint = n;
+  }
+
+  function getStructureNameHint() {
+    return structureNameHint;
+  }
+
   function setSelection(sel, opts) {
     if (!sel || !isValidId(sel.physicalid) || isBadDashboardSelection(sel)) return;
     currentSelection = sel;
@@ -124,6 +145,14 @@ var ProductExplorerBridge = (function () {
       var sel3dx = ThreeDXContentParser.toSelection(data);
       if (sel3dx) setSelection(sel3dx);
       return;
+    }
+
+    if (data.structureName || data.rootName || data.structure || data.productName) {
+      setStructureNameHint(data.structureName || data.rootName || data.structure || data.productName);
+    }
+    if (data.widgetTitle || data.title || data.caption) {
+      var fromTitle = extractStructureNameFromText(data.widgetTitle || data.title || data.caption);
+      if (fromTitle) setStructureNameHint(fromTitle);
     }
 
     if (data.rootPhysicalId || data.rootId) {
@@ -173,6 +202,9 @@ var ProductExplorerBridge = (function () {
   }
 
   function initFromQuery() {
+    if (APP_QUERY.structure || APP_QUERY.rootName) {
+      setStructureNameHint(APP_QUERY.structure || APP_QUERY.rootName);
+    }
     if (APP_QUERY.physicalid && isValidId(APP_QUERY.physicalid)) {
       setSelection({
         physicalid: APP_QUERY.physicalid,
@@ -247,6 +279,9 @@ var ProductExplorerBridge = (function () {
     subscribe: subscribe,
     setSelection: setSelection,
     getSelection: function () { return currentSelection; },
+    getStructureNameHint: getStructureNameHint,
+    setStructureNameHint: setStructureNameHint,
+    extractStructureNameFromText: extractStructureNameFromText,
     clearSelection: clearSelection,
     isBadDashboardSelection: isBadDashboardSelection,
     normalizeSelection: normalizeSelection,
