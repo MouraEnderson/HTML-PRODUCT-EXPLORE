@@ -1,30 +1,14 @@
-# URL para colar no Web Page Reader (copiar TUDO numa linha)
+URL do Additional App (Widget + Externo) — use EXATAMENTE:
 
-## USE NO WEB PAGE READER (GitHub Pages — renderiza HTML, não código)
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-uwa.html
 
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/index.html?physicalid=132FB3CE26D70E006A18D1870000316D&displayName=01_SKA_Drone%20Assembly_130520206
+Alternativa (também UWA):
 
-## Alternativa preview
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/index.html
 
-https://htmlpreview.github.io/?https://github.com/MouraEnderson/HTML-PRODUCT-EXPLORE/blob/main/index.html
+Com produto fixo (teste):
 
-## NÃO USE (mostra código-fonte no widget — text/plain)
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/index.html?physicalid=132FB3CE26D70E006A18D1870000316D&displayName=01_SKA_Drone%20Assembly_130520208
 
-https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/index.html
-
-## O que NÃO funciona no Web Page Reader
-
-- Link 3DDrive (#app:X3DDRIV_AP/...)
-- Sincronizar automático com aba EXPLORE (bloqueio segurança)
-- APIs ENOVIA reais (precisa HTML no 3DSpace)
-
-## Depois de colar a URL
-
-1. Ctrl+F5 no dashboard
-2. Deve aparecer faixa laranja "Modo Web Page Reader"
-3. Physical ID já preenchido (URL Drone) → Carregar objeto → Atualizar
-4. KPIs e gráficos demo aparecem (não é BOM real do tenant)
-
-## Solução real (BOM do Explorer)
-
-Admin publica: https://r1132100929518-us1-space.3dexperience.3ds.com/enovia/webapps/BomAnalytics/index.html
+Após publicar no GitHub: no dashboard, remova o widget antigo e adicione de novo.
+Ctrl+F5 no navegador. Status deve mostrar "v20260528" (não "Inicializando…").

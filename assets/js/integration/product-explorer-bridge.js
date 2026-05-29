@@ -43,13 +43,33 @@ var ProductExplorerBridge = (function () {
 
   function onMessage(event) {
     if (!event.data) return;
-    if (event.origin && event.origin.indexOf('3dexperience.3ds.com') < 0 &&
-        event.origin.indexOf('github') < 0 && event.origin !== location.origin) {
-      return;
-    }
+    var origin = event.origin || '';
+    var okOrigin =
+      !origin ||
+      origin === location.origin ||
+      origin.indexOf('3dexperience.3ds.com') >= 0 ||
+      origin.indexOf('3ds.com') >= 0 ||
+      origin.indexOf('github') >= 0;
+    if (!okOrigin) return;
+
     var data = event.data;
     if (typeof data === 'string') {
+      if (typeof ThreeDXContentParser !== 'undefined') {
+        var loose = ThreeDXContentParser.parseJsonText(data);
+        if (loose) {
+          setSelection(loose);
+          return;
+        }
+      }
       try { data = JSON.parse(data); } catch (e) { return; }
+    }
+
+    if (data.physicalid || data.objectId || data.resourceid) {
+      var direct = normalizeSelection(data);
+      if (direct) {
+        setSelection(direct);
+        return;
+      }
     }
     if (data.protocol === '3DXContent' && data.data && data.data.items) {
       var sel3dx = ThreeDXContentParser.toSelection(data);
@@ -132,13 +152,25 @@ var ProductExplorerBridge = (function () {
     }
   }
 
+  function startContentPoll() {
+    window.setInterval(function () {
+      if (typeof ThreeDXContentParser === 'undefined') return;
+      var content = ThreeDXContentParser.parseLocations();
+      var sel = content ? ThreeDXContentParser.toSelection(content) : null;
+      if (!sel || !sel.physicalid) return;
+      if (!currentSelection || currentSelection.physicalid !== sel.physicalid) {
+        setSelection(sel);
+      }
+    }, 2500);
+  }
+
   function init() {
     window.addEventListener('message', onMessage, false);
     initFromQuery();
     initFrom3DXDeepLink();
     initWidgetEvents();
     initPlatformSelection();
-    /* poll centralizado em app.js */
+    startContentPoll();
     return {
       getSelection: function () { return currentSelection; },
       subscribe: subscribe,

@@ -5,66 +5,57 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <title>BOM Analytics</title>
-  <script>
-    (function () {
-      var REPO = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-      var host = (location.hostname || '').toLowerCase();
-      var onGithub = host.indexOf('github.io') >= 0;
-      var onLocal = host === 'localhost' || host === '127.0.0.1';
-      if (!onGithub && !onLocal) {
-        var base = document.createElement('base');
-        base.href = REPO;
-        document.head.appendChild(base);
-      }
-      function loadScript(src) {
-        var s = document.createElement('script');
-        s.src = (onGithub || onLocal) ? src : REPO + src;
-        s.async = false;
-        document.head.appendChild(s);
-      }
-      loadScript('assets/vendor/chart.umd.min.js');
-    })();
+  <script type="text/javascript">
+    window.__3DX_TRUSTED_WIDGET__ = true;
+    window.__3DX_BOOT_DEFER__ = true;
   </script>
-  <link rel="stylesheet" href="assets/css/dashboard.css?v=20260608" />
+  <script type="text/javascript" src="assets/vendor/chart.umd.min.js"></script>
+  <script type="text/javascript">
+  //<![CDATA[
+    var BOM_VER = '20260528';
+    function bomEntry() {
+      var s = document.createElement('script');
+      s.src = 'assets/js/boot.js?v=' + BOM_VER;
+      s.onload = function () {
+        var target = (typeof widget !== 'undefined' && widget.body) ? widget.body : document.body;
+        BomBoot.run(target);
+      };
+      document.head.appendChild(s);
+    }
+    if (typeof widget !== 'undefined' && widget.addEvent) {
+      widget.addEvent('onLoad', bomEntry);
+    } else {
+      document.addEventListener('DOMContentLoaded', bomEntry);
+    }
+  //]]>
+  </script>
 </head>
-<body class="ui-explorer-only">
+<body>
+<div id="bom-app-template" style="display:none">
   <header class="app-header explorer-header">
     <h1>BOM Analytics</h1>
     <p class="explorer-product">Product Structure Explorer: <strong id="selectionLabel">—</strong></p>
     <button type="button" class="ui-hidden" id="btnSyncExplorer">sync</button>
     <button type="button" class="ui-hidden" id="btnRefresh">refresh</button>
   </header>
-
-  <div id="statusBar" class="status-bar">Aguardando produto no Explorer…</div>
-
+  <div id="statusBar" class="status-bar">Aguardando… v20260528</div>
   <div class="ui-hidden" aria-hidden="true">
-    <div id="platformSearchResults"></div>
-    <input type="search" id="platformSearchInput" />
-    <button id="btnPlatformSearch"></button>
     <input type="text" id="explorerObjectId" />
     <input type="text" id="explorerObjectName" />
     <button id="btnLoadObjectId"></button>
-    <button id="btnCopyHelp"></button>
-    <div id="syncHelpText"></div>
-    <section id="dropZone"></section>
-    <input type="file" id="fileInput" />
     <select id="filterMaturity"><option value="all">all</option></select>
     <select id="filterType"><option value="all">all</option></select>
     <select id="filterApproval"><option value="all">all</option></select>
     <select id="filterPP"><option value="all">all</option></select>
-    <div id="bomTree"></div>
   </div>
-
   <main class="dashboard-explorer">
-    <section id="kpiGrid" class="kpi-grid kpi-compact" aria-label="Indicadores"></section>
-
-    <section class="charts-grid charts-main" aria-label="Gráficos">
+    <section id="kpiGrid" class="kpi-grid kpi-compact"></section>
+    <section class="charts-grid charts-main">
       <div class="chart-card"><canvas id="chartMaturity"></canvas></div>
       <div class="chart-card"><canvas id="chartType"></canvas></div>
       <div class="chart-card"><canvas id="chartRevision"></canvas></div>
       <div class="chart-card"><canvas id="chartApproval"></canvas></div>
     </section>
-
     <section class="panel table-panel">
       <div class="panel-header">E-BOM — <span id="tableProductLabel">—</span></div>
       <div class="filter-row">
@@ -78,40 +69,7 @@
       </div>
     </section>
   </main>
-
-  <div id="loadingOverlay" class="loading-overlay hidden">Carregando E-BOM do Explorer…</div>
-
-  <script src="assets/js/config.js?v=20260608"></script>
-  <script src="assets/js/platform/widget-runtime.js?v=20260608"></script>
-  <script src="assets/js/platform/platform-bridge.js?v=20260608"></script>
-  <script src="assets/js/platform/context.js?v=20260608"></script>
-  <script src="assets/js/platform/compass.js?v=20260608"></script>
-  <script src="assets/js/platform/waf-client.js?v=20260608"></script>
-  <script src="assets/js/integration/3dx-content-parser.js?v=20260608"></script>
-  <script src="assets/js/integration/enovia-api.js?v=20260608"></script>
-  <script src="assets/js/integration/search-api.js?v=20260608"></script>
-  <script src="assets/js/integration/product-explorer-bridge.js?v=20260608"></script>
-  <script src="assets/js/services/file-import-service.js?v=20260608"></script>
-  <script src="assets/js/services/product-search-service.js?v=20260608"></script>
-  <script src="assets/js/services/attribute-service.js?v=20260608"></script>
-  <script src="assets/js/services/physical-product-service.js?v=20260608"></script>
-  <script src="assets/js/services/bom-service.js?v=20260608"></script>
-  <script src="assets/js/processing/bom-normalizer.js?v=20260608"></script>
-  <script src="assets/js/processing/metrics-engine.js?v=20260608"></script>
-  <script src="assets/js/processing/anomaly-detector.js?v=20260608"></script>
-  <script src="assets/js/ui/kpi-cards.js?v=20260608"></script>
-  <script src="assets/js/ui/charts-manager.js?v=20260608"></script>
-  <script src="assets/js/ui/filters.js?v=20260608"></script>
-  <script src="assets/js/ui/data-table.js?v=20260608"></script>
-  <script src="assets/js/ui/bom-tree.js?v=20260608"></script>
-  <script src="assets/js/ui/explorer-sync-panel.js?v=20260608"></script>
-  <script src="assets/js/app.js?v=20260608"></script>
-  <script>
-    try {
-      if (typeof widget !== 'undefined' && widget && typeof WidgetRuntime !== 'undefined') {
-        WidgetRuntime.bindWidgetEvents();
-      }
-    } catch (e) { /* */ }
-  </script>
+  <div id="loadingOverlay" class="loading-overlay hidden">Carregando E-BOM…</div>
+</div>
 </body>
 </html>

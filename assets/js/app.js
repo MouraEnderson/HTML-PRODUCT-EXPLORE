@@ -49,7 +49,7 @@ var App = (function () {
       ChartsManager.destroyAll();
       ChartsManager.render(currentMetrics);
     }
-    if (APP_CONFIG.SHOW_TREE !== false && byId('bomTree')) {
+    if (APP_CONFIG.SHOW_TREE !== false && byId('bomTree') && typeof BomTree !== 'undefined') {
       BomTree.refresh(index, rootId);
     }
     DataTable.setData(filtered);
@@ -194,7 +194,7 @@ var App = (function () {
     ChartsManager.init();
     DataTable.init('#bomTable');
     var treeEl = byId('bomTree');
-    if (treeEl && APP_CONFIG.SHOW_TREE !== false) {
+    if (treeEl && APP_CONFIG.SHOW_TREE !== false && typeof BomTree !== 'undefined') {
       BomTree.init('#bomTree', function (id) {
         return BomService.expandNode(id);
       });
@@ -280,42 +280,21 @@ var App = (function () {
     if (spaceUrl && spaceUrl !== 'demo') {
       try {
         EnoviaApi.init(spaceUrl);
-        SearchApi.init(spaceUrl);
+        if (typeof SearchApi !== 'undefined') SearchApi.init(spaceUrl);
       } catch (e) { /* */ }
     }
     ProductExplorerBridge.init();
     ProductExplorerBridge.subscribe(onSelection);
     initUI();
-    if (!APP_CONFIG.EXPLORER_ONLY && APP_CONFIG.SHOW_PLATFORM_SEARCH !== false) {
-      ProductSearchPanel.init({ onSelect: onSelection });
-    }
-    ExplorerSyncPanel.init({
-      onSelect: onSelection,
-      onStatus: setStatusPublic
-    });
-    if (!APP_CONFIG.UI_CLEAN && byId('dropZone')) {
-      DropZone.init({
-        onImported: function (count, fileName) {
-          APP_CONFIG.IMPORT_MODE = true;
-          APP_CONFIG.DEMO_MODE = false;
-          refreshUI();
-          setStatus('Importado: ' + fileName + ' — ' + count + ' itens.', 'ok');
-        },
-        on3DXProduct: function (sel) {
-          loadPhysicalProduct(sel);
-        },
-        onError: function (msg) {
-          setStatus('Importação: ' + msg, 'error');
-        }
+    if (typeof ExplorerSyncPanel !== 'undefined') {
+      ExplorerSyncPanel.init({
+        onSelect: onSelection,
+        onStatus: setStatusPublic
       });
     }
     toggleCrossOriginUI();
-    if (APP_CONFIG.EXPLORER_ONLY || APP_CONFIG.UI_CLEAN) {
-      window.setTimeout(function () {
-        scheduleExplorerSync();
-        startExplorerPoll();
-      }, 2000);
-    }
+    scheduleExplorerSync();
+    startExplorerPoll();
   }
 
   function pullExplorerSelection() {
@@ -385,11 +364,34 @@ var App = (function () {
   }
 
   function bootstrap() {
-    setStatus('Inicializando…', 'info');
-    var wait = (global.__3DX_TRUSTED_WIDGET__) ? Promise.resolve(true) : waitForTrustedWidget(3000);
-    return wait.then(function () {
-      return bootstrapCore();
-    });
+    setStatus('BOM Analytics v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION) + ' — iniciando…', 'info');
+    var watchdog = window.setTimeout(function () {
+      if (BomService.getNodeCount() <= 1) runFallback();
+      forceStopLoading();
+    }, 12000);
+    var wait = isTrustedBoot() ? Promise.resolve(true) : waitForTrustedWidget(2500);
+    return wait
+      .then(function () { return bootstrapCore(); })
+      .finally(function () {
+        window.clearTimeout(watchdog);
+        forceStopLoading();
+      });
+  }
+
+  function runFallback() {
+    if (BomService.getNodeCount() > 1) return;
+    loadDefaultExplorerProduct();
+  }
+
+  function reloadFromExplorer() {
+    pullExplorerSelection();
+    var sel = ProductExplorerBridge.getSelection();
+    if (sel && sel.physicalid) {
+      lastLoadedId = null;
+      loadBom(sel.physicalid);
+      return;
+    }
+    trySyncThenLoad();
   }
 
   function getTenantSpaceUrl() {
@@ -411,107 +413,90 @@ var App = (function () {
 
   function trySyncThenLoad() {
     pullExplorerSelection();
-    window.setTimeout(function () {
-      var sel = ProductExplorerBridge.getSelection();
-      if (sel && sel.physicalid) {
-        loadBom(sel.physicalid);
+    if (typeof ThreeDXContentParser !== 'undefined') {
+      var content = ThreeDXContentParser.parseLocations();
+      var fromHash = content ? ThreeDXContentParser.toSelection(content) : null;
+      if (fromHash && fromHash.physicalid) {
+        ProductExplorerBridge.setSelection(fromHash, { silent: true });
+        loadBom(fromHash.physicalid);
         return;
       }
-      loadDefaultExplorerProduct();
-    }, APP_CONFIG.EXPLORER_FALLBACK_MS || 2500);
+    }
+    var sel = ProductExplorerBridge.getSelection();
+    if (sel && sel.physicalid) {
+      loadBom(sel.physicalid);
+      return;
+    }
+    loadDefaultExplorerProduct();
+    window.setTimeout(function () {
+      pullExplorerSelection();
+      var later = ProductExplorerBridge.getSelection();
+      if (later && later.physicalid && later.physicalid !== lastLoadedId) {
+        loadBom(later.physicalid);
+      }
+    }, APP_CONFIG.EXPLORER_FALLBACK_MS || 800);
+  }
+
+  function isTrustedBoot() {
+    if (global.__3DX_TRUSTED_WIDGET__) return true;
+    try {
+      if (typeof widget !== 'undefined' && widget) return true;
+    } catch (e) { /* */ }
+    if (APP_CONFIG.CROSS_ORIGIN_WIDGET === false) return true;
+    return false;
   }
 
   function bootstrapTrustedFast() {
     var space = getTenantSpaceUrl();
     if (!space) {
-      setStatus('URL 3DSpace não configurada.', 'error');
+      setStatus('URL 3DSpace não configurada em config.js.', 'error');
       return Promise.resolve();
     }
-    initAppCore(space);
-    setStatus('Conectando…', 'info');
-    return CompassServices.fetchCsrfToken(space)
-      .catch(function () { return null; })
+    APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
+    setStatus('Conectando 3DSpace… v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION), 'info');
+    return PlatformContext.init()
       .then(function () {
-        setStatus('Sincronizando Product Structure Explorer…', 'info');
+        initAppCore(space);
+        return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
+      })
+      .then(function () {
+        setStatus('Carregando E-BOM…', 'info');
         trySyncThenLoad();
-        window.setTimeout(function () {
-          scheduleExplorerSync();
-          startExplorerPoll();
-        }, 3000);
       });
   }
 
   function bootstrapCore() {
-    if (global.__3DX_TRUSTED_WIDGET__ && APP_CONFIG.USE_FAST_BOOT) {
-      return bootstrapTrustedFast().finally(function () {
-        setLoading(false);
-        forceStopLoading();
-      });
+    if (isTrustedBoot() && APP_CONFIG.USE_FAST_BOOT !== false) {
+      return bootstrapTrustedFast();
     }
 
     if (APP_CONFIG.CROSS_ORIGIN_WIDGET) {
       try {
-        var banner = byId('externalBanner');
-        if (banner) banner.classList.remove('hidden');
         initAppCore(null);
         runHealthCheck();
+        trySyncThenLoad();
         setStatus(
-          'Web Page Reader: sem API ENOVIA. Admin: Additional App — leia PASSO-UNICO-ADMIN.md. Enquanto isso: Physical ID ou Carregar Drone.',
+          'Modo Web Page Reader — só 1 item. Use Additional App (widget-uwa.html).',
           'warn'
         );
       } catch (err) {
         console.error(err);
         setStatus('Erro: ' + (err.message || err), 'error');
       }
-      setLoading(false);
       return Promise.resolve();
     }
 
     return PlatformContext.init()
       .then(function () {
-        if (APP_CONFIG.DEMO_MODE) {
-          setStatus('Modo demonstração — dados simulados.', 'warn');
-          return 'demo';
-        }
+        if (APP_CONFIG.DEMO_MODE) return 'demo';
         return CompassServices.get3DSpaceUrl(PlatformContext.getState().platformId);
       })
       .then(function (spaceUrl) {
-        return CompassServices.fetchCsrfToken(spaceUrl).then(function () {
-          return spaceUrl;
-        });
+        return CompassServices.fetchCsrfToken(spaceUrl).then(function () { return spaceUrl; });
       })
       .then(function (spaceUrl) {
         initAppCore(spaceUrl);
-        var modeLabel = APP_CONFIG.WIDGET_MODE || 'plataforma';
-        setStatus('Modo ' + modeLabel + ' — APIs 3DEXPERIENCE ativas.', 'ok');
-        var sel = ProductExplorerBridge.getSelection();
-        if (sel && !APP_CONFIG.CROSS_ORIGIN_WIDGET) return loadBom(sel.physicalid);
-
-        var defaultDrone = (APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.defaultPhysicalId) ||
-          '132FB3CE26D70E006A18D1870000316D';
-        if (APP_QUERY.physicalid) defaultDrone = APP_QUERY.physicalid;
-
-        if (!APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.DEMO_MODE && APP_CONFIG.AUTO_LOAD_DEMO_DRONE) {
-          return loadPhysicalProduct({
-            physicalid: defaultDrone,
-            displayName: '01_SKA_Drone Assembly_130520206',
-            name: '01_SKA_Drone Assembly_130520206',
-            type: 'VPMReference',
-            displayType: 'Physical Product'
-          });
-        }
-
-        if (APP_CONFIG.EXPLORER_ONLY && !APP_CONFIG.CROSS_ORIGIN_WIDGET) {
-          setStatus('Abra o produto no Product Structure Explorer (aba EXPLORE).', 'info');
-          pullExplorerSelection();
-          return Promise.resolve();
-        }
-
-        if (APP_CONFIG.DEMO_MODE) {
-          var root = APP_CONFIG.DEMO_ROOT_ID || 'DEMO_ROOT_001';
-          return loadBom(root);
-        }
-        setStatus('Busque um Physical Product ou selecione no Product Explorer.', 'info');
+        trySyncThenLoad();
       })
       .catch(function (err) {
         console.error(err);
@@ -519,15 +504,9 @@ var App = (function () {
           initAppCore('demo');
           return loadBom('DEMO_ROOT_001');
         }
-        try {
-          initAppCore(null);
-          setStatus('Modo limitado (sem require). Use Buscar + Product Explorer + Atualizar.', 'warn');
-        } catch (e2) {
-          setStatus('Falha na inicialização: ' + err.message, 'error');
-        }
-      })
-      .finally(function () {
-        setLoading(false);
+        initAppCore(getTenantSpaceUrl());
+        runFallback();
+        setStatus('API limitada: ' + (err.message || err), 'warn');
       });
   }
 
@@ -535,27 +514,29 @@ var App = (function () {
     setStatus(msg, type);
   }
 
-  function start() {
+  function run() {
+    if (typeof WidgetRuntime !== 'undefined') WidgetRuntime.markTrusted();
+    APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
     stripLegacyUI();
     bootstrap().catch(function (err) {
       console.error('[App] bootstrap failed', err);
-      setStatus('Erro no bootstrap: ' + (err.message || err), 'error');
-      setLoading(false);
+      setStatus('Erro: ' + (err.message || err), 'error');
+      runFallback();
+      forceStopLoading();
     });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', start);
-  } else {
-    start();
+  function start() {
+    run();
   }
 
-  /** Fallback: garante carga demo se o bootstrap terminar antes dos scripts CDN */
-  window.addEventListener('load', function () {
-    if (APP_CONFIG.DEMO_MODE && BomService.getNodeCount() === 0) {
-      loadBom('DEMO_ROOT_001');
+  if (!global.__3DX_BOOT_DEFER__) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', run);
+    } else {
+      run();
     }
-  });
+  }
 
   function forceStopLoading() {
     setLoading(false);
@@ -564,6 +545,10 @@ var App = (function () {
   }
 
   return {
+    run: run,
+    start: start,
+    runFallback: runFallback,
+    reloadFromExplorer: reloadFromExplorer,
     loadBom: loadBom,
     loadPhysicalProduct: loadPhysicalProduct,
     refreshUI: refreshUI,

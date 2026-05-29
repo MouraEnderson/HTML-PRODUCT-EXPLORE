@@ -13,7 +13,7 @@ O **Web Page Reader** com GitHub **não pode** chamar APIs ENOVIA (E-BOM real). 
 3. Preencha:
    - **Nome:** `BOM Analytics`
    - **Source code URL:**  
-     `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/index.html`
+     `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-uwa.html`
 4. **Salvar** e liberar o app para seu usuário / grupo.
 5. No dashboard **LISTA 3DX**:
    - **Remova** o widget **Web Page Reader** (GitHub).
@@ -28,7 +28,8 @@ Abra o widget **BOM Analytics** no dashboard:
 
 | Status na barra inferior | Significado |
 |--------------------------|-------------|
-| **Modo additional_app — APIs 3DEXPERIENCE ativas** | Correto — E-BOM via API |
+| Barra mostra **v20260528** e **Carregando E-BOM…** / **N itens carregados** | Correto — versão nova, API ativa |
+| **Inicializando…** (sem v20260528) | Cache antigo — remova widget, Ctrl+F5, recrie |
 | **Web Page Reader: sem API ENOVIA** | Ainda está no Reader — troque pelo Additional App |
 
 Com Additional App, o Drone (`01_SKA_Drone Assembly`) deve carregar na árvore ao abrir ou ao clicar **Atualizar**, sem CSV, sem publicar no 3DSpace.

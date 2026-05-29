@@ -8,89 +8,38 @@
   <script type="text/javascript">
   //<![CDATA[
     var BOM_REPO = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-    var BOM_VER = '20260608';
-    window.__3DX_TRUSTED_WIDGET__ = true;
+    var BOM_VER = '20260528';
 
-    var BOM_SCRIPTS = [
-      'assets/js/config.js',
-      'assets/js/platform/widget-runtime.js',
-      'assets/js/platform/platform-bridge.js',
-      'assets/js/platform/context.js',
-      'assets/js/platform/compass.js',
-      'assets/js/platform/waf-client.js',
-      'assets/js/integration/3dx-content-parser.js',
-      'assets/js/integration/enovia-api.js',
-      'assets/js/integration/search-api.js',
-      'assets/js/integration/product-explorer-bridge.js',
-      'assets/js/services/file-import-service.js',
-      'assets/js/services/product-search-service.js',
-      'assets/js/services/attribute-service.js',
-      'assets/js/services/physical-product-service.js',
-      'assets/js/services/bom-service.js',
-      'assets/js/processing/bom-normalizer.js',
-      'assets/js/processing/metrics-engine.js',
-      'assets/js/processing/anomaly-detector.js',
-      'assets/js/ui/kpi-cards.js',
-      'assets/js/ui/charts-manager.js',
-      'assets/js/ui/filters.js',
-      'assets/js/ui/data-table.js',
-      'assets/js/ui/bom-tree.js',
-      'assets/js/ui/explorer-sync-panel.js',
-      'assets/js/app.js'
-    ];
-
-    function bomLoadCss() {
-      var l = document.createElement('link');
-      l.rel = 'stylesheet';
-      l.href = BOM_REPO + 'assets/css/dashboard.css?v=' + BOM_VER;
-      document.getElementsByTagName('head')[0].appendChild(l);
-    }
-
-    function bomLoadScript(i, done) {
-      if (i >= BOM_SCRIPTS.length) {
-        done();
-        return;
-      }
+    function bomStartWidget() {
+      window.__3DX_TRUSTED_WIDGET__ = true;
       var s = document.createElement('script');
-      s.src = BOM_REPO + BOM_SCRIPTS[i] + '?v=' + BOM_VER;
-      s.onload = function () { bomLoadScript(i + 1, done); };
-      s.onerror = function () { bomLoadScript(i + 1, done); };
+      s.src = BOM_REPO + 'assets/js/boot.js?v=' + BOM_VER;
+      s.onload = function () {
+        if (typeof BomBoot !== 'undefined') {
+          BomBoot.run(widget.body);
+        }
+      };
+      s.onerror = function () {
+        var bar = document.getElementById('statusBar');
+        if (bar) bar.textContent = 'Erro ao carregar boot.js — confira GitHub Pages.';
+      };
       document.getElementsByTagName('head')[0].appendChild(s);
     }
 
-    function bomMountBody() {
-      var html = document.getElementById('bom-app-template');
-      if (!html) return;
-      /* DOM no document — getElementById não acha nós só dentro de widget.body */
-      document.body.innerHTML = html.innerHTML;
-      document.body.className = 'ui-explorer-only';
-    }
-
-    function bomBoot() {
-      bomLoadCss();
-      bomMountBody();
-      bomLoadScript(0, function () {
-        try {
-          if (typeof WidgetRuntime !== 'undefined') WidgetRuntime.markTrusted();
-          var ov = document.getElementById('loadingOverlay');
-          if (ov) ov.classList.add('hidden');
-        } catch (e1) { /* */ }
-        window.setTimeout(function () {
-          if (typeof App !== 'undefined' && App.forceStopLoading) {
-            App.forceStopLoading();
-          }
-        }, 22000);
-      });
-    }
-
     if (typeof widget !== 'undefined' && widget.addEvent) {
-      widget.addEvent('onLoad', bomBoot);
+      widget.addEvent('onLoad', bomStartWidget);
       widget.addEvent('onRefresh', function () {
-        var sel = typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getSelection();
-        if (sel && typeof App !== 'undefined') App.loadBom(sel.physicalid);
+        if (typeof App !== 'undefined' && App.reloadFromExplorer) {
+          App.reloadFromExplorer();
+        }
       });
     } else {
-      document.addEventListener('DOMContentLoaded', bomBoot);
+      document.addEventListener('DOMContentLoaded', function () {
+        var s = document.createElement('script');
+        s.src = 'assets/js/boot.js?v=' + BOM_VER;
+        s.onload = function () { BomBoot.run(document.body); };
+        document.head.appendChild(s);
+      });
     }
   //]]>
   </script>
@@ -103,18 +52,15 @@
     <button type="button" class="ui-hidden" id="btnSyncExplorer">sync</button>
     <button type="button" class="ui-hidden" id="btnRefresh">refresh</button>
   </header>
-  <div id="statusBar" class="status-bar">Preparando…</div>
+  <div id="statusBar" class="status-bar">Preparando… v20260528</div>
   <div class="ui-hidden" aria-hidden="true">
     <input type="text" id="explorerObjectId" />
     <input type="text" id="explorerObjectName" />
     <button id="btnLoadObjectId"></button>
-    <button id="btnCopyHelp"></button>
-    <div id="syncHelpText"></div>
     <select id="filterMaturity"><option value="all">all</option></select>
     <select id="filterType"><option value="all">all</option></select>
     <select id="filterApproval"><option value="all">all</option></select>
     <select id="filterPP"><option value="all">all</option></select>
-    <div id="bomTree"></div>
   </div>
   <main class="dashboard-explorer">
     <section id="kpiGrid" class="kpi-grid kpi-compact"></section>

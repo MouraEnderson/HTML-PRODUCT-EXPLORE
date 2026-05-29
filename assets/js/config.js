@@ -7,7 +7,8 @@
 
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
-    VERSION: '1.1.0',
+    VERSION: '1.2.0',
+    BUILD: '20260528',
 
     /** Somente Explorer → gráficos + tabela */
     EXPLORER_ONLY: true,
@@ -22,7 +23,7 @@
     BOM_FAST_DEPTH: 3,
     USE_FAST_BOOT: true,
     /** Se Explorer não responder em N ms, carrega produto padrão do tenant */
-    EXPLORER_FALLBACK_MS: 2500,
+    EXPLORER_FALLBACK_MS: 800,
 
     /** Limite de nós na árvore (proteção memória) */
     BOM_MAX_NODES: 50000,
@@ -31,7 +32,7 @@
     BOM_LAZY_BATCH_SIZE: 100,
 
     /** Profundidade inicial automática */
-    BOM_INITIAL_DEPTH: 2,
+    BOM_INITIAL_DEPTH: 3,
 
     /** Debounce busca/filtros (ms) */
     SEARCH_DEBOUNCE_MS: 280,
@@ -116,7 +117,7 @@
       platformHost: 'r1132100929518-us1-ifwe.3dexperience.3ds.com',
       spaceHost: 'r1132100929518-us1-space.3dexperience.3ds.com',
       defaultPhysicalId: '132FB3CE26D70E006A18D1870000316D',
-      defaultDisplayName: '01_SKA_Drone Assembly_130520206'
+      defaultDisplayName: '01_SKA_Drone Assembly_130520208'
     },
 
     PLATFORM: {
