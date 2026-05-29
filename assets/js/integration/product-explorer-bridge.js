@@ -58,6 +58,26 @@ var ProductExplorerBridge = (function () {
     return s;
   }
 
+  function lookupRegistryId(term) {
+    if (!term) return null;
+    var reg = APP_CONFIG.STRUCTURE_IDS || {};
+    var key = String(term).trim();
+    var id = reg[key] || reg[key.toLowerCase()] || reg[key.toUpperCase()];
+    if (!id) {
+      var tLow = key.toLowerCase();
+      var keys = Object.keys(reg);
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        var kLow = k.toLowerCase();
+        if (tLow.indexOf(kLow) >= 0 || kLow.indexOf(tLow) >= 0) {
+          id = reg[k];
+          break;
+        }
+      }
+    }
+    return id ? normalizeId(id) : null;
+  }
+
   function normalizeSelection(payload) {
     if (!payload) return null;
     var obj = payload.data || payload.object || payload.item || payload.selection || payload;
@@ -77,6 +97,10 @@ var ProductExplorerBridge = (function () {
       if (rid) physicalid = normalizeId(rid);
     }
     if (!isValidId(physicalid)) return null;
+    var hintId = lookupRegistryId(structureNameHint || displayName);
+    if (hintId && hintId !== physicalid) {
+      physicalid = hintId;
+    }
     if (!displayName) {
       displayName = labelText(obj.title) || labelText(obj.name) || physicalid;
     }

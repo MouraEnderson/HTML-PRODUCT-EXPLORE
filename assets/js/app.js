@@ -233,10 +233,9 @@ var App = (function () {
             }
           });
         }
-        setStatus(
-          msg + ' — API ENOVIA (403/400): confirme Security Context no 3DDashboard ou peça ao TI.',
-          'error'
-        );
+        var short = msg;
+        if (short.length > 220) short = short.slice(0, 220) + '…';
+        setStatus(short, 'error');
       })
       .finally(function () {
         root.__3DX_ALLOW_API__ = false;
@@ -404,7 +403,9 @@ var App = (function () {
         })
         .catch(function (err) {
           var msg = (err && err.message) ? err.message : String(err);
-          setStatus('API: ' + msg, 'error');
+          var short = msg;
+        if (short.length > 220) short = short.slice(0, 220) + '…';
+        setStatus(short, 'error');
         })
         .finally(function () {
           root.__3DX_ALLOW_API__ = false;

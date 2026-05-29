@@ -34,10 +34,20 @@ var WafClient = (function () {
   }
 
   function isRetryableHttp(msg) {
-    return /ResponseCode.*(403|400)|\b403\b|\b400\b/i.test(msg || '');
+    return /ResponseCode.*(403|400|406)|\b403\b|\b400\b|\b406\b/i.test(msg || '');
+  }
+
+  function mustUseIfweOnly() {
+    if (APP_CONFIG.IFRAME_ON_IFWE_DASHBOARD) return true;
+    return (
+      typeof CompassServices !== 'undefined' &&
+      CompassServices.isDashboardOnIfwe &&
+      CompassServices.isDashboardOnIfwe()
+    );
   }
 
   function swapSpaceIfwe(url) {
+    if (mustUseIfweOnly()) return ifweRetryUrl(url);
     if (!APP_CONFIG.TENANT_DEFAULTS) return null;
     var sh = APP_CONFIG.TENANT_DEFAULTS.spaceHost;
     var ih = APP_CONFIG.TENANT_DEFAULTS.platformHost;
@@ -79,7 +89,11 @@ var WafClient = (function () {
           onFailure: function (err) {
             var msg = (err && (err.message || err.error)) || 'WAF request failed';
             if (!retried && (isNetworkZero(msg) || isRetryableHttp(msg))) {
-              var alt = ifweRetryUrl(targetUrl) || swapSpaceIfwe(targetUrl);
+              var onIfwe =
+                typeof CompassServices !== 'undefined' &&
+                CompassServices.isDashboardOnIfwe &&
+                CompassServices.isDashboardOnIfwe();
+              var alt = onIfwe ? ifweRetryUrl(targetUrl) : (ifweRetryUrl(targetUrl) || swapSpaceIfwe(targetUrl));
               if (alt && alt !== targetUrl) {
                 if (typeof CompassServices !== 'undefined' && CompassServices.applyVerifiedSpaceUrl) {
                   var baseMatch = alt.match(/^(https:\/\/[^/]+\/enovia)/i);
@@ -98,8 +112,14 @@ var WafClient = (function () {
             }
             if (isNetworkZero(msg) && /space\.3dexperience/i.test(targetUrl)) {
               msg =
-                'NetworkError (código 0): host *-space inacessível. Tentativa via ifwe também falhou. ' +
-                'Peça ao TI liberar DNS ou teste VPN. URL: ' + targetUrl;
+                'Rede bloqueou *-space (código 0). No 3DDashboard use só *-ifwe — atualize para build bom20260602c.';
+            }
+            if (isRetryableHttp(msg) && /dseng:EngItem/i.test(targetUrl)) {
+              msg =
+                'EngItem não suportado neste tenant (400/406). Atualize o Additional App para build bom20260602d.';
+            }
+            if (isRetryableHttp(msg) && /dspfl:PhysicalProduct/i.test(targetUrl)) {
+              msg = 'Physical Product API: ' + msg + ' — confirme Security Context no widget.';
             }
             reject(new Error(msg));
           }

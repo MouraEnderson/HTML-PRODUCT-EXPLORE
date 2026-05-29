@@ -112,13 +112,13 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260602b',
+    BUILD: 'bom20260602d',
     /** Fallback offline só com ?snapshot= na URL */
     DEFAULT_SNAPSHOT_PATH: 'data/mont10.json',
 
     /** Se *-space falhar (DNS), tenta mesmo tenant via *-ifwe/enovia */
     SPACE_FALLBACK_VIA_IFWE: true,
-    PREFER_IFWE_FIRST: false,
+    PREFER_IFWE_FIRST: true,
 
     /** Tenant cloud: objetos usam prefixo prd- (ex. prd-R1132100929518-00511496) */
     PHYSICAL_ID_PREFIX: 'prd-',
@@ -327,7 +327,24 @@
     APP_CONFIG.WIDGET_MODE = APP_CONFIG.CROSS_ORIGIN_WIDGET ? 'web_page_reader' : 'external';
   }
 
+  function applyParentDashboardHost() {
+    var onIfwe = false;
+    try {
+      var hosts = [global.location.hostname];
+      if (global.top && global.top !== global) hosts.push(global.top.location.hostname);
+      if (global.parent && global.parent !== global) hosts.push(global.parent.location.hostname);
+      hosts.forEach(function (h) {
+        if ((h || '').toLowerCase().indexOf('ifwe') >= 0) onIfwe = true;
+      });
+    } catch (e) { /* */ }
+    if (onIfwe) {
+      APP_CONFIG.PREFER_IFWE_FIRST = true;
+      APP_CONFIG.IFRAME_ON_IFWE_DASHBOARD = true;
+    }
+  }
+
   detectRuntimeMode();
+  applyParentDashboardHost();
   global.detectRuntimeMode = detectRuntimeMode;
 
   if (query.snapshot || query.snap || query.data) {
@@ -805,6 +822,41 @@ var CompassServices = (function () {
     return u;
   }
 
+  function runtimeHostnames() {
+    var hosts = [];
+    try {
+      if (location.hostname) hosts.push(location.hostname);
+    } catch (e) { /* */ }
+    try {
+      if (window.top && window.top !== window && window.top.location.hostname) {
+        hosts.push(window.top.location.hostname);
+      }
+    } catch (e) { /* */ }
+    try {
+      if (window.parent && window.parent !== window && window.parent.location.hostname) {
+        hosts.push(window.parent.location.hostname);
+      }
+    } catch (e) { /* */ }
+    return hosts;
+  }
+
+  /** GitHub iframe no 3DDashboard ifwe: location é github.io, mas o tenant é ifwe. */
+  function isDashboardOnIfwe() {
+    try {
+      var hosts = runtimeHostnames();
+      for (var i = 0; i < hosts.length; i++) {
+        if ((hosts[i] || '').toLowerCase().indexOf('ifwe') >= 0) return true;
+      }
+    } catch (e) {
+      return false;
+    }
+    return false;
+  }
+
+  function getVerifiedSpaceUrl() {
+    return cache.spaceUrlVerified && cache.spaceUrl ? cache.spaceUrl : null;
+  }
+
   function spaceUrlCandidates(primary) {
     var list = [];
     var seen = {};
@@ -813,6 +865,10 @@ var CompassServices = (function () {
       if (!u || seen[u]) return;
       seen[u] = true;
       list.push(u);
+    }
+    if (isDashboardOnIfwe() && APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== false) {
+      add(ifweSpaceUrl());
+      return list;
     }
     if (APP_CONFIG.PREFER_IFWE_FIRST !== false && APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== false) {
       add(ifweSpaceUrl());
@@ -964,6 +1020,8 @@ var CompassServices = (function () {
   return {
     tenantSpaceUrl: tenantSpaceUrl,
     ifweSpaceUrl: ifweSpaceUrl,
+    isDashboardOnIfwe: isDashboardOnIfwe,
+    getVerifiedSpaceUrl: getVerifiedSpaceUrl,
     get3DSpaceUrl: get3DSpaceUrl,
     ensureWorkingSpaceUrl: ensureWorkingSpaceUrl,
     applyVerifiedSpaceUrl: applyVerifiedSpaceUrl,
@@ -1083,10 +1141,20 @@ var WafClient = (function () {
   }
 
   function isRetryableHttp(msg) {
-    return /ResponseCode.*(403|400)|\b403\b|\b400\b/i.test(msg || '');
+    return /ResponseCode.*(403|400|406)|\b403\b|\b400\b|\b406\b/i.test(msg || '');
+  }
+
+  function mustUseIfweOnly() {
+    if (APP_CONFIG.IFRAME_ON_IFWE_DASHBOARD) return true;
+    return (
+      typeof CompassServices !== 'undefined' &&
+      CompassServices.isDashboardOnIfwe &&
+      CompassServices.isDashboardOnIfwe()
+    );
   }
 
   function swapSpaceIfwe(url) {
+    if (mustUseIfweOnly()) return ifweRetryUrl(url);
     if (!APP_CONFIG.TENANT_DEFAULTS) return null;
     var sh = APP_CONFIG.TENANT_DEFAULTS.spaceHost;
     var ih = APP_CONFIG.TENANT_DEFAULTS.platformHost;
@@ -1128,7 +1196,11 @@ var WafClient = (function () {
           onFailure: function (err) {
             var msg = (err && (err.message || err.error)) || 'WAF request failed';
             if (!retried && (isNetworkZero(msg) || isRetryableHttp(msg))) {
-              var alt = ifweRetryUrl(targetUrl) || swapSpaceIfwe(targetUrl);
+              var onIfwe =
+                typeof CompassServices !== 'undefined' &&
+                CompassServices.isDashboardOnIfwe &&
+                CompassServices.isDashboardOnIfwe();
+              var alt = onIfwe ? ifweRetryUrl(targetUrl) : (ifweRetryUrl(targetUrl) || swapSpaceIfwe(targetUrl));
               if (alt && alt !== targetUrl) {
                 if (typeof CompassServices !== 'undefined' && CompassServices.applyVerifiedSpaceUrl) {
                   var baseMatch = alt.match(/^(https:\/\/[^/]+\/enovia)/i);
@@ -1147,8 +1219,14 @@ var WafClient = (function () {
             }
             if (isNetworkZero(msg) && /space\.3dexperience/i.test(targetUrl)) {
               msg =
-                'NetworkError (código 0): host *-space inacessível. Tentativa via ifwe também falhou. ' +
-                'Peça ao TI liberar DNS ou teste VPN. URL: ' + targetUrl;
+                'Rede bloqueou *-space (código 0). No 3DDashboard use só *-ifwe — atualize para build bom20260602c.';
+            }
+            if (isRetryableHttp(msg) && /dseng:EngItem/i.test(targetUrl)) {
+              msg =
+                'EngItem não suportado neste tenant (400/406). Atualize o Additional App para build bom20260602d.';
+            }
+            if (isRetryableHttp(msg) && /dspfl:PhysicalProduct/i.test(targetUrl)) {
+              msg = 'Physical Product API: ' + msg + ' — confirme Security Context no widget.';
             }
             reject(new Error(msg));
           }
@@ -1413,12 +1491,31 @@ var EnoviaApi = (function () {
   var restBase = null;
 
   function defaultSpaceUrl() {
-    if (typeof PlatformBridge !== 'undefined' && PlatformBridge.getSpaceUrl) {
-      var u = PlatformBridge.getSpaceUrl();
-      if (u) return u;
+    if (typeof CompassServices !== 'undefined' && CompassServices.getVerifiedSpaceUrl) {
+      var verified = CompassServices.getVerifiedSpaceUrl();
+      if (verified) return verified;
     }
-    if (typeof CompassServices !== 'undefined' && CompassServices.tenantSpaceUrl) {
-      return CompassServices.tenantSpaceUrl();
+    if (
+      (APP_CONFIG.IFRAME_ON_IFWE_DASHBOARD ||
+        (typeof CompassServices !== 'undefined' &&
+          CompassServices.isDashboardOnIfwe &&
+          CompassServices.isDashboardOnIfwe())) &&
+      typeof CompassServices !== 'undefined' &&
+      CompassServices.ifweSpaceUrl
+    ) {
+      return CompassServices.ifweSpaceUrl();
+    }
+    try {
+      if ((location.hostname || '').toLowerCase().indexOf('ifwe') >= 0) {
+        if (typeof CompassServices !== 'undefined' && CompassServices.ifweSpaceUrl) {
+          return CompassServices.ifweSpaceUrl();
+        }
+        var ih = APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.platformHost;
+        if (ih) return 'https://' + ih + '/enovia';
+      }
+    } catch (e) { /* */ }
+    if (typeof CompassServices !== 'undefined' && CompassServices.ifweSpaceUrl && APP_CONFIG.PREFER_IFWE_FIRST !== false) {
+      return CompassServices.ifweSpaceUrl();
     }
     var h = APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.spaceHost;
     return h ? 'https://' + h + '/enovia' : null;
@@ -1520,24 +1617,33 @@ var EnoviaApi = (function () {
     return member.physicalid || null;
   }
 
-  /** Tenta carregar raiz — sem $expand=all (evita 400 no tenant). */
+  /** Cloud: Physical Product / VPM — EngItem costuma retornar 400. */
   function getProductRoot(physicalId, expand) {
     var id = apiId(physicalId);
-    var exp = expand || null;
-    function chainPrd() {
-      return getPhysicalProduct(id, exp)
-        .catch(function () { return getPhysicalProduct(id, null); })
-        .catch(function () { return getVpmReference(id, null); })
-        .catch(function () { return getEngItem(id, null); });
+    return getPhysicalProduct(id, null)
+      .catch(function () { return getVpmReference(id, null); });
+  }
+
+  function getPhysicalProductChildren(parentPhysicalId, skip, top) {
+    ensureRestBase();
+    skip = skip || 0;
+    top = top || APP_CONFIG.BOM_LAZY_BATCH_SIZE;
+    var m = APP_CONFIG.MODELERS;
+    var id = encodeURIComponent(apiId(parentPhysicalId));
+    var base = restBase + '/' + m.PHYSICAL_PRODUCT + '/' + m.PHYS_PRODUCT_TYPE + '/' + id;
+    var urls = [
+      base + '/dspfl:Part?$skip=' + skip + '&$top=' + top,
+      base + '/dspfl:Instance?$skip=' + skip + '&$top=' + top,
+      base + '?$expand=dspfl:Part&$skip=' + skip + '&$top=' + top,
+      base + '?$expand=dspfl:Instance&$skip=' + skip + '&$top=' + top
+    ];
+    function tryUrl(i) {
+      if (i >= urls.length) {
+        return Promise.reject(new Error('Sem filhos dspfl para ' + parentPhysicalId));
+      }
+      return WafClient.get(urls[i]).catch(function () { return tryUrl(i + 1); });
     }
-    function chainHex() {
-      return getPhysicalProduct(id, exp)
-        .catch(function () { return getPhysicalProduct(id, null); })
-        .catch(function () { return getVpmReference(id, null); })
-        .catch(function () { return getEngItem(id, null); });
-    }
-    if (/^prd-/i.test(id)) return chainPrd();
-    return chainHex();
+    return tryUrl(0);
   }
 
   function getEngItemBomExpand(physicalId) {
@@ -1577,6 +1683,7 @@ var EnoviaApi = (function () {
     extractEngItemIdFromResponse: extractEngItemIdFromResponse,
     getEngItemBomExpand: getEngItemBomExpand,
     getEngInstanceChildren: getEngInstanceChildren,
+    getPhysicalProductChildren: getPhysicalProductChildren,
     getPhysicalProductsForEngItem: getPhysicalProductsForEngItem,
     extractMembers: extractMembers,
     engItemUrl: engItemUrl
@@ -1859,6 +1966,26 @@ var ProductExplorerBridge = (function () {
     return s;
   }
 
+  function lookupRegistryId(term) {
+    if (!term) return null;
+    var reg = APP_CONFIG.STRUCTURE_IDS || {};
+    var key = String(term).trim();
+    var id = reg[key] || reg[key.toLowerCase()] || reg[key.toUpperCase()];
+    if (!id) {
+      var tLow = key.toLowerCase();
+      var keys = Object.keys(reg);
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        var kLow = k.toLowerCase();
+        if (tLow.indexOf(kLow) >= 0 || kLow.indexOf(tLow) >= 0) {
+          id = reg[k];
+          break;
+        }
+      }
+    }
+    return id ? normalizeId(id) : null;
+  }
+
   function normalizeSelection(payload) {
     if (!payload) return null;
     var obj = payload.data || payload.object || payload.item || payload.selection || payload;
@@ -1878,6 +2005,10 @@ var ProductExplorerBridge = (function () {
       if (rid) physicalid = normalizeId(rid);
     }
     if (!isValidId(physicalid)) return null;
+    var hintId = lookupRegistryId(structureNameHint || displayName);
+    if (hintId && hintId !== physicalid) {
+      physicalid = hintId;
+    }
     if (!displayName) {
       displayName = labelText(obj.title) || labelText(obj.name) || physicalid;
     }
@@ -3199,13 +3330,13 @@ var ExplorerScanner = (function () {
         if (typeof PlatformBridge !== 'undefined' && PlatformBridge.requestExplorerStructure) {
           PlatformBridge.requestExplorerStructure();
         }
-        var sel = getSelection();
-        if (sel) return resolve(sel);
         var term = getExplorerRootSearchTerm();
         if (term) {
           var regHit = resolveFromStructureRegistry(term);
           if (regHit) return resolve(regHit);
         }
+        var sel = getSelection();
+        if (sel) return resolve(sel);
         n++;
         if (n >= maxAttempts) return resolve(null);
         window.setTimeout(tick, intervalMs);
@@ -3271,9 +3402,23 @@ var ExplorerScanner = (function () {
     return ensureSpaceApi().then(function () {
       var space =
         (typeof PlatformBridge !== 'undefined' && PlatformBridge.getSpaceUrl && PlatformBridge.getSpaceUrl()) ||
-        (APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.spaceHost
-          ? 'https://' + APP_CONFIG.TENANT_DEFAULTS.spaceHost + '/enovia'
-          : null);
+        null;
+      if (!space && typeof CompassServices !== 'undefined') {
+        if (CompassServices.isDashboardOnIfwe && CompassServices.isDashboardOnIfwe()) {
+          space = CompassServices.ifweSpaceUrl();
+        } else if (CompassServices.getVerifiedSpaceUrl) {
+          space = CompassServices.getVerifiedSpaceUrl();
+        }
+      }
+      if (!space && APP_CONFIG.TENANT_DEFAULTS) {
+        var host =
+          typeof CompassServices !== 'undefined' &&
+          CompassServices.isDashboardOnIfwe &&
+          CompassServices.isDashboardOnIfwe()
+            ? APP_CONFIG.TENANT_DEFAULTS.platformHost
+            : APP_CONFIG.TENANT_DEFAULTS.spaceHost;
+        if (host) space = 'https://' + host + '/enovia';
+      }
       if (!space) return null;
       SearchApi.init(space);
       var tries = [term];
@@ -3313,7 +3458,19 @@ var ExplorerScanner = (function () {
     }
 
     return waitForSelection(12, 400).then(function (sel) {
-      if (sel) return sel;
+      var termFirst = getExplorerRootSearchTerm();
+      if (termFirst) {
+        var regFirst = resolveFromStructureRegistry(termFirst);
+        if (regFirst) return regFirst;
+      }
+      if (sel) {
+        var termAlign = getExplorerRootSearchTerm();
+        if (termAlign) {
+          var regAlign = resolveFromStructureRegistry(termAlign);
+          if (regAlign) return regAlign;
+        }
+        return sel;
+      }
 
       var manual = readManualPhysicalId();
       if (manual) return manual;
@@ -3602,7 +3759,11 @@ var BomService = (function () {
     var top = APP_CONFIG.BOM_LAZY_BATCH_SIZE;
 
     function fetchPage() {
-      return EnoviaApi.getEngInstanceChildren(parentId, skip, top).then(function (res) {
+      var fetcher =
+        typeof EnoviaApi.getPhysicalProductChildren === 'function'
+          ? EnoviaApi.getPhysicalProductChildren.bind(EnoviaApi)
+          : EnoviaApi.getEngInstanceChildren.bind(EnoviaApi);
+      return fetcher(parentId, skip, top).then(function (res) {
         var members = EnoviaApi.extractMembers(res);
         members.forEach(function (m) {
           var node = parseInstance(m, parentId, level);
@@ -3751,10 +3912,7 @@ var BomService = (function () {
         attrs.displayType = attrs.displayType || 'Physical Product';
         addNode(attrs, null, 0, 1);
         index[attrs.physicalid].loaded = false;
-        var bomParentId =
-          (typeof EnoviaApi.extractEngItemIdFromResponse === 'function' &&
-            EnoviaApi.extractEngItemIdFromResponse(res)) ||
-          attrs.physicalid;
+        var bomParentId = attrs.physicalid || physicalId;
         var depth = APP_CONFIG.BOM_FAST_DEPTH || APP_CONFIG.BOM_INITIAL_DEPTH;
         return loadTreeRecursive(bomParentId, depth, 1);
       });
@@ -4919,10 +5077,9 @@ var App = (function () {
             }
           });
         }
-        setStatus(
-          msg + ' — API ENOVIA (403/400): confirme Security Context no 3DDashboard ou peça ao TI.',
-          'error'
-        );
+        var short = msg;
+        if (short.length > 220) short = short.slice(0, 220) + '…';
+        setStatus(short, 'error');
       })
       .finally(function () {
         root.__3DX_ALLOW_API__ = false;
@@ -5090,7 +5247,9 @@ var App = (function () {
         })
         .catch(function (err) {
           var msg = (err && err.message) ? err.message : String(err);
-          setStatus('API: ' + msg, 'error');
+          var short = msg;
+        if (short.length > 220) short = short.slice(0, 220) + '…';
+        setStatus(short, 'error');
         })
         .finally(function () {
           root.__3DX_ALLOW_API__ = false;

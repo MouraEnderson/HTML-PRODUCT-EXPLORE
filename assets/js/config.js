@@ -8,13 +8,13 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260602b',
+    BUILD: 'bom20260602d',
     /** Fallback offline só com ?snapshot= na URL */
     DEFAULT_SNAPSHOT_PATH: 'data/mont10.json',
 
     /** Se *-space falhar (DNS), tenta mesmo tenant via *-ifwe/enovia */
     SPACE_FALLBACK_VIA_IFWE: true,
-    PREFER_IFWE_FIRST: false,
+    PREFER_IFWE_FIRST: true,
 
     /** Tenant cloud: objetos usam prefixo prd- (ex. prd-R1132100929518-00511496) */
     PHYSICAL_ID_PREFIX: 'prd-',
@@ -223,7 +223,24 @@
     APP_CONFIG.WIDGET_MODE = APP_CONFIG.CROSS_ORIGIN_WIDGET ? 'web_page_reader' : 'external';
   }
 
+  function applyParentDashboardHost() {
+    var onIfwe = false;
+    try {
+      var hosts = [global.location.hostname];
+      if (global.top && global.top !== global) hosts.push(global.top.location.hostname);
+      if (global.parent && global.parent !== global) hosts.push(global.parent.location.hostname);
+      hosts.forEach(function (h) {
+        if ((h || '').toLowerCase().indexOf('ifwe') >= 0) onIfwe = true;
+      });
+    } catch (e) { /* */ }
+    if (onIfwe) {
+      APP_CONFIG.PREFER_IFWE_FIRST = true;
+      APP_CONFIG.IFRAME_ON_IFWE_DASHBOARD = true;
+    }
+  }
+
   detectRuntimeMode();
+  applyParentDashboardHost();
   global.detectRuntimeMode = detectRuntimeMode;
 
   if (query.snapshot || query.snap || query.data) {

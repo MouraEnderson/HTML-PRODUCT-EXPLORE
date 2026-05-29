@@ -44,6 +44,41 @@ var CompassServices = (function () {
     return u;
   }
 
+  function runtimeHostnames() {
+    var hosts = [];
+    try {
+      if (location.hostname) hosts.push(location.hostname);
+    } catch (e) { /* */ }
+    try {
+      if (window.top && window.top !== window && window.top.location.hostname) {
+        hosts.push(window.top.location.hostname);
+      }
+    } catch (e) { /* */ }
+    try {
+      if (window.parent && window.parent !== window && window.parent.location.hostname) {
+        hosts.push(window.parent.location.hostname);
+      }
+    } catch (e) { /* */ }
+    return hosts;
+  }
+
+  /** GitHub iframe no 3DDashboard ifwe: location é github.io, mas o tenant é ifwe. */
+  function isDashboardOnIfwe() {
+    try {
+      var hosts = runtimeHostnames();
+      for (var i = 0; i < hosts.length; i++) {
+        if ((hosts[i] || '').toLowerCase().indexOf('ifwe') >= 0) return true;
+      }
+    } catch (e) {
+      return false;
+    }
+    return false;
+  }
+
+  function getVerifiedSpaceUrl() {
+    return cache.spaceUrlVerified && cache.spaceUrl ? cache.spaceUrl : null;
+  }
+
   function spaceUrlCandidates(primary) {
     var list = [];
     var seen = {};
@@ -52,6 +87,10 @@ var CompassServices = (function () {
       if (!u || seen[u]) return;
       seen[u] = true;
       list.push(u);
+    }
+    if (isDashboardOnIfwe() && APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== false) {
+      add(ifweSpaceUrl());
+      return list;
     }
     if (APP_CONFIG.PREFER_IFWE_FIRST !== false && APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== false) {
       add(ifweSpaceUrl());
@@ -203,6 +242,8 @@ var CompassServices = (function () {
   return {
     tenantSpaceUrl: tenantSpaceUrl,
     ifweSpaceUrl: ifweSpaceUrl,
+    isDashboardOnIfwe: isDashboardOnIfwe,
+    getVerifiedSpaceUrl: getVerifiedSpaceUrl,
     get3DSpaceUrl: get3DSpaceUrl,
     ensureWorkingSpaceUrl: ensureWorkingSpaceUrl,
     applyVerifiedSpaceUrl: applyVerifiedSpaceUrl,

@@ -134,13 +134,13 @@ var ExplorerScanner = (function () {
         if (typeof PlatformBridge !== 'undefined' && PlatformBridge.requestExplorerStructure) {
           PlatformBridge.requestExplorerStructure();
         }
-        var sel = getSelection();
-        if (sel) return resolve(sel);
         var term = getExplorerRootSearchTerm();
         if (term) {
           var regHit = resolveFromStructureRegistry(term);
           if (regHit) return resolve(regHit);
         }
+        var sel = getSelection();
+        if (sel) return resolve(sel);
         n++;
         if (n >= maxAttempts) return resolve(null);
         window.setTimeout(tick, intervalMs);
@@ -206,9 +206,23 @@ var ExplorerScanner = (function () {
     return ensureSpaceApi().then(function () {
       var space =
         (typeof PlatformBridge !== 'undefined' && PlatformBridge.getSpaceUrl && PlatformBridge.getSpaceUrl()) ||
-        (APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.spaceHost
-          ? 'https://' + APP_CONFIG.TENANT_DEFAULTS.spaceHost + '/enovia'
-          : null);
+        null;
+      if (!space && typeof CompassServices !== 'undefined') {
+        if (CompassServices.isDashboardOnIfwe && CompassServices.isDashboardOnIfwe()) {
+          space = CompassServices.ifweSpaceUrl();
+        } else if (CompassServices.getVerifiedSpaceUrl) {
+          space = CompassServices.getVerifiedSpaceUrl();
+        }
+      }
+      if (!space && APP_CONFIG.TENANT_DEFAULTS) {
+        var host =
+          typeof CompassServices !== 'undefined' &&
+          CompassServices.isDashboardOnIfwe &&
+          CompassServices.isDashboardOnIfwe()
+            ? APP_CONFIG.TENANT_DEFAULTS.platformHost
+            : APP_CONFIG.TENANT_DEFAULTS.spaceHost;
+        if (host) space = 'https://' + host + '/enovia';
+      }
       if (!space) return null;
       SearchApi.init(space);
       var tries = [term];
@@ -248,7 +262,19 @@ var ExplorerScanner = (function () {
     }
 
     return waitForSelection(12, 400).then(function (sel) {
-      if (sel) return sel;
+      var termFirst = getExplorerRootSearchTerm();
+      if (termFirst) {
+        var regFirst = resolveFromStructureRegistry(termFirst);
+        if (regFirst) return regFirst;
+      }
+      if (sel) {
+        var termAlign = getExplorerRootSearchTerm();
+        if (termAlign) {
+          var regAlign = resolveFromStructureRegistry(termAlign);
+          if (regAlign) return regAlign;
+        }
+        return sel;
+      }
 
       var manual = readManualPhysicalId();
       if (manual) return manual;

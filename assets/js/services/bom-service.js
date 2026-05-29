@@ -73,7 +73,11 @@ var BomService = (function () {
     var top = APP_CONFIG.BOM_LAZY_BATCH_SIZE;
 
     function fetchPage() {
-      return EnoviaApi.getEngInstanceChildren(parentId, skip, top).then(function (res) {
+      var fetcher =
+        typeof EnoviaApi.getPhysicalProductChildren === 'function'
+          ? EnoviaApi.getPhysicalProductChildren.bind(EnoviaApi)
+          : EnoviaApi.getEngInstanceChildren.bind(EnoviaApi);
+      return fetcher(parentId, skip, top).then(function (res) {
         var members = EnoviaApi.extractMembers(res);
         members.forEach(function (m) {
           var node = parseInstance(m, parentId, level);
@@ -222,10 +226,7 @@ var BomService = (function () {
         attrs.displayType = attrs.displayType || 'Physical Product';
         addNode(attrs, null, 0, 1);
         index[attrs.physicalid].loaded = false;
-        var bomParentId =
-          (typeof EnoviaApi.extractEngItemIdFromResponse === 'function' &&
-            EnoviaApi.extractEngItemIdFromResponse(res)) ||
-          attrs.physicalid;
+        var bomParentId = attrs.physicalid || physicalId;
         var depth = APP_CONFIG.BOM_FAST_DEPTH || APP_CONFIG.BOM_INITIAL_DEPTH;
         return loadTreeRecursive(bomParentId, depth, 1);
       });

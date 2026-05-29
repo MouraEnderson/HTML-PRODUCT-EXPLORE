@@ -8,12 +8,31 @@ var EnoviaApi = (function () {
   var restBase = null;
 
   function defaultSpaceUrl() {
-    if (typeof PlatformBridge !== 'undefined' && PlatformBridge.getSpaceUrl) {
-      var u = PlatformBridge.getSpaceUrl();
-      if (u) return u;
+    if (typeof CompassServices !== 'undefined' && CompassServices.getVerifiedSpaceUrl) {
+      var verified = CompassServices.getVerifiedSpaceUrl();
+      if (verified) return verified;
     }
-    if (typeof CompassServices !== 'undefined' && CompassServices.tenantSpaceUrl) {
-      return CompassServices.tenantSpaceUrl();
+    if (
+      (APP_CONFIG.IFRAME_ON_IFWE_DASHBOARD ||
+        (typeof CompassServices !== 'undefined' &&
+          CompassServices.isDashboardOnIfwe &&
+          CompassServices.isDashboardOnIfwe())) &&
+      typeof CompassServices !== 'undefined' &&
+      CompassServices.ifweSpaceUrl
+    ) {
+      return CompassServices.ifweSpaceUrl();
+    }
+    try {
+      if ((location.hostname || '').toLowerCase().indexOf('ifwe') >= 0) {
+        if (typeof CompassServices !== 'undefined' && CompassServices.ifweSpaceUrl) {
+          return CompassServices.ifweSpaceUrl();
+        }
+        var ih = APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.platformHost;
+        if (ih) return 'https://' + ih + '/enovia';
+      }
+    } catch (e) { /* */ }
+    if (typeof CompassServices !== 'undefined' && CompassServices.ifweSpaceUrl && APP_CONFIG.PREFER_IFWE_FIRST !== false) {
+      return CompassServices.ifweSpaceUrl();
     }
     var h = APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.spaceHost;
     return h ? 'https://' + h + '/enovia' : null;
@@ -115,24 +134,33 @@ var EnoviaApi = (function () {
     return member.physicalid || null;
   }
 
-  /** Tenta carregar raiz — sem $expand=all (evita 400 no tenant). */
+  /** Cloud: Physical Product / VPM — EngItem costuma retornar 400. */
   function getProductRoot(physicalId, expand) {
     var id = apiId(physicalId);
-    var exp = expand || null;
-    function chainPrd() {
-      return getPhysicalProduct(id, exp)
-        .catch(function () { return getPhysicalProduct(id, null); })
-        .catch(function () { return getVpmReference(id, null); })
-        .catch(function () { return getEngItem(id, null); });
+    return getPhysicalProduct(id, null)
+      .catch(function () { return getVpmReference(id, null); });
+  }
+
+  function getPhysicalProductChildren(parentPhysicalId, skip, top) {
+    ensureRestBase();
+    skip = skip || 0;
+    top = top || APP_CONFIG.BOM_LAZY_BATCH_SIZE;
+    var m = APP_CONFIG.MODELERS;
+    var id = encodeURIComponent(apiId(parentPhysicalId));
+    var base = restBase + '/' + m.PHYSICAL_PRODUCT + '/' + m.PHYS_PRODUCT_TYPE + '/' + id;
+    var urls = [
+      base + '/dspfl:Part?$skip=' + skip + '&$top=' + top,
+      base + '/dspfl:Instance?$skip=' + skip + '&$top=' + top,
+      base + '?$expand=dspfl:Part&$skip=' + skip + '&$top=' + top,
+      base + '?$expand=dspfl:Instance&$skip=' + skip + '&$top=' + top
+    ];
+    function tryUrl(i) {
+      if (i >= urls.length) {
+        return Promise.reject(new Error('Sem filhos dspfl para ' + parentPhysicalId));
+      }
+      return WafClient.get(urls[i]).catch(function () { return tryUrl(i + 1); });
     }
-    function chainHex() {
-      return getPhysicalProduct(id, exp)
-        .catch(function () { return getPhysicalProduct(id, null); })
-        .catch(function () { return getVpmReference(id, null); })
-        .catch(function () { return getEngItem(id, null); });
-    }
-    if (/^prd-/i.test(id)) return chainPrd();
-    return chainHex();
+    return tryUrl(0);
   }
 
   function getEngItemBomExpand(physicalId) {
@@ -172,6 +200,7 @@ var EnoviaApi = (function () {
     extractEngItemIdFromResponse: extractEngItemIdFromResponse,
     getEngItemBomExpand: getEngItemBomExpand,
     getEngInstanceChildren: getEngInstanceChildren,
+    getPhysicalProductChildren: getPhysicalProductChildren,
     getPhysicalProductsForEngItem: getPhysicalProductsForEngItem,
     extractMembers: extractMembers,
     engItemUrl: engItemUrl
