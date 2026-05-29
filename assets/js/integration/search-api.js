@@ -20,6 +20,13 @@ var SearchApi = (function () {
     var engType = m.ENG_ITEM_TYPE || 'dseng:EngItem';
     var titleFilter = encodeURIComponent("title co '" + term.replace(/'/g, "''") + "'");
     var nameFilter = encodeURIComponent("name co '" + term.replace(/'/g, "''") + "'");
+    if (APP_CONFIG.CLOUD_PHYSICAL_ONLY || APP_CONFIG.IFRAME_ON_IFWE_DASHBOARD) {
+      return [
+        modelerBase + '/dspfl/dspfl:PhysicalProduct/search?searchStr=' + enc + '&$top=' + top,
+        modelerBase + '/search?searchStr=' + enc + '&$top=' + top,
+        modelerBase + '/search?q=' + enc + '&$top=' + top
+      ];
+    }
     return [
       modelerBase + '/search?searchStr=' + enc + '&$top=' + top,
       modelerBase + '/search?q=' + enc + '&$top=' + top,

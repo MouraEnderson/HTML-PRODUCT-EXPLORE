@@ -127,7 +127,10 @@ var CompassServices = (function () {
       return Promise.resolve(cache.spaceUrl);
     }
     cache.spaceUrlVerified = false;
-    return probeCandidates(spaceUrlCandidates(null)).catch(function () {
+    return probeCandidates(spaceUrlCandidates(null)).catch(function (err) {
+      if (isDashboardOnIfwe()) {
+        return Promise.reject(err || new Error('API ifwe indisponível no dashboard.'));
+      }
       return get3DSpaceUrl(platformId).then(function (primary) {
         return probeCandidates(spaceUrlCandidates(primary));
       });
@@ -153,6 +156,14 @@ var CompassServices = (function () {
   }
 
   function get3DSpaceUrl(platformId) {
+    if (isDashboardOnIfwe() && APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== false) {
+      var ifwe = ifweSpaceUrl();
+      if (ifwe) {
+        cache.spaceUrl = ifwe;
+        cache.spaceUrlVerified = true;
+        return Promise.resolve(ifwe);
+      }
+    }
     if (APP_CONFIG.DEMO_MODE) {
       cache.spaceUrl = 'https://demo-3dspace.example.com/3dspace';
       return Promise.resolve(cache.spaceUrl);

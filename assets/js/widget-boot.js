@@ -6,7 +6,8 @@ var BomWidgetBoot = (function (global) {
   'use strict';
 
   var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-  var VER = 'uwa20260603g';
+  var VER = 'bom20260602e';
+  var BUNDLE = GH + 'assets/js/bom-bundle-' + VER + '.js';
 
   function setBar(msg, kind) {
     try {
@@ -86,7 +87,7 @@ var BomWidgetBoot = (function (global) {
         return;
       }
       loadScript(GH + 'assets/vendor/chart.umd.min.js?v=' + VER, true, function () {
-        loadScript(GH + 'assets/js/bom-bundle.js?v=' + VER, false, function (err2) {
+        loadScript(BUNDLE, false, function (err2) {
           if (err2) {
             setBar('Varredura falhou: ' + (err2.message || err2), 'error');
             return;

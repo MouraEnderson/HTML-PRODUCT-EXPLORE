@@ -354,6 +354,11 @@ var ExplorerScanner = (function () {
   }
 
   function scanViaApi(sel) {
+    var term = getExplorerRootSearchTerm();
+    if (term) {
+      var regSel = resolveFromStructureRegistry(term);
+      if (regSel) sel = regSel;
+    }
     var boot =
       typeof WafBootstrap !== 'undefined' && WafBootstrap.ensure
         ? WafBootstrap.ensure()

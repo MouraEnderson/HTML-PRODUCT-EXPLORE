@@ -134,11 +134,38 @@ var EnoviaApi = (function () {
     return member.physicalid || null;
   }
 
-  /** Cloud: Physical Product / VPM — EngItem costuma retornar 400. */
+  function candidateRootIds(physicalId) {
+    var seen = {};
+    var list = [];
+    function add(id) {
+      id = apiId(id);
+      if (!id || seen[id]) return;
+      seen[id] = true;
+      list.push(id);
+    }
+    add(physicalId);
+    var reg = APP_CONFIG.STRUCTURE_IDS || {};
+    Object.keys(reg).forEach(function (k) {
+      if (/^prd-/i.test(k) && reg[k] && apiId(reg[k]) === apiId(physicalId)) {
+        add(k);
+      }
+    });
+    return list;
+  }
+
+  /** Cloud: Physical Product / VPM — tenta prd- e hex; sem EngItem. */
   function getProductRoot(physicalId, expand) {
-    var id = apiId(physicalId);
-    return getPhysicalProduct(id, null)
-      .catch(function () { return getVpmReference(id, null); });
+    var ids = candidateRootIds(physicalId);
+    function tryId(i) {
+      if (i >= ids.length) {
+        return Promise.reject(new Error('Physical Product não encontrado para ' + physicalId));
+      }
+      var id = ids[i];
+      return getPhysicalProduct(id, null)
+        .catch(function () { return getVpmReference(id, null); })
+        .catch(function () { return tryId(i + 1); });
+    }
+    return tryId(0);
   }
 
   function getPhysicalProductChildren(parentPhysicalId, skip, top) {

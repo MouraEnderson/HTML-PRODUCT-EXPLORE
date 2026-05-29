@@ -36,5 +36,12 @@ foreach ($f in $files) {
   $parts += ";/* --- $f --- */"
   $parts += [IO.File]::ReadAllText((Join-Path $root $f))
 }
-[IO.File]::WriteAllText($out, ($parts -join "`n"))
-Write-Host "OK: $out ($((Get-Item $out).Length) bytes)"
+$content = $parts -join "`n"
+[IO.File]::WriteAllText($out, $content)
+$build = 'bom20260602e'
+if ($content -match "BUILD:\s*'([^']+)'") { $build = $Matches[1] }
+$versioned = Join-Path $root "assets\js\bom-bundle-$build.js"
+[IO.File]::WriteAllText($versioned, $content)
+$buildIdJs = "window.__BOM_BUILD_ID__='$build';"
+[IO.File]::WriteAllText((Join-Path $root 'assets\js\build-id.js'), $buildIdJs)
+Write-Host "OK: $out + bom-bundle-$build.js + build-id.js ($((Get-Item $out).Length) bytes)"

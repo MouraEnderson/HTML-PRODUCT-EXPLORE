@@ -39,8 +39,9 @@
     window.__3DX_BOOT_DEFER__ = true;
     window.__3DX_DEFAULT_SNAPSHOT__ = 'data/mont10.json';
 
-    var BOM_BUILD = 'bom20260602d';
+    var BOM_BUILD = 'bom20260602e';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
+    var BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js';
 
     (function parseEmbedEarly() {
       function pq(s) {
@@ -165,7 +166,7 @@
 
     function startBundle() {
       loadScript(GH + 'assets/vendor/chart.umd.min.js?v=' + BOM_BUILD, true, function () {
-        loadScript(GH + 'assets/js/bom-bundle.js?v=' + BOM_BUILD, false, function (err) {
+        loadScript(BUNDLE, false, function (err) {
           if (err) {
             setBar('Erro ao carregar bundle. Verifique GitHub Pages.', 'error');
             return;

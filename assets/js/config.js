@@ -8,7 +8,9 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260602d',
+    BUILD: 'bom20260602e',
+    /** Tenant cloud: não usar dseng:EngItem nem host *-space no 3DDashboard */
+    CLOUD_PHYSICAL_ONLY: true,
     /** Fallback offline só com ?snapshot= na URL */
     DEFAULT_SNAPSHOT_PATH: 'data/mont10.json',
 
@@ -236,6 +238,7 @@
     if (onIfwe) {
       APP_CONFIG.PREFER_IFWE_FIRST = true;
       APP_CONFIG.IFRAME_ON_IFWE_DASHBOARD = true;
+      APP_CONFIG.CLOUD_PHYSICAL_ONLY = true;
     }
   }
 

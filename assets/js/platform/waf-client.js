@@ -58,8 +58,26 @@ var WafClient = (function () {
     return null;
   }
 
+  function normalizeRequestUrl(url) {
+    if (!url) return url;
+    if (mustUseIfweOnly() && APP_CONFIG.TENANT_DEFAULTS) {
+      var sh = APP_CONFIG.TENANT_DEFAULTS.spaceHost;
+      var ih = APP_CONFIG.TENANT_DEFAULTS.platformHost;
+      if (sh && ih && url.indexOf(sh) >= 0) {
+        url = url.replace(sh, ih);
+      }
+    }
+    if (APP_CONFIG.CLOUD_PHYSICAL_ONLY && /\/dseng\/dseng:EngItem\//i.test(url)) {
+      throw new Error(
+        'EngItem bloqueado (tenant cloud). Atualize o bundle: ' + (APP_CONFIG.BUILD || 'bom20260602e')
+      );
+    }
+    return url;
+  }
+
   function request(method, url, options) {
     options = options || {};
+    url = normalizeRequestUrl(url);
     var headers = Object.assign({}, PlatformContext.getHeaders(), options.headers || {});
 
     if (APP_CONFIG.DEMO_MODE) {
