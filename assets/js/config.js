@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260531d',
+    BUILD: 'bom20260531e',
     /** Não carrega BOM automático no boot — só após Varrer */
     WAIT_FOR_USER_SCAN: true,
     /** Sprint 1: API primeiro; cola só com ALLOW_PASTE_FALLBACK true */
@@ -135,6 +135,7 @@
      * Preencha Mont10: Explorer → raiz → Propriedades → ID físico.
      */
     STRUCTURE_IDS: {
+      Mont10: 'R1132100929518-00511496'
     },
 
     PLATFORM: {

@@ -10,7 +10,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260531d',
+    BUILD: 'bom20260531e',
     /** Não carrega BOM automático no boot — só após Varrer */
     WAIT_FOR_USER_SCAN: true,
     /** Sprint 1: API primeiro; cola só com ALLOW_PASTE_FALLBACK true */
@@ -137,6 +137,7 @@
      * Preencha Mont10: Explorer → raiz → Propriedades → ID físico.
      */
     STRUCTURE_IDS: {
+      Mont10: 'R1132100929518-00511496'
     },
 
     PLATFORM: {
@@ -920,8 +921,12 @@ var ThreeDXContentParser = (function () {
   function isValidPhysicalId(id) {
     if (!id) return false;
     id = String(id).trim();
-    if (id.length < 16) return false;
-    return /^[0-9A-Fa-f]{16,}$/.test(id);
+    if (id.length < 8) return false;
+    // Hex ENOVIA clássico (ex. 32 caracteres)
+    if (/^[0-9A-Fa-f]{16,}$/.test(id)) return true;
+    // Referência cloud / tenant (ex. R1132100929518-00511496)
+    if (/^[A-Za-z0-9][A-Za-z0-9_.-]{7,127}$/.test(id)) return true;
+    return false;
   }
 
   function tryParseJson(encoded) {
@@ -2615,6 +2620,21 @@ var ExplorerScanner = (function () {
     return null;
   }
 
+  function resolveFromUrlQuery() {
+    var q = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
+    var id = String(q.physicalid || APP_CONFIG.URL_PHYSICAL_ID || '').trim();
+    if (!id || !isValidId(id)) return null;
+    var name = q.displayName || q.name || q.structure || q.rootName || getLabelStructureName() || id;
+    return {
+      physicalid: id,
+      type: q.type || 'VPMReference',
+      name: name,
+      displayName: name,
+      displayType: 'Physical Product',
+      source: 'url-query'
+    };
+  }
+
   function readManualPhysicalId() {
     var el = document.getElementById('explorerObjectId');
     var id = el && el.value ? String(el.value).trim() : '';
@@ -2762,6 +2782,14 @@ var ExplorerScanner = (function () {
 
       var manual = readManualPhysicalId();
       if (manual) return manual;
+
+      var fromUrl = resolveFromUrlQuery();
+      if (fromUrl) {
+        if (typeof ProductExplorerBridge !== 'undefined') {
+          ProductExplorerBridge.setSelection(fromUrl, { silent: true });
+        }
+        return fromUrl;
+      }
 
       var term = getExplorerRootSearchTerm();
       if (term) {
@@ -4413,7 +4441,28 @@ var App = (function () {
       });
   }
 
+  function applyUrlParamsToUI() {
+    var q = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
+    var id = String(q.physicalid || APP_CONFIG.URL_PHYSICAL_ID || '').trim();
+    if (!id) return;
+    var idEl = byId('explorerObjectId');
+    if (idEl) idEl.value = id;
+    var lbl = byId('selectionLabel');
+    var name = q.displayName || q.name || q.structure || q.rootName || id;
+    if (lbl) lbl.textContent = name;
+    if (typeof ProductExplorerBridge !== 'undefined' && isValidPhysicalId(id)) {
+      ProductExplorerBridge.setSelection({
+        physicalid: id,
+        type: q.type || 'VPMReference',
+        name: name,
+        displayName: name,
+        source: 'url-query'
+      }, { silent: true });
+    }
+  }
+
   function initUI() {
+    applyUrlParamsToUI();
     KpiCards.init('#kpiGrid');
     ChartsManager.init();
     DataTable.init('#bomTable');

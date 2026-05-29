@@ -50,6 +50,21 @@ var ExplorerScanner = (function () {
     return null;
   }
 
+  function resolveFromUrlQuery() {
+    var q = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
+    var id = String(q.physicalid || APP_CONFIG.URL_PHYSICAL_ID || '').trim();
+    if (!id || !isValidId(id)) return null;
+    var name = q.displayName || q.name || q.structure || q.rootName || getLabelStructureName() || id;
+    return {
+      physicalid: id,
+      type: q.type || 'VPMReference',
+      name: name,
+      displayName: name,
+      displayType: 'Physical Product',
+      source: 'url-query'
+    };
+  }
+
   function readManualPhysicalId() {
     var el = document.getElementById('explorerObjectId');
     var id = el && el.value ? String(el.value).trim() : '';
@@ -197,6 +212,14 @@ var ExplorerScanner = (function () {
 
       var manual = readManualPhysicalId();
       if (manual) return manual;
+
+      var fromUrl = resolveFromUrlQuery();
+      if (fromUrl) {
+        if (typeof ProductExplorerBridge !== 'undefined') {
+          ProductExplorerBridge.setSelection(fromUrl, { silent: true });
+        }
+        return fromUrl;
+      }
 
       var term = getExplorerRootSearchTerm();
       if (term) {

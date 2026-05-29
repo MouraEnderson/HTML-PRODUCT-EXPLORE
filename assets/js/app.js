@@ -324,7 +324,28 @@ var App = (function () {
       });
   }
 
+  function applyUrlParamsToUI() {
+    var q = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
+    var id = String(q.physicalid || APP_CONFIG.URL_PHYSICAL_ID || '').trim();
+    if (!id) return;
+    var idEl = byId('explorerObjectId');
+    if (idEl) idEl.value = id;
+    var lbl = byId('selectionLabel');
+    var name = q.displayName || q.name || q.structure || q.rootName || id;
+    if (lbl) lbl.textContent = name;
+    if (typeof ProductExplorerBridge !== 'undefined' && isValidPhysicalId(id)) {
+      ProductExplorerBridge.setSelection({
+        physicalid: id,
+        type: q.type || 'VPMReference',
+        name: name,
+        displayName: name,
+        source: 'url-query'
+      }, { silent: true });
+    }
+  }
+
   function initUI() {
+    applyUrlParamsToUI();
     KpiCards.init('#kpiGrid');
     ChartsManager.init();
     DataTable.init('#bomTable');

@@ -8,8 +8,12 @@ var ThreeDXContentParser = (function () {
   function isValidPhysicalId(id) {
     if (!id) return false;
     id = String(id).trim();
-    if (id.length < 16) return false;
-    return /^[0-9A-Fa-f]{16,}$/.test(id);
+    if (id.length < 8) return false;
+    // Hex ENOVIA clássico (ex. 32 caracteres)
+    if (/^[0-9A-Fa-f]{16,}$/.test(id)) return true;
+    // Referência cloud / tenant (ex. R1132100929518-00511496)
+    if (/^[A-Za-z0-9][A-Za-z0-9_.-]{7,127}$/.test(id)) return true;
+    return false;
   }
 
   function tryParseJson(encoded) {
