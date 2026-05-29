@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:widget="http://www.netvibes.com/ns/">
+<head>
+  <meta charset="UTF-8" />
+  <title>BOM Analytics — teste UWA</title>
+  <style>
+    body { font-family: "Segoe UI", sans-serif; margin: 0; }
+    .ok { padding: 16px; color: #1b5e20; font-weight: bold; font-size: 15px; background: #e8f5e9; }
+    .hint { padding: 12px; font-size: 12px; color: #005686; background: #e3f2fd; }
+  </style>
+  <script type="text/javascript">
+  //<![CDATA[
+    var HTML =
+      '<div class="ok">BOM Analytics — widget UWA OK</div>' +
+      '<div class="hint">Troque a URL do Additional App para <b>widget-uwa.html</b> e Ctrl+F5.</div>';
+
+    function onLoad() {
+      if (!widget || !widget.body) return;
+      widget.body.innerHTML = HTML;
+    }
+
+    function wait() {
+      if (typeof widget !== 'undefined' && widget && widget.addEvent) {
+        widget.addEvent('onLoad', onLoad);
+        if (widget.body && !widget.body.innerHTML.replace(/\s/g, '')) {
+          window.setTimeout(onLoad, 0);
+        }
+        return;
+      }
+      setTimeout(wait, 80);
+    }
+    wait();
+  //]]>
+  </script>
+</head>
+<body><p class="hint">Aguardando widget…</p></body>
+</html>

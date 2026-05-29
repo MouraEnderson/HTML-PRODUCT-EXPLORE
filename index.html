@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:widget="http://www.netvibes.com/ns/">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>BOM Analytics</title>
+  <script type="text/javascript">
+    window.__3DX_TRUSTED_WIDGET__ = true;
+    window.__3DX_BOOT_DEFER__ = true;
+  </script>
+  <script type="text/javascript" src="assets/vendor/chart.umd.min.js"></script>
+  <script type="text/javascript">
+  //<![CDATA[
+    var BOM_VER = '20260528';
+    function bomEntry() {
+      var s = document.createElement('script');
+      s.src = 'assets/js/boot.js?v=' + BOM_VER;
+      s.onload = function () {
+        var target = (typeof widget !== 'undefined' && widget.body) ? widget.body : document.body;
+        BomBoot.run(target);
+      };
+      document.head.appendChild(s);
+    }
+    if (typeof widget !== 'undefined' && widget.addEvent) {
+      widget.addEvent('onLoad', bomEntry);
+    } else {
+      document.addEventListener('DOMContentLoaded', bomEntry);
+    }
+  //]]>
+  </script>
+</head>
+<body>
+<div id="bom-app-template" style="display:none">
+  <header class="app-header explorer-header">
+    <h1>BOM Analytics</h1>
+    <p class="explorer-product">Product Structure Explorer: <strong id="selectionLabel">—</strong></p>
+    <button type="button" class="ui-hidden" id="btnSyncExplorer">↻</button>
+    <button type="button" class="ui-hidden" id="btnRefresh">refresh</button>
+  </header>
+  <div id="statusBar" class="status-bar">Aguardando… snapshot</div>
+  <section class="snapshot-panel" id="snapshotPanel">
+    <p class="snapshot-hint">Explorer → Ctrl+C na grade → cole abaixo → Importar</p>
+    <textarea id="pasteArea" class="paste-area" rows="4" placeholder="Ctrl+V…"></textarea>
+    <div class="snapshot-actions">
+      <button type="button" id="btnImportPaste" class="btn-primary">Importar estrutura</button>
+      <button type="button" id="btnLoadSnapshotFile">Arquivo .json</button>
+      <input type="file" id="snapshotFileInput" accept=".json" class="ui-hidden" />
+      <a href="collect.html" target="_blank" rel="noopener">Coletor JSON</a>
+    </div>
+  </section>
+  <div class="explorer-id-row ui-hidden" aria-hidden="true">
+    <input type="text" id="explorerObjectId" />
+    <button type="button" id="btnLoadObjectId"></button>
+  </div>
+  <div class="ui-hidden" aria-hidden="true">
+    <input type="text" id="explorerObjectName" />
+    <select id="filterMaturity"><option value="all">all</option></select>
+    <select id="filterType"><option value="all">all</option></select>
+    <select id="filterApproval"><option value="all">all</option></select>
+    <select id="filterPP"><option value="all">all</option></select>
+  </div>
+  <main class="dashboard-explorer">
+    <section id="kpiGrid" class="kpi-grid kpi-compact"></section>
+    <section class="charts-grid charts-main">
+      <div class="chart-card"><canvas id="chartMaturity"></canvas></div>
+      <div class="chart-card"><canvas id="chartType"></canvas></div>
+      <div class="chart-card"><canvas id="chartRevision"></canvas></div>
+      <div class="chart-card"><canvas id="chartApproval"></canvas></div>
+    </section>
+    <section class="panel table-panel">
+      <div class="panel-header">E-BOM — <span id="tableProductLabel">—</span></div>
+      <div class="filter-row">
+        <input type="search" id="searchInput" placeholder="Filtrar tabela…" />
+      </div>
+      <div class="table-scroll table-scroll-wide">
+        <table id="bomTable" class="data-table">
+          <thead><tr></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <div id="loadingOverlay" class="loading-overlay hidden">Carregando E-BOM…</div>
+</div>
+</body>
+</html>
