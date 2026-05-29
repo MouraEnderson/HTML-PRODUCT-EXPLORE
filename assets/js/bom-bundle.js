@@ -85,7 +85,9 @@
       try {
         if (src && src.indexOf('#') >= 0) hash = src.slice(src.indexOf('#'));
       } catch (e) { /* */ }
-      if (hash.indexOf('?') >= 0) mergeInto(merged, parseQueryString(hash.slice(hash.indexOf('?')));
+      if (hash.indexOf('?') >= 0) {
+        mergeInto(merged, parseQueryString(hash.slice(hash.indexOf('?'))));
+      }
     });
     mergeInto(merged, parseQueryString(global.location.search));
 
