@@ -52,18 +52,16 @@
   </header>
 
   <div id="externalBanner" class="external-banner hidden">
-    <strong>GitHub não lê o Product Explorer.</strong> Para BOM automática (Drone, KPIs, árvore real), o admin deve publicar este HTML no
-    <strong>3DSpace</strong> — ver <code>OBJETIVO-PROJETO.md</code> e <code>DEPLOY-3DSPACE.md</code>.
-    URL alvo do widget:
-    <code>https://r1132100929518-us1-space.3dexperience.3ds.com/enovia/webapps/BomAnalytics/index.html</code>
+    <strong>Admin da plataforma:</strong> não use Web Page Reader para BOM real. Crie
+    <strong>Additional App</strong> com a mesma URL GitHub — passo a passo em
+    <code>GUIA-ADMIN-ADDITIONAL-APP.md</code> (sem publicar no 3DSpace).
   </div>
 
   <section class="panel goal-panel" aria-label="Objetivo">
-    <div class="panel-header">Objetivo: dashboard da E-BOM do Product Explorer</div>
+    <div class="panel-header">Para admin: Additional App (recomendado)</div>
     <p class="goal-text">
-      Este HTML foi feito para consumir a <strong>estrutura e atributos</strong> do Product Structure Explorer via APIs ENOVIA
-      (mesma sessão 3DEXPERIENCE). Com o link GitHub no widget, só é possível <strong>visualizar layout</strong> ou dados de exemplo —
-      não a BOM real do tenant.
+      Você é admin: registre este HTML como <strong>Additional App</strong> no Platform Management (URL GitHub igual à do Web Page Reader).
+      Assim o dashboard usa <strong>WAFData</strong> e lê a E-BOM do Product Explorer. Web Page Reader sozinho não acessa ENOVIA (limitação DS).
     </p>
   </section>
 

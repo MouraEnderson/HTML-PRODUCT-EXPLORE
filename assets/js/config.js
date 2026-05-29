@@ -136,10 +136,30 @@
   }
 
   var _host = (global.location && global.location.hostname) ? global.location.hostname.toLowerCase() : '';
-  APP_CONFIG.CROSS_ORIGIN_WIDGET =
-    _host.indexOf('github.io') >= 0 ||
-    _host.indexOf('jsdelivr.net') >= 0 ||
-    _host.indexOf('githubusercontent.com') >= 0;
+  APP_CONFIG.WIDGET_MODE = 'unknown';
+
+  if (_host.indexOf('3dexperience.3ds.com') >= 0) {
+    APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
+    APP_CONFIG.WIDGET_MODE = '3dexperience_host';
+  } else {
+    APP_CONFIG.CROSS_ORIGIN_WIDGET =
+      _host.indexOf('github.io') >= 0 ||
+      _host.indexOf('jsdelivr.net') >= 0 ||
+      _host.indexOf('githubusercontent.com') >= 0;
+    APP_CONFIG.WIDGET_MODE = APP_CONFIG.CROSS_ORIGIN_WIDGET ? 'web_page_reader' : 'external';
+  }
+
+  try {
+    if (typeof widget !== 'undefined' && widget) {
+      APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
+      APP_CONFIG.WIDGET_MODE = 'additional_app';
+    }
+  } catch (e) { /* */ }
+
+  if (query.trusted === '1') {
+    APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
+    APP_CONFIG.WIDGET_MODE = 'forced_trusted';
+  }
 
   if (query.physicalid) {
     APP_CONFIG.URL_PHYSICAL_ID = query.physicalid;

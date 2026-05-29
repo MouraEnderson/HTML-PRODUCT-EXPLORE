@@ -237,9 +237,46 @@ var App = (function () {
     return true;
   }
 
+  /** Additional App injeta UWA/require — aguarda antes de assumir Web Page Reader. */
+  function waitForTrustedWidget(ms) {
+    ms = ms || 2500;
+    return new Promise(function (resolve) {
+      if (!APP_CONFIG.CROSS_ORIGIN_WIDGET) return resolve(true);
+      var t0 = Date.now();
+      function tick() {
+        var hasUwa = false;
+        try {
+          hasUwa = typeof widget !== 'undefined' && widget;
+        } catch (e) { /* */ }
+        var hasRequire = typeof require !== 'undefined';
+        var hasWaf = typeof WAFData !== 'undefined';
+        if (hasUwa || hasRequire || hasWaf) {
+          APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
+          APP_CONFIG.WIDGET_MODE = hasUwa ? 'additional_app' : 'trusted_runtime';
+          resolve(true);
+          return;
+        }
+        if (Date.now() - t0 >= ms) {
+          resolve(false);
+          return;
+        }
+        setTimeout(tick, 150);
+      }
+      tick();
+    });
+  }
+
   function bootstrap() {
     setLoading(true);
     setStatus('Inicializando...', 'info');
+
+    return waitForTrustedWidget(2500).then(function () {
+      return bootstrapCore();
+    });
+  }
+
+  function bootstrapCore() {
+    setLoading(true);
 
     if (APP_CONFIG.CROSS_ORIGIN_WIDGET) {
       try {
@@ -248,7 +285,7 @@ var App = (function () {
         initAppCore(null);
         runHealthCheck();
         setStatus(
-          'Widget em GitHub: BOM real exige publicação no 3DSpace (OBJETIVO-PROJETO.md). Abaixo: Explorer + Sincronizar ou fallback colar.',
+          'Web Page Reader: sem API ENOVIA. Admin: crie Additional App (GUIA-ADMIN-ADDITIONAL-APP.md). Enquanto isso: Physical ID ou Carregar Drone.',
           'warn'
         );
       } catch (err) {
@@ -269,6 +306,8 @@ var App = (function () {
       })
       .then(function (spaceUrl) {
         initAppCore(spaceUrl);
+        var modeLabel = APP_CONFIG.WIDGET_MODE || 'plataforma';
+        setStatus('Modo ' + modeLabel + ' — APIs 3DEXPERIENCE ativas.', 'ok');
         var sel = ProductExplorerBridge.getSelection();
         if (sel && !APP_CONFIG.CROSS_ORIGIN_WIDGET) return loadBom(sel.physicalid);
         if (APP_CONFIG.DEMO_MODE) {
