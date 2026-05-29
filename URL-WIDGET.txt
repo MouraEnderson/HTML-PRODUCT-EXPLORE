@@ -1,0 +1,13 @@
+# URLs para widget 3DEXPERIENCE
+
+## 1) GitHub Pages (principal — após ativar branch gh-pages)
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/index.html
+
+Ativar em: Settings → Pages → Branch: gh-pages → Folder: / (root)
+
+## 2) CDN jsDelivr (funciona AGORA, enquanto Pages não publica)
+https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/index.html
+
+## 3) NÃO usar (dá 404 ou HTML sem estilo)
+- https://github.com/MouraEnderson/HTML-PRODUCT-EXPLORE
+- https://raw.githubusercontent.com/.../index.html
