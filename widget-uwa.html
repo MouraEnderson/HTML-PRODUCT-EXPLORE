@@ -4,75 +4,128 @@
 <head>
   <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
   <title>BOM Analytics</title>
-  <style type="text/css">
-    html, body { height: 100%; margin: 0; overflow: hidden; }
-    #bom-root { height: 100%; min-height: 320px; }
-    .boot-msg { padding: 14px; font-family: "Segoe UI", Arial, sans-serif; color: #333; }
-    .boot-err { color: #b71c1c; }
-  </style>
+  <script type="text/javascript" src="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/vendor/chart.umd.min.js"></script>
   <script type="text/javascript">
   //<![CDATA[
     var BOM_REPO = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-    var BOM_VER = '20260605';
-    var BOM_APP = BOM_REPO + 'index.html?v=' + BOM_VER;
+    var BOM_VER = '20260606';
+    window.__3DX_TRUSTED_WIDGET__ = true;
 
-    function bomMsg(text, isErr) {
-      try {
-        if (typeof widget !== 'undefined' && widget && widget.body) {
-          widget.body.innerHTML = '<div class="boot-msg' + (isErr ? ' boot-err' : '') + '">' + text + '</div>';
-        } else {
-          document.body.innerHTML = '<div class="boot-msg">' + text + '</div>';
-        }
-      } catch (e) { /* */ }
+    var BOM_SCRIPTS = [
+      'assets/js/config.js',
+      'assets/js/platform/widget-runtime.js',
+      'assets/js/platform/platform-bridge.js',
+      'assets/js/platform/context.js',
+      'assets/js/platform/compass.js',
+      'assets/js/platform/waf-client.js',
+      'assets/js/integration/3dx-content-parser.js',
+      'assets/js/integration/enovia-api.js',
+      'assets/js/integration/search-api.js',
+      'assets/js/integration/product-explorer-bridge.js',
+      'assets/js/services/file-import-service.js',
+      'assets/js/services/product-search-service.js',
+      'assets/js/services/attribute-service.js',
+      'assets/js/services/physical-product-service.js',
+      'assets/js/services/bom-service.js',
+      'assets/js/processing/bom-normalizer.js',
+      'assets/js/processing/metrics-engine.js',
+      'assets/js/processing/anomaly-detector.js',
+      'assets/js/ui/kpi-cards.js',
+      'assets/js/ui/charts-manager.js',
+      'assets/js/ui/filters.js',
+      'assets/js/ui/data-table.js',
+      'assets/js/ui/bom-tree.js',
+      'assets/js/ui/explorer-sync-panel.js',
+      'assets/js/app.js'
+    ];
+
+    function bomLoadCss() {
+      var l = document.createElement('link');
+      l.rel = 'stylesheet';
+      l.href = BOM_REPO + 'assets/css/dashboard.css?v=' + BOM_VER;
+      document.getElementsByTagName('head')[0].appendChild(l);
     }
 
-    function bomLoadIframe() {
-      var root = document.getElementById('bom-root');
-      if (!root && typeof widget !== 'undefined' && widget.body) {
-        widget.body.innerHTML = '<div id="bom-root"></div>';
-        root = widget.body.firstChild;
-      }
-      if (!root) return;
-      var q = '';
-      try { q = window.location.search || ''; } catch (e1) { /* */ }
-      var iframe = document.createElement('iframe');
-      iframe.id = 'bomFrame';
-      iframe.title = 'BOM Analytics';
-      iframe.setAttribute('src', BOM_APP + q);
-      iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;';
-      root.innerHTML = '';
-      root.appendChild(iframe);
-      try {
-        if (widget.setBodySize) widget.setBodySize();
-        if (widget.setViewport) widget.setViewport({ height: '100%' });
-      } catch (e2) { /* */ }
-    }
-
-    function bomInit() {
-      bomMsg('BOM Analytics — iniciando UWA…');
-      if (typeof widget === 'undefined') {
-        bomMsg('Abra pelo 3DDashboard (Additional App Widget). URL: ' + BOM_APP, true);
+    function bomLoadScript(i, done) {
+      if (i >= BOM_SCRIPTS.length) {
+        done();
         return;
       }
-      widget.addEvent('onLoad', function () {
-        bomLoadIframe();
-      });
-      widget.addEvent('onRefresh', function () {
-        var f = document.getElementById('bomFrame');
-        if (f) f.src = BOM_APP + '&_=' + Date.now();
-      });
-      try {
-        if (widget.body) {
-          widget.body.innerHTML = '<div id="bom-root"></div>';
-        }
-      } catch (e3) { /* */ }
+      var s = document.createElement('script');
+      s.src = BOM_REPO + BOM_SCRIPTS[i] + '?v=' + BOM_VER;
+      s.onload = function () { bomLoadScript(i + 1, done); };
+      s.onerror = function () { bomLoadScript(i + 1, done); };
+      document.getElementsByTagName('head')[0].appendChild(s);
     }
 
-    bomInit();
+    function bomMountBody() {
+      var html = document.getElementById('bom-app-template');
+      if (!html) return;
+      var target = (typeof widget !== 'undefined' && widget.body) ? widget.body : document.body;
+      target.innerHTML = html.innerHTML;
+      target.className = 'ui-explorer-only';
+    }
+
+    function bomBoot() {
+      bomLoadCss();
+      bomMountBody();
+      bomLoadScript(0, function () {
+        try {
+          if (typeof WidgetRuntime !== 'undefined') WidgetRuntime.markTrusted();
+        } catch (e1) { /* */ }
+      });
+    }
+
+    if (typeof widget !== 'undefined' && widget.addEvent) {
+      widget.addEvent('onLoad', bomBoot);
+      widget.addEvent('onRefresh', function () {
+        var sel = typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getSelection();
+        if (sel && typeof App !== 'undefined') App.loadBom(sel.physicalid);
+      });
+    } else {
+      document.addEventListener('DOMContentLoaded', bomBoot);
+    }
   //]]>
   </script>
 </head>
 <body>
-  <div id="bom-root" class="boot-msg">BOM Analytics — aguardando 3DDashboard…</div>
+<div id="bom-app-template" style="display:none">
+  <header class="app-header explorer-header">
+    <h1>BOM Analytics</h1>
+    <p class="explorer-product">Product Structure Explorer: <strong id="selectionLabel">—</strong></p>
+    <button type="button" class="ui-hidden" id="btnSyncExplorer">sync</button>
+    <button type="button" class="ui-hidden" id="btnRefresh">refresh</button>
+  </header>
+  <div id="statusBar" class="status-bar">Carregando…</div>
+  <div class="ui-hidden" aria-hidden="true">
+    <input type="text" id="explorerObjectId" />
+    <input type="text" id="explorerObjectName" />
+    <button id="btnLoadObjectId"></button>
+    <button id="btnCopyHelp"></button>
+    <div id="syncHelpText"></div>
+    <select id="filterMaturity"><option value="all">all</option></select>
+    <select id="filterType"><option value="all">all</option></select>
+    <select id="filterApproval"><option value="all">all</option></select>
+    <select id="filterPP"><option value="all">all</option></select>
+    <div id="bomTree"></div>
+  </div>
+  <main class="dashboard-explorer">
+    <section id="kpiGrid" class="kpi-grid kpi-compact"></section>
+    <section class="charts-grid charts-main">
+      <div class="chart-card"><canvas id="chartMaturity"></canvas></div>
+      <div class="chart-card"><canvas id="chartType"></canvas></div>
+      <div class="chart-card"><canvas id="chartRevision"></canvas></div>
+      <div class="chart-card"><canvas id="chartApproval"></canvas></div>
+    </section>
+    <section class="panel table-panel">
+      <div class="panel-header">E-BOM — <span id="tableProductLabel">—</span></div>
+      <div class="filter-row"><input type="search" id="searchInput" placeholder="Filtrar tabela…" /></div>
+      <div class="table-scroll table-scroll-wide">
+        <table id="bomTable" class="data-table"><thead><tr></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+  </main>
+  <div id="loadingOverlay" class="loading-overlay hidden">Carregando E-BOM…</div>
+</div>
 </body>
 </html>

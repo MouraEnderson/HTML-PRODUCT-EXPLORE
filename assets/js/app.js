@@ -8,6 +8,7 @@ var App = (function () {
   var currentMetrics = null;
   var currentAnomalies = null;
   var loading = false;
+  var lastLoadedId = null;
 
   function setStatus(msg, type) {
     var el = document.getElementById('statusBar');
@@ -83,32 +84,36 @@ var App = (function () {
       displayName: sel.displayName || sel.name || physicalId
     }).then(function () {
       refreshUI();
-      setStatus(
-        'Objeto do Explorer vinculado. Estrutura filha completa exige HTML no 3DSpace (mesmo domínio).',
-        'warn'
-      );
+      setStatus('Modo limitado: 1 item (use Additional App widget-uwa sem iframe).', 'warn');
     });
   }
 
   function loadBom(physicalId) {
     if (!physicalId || loading) return Promise.resolve();
+    if (physicalId === lastLoadedId && BomService.getNodeCount() > 1) {
+      return Promise.resolve();
+    }
     setLoading(true);
-    setStatus('Carregando E-BOM...', 'info');
+    setStatus('Carregando E-BOM…', 'info');
 
     if (APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.DEMO_MODE) {
-      return loadBomFromSelectionOnly(physicalId);
+      return loadBomFromSelectionOnly(physicalId).finally(function () {
+        setLoading(false);
+      });
     }
 
     return BomService.loadRoot(physicalId)
-      .then(function (index) {
-        return PhysicalProductService.enrichNodes(index, { batchSize: 25 });
-      })
       .then(function () {
+        lastLoadedId = physicalId;
         refreshUI();
+        setStatus(BomService.getNodeCount() + ' itens carregados.', 'ok');
+        if (APP_CONFIG.SKIP_PP_ENRICH) return;
+        return PhysicalProductService.enrichNodes(BomService.getIndex(), { batchSize: 40 })
+          .then(function () { refreshUI(); });
       })
       .catch(function (err) {
         console.error(err);
-        setStatus('Erro ao carregar BOM: ' + (err.message || err), 'error');
+        setStatus('Erro: ' + (err.message || err), 'error');
       })
       .finally(function () {
         setLoading(false);

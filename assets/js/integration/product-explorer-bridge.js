@@ -138,9 +138,7 @@ var ProductExplorerBridge = (function () {
     initFrom3DXDeepLink();
     initWidgetEvents();
     initPlatformSelection();
-    if (APP_CONFIG && APP_CONFIG.EXPLORER_ONLY && APP_CONFIG.AUTO_SYNC_EXPLORER_MS) {
-      setInterval(pollSelection, APP_CONFIG.AUTO_SYNC_EXPLORER_MS);
-    }
+    /* poll centralizado em app.js */
     return {
       getSelection: function () { return currentSelection; },
       subscribe: subscribe,

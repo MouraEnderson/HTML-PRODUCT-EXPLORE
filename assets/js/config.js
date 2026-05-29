@@ -17,7 +17,9 @@
     SHOW_ISSUES_PANEL: false,
     SHOW_PLATFORM_SEARCH: false,
     AUTO_LOAD_DEMO_DRONE: false,
-    AUTO_SYNC_EXPLORER_MS: 4000,
+    AUTO_SYNC_EXPLORER_MS: 12000,
+    SKIP_PP_ENRICH: true,
+    BOM_FAST_DEPTH: 3,
 
     /** Limite de nós na árvore (proteção memória) */
     BOM_MAX_NODES: 50000,
@@ -162,7 +164,7 @@
   }
 
   try {
-    if (typeof widget !== 'undefined' && widget) {
+    if (global.__3DX_TRUSTED_WIDGET__ || (typeof widget !== 'undefined' && widget)) {
       APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
       APP_CONFIG.WIDGET_MODE = 'additional_app';
     }

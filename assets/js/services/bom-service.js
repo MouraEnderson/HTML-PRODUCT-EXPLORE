@@ -170,8 +170,7 @@ var BomService = (function () {
         buildDemoSubtree(rootId, 1, 4);
         return PhysicalProductService.enrichNodes(index);
       }
-      if (index[rootId]) index[rootId].loaded = false;
-      return loadTreeRecursive(rootId, APP_CONFIG.BOM_INITIAL_DEPTH + 2, 1);
+      return loadRoot(sel.physicalid);
     });
   }
 
@@ -215,7 +214,8 @@ var BomService = (function () {
         attrs.displayType = attrs.displayType || 'Physical Product';
         addNode(attrs, null, 0, 1);
         index[physicalId].loaded = false;
-        return loadTreeRecursive(physicalId, APP_CONFIG.BOM_INITIAL_DEPTH + 2, 1);
+        var depth = APP_CONFIG.BOM_FAST_DEPTH || APP_CONFIG.BOM_INITIAL_DEPTH;
+        return loadTreeRecursive(physicalId, depth, 1);
       });
   }
 
