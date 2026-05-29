@@ -6,6 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <title>BOM Analytics v2</title>
   <style type="text/css">
+    html, body { margin: 0; padding: 0; min-height: 100%; background: #f0f6fa; font-family: "Segoe UI", sans-serif; }
     .bom-ver { margin: 0; padding: 10px 12px; background: #0d47a1; color: #fff; font-size: 14px; font-weight: bold; }
     .bom-h1 { margin: 0; padding: 10px 14px; background: #fff; font-size: 16px; color: #005686; }
     .bom-st { padding: 10px 14px; font-size: 14px; background: #e3f2fd; color: #0d47a1; font-weight: bold; }
@@ -21,12 +22,20 @@
     .bom-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     .bom-table th, .bom-table td { border: 1px solid #ddd; padding: 4px 8px; }
   </style>
+</head>
+<body>
+  <noscript>Ative JavaScript para usar o BOM Analytics.</noscript>
   <script type="text/javascript">
   //<![CDATA[
-    var BOM_V2 = 'bom20260530d-SOLO';
+    var BOM_V2 = 'bom20260530e';
+
+    function mountEl() {
+      if (typeof widget !== 'undefined' && widget && widget.body) return widget.body;
+      return document.body;
+    }
 
     function rootEl() {
-      return window.__3DX_UI_ROOT__ || (typeof widget !== 'undefined' && widget.body ? widget.body : null);
+      return window.__3DX_UI_ROOT__ || mountEl();
     }
 
     function $(id) {
@@ -98,8 +107,6 @@
           return '<tr><td>' + it.name + '</td><td>' + it.revision + '</td><td>' + it.state + '</td></tr>';
         }).join('');
       }
-      var tl = $('tableProductLabel');
-      if (tl) tl.textContent = mont.name;
     }
 
     function onVarrerClick() {
@@ -113,8 +120,7 @@
       }
       if (btn) {
         btn.disabled = true;
-        btn.value = 'Varrendo…';
-        if (btn.textContent !== undefined) btn.textContent = 'Varrendo…';
+        btn.textContent = 'Varrendo…';
       }
       try {
         var items = parseExplorerPaste(text);
@@ -140,29 +146,29 @@
       btn.setAttribute('data-bom-bound', '1');
       if (btn.addEventListener) {
         btn.addEventListener('click', onVarrerClick, false);
-      } else if (btn.attachEvent) {
-        btn.attachEvent('onclick', onVarrerClick);
       } else {
         btn.onclick = onVarrerClick;
       }
     }
 
+    var UI_HTML =
+      '<p class="bom-ver">BOM v2 SOLO — ' + BOM_V2 + '</p>' +
+      '<div class="bom-h1">Estrutura: <strong id="selectionLabel">-</strong></div>' +
+      '<div id="statusBar" class="bom-st">Clique Varrer após colar na caixa azul</div>' +
+      '<div class="bom-panel">' +
+      '<p class="bom-hint">Explorer: Ctrl+A → Ctrl+C → Ctrl+V na caixa → Varrer</p>' +
+      '<textarea id="pasteArea" placeholder="CAIXA AZUL — cole aqui"></textarea>' +
+      '<button type="button" id="btnScanExplorer" class="bom-btn">Varrer estrutura Explorer</button>' +
+      '</div>' +
+      '<div id="kpiGrid" class="bom-kpi"></div>' +
+      '<div class="bom-table-wrap">' +
+      '<table id="bomTable" class="bom-table"><thead><tr></tr></thead><tbody></tbody></table>' +
+      '</div>';
+
     function paint() {
-      if (typeof widget === 'undefined' || !widget.body) return;
-      var b = widget.body;
-      b.innerHTML =
-        '<p class="bom-ver">BOM v2 SOLO — ' + BOM_V2 + '</p>' +
-        '<div class="bom-h1">Estrutura: <strong id="selectionLabel">-</strong></div>' +
-        '<div id="statusBar" class="bom-st">Clique Varrer após colar na caixa azul</div>' +
-        '<div class="bom-panel">' +
-        '<p class="bom-hint">Explorer: Ctrl+A → Ctrl+C → Ctrl+V na caixa → Varrer</p>' +
-        '<textarea id="pasteArea" placeholder="CAIXA AZUL — cole aqui"></textarea>' +
-        '<button type="button" id="btnScanExplorer" class="bom-btn">Varrer estrutura Explorer</button>' +
-        '</div>' +
-        '<div id="kpiGrid" class="bom-kpi"></div>' +
-        '<div class="bom-table-wrap">' +
-        '<table id="bomTable" class="bom-table"><thead><tr></tr></thead><tbody></tbody></table>' +
-        '</div>';
+      var b = mountEl();
+      if (!b) return;
+      b.innerHTML = UI_HTML;
       b.style.minHeight = '400px';
       window.__3DX_UI_ROOT__ = b;
       bindButton();
@@ -171,21 +177,32 @@
 
     function init() {
       paint();
-      bindButton();
     }
 
-    function boot() {
-      if (typeof widget !== 'undefined' && widget) {
-        if (widget.addEvent) widget.addEvent('onLoad', init);
-        if (widget.addEvent) widget.addEvent('onRefresh', init);
-        if (widget.body) init();
+    function bootUwa() {
+      if (typeof widget === 'undefined' || !widget) {
+        bootBrowser();
+        return;
+      }
+      if (widget.addEvent) {
+        widget.addEvent('onLoad', init);
+        widget.addEvent('onRefresh', init);
+      }
+      if (widget.body) init();
+      else window.setTimeout(bootUwa, 80);
+    }
+
+    function bootBrowser() {
+      if (document.body) init();
+      else if (document.addEventListener) {
+        document.addEventListener('DOMContentLoaded', init);
       } else {
-        window.setTimeout(boot, 80);
+        window.onload = init;
       }
     }
-    boot();
+
+    bootUwa();
   //]]>
   </script>
-</head>
-<body></body>
+</body>
 </html>
