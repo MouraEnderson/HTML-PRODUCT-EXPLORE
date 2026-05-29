@@ -8,13 +8,13 @@
   <script>
     (function () {
       var CDN = 'https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/';
-      var host = location.hostname || '';
+      var host = (location.hostname || '').toLowerCase();
+      window.__3DX_ASSET_ROOT__ = 'assets/';
       if (host.indexOf('3dexperience.3ds.com') >= 0) return;
-      if (host.indexOf('github.io') < 0 && host !== 'localhost' && host !== '127.0.0.1') {
-        var base = document.createElement('base');
-        base.href = CDN;
-        document.head.appendChild(base);
-      }
+      window.__3DX_ASSET_ROOT__ = CDN;
+      var base = document.createElement('base');
+      base.href = CDN;
+      document.head.appendChild(base);
     })();
   </script>
   <link rel="stylesheet" href="assets/css/dashboard.css" />
@@ -38,6 +38,20 @@
     </div>
   </header>
 
+  <div id="externalBanner" class="external-banner hidden">Modo Web Page Reader: arraste o Excel/CSV exportado do Product Explorer na área abaixo (recomendado).</div>
+
+  <section id="dropZone" class="drop-zone panel" aria-label="Importar estrutura">
+    <div class="panel-header">Arrastar estrutura do Product Explorer</div>
+    <div class="drop-zone-inner">
+      <div class="drop-icon">📂</div>
+      <p id="dropZoneLabel" class="drop-label">Solte aqui o <strong>Excel ou CSV</strong> exportado do Product Explorer</p>
+      <p class="drop-hint">No Explorer: estrutura aberta → Exportar / Excel → arraste o arquivo para esta área</p>
+      <label class="btn btn-primary file-btn">
+        Escolher arquivo
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.txt" hidden />
+      </label>
+    </div>
+  </section>
   <div id="statusBar" class="status-bar">Inicializando...</div>
 
   <section class="panel explorer-sync-panel" aria-label="Sincronizar Product Explorer">
@@ -144,6 +158,7 @@
   <script src="assets/js/integration/search-api.js"></script>
   <script src="assets/js/integration/product-explorer-bridge.js"></script>
   <!-- Services -->
+  <script src="assets/js/services/file-import-service.js"></script>
   <script src="assets/js/services/product-search-service.js"></script>
   <script src="assets/js/services/attribute-service.js"></script>
   <script src="assets/js/services/physical-product-service.js"></script>
@@ -160,6 +175,7 @@
   <script src="assets/js/ui/bom-tree.js"></script>
   <script src="assets/js/ui/product-search-panel.js"></script>
   <script src="assets/js/ui/explorer-sync-panel.js"></script>
+  <script src="assets/js/ui/drop-zone.js"></script>
   <!-- App -->
   <script src="assets/js/app.js"></script>
 </body>
