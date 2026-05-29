@@ -278,8 +278,10 @@ var App = (function () {
   function initAppCore(spaceUrl) {
     stripLegacyUI();
     if (spaceUrl && spaceUrl !== 'demo') {
-      EnoviaApi.init(spaceUrl);
-      SearchApi.init(spaceUrl);
+      try {
+        EnoviaApi.init(spaceUrl);
+        SearchApi.init(spaceUrl);
+      } catch (e) { /* */ }
     }
     ProductExplorerBridge.init();
     ProductExplorerBridge.subscribe(onSelection);
@@ -390,7 +392,62 @@ var App = (function () {
     });
   }
 
+  function getTenantSpaceUrl() {
+    var h = APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.spaceHost;
+    return h ? ('https://' + h + '/enovia') : null;
+  }
+
+  function loadDefaultExplorerProduct() {
+    var d = APP_CONFIG.TENANT_DEFAULTS || {};
+    if (!d.defaultPhysicalId) return;
+    onSelection({
+      physicalid: d.defaultPhysicalId,
+      displayName: d.defaultDisplayName || d.defaultPhysicalId,
+      name: d.defaultDisplayName || d.defaultPhysicalId,
+      type: 'VPMReference',
+      displayType: 'Physical Product'
+    });
+  }
+
+  function trySyncThenLoad() {
+    pullExplorerSelection();
+    window.setTimeout(function () {
+      var sel = ProductExplorerBridge.getSelection();
+      if (sel && sel.physicalid) {
+        loadBom(sel.physicalid);
+        return;
+      }
+      loadDefaultExplorerProduct();
+    }, APP_CONFIG.EXPLORER_FALLBACK_MS || 2500);
+  }
+
+  function bootstrapTrustedFast() {
+    var space = getTenantSpaceUrl();
+    if (!space) {
+      setStatus('URL 3DSpace não configurada.', 'error');
+      return Promise.resolve();
+    }
+    initAppCore(space);
+    setStatus('Conectando…', 'info');
+    return CompassServices.fetchCsrfToken(space)
+      .catch(function () { return null; })
+      .then(function () {
+        setStatus('Sincronizando Product Structure Explorer…', 'info');
+        trySyncThenLoad();
+        window.setTimeout(function () {
+          scheduleExplorerSync();
+          startExplorerPoll();
+        }, 3000);
+      });
+  }
+
   function bootstrapCore() {
+    if (global.__3DX_TRUSTED_WIDGET__ && APP_CONFIG.USE_FAST_BOOT) {
+      return bootstrapTrustedFast().finally(function () {
+        setLoading(false);
+        forceStopLoading();
+      });
+    }
 
     if (APP_CONFIG.CROSS_ORIGIN_WIDGET) {
       try {

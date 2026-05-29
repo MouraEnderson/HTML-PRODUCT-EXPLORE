@@ -30,12 +30,19 @@ var ThreeDXContentParser = (function () {
   }
 
   function parseLocations() {
-    var sources = [window.location.hash];
+    var sources = [window.location.hash, window.location.search];
     try {
       if (window.parent && window.parent !== window && window.parent.location) {
         sources.push(window.parent.location.hash);
+        sources.push(window.parent.location.search);
       }
     } catch (e) { /* cross-origin */ }
+    try {
+      if (window.top && window.top.location) {
+        sources.push(window.top.location.hash);
+        sources.push(window.top.location.search);
+      }
+    } catch (e2) { /* */ }
     for (var i = 0; i < sources.length; i++) {
       var parsed = extractFromHash(sources[i]);
       if (parsed) return parsed;

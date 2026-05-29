@@ -17,9 +17,12 @@
     SHOW_ISSUES_PANEL: false,
     SHOW_PLATFORM_SEARCH: false,
     AUTO_LOAD_DEMO_DRONE: false,
-    AUTO_SYNC_EXPLORER_MS: 12000,
+    AUTO_SYNC_EXPLORER_MS: 15000,
     SKIP_PP_ENRICH: true,
     BOM_FAST_DEPTH: 3,
+    USE_FAST_BOOT: true,
+    /** Se Explorer não responder em N ms, carrega produto padrão do tenant */
+    EXPLORER_FALLBACK_MS: 2500,
 
     /** Limite de nós na árvore (proteção memória) */
     BOM_MAX_NODES: 50000,
