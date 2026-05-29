@@ -141,8 +141,10 @@
     _host.indexOf('jsdelivr.net') >= 0 ||
     _host.indexOf('githubusercontent.com') >= 0;
 
-  if (APP_CONFIG.CROSS_ORIGIN_WIDGET && query.physicalid) {
-    APP_CONFIG.DEMO_MODE = true;
+  if (query.physicalid) {
+    APP_CONFIG.URL_PHYSICAL_ID = query.physicalid;
+  }
+  if (query.demo === 'true' && query.physicalid) {
     APP_CONFIG.DEMO_ROOT_ID = query.physicalid;
   }
 

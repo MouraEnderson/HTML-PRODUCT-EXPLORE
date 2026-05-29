@@ -1,0 +1,6 @@
+Nível;Nome;Title;Tipo;Revisão;Estado;Qtd;Owner
+0;01_SKA_Drone Assembly;Drone Assembly;VPMReference;A;RELEASED;1;eng.lead
+1;ASM_Fuselage;Fuselage;VPMReference;B;IN_WORK;1;user1
+2;PRT_Frame_01;Frame;VPMPart;A;RELEASED;2;user2
+1;ASM_Motor;Motor Assembly;VPMReference;A;RELEASED;4;user3
+2;PRT_Blade;Blade;VPMPart;C;RELEASED;8;user4

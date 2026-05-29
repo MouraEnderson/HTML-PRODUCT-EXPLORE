@@ -7,10 +7,13 @@
   <title>3DEXPERIENCE — BOM Analytics | Product Explorer</title>
   <script>
     (function () {
-      var CDN = 'https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/';
       var host = (location.hostname || '').toLowerCase();
+      var on3dx = host.indexOf('3dexperience.3ds.com') >= 0;
+      var onGithub = host.indexOf('github.io') >= 0;
+      window.__3DX_USE_LOCAL_ASSETS__ = on3dx || onGithub;
       window.__3DX_ASSET_ROOT__ = 'assets/';
-      if (host.indexOf('3dexperience.3ds.com') >= 0) return;
+      if (on3dx || onGithub) return;
+      var CDN = 'https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/';
       window.__3DX_ASSET_ROOT__ = CDN;
       var base = document.createElement('base');
       base.href = CDN;
@@ -18,9 +21,19 @@
     })();
   </script>
   <link rel="stylesheet" href="assets/css/dashboard.css" />
-  <!-- CDN: ajuste versões conforme política corporativa / allowlist WAF -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js" crossorigin="anonymous"></script>
+  <script>
+    (function () {
+      var local = window.__3DX_USE_LOCAL_ASSETS__;
+      var chart = local
+        ? 'assets/vendor/chart.umd.min.js'
+        : 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+      var xlsx = local
+        ? 'assets/vendor/xlsx.full.min.js'
+        : 'https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js';
+      document.write('<script src="' + chart + '"><\/script>');
+      document.write('<script src="' + xlsx + '"><\/script>');
+    })();
+  </script>
 </head>
 <body>
   <header class="app-header">
@@ -50,6 +63,8 @@
         Escolher arquivo
         <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.txt" hidden />
       </label>
+      <button type="button" class="btn" id="btnSampleImport">Testar com exemplo CSV</button>
+      <a class="btn" href="importar.html" target="_blank" rel="noopener">Versão simples (só CSV)</a>
     </div>
   </section>
   <div id="statusBar" class="status-bar">Inicializando...</div>

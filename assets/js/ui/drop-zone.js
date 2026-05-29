@@ -35,6 +35,32 @@ var DropZone = (function () {
         if (input.files && input.files[0]) handleFiles(input.files[0], options);
       });
     }
+
+    var btnSample = document.getElementById('btnSampleImport');
+    if (btnSample) {
+      btnSample.addEventListener('click', function () {
+        var url = (window.__3DX_ASSET_ROOT__ || 'assets/') + 'samples/estrutura-exemplo.csv';
+        setStatus('Carregando exemplo...', 'info');
+        fetch(url)
+          .then(function (r) {
+            if (!r.ok) throw new Error('Exemplo não encontrado (' + r.status + '). Use importar.html');
+            return r.text();
+          })
+          .then(function (text) {
+            var blob = new Blob([text], { type: 'text/csv' });
+            var file = new File([blob], 'estrutura-exemplo.csv', { type: 'text/csv' });
+            handleFiles(file, options);
+          })
+          .catch(function (err) {
+            if (options.onError) options.onError(err.message || err);
+          });
+      });
+    }
+  }
+
+  function setStatus(msg) {
+    var bar = document.getElementById('statusBar');
+    if (bar) bar.textContent = msg;
   }
 
   function prevent(e) {

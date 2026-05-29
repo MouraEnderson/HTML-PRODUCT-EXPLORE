@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BOM — Importar CSV (sem CDN)</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Segoe UI, system-ui, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
+    header { padding: 1rem 1.25rem; background: #005686; }
+    h1 { margin: 0; font-size: 1.15rem; }
+    .sub { opacity: 0.9; font-size: 0.85rem; margin-top: 0.25rem; }
+    main { padding: 1rem 1.25rem 2rem; max-width: 1100px; margin: 0 auto; }
+    .zone {
+      border: 2px dashed #38bdf8; border-radius: 12px; padding: 2rem; text-align: center;
+      background: #1e293b; margin-bottom: 1rem;
+    }
+    .zone.drag { background: #334155; border-color: #7dd3fc; }
+    .btn {
+      display: inline-block; margin: 0.35rem; padding: 0.55rem 1rem; border: 0; border-radius: 8px;
+      background: #0284c7; color: #fff; cursor: pointer; font-size: 0.95rem;
+    }
+    .btn.secondary { background: #475569; }
+    #status { padding: 0.75rem; border-radius: 8px; background: #1e293b; margin-bottom: 1rem; font-size: 0.9rem; }
+    #status.err { background: #7f1d1d; }
+    #status.ok { background: #14532d; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+    .kpi { background: #1e293b; padding: 0.75rem; border-radius: 8px; }
+    .kpi b { display: block; font-size: 1.4rem; color: #7dd3fc; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; background: #1e293b; }
+    th, td { border: 1px solid #334155; padding: 0.4rem 0.5rem; text-align: left; }
+    th { background: #0f172a; position: sticky; top: 0; }
+    .scroll { max-height: 420px; overflow: auto; border-radius: 8px; }
+    ul.tree { list-style: none; padding-left: 1rem; font-size: 0.88rem; }
+    .note { font-size: 0.85rem; color: #94a3b8; line-height: 1.45; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Importar estrutura — modo simples</h1>
+    <div class="sub">Funciona no Web Page Reader mesmo com CDN bloqueado. Use CSV (ou Excel salvo como CSV).</div>
+  </header>
+  <main>
+    <div id="status">Arraste um CSV ou clique em &quot;Testar com exemplo&quot;.</div>
+    <div id="zone" class="zone">
+      <p><strong>Solte o arquivo aqui</strong> (.csv ou .txt)</p>
+      <p class="note">No Excel: Arquivo → Salvar como → CSV (delimitado por ponto e vírgula).</p>
+      <label class="btn">Escolher arquivo<input type="file" id="file" accept=".csv,.txt" hidden /></label>
+      <button type="button" class="btn secondary" id="btnSample">Testar com exemplo</button>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <h2>Árvore</h2>
+    <ul class="tree" id="tree"></ul>
+    <h2>Tabela</h2>
+    <div class="scroll">
+      <table><thead id="thead"></thead><tbody id="tbody"></tbody></table>
+    </div>
+  </main>
+  <script>
+(function () {
+  var SAMPLE = 'Nível;Nome;Title;Tipo;Revisão;Estado;Qtd;Owner\n' +
+    '0;01_SKA_Drone Assembly;Drone Assembly;VPMReference;A;RELEASED;1;eng.lead\n' +
+    '1;ASM_Fuselage;Fuselage;VPMReference;B;IN_WORK;1;user1\n' +
+    '2;PRT_Frame_01;Frame;VPMPart;A;RELEASED;2;user2\n' +
+    '1;ASM_Motor;Motor Assembly;VPMReference;A;RELEASED;4;user3\n' +
+    '2;PRT_Blade;Blade;VPMPart;C;RELEASED;8;user4';
+
+  function setStatus(msg, ok) {
+    var el = document.getElementById('status');
+    el.textContent = msg;
+    el.className = ok === true ? 'ok' : (ok === false ? 'err' : '');
+  }
+
+  function parseCsv(text) {
+    var lines = text.split(/\r?\n/).filter(function (l) { return l.trim(); });
+    if (lines.length < 2) throw new Error('CSV vazio ou só cabeçalho.');
+    var sep = lines[0].indexOf(';') >= 0 ? ';' : (lines[0].indexOf('\t') >= 0 ? '\t' : ',');
+    var rows = lines.map(function (line) {
+      return line.split(sep).map(function (c) { return c.replace(/^"|"$/g, '').trim(); });
+    });
+    var headers = rows[0].map(function (h) { return h.toLowerCase(); });
+    function col(names) {
+      for (var i = 0; i < headers.length; i++) {
+        for (var n = 0; n < names.length; n++) {
+          if (headers[i].indexOf(names[n]) >= 0) return i;
+        }
+      }
+      return -1;
+    }
+    var iLevel = col(['nível', 'nivel', 'level']);
+    var iName = col(['nome', 'name', 'title']);
+    var iTitle = col(['title', 'título', 'titulo']);
+    if (iName < 0) iName = 0;
+    var items = [];
+    for (var r = 1; r < rows.length; r++) {
+      var row = rows[r];
+      var name = row[iName] || '';
+      if (!name && iTitle >= 0) name = row[iTitle];
+      if (!name) continue;
+      var level = iLevel >= 0 ? parseInt(row[iLevel], 10) : 0;
+      if (isNaN(level)) level = 0;
+      items.push({
+        level: level,
+        name: name,
+        title: (iTitle >= 0 ? row[iTitle] : '') || name,
+        type: row[col(['tipo', 'type'])] || '',
+        revision: row[col(['rev', 'revis'])] || '',
+        state: row[col(['estado', 'state', 'matur'])] || ''
+      });
+    }
+    if (!items.length) throw new Error('Nenhuma linha de dados. Verifique separador ; ou ,');
+    return items;
+  }
+
+  function buildTree(items) {
+    var html = '';
+    var stack = [];
+    items.forEach(function (it) {
+      while (stack.length > it.level) stack.pop();
+      var indent = it.level * 12;
+      html += '<li style="margin-left:' + indent + 'px">' + escape(it.name) +
+        (it.revision ? ' <small>(' + escape(it.revision) + ')</small>' : '') + '</li>';
+      stack.push(it);
+    });
+    return html;
+  }
+
+  function escape(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function render(items) {
+    document.getElementById('kpis').innerHTML =
+      '<div class="kpi"><b>' + items.length + '</b>itens</div>' +
+      '<div class="kpi"><b>' + (Math.max.apply(null, items.map(function (i) { return i.level; })) + 1) + '</b>níveis</div>';
+    document.getElementById('tree').innerHTML = buildTree(items);
+    document.getElementById('thead').innerHTML = '<tr><th>Nível</th><th>Nome</th><th>Title</th><th>Tipo</th><th>Rev</th><th>Estado</th></tr>';
+    document.getElementById('tbody').innerHTML = items.map(function (it) {
+      return '<tr><td>' + it.level + '</td><td>' + escape(it.name) + '</td><td>' + escape(it.title) +
+        '</td><td>' + escape(it.type) + '</td><td>' + escape(it.revision) + '</td><td>' + escape(it.state) + '</td></tr>';
+    }).join('');
+    setStatus('OK — ' + items.length + ' itens importados.', true);
+  }
+
+  function processText(text, label) {
+    try {
+      var items = parseCsv(text);
+      render(items);
+    } catch (e) {
+      setStatus((label || 'Erro') + ': ' + e.message, false);
+    }
+  }
+
+  function readFile(file) {
+    var reader = new FileReader();
+    reader.onload = function (e) { processText(e.target.result, file.name); };
+    reader.onerror = function () { setStatus('Falha ao ler arquivo.', false); };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  var zone = document.getElementById('zone');
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) { e.preventDefault(); e.stopPropagation(); });
+  });
+  zone.addEventListener('dragover', function () { zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', function () { zone.classList.remove('drag'); });
+  zone.addEventListener('drop', function (e) {
+    zone.classList.remove('drag');
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) readFile(f);
+  });
+  document.getElementById('file').addEventListener('change', function (e) {
+    if (e.target.files[0]) readFile(e.target.files[0]);
+  });
+  document.getElementById('btnSample').addEventListener('click', function () {
+    processText(SAMPLE, 'exemplo embutido');
+  });
+})();
+  </script>
+</body>
+</html>

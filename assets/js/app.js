@@ -180,6 +180,20 @@ var App = (function () {
     });
   }
 
+  function runHealthCheck() {
+    var problems = [];
+    if (typeof XLSX === 'undefined') problems.push('XLSX (Excel) não carregou');
+    if (typeof Chart === 'undefined') problems.push('Chart.js não carregou');
+    if (problems.length) {
+      setStatus(
+        'Atenção: ' + problems.join('; ') + '. Use CSV ou importar.html. Botão "Testar com exemplo CSV".',
+        'error'
+      );
+      return false;
+    }
+    return true;
+  }
+
   function bootstrap() {
     setLoading(true);
     setStatus('Inicializando...', 'info');
@@ -189,8 +203,9 @@ var App = (function () {
         var banner = document.getElementById('externalBanner');
         if (banner) banner.classList.remove('hidden');
         initAppCore(null);
+        runHealthCheck();
         setStatus(
-          'Modo externo: cole Physical ID → Carregar objeto → Atualizar (dados demo da estrutura).',
+          'Modo externo: arraste CSV/Excel OU clique "Testar com exemplo CSV". Sincronizar Explorer não funciona aqui.',
           'warn'
         );
       } catch (err) {

@@ -53,7 +53,8 @@ var FileImportService = (function () {
     var headers = rows[0].map(function (c) { return String(c || ''); });
     var colMap = mapColumns(headers);
     if (colMap.name === undefined && colMap.title === undefined) {
-      throw new Error('Coluna Nome/Title não encontrada. Exporte do Product Explorer com cabeçalhos.');
+      colMap.name = 0;
+      colMap.level = colMap.level !== undefined ? colMap.level : (headers.length > 1 ? 1 : undefined);
     }
 
     var items = [];
@@ -118,8 +119,9 @@ var FileImportService = (function () {
         try {
           var text = e.target.result;
           var lines = text.split(/\r?\n/).filter(function (l) { return l.trim(); });
+          var sep = text.indexOf(';') >= 0 ? ';' : (text.indexOf('\t') >= 0 ? '\t' : ',');
           var rows = lines.map(function (line) {
-            return line.split(/[;\t,]/).map(function (c) { return c.replace(/^"|"$/g, '').trim(); });
+            return line.split(sep).map(function (c) { return c.replace(/^"|"$/g, '').trim(); });
           });
           resolve(parseRows(rows));
         } catch (err) {
