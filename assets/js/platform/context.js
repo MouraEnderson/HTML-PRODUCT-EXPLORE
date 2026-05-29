@@ -16,6 +16,9 @@ var PlatformContext = (function () {
   };
 
   function getRequire() {
+    if (typeof PlatformBridge !== 'undefined' && PlatformBridge.isTrustedRuntime && PlatformBridge.isTrustedRuntime()) {
+      if (typeof require !== 'undefined') return require;
+    }
     if (typeof PlatformBridge !== 'undefined' && PlatformBridge.isExternalWidget()) {
       return PlatformBridge.safeGetRequire();
     }
@@ -93,10 +96,23 @@ var PlatformContext = (function () {
     if (loadFrom3DXDeepLink()) {
       return Promise.resolve(state);
     }
+    if (!state.securityContext && APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.securityContext) {
+      state.securityContext = APP_CONFIG.TENANT_DEFAULTS.securityContext;
+      state.tenant = APP_CONFIG.TENANT_DEFAULTS.envId || state.tenant;
+      state.platformId = APP_CONFIG.TENANT_DEFAULTS.envId || state.platformId;
+      state.ready = true;
+    }
+
     return loadFromWidget().then(function (ok) {
       if (ok) return state;
       return loadFromWAF().then(function () {
         if (!state.ready) loadFrom3DXDeepLink();
+        if (!state.ready && APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.securityContext) {
+          state.securityContext = APP_CONFIG.TENANT_DEFAULTS.securityContext;
+          state.tenant = APP_CONFIG.TENANT_DEFAULTS.envId;
+          state.platformId = APP_CONFIG.TENANT_DEFAULTS.envId;
+          state.ready = true;
+        }
         return state;
       });
     });

@@ -7,6 +7,9 @@ var WafClient = (function () {
 
   function getWAFData() {
     if (typeof WAFData !== 'undefined') return WAFData;
+    try {
+      if (typeof widget !== 'undefined' && widget && widget.WAFData) return widget.WAFData;
+    } catch (e) { /* */ }
     if (window.parent && window.parent.WAFData) {
       try { return window.parent.WAFData; } catch (e) { return null; }
     }

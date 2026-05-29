@@ -1,5 +1,7 @@
 # Guia para você (admin da plataforma) — sem publicar no 3DSpace
 
+**Resumo em 1 página:** leia primeiro `PASSO-UNICO-ADMIN.md`.
+
 Você disse que só usa **Web Page Reader** hoje. Como **administrador da instância**, você pode registrar o **mesmo HTML** como **Additional App** — isso é o recurso certo para ler **E-BOM e APIs ENOVIA**, sem mexer no servidor 3DSpace.
 
 Documentação DS (PLM Coach / CAA): [Widget Dashboard Integration](https://library.plmcoach.com/caa3dx/win_b64.doc/English/CAAWebAppsJSRoot/CAAWebAppsTaWidgetIntegration.htm)
@@ -40,6 +42,8 @@ Documentação DS (PLM Coach / CAA): [Widget Dashboard Integration](https://libr
 | **Short name** | `BOM Analytics` |
 | **Source code URL** | `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/index.html` |
 | **Configuration file URL** | (deixe vazio) |
+
+URL alternativa (template UWA): `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-uwa.html`
 
 4. Salve.
 

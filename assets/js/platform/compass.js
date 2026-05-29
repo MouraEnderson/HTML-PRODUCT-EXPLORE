@@ -28,7 +28,9 @@ var CompassServices = (function () {
       cache.spaceUrl = 'https://demo-3dspace.example.com/3dspace';
       return Promise.resolve(cache.spaceUrl);
     }
-    if (typeof PlatformBridge !== 'undefined' && PlatformBridge.isExternalWidget()) {
+    if (typeof WidgetRuntime !== 'undefined' && WidgetRuntime.isTrusted()) {
+      /* usa i3DXCompassServices abaixo */
+    } else if (typeof PlatformBridge !== 'undefined' && PlatformBridge.isExternalWidget()) {
       cache.spaceUrl = PlatformBridge.getSpaceUrl();
       return Promise.resolve(cache.spaceUrl);
     }
@@ -60,8 +62,24 @@ var CompassServices = (function () {
     return spaceUrl + '/resources/v1/modeler';
   }
 
+  function fetchCsrfToken(spaceUrl) {
+    if (!spaceUrl) return Promise.resolve(null);
+    var url = spaceUrl + '/resources/v1/application/CSRF';
+    if (typeof WafClient !== 'undefined') {
+      return WafClient.get(url).then(function (data) {
+        var token = (data && (data.csrf && data.csrf.value)) || data.value || data.token;
+        if (token && typeof PlatformContext !== 'undefined') {
+          PlatformContext.setCsrfToken(token);
+        }
+        return token;
+      }).catch(function () { return null; });
+    }
+    return Promise.resolve(null);
+  }
+
   return {
     get3DSpaceUrl: get3DSpaceUrl,
+    fetchCsrfToken: fetchCsrfToken,
     buildRestBase: buildRestBase,
     clearCache: function () {
       cache.spaceUrl = null;

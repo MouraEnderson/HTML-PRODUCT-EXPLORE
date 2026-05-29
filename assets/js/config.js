@@ -99,7 +99,9 @@
       envId: 'R1132100929518',
       securityContext: 'ctx::VPLMProjectLeader.Company Name.CS_IMPLANTACAO',
       platformHost: 'r1132100929518-us1-ifwe.3dexperience.3ds.com',
-      spaceHost: 'r1132100929518-us1-space.3dexperience.3ds.com'
+      spaceHost: 'r1132100929518-us1-space.3dexperience.3ds.com',
+      defaultPhysicalId: '132FB3CE26D70E006A18D1870000316D',
+      defaultDisplayName: '01_SKA_Drone Assembly_130520206'
     },
 
     PLATFORM: {

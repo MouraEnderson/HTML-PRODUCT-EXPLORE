@@ -246,7 +246,8 @@ var App = (function () {
       function tick() {
         var hasUwa = false;
         try {
-          hasUwa = typeof widget !== 'undefined' && widget;
+          hasUwa = (typeof WidgetRuntime !== 'undefined' && WidgetRuntime.isTrusted()) ||
+            (typeof widget !== 'undefined' && widget);
         } catch (e) { /* */ }
         var hasRequire = typeof require !== 'undefined';
         var hasWaf = typeof WAFData !== 'undefined';
@@ -270,7 +271,7 @@ var App = (function () {
     setLoading(true);
     setStatus('Inicializando...', 'info');
 
-    return waitForTrustedWidget(2500).then(function () {
+    return waitForTrustedWidget(4000).then(function () {
       return bootstrapCore();
     });
   }
@@ -285,7 +286,7 @@ var App = (function () {
         initAppCore(null);
         runHealthCheck();
         setStatus(
-          'Web Page Reader: sem API ENOVIA. Admin: crie Additional App (GUIA-ADMIN-ADDITIONAL-APP.md). Enquanto isso: Physical ID ou Carregar Drone.',
+          'Web Page Reader: sem API ENOVIA. Admin: Additional App — leia PASSO-UNICO-ADMIN.md. Enquanto isso: Physical ID ou Carregar Drone.',
           'warn'
         );
       } catch (err) {
@@ -305,11 +306,31 @@ var App = (function () {
         return CompassServices.get3DSpaceUrl(PlatformContext.getState().platformId);
       })
       .then(function (spaceUrl) {
+        return CompassServices.fetchCsrfToken(spaceUrl).then(function () {
+          return spaceUrl;
+        });
+      })
+      .then(function (spaceUrl) {
         initAppCore(spaceUrl);
         var modeLabel = APP_CONFIG.WIDGET_MODE || 'plataforma';
         setStatus('Modo ' + modeLabel + ' — APIs 3DEXPERIENCE ativas.', 'ok');
         var sel = ProductExplorerBridge.getSelection();
         if (sel && !APP_CONFIG.CROSS_ORIGIN_WIDGET) return loadBom(sel.physicalid);
+
+        var defaultDrone = (APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.defaultPhysicalId) ||
+          '132FB3CE26D70E006A18D1870000316D';
+        if (APP_QUERY.physicalid) defaultDrone = APP_QUERY.physicalid;
+
+        if (!APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.DEMO_MODE) {
+          return loadPhysicalProduct({
+            physicalid: defaultDrone,
+            displayName: '01_SKA_Drone Assembly_130520206',
+            name: '01_SKA_Drone Assembly_130520206',
+            type: 'VPMReference',
+            displayType: 'Physical Product'
+          });
+        }
+
         if (APP_CONFIG.DEMO_MODE) {
           var root = APP_CONFIG.DEMO_ROOT_ID || 'DEMO_ROOT_001';
           return loadBom(root);
