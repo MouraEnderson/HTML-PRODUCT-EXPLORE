@@ -1,10 +1,14 @@
 # URL para colar no Web Page Reader (copiar TUDO numa linha)
 
-## RECOMENDADO — Drone já pré-configurado + assets via CDN
+## USE NO WEB PAGE READER (GitHub Pages — renderiza HTML, não código)
 
-https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/index.html?physicalid=132FB3CE26D70E006A18D1870000316D&displayName=01_SKA_Drone%20Assembly_130520206
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/index.html?physicalid=132FB3CE26D70E006A18D1870000316D&displayName=01_SKA_Drone%20Assembly_130520206
 
-## Genérico (sem produto)
+## Alternativa preview
+
+https://htmlpreview.github.io/?https://github.com/MouraEnderson/HTML-PRODUCT-EXPLORE/blob/main/index.html
+
+## NÃO USE (mostra código-fonte no widget — text/plain)
 
 https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/index.html
 
