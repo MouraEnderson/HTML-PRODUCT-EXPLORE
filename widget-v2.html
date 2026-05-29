@@ -16,31 +16,29 @@
     .bom-btn { display: block; width: 100%; padding: 12px; margin-top: 10px; background: #2e7d32; color: #fff; border: 0; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; }
     .bom-btn:disabled { background: #9e9e9e; }
     .bom-paste-hint { margin: 0 0 6px; font-size: 13px; font-weight: bold; color: #0d47a1; }
-    #pasteArea { display: block !important; width: 100%; min-height: 72px; padding: 10px; border: 4px solid #1976d2 !important; border-radius: 8px; background: #bbdefb !important; font-size: 12px; font-family: Consolas, monospace; box-sizing: border-box; }
+    #pasteArea { display: block !important; width: 100%; min-height: 72px; padding: 10px; border: 4px solid #1976d2 !important; border-radius: 8px; background: #bbdefb !important; font-size: 11px; font-family: Consolas, monospace; box-sizing: border-box; }
     .bom-charts { padding: 8px 14px; }
-    .bom-chart { display: inline-block; width: 48%; min-height: 100px; margin: 1%; background: #fff; border: 1px solid #dde3ea; }
-    .bom-table-wrap { margin: 8px 14px; background: #fff; border: 1px solid #dde3ea; max-height: 180px; overflow: auto; }
+    .bom-chart { display: inline-block; width: 48%; min-height: 80px; margin: 1%; background: #fff; border: 1px solid #dde3ea; }
+    .bom-table-wrap { margin: 8px 14px; background: #fff; border: 1px solid #dde3ea; max-height: 160px; overflow: auto; }
     .bom-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     .bom-table th, .bom-table td { border: 1px solid #e0e0e0; padding: 4px 6px; }
     .bom-hidden { display: none; }
-    .bom-kpi { padding: 6px 14px; font-size: 13px; }
+    .bom-kpi { padding: 6px 14px; font-size: 13px; line-height: 1.5; }
   </style>
   <script type="text/javascript">
   //<![CDATA[
     window.__3DX_TRUSTED_WIDGET__ = true;
     window.__3DX_BOOT_DEFER__ = true;
 
-    var BOM_BUILD = 'bom20260530b';
+    var BOM_BUILD = 'bom20260530c';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
 
-    function uiRoot() {
-      return window.__3DX_UI_ROOT__ || null;
-    }
+    function uiRoot() { return window.__3DX_UI_ROOT__ || null; }
 
     function setBar(msg, kind) {
       var el = uiRoot() && uiRoot().querySelector('#statusBar');
       if (!el) return;
-      el.innerHTML = msg;
+      el.textContent = msg;
       el.className = 'bom-st';
       if (kind === 'ok') el.className = 'bom-st bom-st-ok';
       if (kind === 'error') el.className = 'bom-st bom-st-err';
@@ -50,12 +48,11 @@
       if (!widget || !widget.body) return;
       var b = widget.body;
       b.innerHTML = '';
-      b.className = 'bom-root';
       b.style.minHeight = '420px';
 
       var ver = document.createElement('p');
       ver.className = 'bom-ver';
-      ver.textContent = 'BOM Analytics v2 — build ' + BOM_BUILD + ' — CAIXA AZUL ABAIXO';
+      ver.textContent = 'BOM Analytics v2 — ' + BOM_BUILD + ' — cole e Varrer (sem travar)';
       b.appendChild(ver);
 
       var h1 = document.createElement('div');
@@ -66,7 +63,7 @@
       var st = document.createElement('div');
       st.id = 'statusBar';
       st.className = 'bom-st';
-      st.textContent = 'Cole a grade do Explorer na caixa azul.';
+      st.textContent = 'Cole Mont10+M1+M2 na caixa azul → Varrer';
       b.appendChild(st);
 
       var panel = document.createElement('div');
@@ -74,12 +71,12 @@
 
       var hint = document.createElement('p');
       hint.className = 'bom-paste-hint';
-      hint.textContent = '1) Explorer: clique na grade → Ctrl+A → Ctrl+C   2) Cole aqui (Ctrl+V)   3) Varrer';
+      hint.textContent = 'Explorer: Ctrl+A → Ctrl+C → Ctrl+V → Varrer';
       panel.appendChild(hint);
 
       var ta = document.createElement('textarea');
       ta.id = 'pasteArea';
-      ta.setAttribute('placeholder', 'CAIXA AZUL — cole Mont10, M1, M2…');
+      ta.setAttribute('placeholder', 'CAIXA AZUL — cole aqui');
       panel.appendChild(ta);
 
       var btn = document.createElement('button');
@@ -92,100 +89,71 @@
 
       b.appendChild(panel);
 
-      var hidden = document.createElement('div');
-      hidden.className = 'bom-hidden';
-      hidden.innerHTML =
-        '<input type="search" id="searchInput" />' +
-        '<select id="filterMaturity"><option value="all">all</option></select>' +
-        '<select id="filterType"><option value="all">all</option></select>' +
-        '<select id="filterApproval"><option value="all">all</option></select>' +
-        '<select id="filterPP"><option value="all">all</option></select>';
-      b.appendChild(hidden);
-
       var kpi = document.createElement('div');
       kpi.id = 'kpiGrid';
       kpi.className = 'bom-kpi';
       b.appendChild(kpi);
 
-      var charts = document.createElement('div');
-      charts.className = 'bom-charts';
-      charts.innerHTML =
-        '<div class="bom-chart"><canvas id="chartMaturity"></canvas></div>' +
-        '<div class="bom-chart"><canvas id="chartType"></canvas></div>' +
-        '<div class="bom-chart"><canvas id="chartRevision"></canvas></div>' +
-        '<div class="bom-chart"><canvas id="chartApproval"></canvas></div>';
-      b.appendChild(charts);
-
       var tw = document.createElement('div');
       tw.className = 'bom-table-wrap';
       tw.innerHTML =
-        '<div style="padding:8px;font-weight:bold">E-BOM — <span id="tableProductLabel">-</span></div>' +
+        '<div style="padding:6px;font-weight:bold">E-BOM — <span id="tableProductLabel">-</span></div>' +
         '<table id="bomTable" class="bom-table"><thead><tr></tr></thead><tbody></tbody></table>';
       b.appendChild(tw);
 
       window.__3DX_UI_ROOT__ = b;
     }
 
-    /** Varredura mínima se o bundle ainda não carregou */
+    function parseLine(line) {
+      var raw = String(line || '').trim();
+      if (!raw || /^(t[ií]tulo|title|nome|revision)/i.test(raw)) return null;
+      var nameM = raw.match(/^(Mont\d*|M\d+)\b/i);
+      if (!nameM) return null;
+      var name = nameM[1];
+      var revM = raw.match(/([\d]+\.[\d]+)/);
+      var state = /Aprovado/i.test(raw) ? 'Aprovado' : '';
+      return {
+        name: name,
+        title: name,
+        revision: revM ? revM[1] : '',
+        state: state,
+        maturity: state,
+        approval: state ? 'Approved' : 'Unknown',
+        level: /^mont/i.test(name) ? 0 : 1,
+        physicalid: 'IMP_' + name
+      };
+    }
+
     function quickParse(text) {
-      var lines = String(text || '').split(/\r?\n/).filter(function (l) { return l.trim(); });
-      if (lines.length < 2) return null;
+      var lines = String(text || '').split(/\r?\n/);
       var items = [];
-      var start = 0;
-      if (/t[ií]tulo|title|nome/i.test(lines[0])) start = 1;
-      for (var i = start; i < lines.length; i++) {
-        var cols = lines[i].indexOf('\t') >= 0 ? lines[i].split('\t') : lines[i].split(';');
-        var name = (cols[0] || '').replace(/^\s+|\s+$/g, '');
-        if (name.charAt(0) === '{') continue;
-        if (/enderson|moura/i.test(name) && !/mont|^m\d+$/i.test(name)) continue;
-        if (!name || /^physical\s*product$/i.test(name)) continue;
-        var rev = cols[1] || '';
-        var typ = cols[2] || 'Physical Product';
-        var state = cols[4] || cols[5] || '';
-        if (/aprovado/i.test(state)) state = 'Aprovado';
-        items.push({
-          level: items.length === 0 ? 0 : 1,
-          name: name,
-          title: name,
-          type: typ,
-          revision: rev,
-          state: state,
-          maturity: state,
-          approval: /aprovado/i.test(state) ? 'Approved' : 'Unknown',
-          quantity: 1,
-          physicalid: 'IMP_' + items.length + '_' + name
-        });
-      }
+      lines.forEach(function (line) {
+        var row = parseLine(line);
+        if (row) items.push(row);
+      });
       if (items.length < 2) return null;
-      var hasMont = items.some(function (it) { return /mont/i.test(it.name); });
-      if (!hasMont) return null;
+      if (!items.some(function (it) { return /^mont/i.test(it.name); })) return null;
       return items;
     }
 
     function quickRender(items) {
       var root = uiRoot();
       if (!root) return;
+      var rootName = items[0].name;
+      var appr = items.filter(function (it) { return /Aprovado/i.test(it.state); }).length;
       var lbl = root.querySelector('#selectionLabel');
       var kpi = root.querySelector('#kpiGrid');
       var tbody = root.querySelector('#bomTable tbody');
       var thead = root.querySelector('#bomTable thead tr');
-      var tl = root.querySelector('#tableProductLabel');
-      var rootName = items[0].name;
       if (lbl) lbl.textContent = rootName;
+      var tl = root.querySelector('#tableProductLabel');
       if (tl) tl.textContent = rootName;
-      var appr = 0;
-      items.forEach(function (it) {
-        if (/aprovado/i.test(it.state || '')) appr++;
-      });
       if (kpi) {
         kpi.innerHTML =
           '<div><strong>' + items.length + '</strong> Total de itens</div>' +
-          '<div><strong>' + appr + '</strong> Aprovados</div>' +
-          '<div><strong>' + items.length + '</strong> Physical Products</div>';
+          '<div><strong>' + appr + '</strong> Aprovados</div>';
       }
-      if (thead) {
-        thead.innerHTML = '<th>Nome</th><th>Rev</th><th>Estado</th>';
-      }
+      if (thead) thead.innerHTML = '<th>Nome</th><th>Rev</th><th>Estado</th>';
       if (tbody) {
         tbody.innerHTML = items.map(function (it) {
           return '<tr><td>' + it.name + '</td><td>' + it.revision + '</td><td>' + it.state + '</td></tr>';
@@ -193,84 +161,66 @@
       }
     }
 
+    function finishBtn(btn) {
+      if (!btn) return;
+      btn.disabled = false;
+      btn.textContent = 'Varrer estrutura Explorer';
+    }
+
     function runScan(btn) {
       var area = uiRoot() && uiRoot().querySelector('#pasteArea');
       var text = area && area.value ? area.value.trim() : '';
       if (!text) {
-        setBar('Cole na CAIXA AZUL (Ctrl+V) antes de Varrer.', 'error');
+        setBar('Cole na caixa azul (Ctrl+V) antes de Varrer.', 'error');
         return;
       }
-      if (typeof App !== 'undefined' && App.runExplorerScan) {
-        App.runExplorerScan(btn);
-        return;
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Varrendo…';
       }
-      var items = quickParse(text);
-      if (!items) {
-        setBar('Texto inválido. Explorer: Ctrl+A na grade → Ctrl+C → cole na caixa azul.', 'error');
-        return;
-      }
-      quickRender(items);
-      setBar('Varredura concluída: ' + items.length + ' itens — ' + items[0].name + ' (modo rápido)', 'ok');
+      setBar('Varrendo…', 'info');
+
+      window.setTimeout(function () {
+        try {
+          var items = quickParse(text);
+          if (items) {
+            quickRender(items);
+            setBar('Varredura concluída: ' + items.length + ' itens — ' + items[0].name, 'ok');
+            if (typeof App !== 'undefined' && App.runExplorerScan) {
+              try {
+                APP_CONFIG = window.APP_CONFIG || {};
+                APP_CONFIG.IMPORT_MODE = true;
+              } catch (e1) { /* */ }
+            }
+            finishBtn(btn);
+            return;
+          }
+          setBar('Não achei Mont10/M1/M2. Ctrl+A na grade inteira → Ctrl+C → cole de novo.', 'error');
+        } catch (ex) {
+          setBar('Erro: ' + (ex.message || ex), 'error');
+        }
+        finishBtn(btn);
+      }, 50);
     }
 
     function loadScript(url, optional, next) {
       var s = document.createElement('script');
-      s.type = 'text/javascript';
-      s.charset = 'UTF-8';
       s.src = url;
       s.onload = function () { if (next) next(null); };
       s.onerror = function () { if (optional) { if (next) next(null); } else if (next) next('erro'); };
       document.getElementsByTagName('head')[0].appendChild(s);
     }
 
-    function loadWaf(next) {
-      if (typeof WAFData !== 'undefined' && WAFData.authenticatedRequest) {
-        next(null);
-        return;
-      }
-      var req = (widget && widget.requirejs) || (typeof require !== 'undefined' ? require : null);
-      if (!req) {
-        next(null);
-        return;
-      }
-      req(
-        ['DS/WAFData/WAFData', 'DS/i3DXCompassServices/i3DXCompassServices', 'DS/PlatformAPI/PlatformAPI'],
-        function (WAF, Compass, PAPI) {
-          window.WAFData = WAF;
-          window.__3DX_COMPASS__ = Compass;
-          window.__3DX_PLATFORM_API__ = PAPI;
-          next(null);
-        },
-        function () { next(null); }
-      );
-    }
-
     function startBundle() {
-      var ts = BOM_BUILD + '_' + Date.now();
-      loadScript(GH + 'assets/vendor/chart.umd.min.js?v=' + ts, true, function () {
-        loadScript(GH + 'assets/js/bom-bundle.js?v=' + ts, false, function (err) {
-          if (err) {
-            setBar('Bundle opcional falhou — use caixa azul + Varrer (modo rápido OK).', 'warn');
-            return;
-          }
-          try {
-            if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
-            if (typeof App !== 'undefined' && App.run) {
-              App.run();
-              setBar('Pronto — cole na caixa azul e clique Varrer.', 'ok');
-            }
-          } catch (ex) {
-            setBar('Modo rápido ativo. Cole e Varrer.', 'warn');
-          }
-        });
+      loadScript(GH + 'assets/js/bom-bundle.js?v=' + BOM_BUILD, true, function () {
+        if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
+        if (typeof App !== 'undefined' && App.run) App.run();
       });
     }
 
     function executeInit() {
       paint();
-      loadWaf(function () {
-        startBundle();
-      });
+      startBundle();
     }
 
     function widgetLoading() {

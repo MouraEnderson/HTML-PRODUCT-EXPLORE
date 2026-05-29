@@ -10,7 +10,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260530b',
+    BUILD: 'bom20260530c',
     /** Evita varredura automática com seleção errada do dashboard */
     AUTO_SCAN_ON_SELECTION: false,
     /** Nome raiz no Explorer quando seleção automática falha (busca 3DSpace) */
@@ -1874,9 +1874,42 @@ var FileImportService = (function () {
   }
 
   function splitLine(line) {
-    if (line.indexOf('\t') >= 0) return line.split('\t').map(function (c) { return c.replace(/^"|"$/g, '').trim(); });
-    if (line.indexOf(';') >= 0) return line.split(';').map(function (c) { return c.replace(/^"|"$/g, '').trim(); });
-    return line.split(',').map(function (c) { return c.replace(/^"|"$/g, '').trim(); });
+    if (line.indexOf('\t') >= 0) {
+      return line.split('\t').map(function (c) {
+        return unwrapJsonCell(c.replace(/^"|"$/g, '').trim());
+      });
+    }
+    if (line.indexOf(';') >= 0) {
+      return line.split(';').map(function (c) { return unwrapJsonCell(c.replace(/^"|"$/g, '').trim()); });
+    }
+    return line.split(',').map(function (c) { return unwrapJsonCell(c.replace(/^"|"$/g, '').trim()); });
+  }
+
+  /** Linha Explorer com JSON embutido (ícone do proprietário). */
+  function parseExplorerGridLine(line) {
+    var raw = cleanCell(line);
+    if (!raw) return null;
+    var nameM = raw.match(/^(Mont\d*|M\d+)\b/i);
+    if (!nameM) return null;
+    var name = nameM[1];
+    var revM = raw.match(/([\d]+[.,][\d]+)/);
+    var revision = revM ? revM[1].replace(',', '.') : '';
+    var state = /Aprovado/i.test(raw) ? 'Aprovado' : '';
+    var st = normalizeImportedState(state, 'Unknown');
+    return {
+      physicalid: 'IMP_' + name.replace(/\W/g, '_'),
+      name: name,
+      title: name,
+      type: 'Physical Product',
+      displayType: 'Physical Product',
+      revision: revision,
+      state: st.state,
+      maturity: st.maturity,
+      approval: st.approval,
+      quantity: 1,
+      owner: unwrapJsonCell(raw),
+      level: /^mont/i.test(name) ? 0 : 1
+    };
   }
 
   function textToRows(text) {
@@ -2008,14 +2041,43 @@ var FileImportService = (function () {
     }
   }
 
+  function parseTextFromGridLines(text) {
+    var lines = String(text || '').split(/\r?\n/).filter(function (l) { return l.trim(); });
+    var items = [];
+    var start = 0;
+    if (lines.length && looksLikeHeader([splitLine(lines[0])])) start = 1;
+    for (var i = start; i < lines.length; i++) {
+      if (lines[i].indexOf('"icon"') >= 0 || lines[i].indexOf('getpicture') >= 0) {
+        if (!/mont|^m\d+/i.test(lines[i])) continue;
+      }
+      var row = parseExplorerGridLine(lines[i]);
+      if (row) items.push(row);
+    }
+    if (items.length >= 2) {
+      var hasMont = items.some(function (it) { return /^mont/i.test(it.name); });
+      if (hasMont) {
+        items.forEach(function (it, idx) {
+          if (!/^mont/i.test(it.name)) it.level = 1;
+          else it.level = 0;
+        });
+        validateImportedItems(items);
+        return items;
+      }
+    }
+    return null;
+  }
+
   function parseText(text) {
     if (!looksLikeExplorerPaste(text)) {
       throw new Error(
         'Clipboard não tem a grade do Explorer. No Explorer: clique na tabela → Ctrl+A → Ctrl+C → cole na caixa azul → Varrer.'
       );
     }
+    var gridItems = parseTextFromGridLines(text);
+    if (gridItems && gridItems.length) return gridItems;
+
     var rows = textToRows(text).map(function (row) {
-      return row.map(function (c) { return cleanCell(c); });
+      return row.map(function (c) { return cleanCell(unwrapJsonCell(c)); });
     });
     if (rows.length === 1 && rows[0].length === 1) {
       return buildItemsFromSingleColumn([rows[0][0]]);
@@ -2607,24 +2669,38 @@ var ExplorerScanner = (function () {
     });
   }
 
+  function withScanTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise(function (_, reject) {
+        window.setTimeout(function () {
+          reject(new Error('Varredura demorou demais — use só a caixa azul + Varrer.'));
+        }, ms || 10000);
+      })
+    ]);
+  }
+
   /**
-   * Ordem: caixa de cola → clipboard (gesto do clique) → API.
+   * Ordem: caixa de cola → clipboard → API (máx. 10s).
    */
   function scan() {
     clearBadSelection();
-    return scanViaPasteArea()
-      .catch(function () {
-        return scanViaClipboardNow();
-      })
-      .catch(function () {
-        return scanViaApiOrSelection();
-      })
-      .catch(function (err) {
-        var hint =
-          'No Explorer: clique na grade → Ctrl+A → Ctrl+C → cole na caixa azul → Varrer.';
-        if (err && err.message) hint = err.message + ' ' + hint;
-        throw new Error(hint);
-      });
+    var area = document.getElementById('pasteArea');
+    var hasPaste = area && area.value && String(area.value).trim().length > 0;
+
+    var chain = hasPaste
+      ? scanViaPasteArea()
+      : scanViaPasteArea()
+          .catch(function () { return scanViaClipboardNow(); })
+          .catch(function () { return scanViaApiOrSelection(); });
+
+    return withScanTimeout(chain, hasPaste ? 8000 : 12000).catch(function (err) {
+      if (hasPaste) throw err;
+      var hint =
+        'No Explorer: clique na grade → Ctrl+A → Ctrl+C → cole na caixa azul → Varrer.';
+      if (err && err.message) hint = err.message + ' ' + hint;
+      throw new Error(hint);
+    });
   }
 
   return {
@@ -3905,7 +3981,7 @@ var App = (function () {
       btnEl.textContent = 'Varrendo…';
     }
     setStatus('Varredura em andamento…', 'info');
-    ExplorerScanner.scan()
+    apiTimeout(ExplorerScanner.scan(), 12000, 'Varredura cancelada (timeout). Cole na caixa azul e Varrer de novo.')
       .then(function (res) {
         APP_CONFIG.IMPORT_MODE = true;
         APP_CONFIG.DEMO_MODE = false;

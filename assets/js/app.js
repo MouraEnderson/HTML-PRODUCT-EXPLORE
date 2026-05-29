@@ -122,7 +122,7 @@ var App = (function () {
       btnEl.textContent = 'Varrendo…';
     }
     setStatus('Varredura em andamento…', 'info');
-    ExplorerScanner.scan()
+    apiTimeout(ExplorerScanner.scan(), 12000, 'Varredura cancelada (timeout). Cole na caixa azul e Varrer de novo.')
       .then(function (res) {
         APP_CONFIG.IMPORT_MODE = true;
         APP_CONFIG.DEMO_MODE = false;

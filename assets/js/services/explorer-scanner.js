@@ -248,24 +248,38 @@ var ExplorerScanner = (function () {
     });
   }
 
+  function withScanTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise(function (_, reject) {
+        window.setTimeout(function () {
+          reject(new Error('Varredura demorou demais — use só a caixa azul + Varrer.'));
+        }, ms || 10000);
+      })
+    ]);
+  }
+
   /**
-   * Ordem: caixa de cola → clipboard (gesto do clique) → API.
+   * Ordem: caixa de cola → clipboard → API (máx. 10s).
    */
   function scan() {
     clearBadSelection();
-    return scanViaPasteArea()
-      .catch(function () {
-        return scanViaClipboardNow();
-      })
-      .catch(function () {
-        return scanViaApiOrSelection();
-      })
-      .catch(function (err) {
-        var hint =
-          'No Explorer: clique na grade → Ctrl+A → Ctrl+C → cole na caixa azul → Varrer.';
-        if (err && err.message) hint = err.message + ' ' + hint;
-        throw new Error(hint);
-      });
+    var area = document.getElementById('pasteArea');
+    var hasPaste = area && area.value && String(area.value).trim().length > 0;
+
+    var chain = hasPaste
+      ? scanViaPasteArea()
+      : scanViaPasteArea()
+          .catch(function () { return scanViaClipboardNow(); })
+          .catch(function () { return scanViaApiOrSelection(); });
+
+    return withScanTimeout(chain, hasPaste ? 8000 : 12000).catch(function (err) {
+      if (hasPaste) throw err;
+      var hint =
+        'No Explorer: clique na grade → Ctrl+A → Ctrl+C → cole na caixa azul → Varrer.';
+      if (err && err.message) hint = err.message + ' ' + hint;
+      throw new Error(hint);
+    });
   }
 
   return {
