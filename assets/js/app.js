@@ -5,6 +5,8 @@
 var App = (function () {
   'use strict';
 
+  var root = typeof window !== 'undefined' ? window : this;
+
   function byId(id) {
     var el = document.getElementById(id);
     if (el) return el;
@@ -438,7 +440,7 @@ var App = (function () {
   }
 
   function isTrustedBoot() {
-    if (global.__3DX_TRUSTED_WIDGET__) return true;
+    if (root.__3DX_TRUSTED_WIDGET__) return true;
     try {
       if (typeof widget !== 'undefined' && widget) return true;
     } catch (e) { /* */ }
@@ -530,7 +532,7 @@ var App = (function () {
     run();
   }
 
-  if (!global.__3DX_BOOT_DEFER__) {
+  if (!root.__3DX_BOOT_DEFER__) {
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', run);
     } else {
