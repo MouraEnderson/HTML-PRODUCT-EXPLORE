@@ -8,7 +8,11 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260602e',
+    BUILD: 'bom20260602f',
+    /** 3DDashboard: não espera probe CSRF (evita travar em "Conectando…") */
+    SKIP_SPACE_PROBE: true,
+    WAF_REQUEST_TIMEOUT_MS: 15000,
+    SCAN_CONNECT_TIMEOUT_MS: 40000,
     /** Tenant cloud: não usar dseng:EngItem nem host *-space no 3DDashboard */
     CLOUD_PHYSICAL_ONLY: true,
     /** Fallback offline só com ?snapshot= na URL */
@@ -239,6 +243,7 @@
       APP_CONFIG.PREFER_IFWE_FIRST = true;
       APP_CONFIG.IFRAME_ON_IFWE_DASHBOARD = true;
       APP_CONFIG.CLOUD_PHYSICAL_ONLY = true;
+      APP_CONFIG.SKIP_SPACE_PROBE = true;
     }
   }
 

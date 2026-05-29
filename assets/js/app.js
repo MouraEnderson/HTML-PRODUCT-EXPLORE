@@ -188,18 +188,19 @@ var App = (function () {
       if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
       if (ProductExplorerBridge.pollSelection) ProductExplorerBridge.pollSelection();
     }
-    setStatus('Conectando API e varrendo Explorer…', 'info');
-    var prep =
+    setStatus('Conectando API (ifwe)…', 'info');
+    var scanChain =
       typeof ExplorerScanner !== 'undefined' && ExplorerScanner.ensureSpaceApi
-        ? ExplorerScanner.ensureSpaceApi()
-        : Promise.resolve();
-    prep.then(function () {
-      return apiTimeout(
-        ExplorerScanner.scan(),
-        APP_CONFIG.SCAN_TIMEOUT_MS || 90000,
-        'Varredura cancelada (timeout). Selecione a raiz no Explorer e Varrer de novo.'
-      );
-    })
+        ? ExplorerScanner.ensureSpaceApi().then(function () {
+            setStatus('Varrendo estrutura Explorer…', 'info');
+            return ExplorerScanner.scan();
+          })
+        : ExplorerScanner.scan();
+    apiTimeout(
+      scanChain,
+      APP_CONFIG.SCAN_CONNECT_TIMEOUT_MS || 40000,
+      'Varredura cancelada (timeout). Abra Mont10 no Explorer e clique Varrer de novo.'
+    )
       .then(function (res) {
         APP_CONFIG.DEMO_MODE = false;
         APP_CONFIG.IMPORT_MODE = res.mode !== 'api';

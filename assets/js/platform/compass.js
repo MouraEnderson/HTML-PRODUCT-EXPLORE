@@ -122,9 +122,22 @@ var CompassServices = (function () {
     return url.replace(fromHost, toHost);
   }
 
+  function fastConnectIfwe() {
+    if (!APP_CONFIG.SPACE_FALLBACK_VIA_IFWE && APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== undefined) {
+      return null;
+    }
+    if (!isDashboardOnIfwe() && !APP_CONFIG.IFRAME_ON_IFWE_DASHBOARD) return null;
+    var ifwe = ifweSpaceUrl();
+    return ifwe ? applyVerifiedSpaceUrl(ifwe) : null;
+  }
+
   function ensureWorkingSpaceUrl(platformId) {
     if (cache.spaceUrlVerified && cache.spaceUrl) {
       return Promise.resolve(cache.spaceUrl);
+    }
+    if (APP_CONFIG.SKIP_SPACE_PROBE) {
+      var fast = fastConnectIfwe();
+      if (fast) return Promise.resolve(fast);
     }
     cache.spaceUrlVerified = false;
     return probeCandidates(spaceUrlCandidates(null)).catch(function (err) {
@@ -253,6 +266,7 @@ var CompassServices = (function () {
   return {
     tenantSpaceUrl: tenantSpaceUrl,
     ifweSpaceUrl: ifweSpaceUrl,
+    fastConnectIfwe: fastConnectIfwe,
     isDashboardOnIfwe: isDashboardOnIfwe,
     getVerifiedSpaceUrl: getVerifiedSpaceUrl,
     get3DSpaceUrl: get3DSpaceUrl,

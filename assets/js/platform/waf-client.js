@@ -96,13 +96,25 @@ var WafClient = (function () {
       }
 
       return new Promise(function (resolve, reject) {
+        var timeoutMs = (APP_CONFIG && APP_CONFIG.WAF_REQUEST_TIMEOUT_MS) || 15000;
+        var settled = false;
+        function finish(fn, val) {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timer);
+          fn(val);
+        }
+        var timer = window.setTimeout(function () {
+          finish(reject, new Error('API timeout (' + timeoutMs + 'ms)'));
+        }, timeoutMs);
+
         WAF.authenticatedRequest(targetUrl, {
           method: method,
           headers: headers,
           data: options.body,
           type: 'json',
           onComplete: function (data) {
-            resolve(data);
+            finish(resolve, data);
           },
           onFailure: function (err) {
             var msg = (err && (err.message || err.error)) || 'WAF request failed';
@@ -124,22 +136,18 @@ var WafClient = (function () {
                     } catch (eInit) { /* */ }
                   }
                 }
-                runOnce(alt, true).then(resolve).catch(reject);
+                runOnce(alt, true).then(function (d) { finish(resolve, d); }).catch(function (e) { finish(reject, e); });
                 return;
               }
             }
             if (isNetworkZero(msg) && /space\.3dexperience/i.test(targetUrl)) {
               msg =
-                'Rede bloqueou *-space (código 0). No 3DDashboard use só *-ifwe — atualize para build bom20260602c.';
+                'Rede bloqueou *-space. Use build ' + (APP_CONFIG.BUILD || 'bom20260602f') + ' no Additional App.';
             }
             if (isRetryableHttp(msg) && /dseng:EngItem/i.test(targetUrl)) {
-              msg =
-                'EngItem não suportado neste tenant (400/406). Atualize o Additional App para build bom20260602d.';
+              msg = 'EngItem não suportado neste tenant. Use build ' + (APP_CONFIG.BUILD || 'bom20260602f');
             }
-            if (isRetryableHttp(msg) && /dspfl:PhysicalProduct/i.test(targetUrl)) {
-              msg = 'Physical Product API: ' + msg + ' — confirme Security Context no widget.';
-            }
-            reject(new Error(msg));
+            finish(reject, new Error(msg));
           }
         });
       });

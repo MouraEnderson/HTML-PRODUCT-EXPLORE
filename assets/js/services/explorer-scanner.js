@@ -252,6 +252,25 @@ var ExplorerScanner = (function () {
    * Raiz dinâmica: seleção/hash → ID manual → busca por nome (query/sessão/campo).
    * Mont10 só entra se vier do Explorer/query — não hardcode.
    */
+  function resolveSelectionFast() {
+    clearBadSelection();
+    if (typeof ProductExplorerBridge !== 'undefined') {
+      if (ProductExplorerBridge.pollDashboardExplorerChrome) {
+        ProductExplorerBridge.pollDashboardExplorerChrome();
+      }
+      ProductExplorerBridge.pollStructureHint();
+      ProductExplorerBridge.pollSelection();
+    }
+    var term = getExplorerRootSearchTerm();
+    if (term) {
+      var regHit = resolveFromStructureRegistry(term);
+      if (regHit) return Promise.resolve(regHit);
+    }
+    var sel = getSelection();
+    if (sel) return Promise.resolve(sel);
+    return waitForSelection(5, 300);
+  }
+
   function resolveSelection() {
     clearBadSelection();
     if (typeof PlatformBridge !== 'undefined' && PlatformBridge.requestDashboardSelection) {
@@ -311,12 +330,38 @@ var ExplorerScanner = (function () {
     });
   }
 
+  function promiseTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise(function (_, reject) {
+        window.setTimeout(function () {
+          reject(new Error(label || 'Timeout na conexão API'));
+        }, ms || 12000);
+      })
+    ]);
+  }
+
   function ensureSpaceApi() {
     var chain = PlatformContext.init();
+    if (typeof CompassServices !== 'undefined' && CompassServices.fastConnectIfwe) {
+      var fast = CompassServices.fastConnectIfwe();
+      if (fast && APP_CONFIG.SKIP_SPACE_PROBE) {
+        chain = chain.then(function () {
+          try {
+            EnoviaApi.init(fast);
+            if (typeof SearchApi !== 'undefined') SearchApi.init(fast);
+          } catch (eFast) { /* */ }
+          return fast;
+        });
+        return chain;
+      }
+    }
     if (typeof CompassServices !== 'undefined' && CompassServices.ensureWorkingSpaceUrl) {
       chain = chain.then(function () {
-        return CompassServices.ensureWorkingSpaceUrl(
-          PlatformContext.getState().platformId
+        return promiseTimeout(
+          CompassServices.ensureWorkingSpaceUrl(PlatformContext.getState().platformId),
+          APP_CONFIG.SCAN_CONNECT_TIMEOUT_MS || 12000,
+          'Conexão API demorou — tente Varrer de novo.'
         );
       });
     } else {
@@ -365,6 +410,14 @@ var ExplorerScanner = (function () {
         : Promise.resolve();
     return boot.then(function () {
       if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
+      if (
+        APP_CONFIG.SKIP_SPACE_PROBE &&
+        typeof CompassServices !== 'undefined' &&
+        CompassServices.getVerifiedSpaceUrl &&
+        CompassServices.getVerifiedSpaceUrl()
+      ) {
+        return null;
+      }
       return ensureSpaceApi();
     }).then(function () {
       return BomService.loadRoot(sel.physicalid);
@@ -397,7 +450,8 @@ var ExplorerScanner = (function () {
   }
 
   function scanViaApiOrSelection() {
-    return resolveSelection().then(function (sel) {
+    var pick = APP_CONFIG.SKIP_SPACE_PROBE ? resolveSelectionFast : resolveSelection;
+    return pick().then(function (sel) {
       if (!canUseWafApi()) {
         return Promise.reject(new Error('WAFData indisponível — abra no 3DDashboard (Additional App).'));
       }
