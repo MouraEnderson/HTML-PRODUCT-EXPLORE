@@ -1,164 +1,79 @@
 <!DOCTYPE html>
-<html lang="pt-BR" xmlns="http://www.w3.org/1999/xhtml" xmlns:widget="http://www.netvibes.com/ns/">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:widget="http://www.netvibes.com/ns/">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <title>BOM Analytics</title>
-  <script type="text/javascript">
-    window.__3DX_TRUSTED_WIDGET__ = true;
-    window.__3DX_BOOT_DEFER__ = true;
-  </script>
-  <style type="text/css">
-    body { margin: 0; background: #f0f6fa; }
-    .ui-explorer-only { min-height: 420px; background: #f0f6fa; font: 13px "Segoe UI", sans-serif; color: #1a2332; }
-    .explorer-header { padding: 10px 14px; background: #fff; border-bottom: 1px solid #dde3ea; }
-    .explorer-header h1 { margin: 0; font-size: 1rem; color: #005686; }
-    .explorer-product { margin: 4px 0 0; font-size: 0.82rem; color: #5c6b7a; }
-    .status-bar { padding: 8px 14px; font-size: 0.85rem; }
-    .status-info { background: #e3f2fd; color: #0d47a1; }
-    .status-ok { background: #e8f5e9; color: #1b5e20; }
-    .status-warn { background: #fff3e0; color: #e65100; }
-    .status-error { background: #ffebee; color: #b71c1c; }
-    .snapshot-panel { margin: 10px 14px; padding: 12px; background: #fff; border: 2px solid #ff9800; border-radius: 8px; }
-    .btn-scan-main {
-      display: block; width: 100%; padding: 12px; margin-bottom: 8px;
-      background: #2e7d32; color: #fff; border: 0; border-radius: 6px;
-      font-size: 0.95rem; font-weight: 600; cursor: pointer;
-    }
-    .btn-scan-main:disabled { background: #9e9e9e; cursor: wait; }
-    .snapshot-steps { margin: 0 0 8px; font-size: 0.85rem; color: #0d47a1; }
-    .dashboard-explorer { padding: 8px 14px 16px; }
-    .kpi-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-    .charts-main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-    .chart-card { background: #fff; border: 1px solid #dde3ea; border-radius: 6px; padding: 8px; min-height: 120px; }
-    .table-panel { background: #fff; border: 1px solid #dde3ea; border-radius: 6px; overflow: hidden; }
-    .panel-header { padding: 8px 12px; font-weight: 600; background: #f8f9fa; border-bottom: 1px solid #dde3ea; }
-    .table-scroll { max-height: 200px; overflow: auto; }
-    .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .data-table th, .data-table td { border: 1px solid #e0e0e0; padding: 4px 6px; }
-    .data-table th { background: #f5f5f5; }
-    .ui-hidden { display: none !important; }
-    .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.75); display: flex; align-items: center; justify-content: center; z-index: 9; }
-    .loading-overlay.hidden { display: none; }
-    .env-hint { padding: 8px 14px; font-size: 12px; background: #e8f5e9; color: #1b5e20; }
-  </style>
-</head>
-<body>
-  <!-- Template: no 3DDashboard só widget.body é visível — nunca depender do body da página -->
-  <div id="bom-tpl" style="display:none">
-    <p class="env-hint" id="envHint">3DDashboard — BOM Analytics</p>
-    <header class="explorer-header">
-      <h1>BOM Analytics</h1>
-      <p class="explorer-product">Estrutura: <strong id="selectionLabel">—</strong></p>
-    </header>
-    <div id="statusBar" class="status-bar status-info">Montando widget…</div>
-    <section class="snapshot-panel">
-      <button type="button" id="btnScanExplorer" class="btn-scan-main">Varrer estrutura Explorer</button>
-      <p class="snapshot-steps">Mont10 no Explorer → <strong>Varrer</strong></p>
-    </section>
-    <div class="ui-hidden" aria-hidden="true">
-      <textarea id="pasteArea" rows="2"></textarea>
-      <button type="button" id="btnImportPaste"></button>
-      <button type="button" id="btnLoadExample"></button>
-      <button type="button" id="btnSyncExplorer"></button>
-      <button type="button" id="btnRefresh"></button>
-      <input type="file" id="snapshotFileInput" accept=".json" />
-      <input type="text" id="explorerObjectId" />
-      <input type="text" id="explorerObjectName" />
-      <button type="button" id="btnLoadObjectId"></button>
-      <select id="filterMaturity"><option value="all">all</option></select>
-      <select id="filterType"><option value="all">all</option></select>
-      <select id="filterApproval"><option value="all">all</option></select>
-      <select id="filterPP"><option value="all">all</option></select>
-      <input type="search" id="searchInput" />
-    </div>
-    <main class="dashboard-explorer">
-      <section id="kpiGrid" class="kpi-grid"></section>
-      <section class="charts-grid charts-main">
-        <div class="chart-card"><canvas id="chartMaturity"></canvas></div>
-        <div class="chart-card"><canvas id="chartType"></canvas></div>
-        <div class="chart-card"><canvas id="chartRevision"></canvas></div>
-        <div class="chart-card"><canvas id="chartApproval"></canvas></div>
-      </section>
-      <section class="panel table-panel">
-        <div class="panel-header">E-BOM — <span id="tableProductLabel">—</span></div>
-        <div class="table-scroll">
-          <table id="bomTable" class="data-table"><thead><tr></tr></thead><tbody></tbody></table>
-        </div>
-      </section>
-    </main>
-    <div id="loadingOverlay" class="loading-overlay hidden">Varrendo…</div>
-  </div>
-
+  <!-- Script PRIMEIRO (padrão widget-min que funcionou no 3DDashboard) -->
   <script type="text/javascript">
   //<![CDATA[
+    window.__3DX_TRUSTED_WIDGET__ = true;
+    window.__3DX_BOOT_DEFER__ = true;
+
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-    var VER = 'uwa20260603e';
-    var uiMounted = false;
-    var bootStarted = false;
-    var appStarted = false;
+    var VER = 'uwa20260603f';
 
-    function tplHtml() {
-      var t = document.getElementById('bom-tpl');
-      return t ? t.innerHTML : '<p>Erro: template BOM</p>';
-    }
+    var UI_HTML =
+      '<div style="min-height:400px;background:#f0f6fa;font-family:Segoe UI,sans-serif;color:#1a2332;">' +
+      '<p id="envHint" style="margin:0;padding:8px 12px;background:#e8f5e9;color:#1b5e20;font-size:12px;">BOM Analytics — 3DDashboard</p>' +
+      '<div style="padding:10px 14px;background:#fff;border-bottom:1px solid #dde3ea;">' +
+      '<h1 style="margin:0;font-size:16px;color:#005686;">BOM Analytics</h1>' +
+      '<p style="margin:4px 0 0;font-size:13px;color:#5c6b7a;">Estrutura: <strong id="selectionLabel">—</strong></p></div>' +
+      '<div id="statusBar" style="padding:8px 14px;background:#e3f2fd;color:#0d47a1;font-size:13px;">Iniciando…</div>' +
+      '<div style="margin:10px 14px;padding:12px;background:#fff;border:2px solid #ff9800;border-radius:8px;">' +
+      '<button type="button" id="btnScanExplorer" style="display:block;width:100%;padding:12px;background:#2e7d32;color:#fff;border:0;border-radius:6px;font-size:15px;font-weight:600;cursor:pointer;">Varrer estrutura Explorer</button>' +
+      '<p style="margin:8px 0 0;font-size:13px;color:#0d47a1;">Mont10 no Explorer → <b>Varrer</b></p></div>' +
+      '<div style="display:none" id="hiddenFields">' +
+      '<textarea id="pasteArea"></textarea>' +
+      '<button type="button" id="btnImportPaste"></button><button type="button" id="btnLoadExample"></button>' +
+      '<button type="button" id="btnSyncExplorer"></button><button type="button" id="btnRefresh"></button>' +
+      '<input type="file" id="snapshotFileInput" /><input type="text" id="explorerObjectId" />' +
+      '<input type="text" id="explorerObjectName" /><button type="button" id="btnLoadObjectId"></button>' +
+      '<select id="filterMaturity"><option value="all">all</option></select>' +
+      '<select id="filterType"><option value="all">all</option></select>' +
+      '<select id="filterApproval"><option value="all">all</option></select>' +
+      '<select id="filterPP"><option value="all">all</option></select>' +
+      '<input type="search" id="searchInput" /></div>' +
+      '<main style="padding:8px 14px 16px;">' +
+      '<section id="kpiGrid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;"></section>' +
+      '<section style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">' +
+      '<div style="background:#fff;border:1px solid #dde3ea;border-radius:6px;padding:8px;min-height:120px;"><canvas id="chartMaturity"></canvas></div>' +
+      '<div style="background:#fff;border:1px solid #dde3ea;border-radius:6px;padding:8px;min-height:120px;"><canvas id="chartType"></canvas></div>' +
+      '<div style="background:#fff;border:1px solid #dde3ea;border-radius:6px;padding:8px;min-height:120px;"><canvas id="chartRevision"></canvas></div>' +
+      '<div style="background:#fff;border:1px solid #dde3ea;border-radius:6px;padding:8px;min-height:120px;"><canvas id="chartApproval"></canvas></div></section>' +
+      '<section style="background:#fff;border:1px solid #dde3ea;border-radius:6px;overflow:hidden;">' +
+      '<div style="padding:8px 12px;font-weight:600;background:#f8f9fa;border-bottom:1px solid #dde3ea;">E-BOM — <span id="tableProductLabel">—</span></div>' +
+      '<div style="max-height:200px;overflow:auto;"><table id="bomTable" style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr></tr></thead><tbody></tbody></table></div></section></main>' +
+      '<div id="loadingOverlay" style="display:none;position:absolute;inset:0;background:rgba(255,255,255,0.8);align-items:center;justify-content:center;">Varrendo…</div></div>';
 
-    function inDashboard() {
-      try {
-        return typeof widget !== 'undefined' && widget && widget.body;
-      } catch (e) {
-        return false;
-      }
-    }
+    var painted = false;
+    var booted = false;
 
-    function getRoot() {
-      if (inDashboard()) return widget.body;
-      var shell = document.getElementById('chrome-shell');
-      return shell || document.body;
-    }
-
-    function mountUi() {
-      if (uiMounted) return true;
-      var html = tplHtml();
-      if (inDashboard()) {
-        widget.body.innerHTML = html;
-        widget.body.className = 'ui-explorer-only';
-        widget.body.style.minHeight = '420px';
-        widget.body.style.background = '#f0f6fa';
-        widget.body.style.position = 'relative';
-        uiMounted = true;
-        return true;
-      }
-      if (!document.getElementById('chrome-shell')) {
-        var wrap = document.createElement('div');
-        wrap.id = 'chrome-shell';
-        wrap.className = 'ui-explorer-only';
-        wrap.innerHTML = html;
-        document.body.appendChild(wrap);
-        var hint = wrap.querySelector('#envHint');
-        if (hint) {
-          hint.textContent = 'Modo Chrome — varredura API só no 3DDashboard.';
-          hint.style.background = '#fff8e1';
-          hint.style.color = '#6d4c00';
-        }
-        uiMounted = true;
-        return true;
-      }
-      return false;
+    function paint() {
+      if (typeof widget === 'undefined' || !widget || !widget.body) return false;
+      widget.body.innerHTML = UI_HTML;
+      widget.body.style.minHeight = '420px';
+      widget.body.style.background = '#f0f6fa';
+      painted = true;
+      return true;
     }
 
     function setBar(msg, kind) {
-      var root = getRoot();
+      var root = (typeof widget !== 'undefined' && widget && widget.body) ? widget.body : null;
       if (!root) return;
       var el = root.querySelector('#statusBar');
       if (!el) return;
+      var bg = '#e3f2fd', fg = '#0d47a1';
+      if (kind === 'ok') { bg = '#e8f5e9'; fg = '#1b5e20'; }
+      if (kind === 'warn') { bg = '#fff3e0'; fg = '#e65100'; }
+      if (kind === 'error') { bg = '#ffebee'; fg = '#b71c1c'; }
       el.textContent = msg;
-      el.className = 'status-bar status-' + (kind || 'info');
+      el.style.background = bg;
+      el.style.color = fg;
     }
 
     function getRequire() {
       try {
-        if (typeof widget !== 'undefined' && widget && widget.requirejs) return widget.requirejs;
+        if (widget && widget.requirejs) return widget.requirejs;
       } catch (e0) { /* */ }
       if (typeof require !== 'undefined') return require;
       return null;
@@ -167,123 +82,90 @@
     function loadScript(url, optional) {
       return new Promise(function (resolve, reject) {
         var s = document.createElement('script');
-        s.type = 'text/javascript';
-        s.charset = 'UTF-8';
         s.src = url;
-        s.onload = function () { resolve(url); };
+        s.onload = function () { resolve(); };
         s.onerror = function () {
-          if (optional) resolve(null);
-          else reject(new Error('Script bloqueado: ' + url));
+          if (optional) resolve();
+          else reject(new Error('Bloqueado: ' + url));
         };
-        (document.head || document.documentElement).appendChild(s);
+        document.head.appendChild(s);
       });
     }
 
-    function loadWafModules() {
-      return new Promise(function (resolve, reject) {
-        if (typeof WAFData !== 'undefined' && WAFData.authenticatedRequest) {
-          resolve();
-          return;
-        }
-        var req = getRequire();
+    function bootModules() {
+      if (booted) return;
+      booted = true;
+      setBar('Carregando WAFData…', 'info');
+      var req = getRequire();
+      var waf = Promise.resolve();
+      if (typeof WAFData === 'undefined' || !WAFData.authenticatedRequest) {
         if (!req) {
-          reject(new Error('require/WAFData indisponível'));
+          setBar('Sem WAFData — confirme Additional App Widget.', 'error');
           return;
         }
-        setBar('Carregando WAFData…', 'info');
-        req(
-          ['DS/WAFData/WAFData', 'DS/i3DXCompassServices/i3DXCompassServices', 'DS/PlatformAPI/PlatformAPI'],
-          function (WAF, Compass, PAPI) {
-            window.WAFData = WAF;
-            window.__3DX_COMPASS__ = Compass;
-            window.__3DX_PLATFORM_API__ = PAPI;
-            resolve();
-          },
-          function (err) {
-            reject(err || new Error('Falha WAFData'));
+        waf = new Promise(function (res, rej) {
+          req(
+            ['DS/WAFData/WAFData', 'DS/i3DXCompassServices/i3DXCompassServices', 'DS/PlatformAPI/PlatformAPI'],
+            function (WAF, Compass, PAPI) {
+              window.WAFData = WAF;
+              window.__3DX_COMPASS__ = Compass;
+              window.__3DX_PLATFORM_API__ = PAPI;
+              res();
+            },
+            rej
+          );
+        });
+      }
+      waf
+        .then(function () { return loadScript(GH + 'assets/vendor/chart.umd.min.js?v=' + VER, true); })
+        .then(function () { return loadScript(GH + 'assets/js/bom-bundle.js?v=' + VER, false); })
+        .then(function () {
+          if (typeof App !== 'undefined' && App.run) {
+            if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
+            App.run();
+            setBar('Pronto — Mont10 → Varrer.', 'ok');
+          } else {
+            setBar('Bundle não carregou. ⋮ Atualizar.', 'error');
           }
-        );
-      });
-    }
-
-    function startApplication() {
-      if (appStarted) return;
-      appStarted = true;
-      try {
-        if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
-        if (typeof App !== 'undefined' && App.run) {
-          App.run();
-          setBar('Pronto — Mont10 aberto → Varrer.', 'ok');
-          return;
-        }
-        setBar('Bundle não carregou. ⋮ → Atualizar widget.', 'error');
-      } catch (err) {
-        setBar('Erro: ' + (err.message || err), 'error');
-      }
-    }
-
-    function bootPipeline() {
-      if (bootStarted) return;
-      if (!mountUi()) return;
-      bootStarted = true;
-      setBar('Carregando módulos…', 'info');
-
-      if (!inDashboard()) {
-        setBar('WAFData só no 3DDashboard — teste no Additional App.', 'warn');
-      }
-
-      loadWafModules()
-        .then(function () {
-          return loadScript(GH + 'assets/vendor/chart.umd.min.js?v=' + VER, true);
-        })
-        .then(function () {
-          return loadScript(GH + 'assets/js/bom-bundle.js?v=' + VER, false);
-        })
-        .then(function () {
-          startApplication();
         })
         .catch(function (err) {
-          var msg = (err && err.message) ? err.message : String(err);
-          if (!inDashboard()) {
-            setBar('Chrome: ' + msg, 'warn');
-            return;
-          }
-          setBar('Varredura falhou: ' + msg, 'error');
+          setBar('Varredura falhou: ' + (err.message || err), 'error');
         });
     }
 
-    function tryBoot() {
-      mountUi();
-      bootPipeline();
+    function onLoad() {
+      if (!paint()) return;
+      bootModules();
     }
 
-    function widgetLoading() {
-      if (typeof widget !== 'undefined' && widget) {
-        if (!widget.body) {
-          window.setTimeout(widgetLoading, 40);
-          return;
+    function wait() {
+      if (typeof widget !== 'undefined' && widget && widget.addEvent) {
+        widget.addEvent('onLoad', onLoad);
+        widget.addEvent('onRefresh', function () {
+          if (typeof App !== 'undefined' && App.runExplorerScan) {
+            var b = widget.body.querySelector('#btnScanExplorer');
+            App.runExplorerScan(b);
+          }
+        });
+        if (widget.body && !String(widget.body.innerHTML || '').replace(/\s/g, '')) {
+          window.setTimeout(onLoad, 0);
+        } else if (!booted) {
+          window.setTimeout(onLoad, 0);
         }
-        try {
-          widget.addEvent('onLoad', tryBoot);
-          widget.addEvent('onRefresh', function () {
-            if (typeof App !== 'undefined' && App.runExplorerScan) {
-              var b = widget.body.querySelector('#btnScanExplorer');
-              App.runExplorerScan(b);
-            }
-          });
-        } catch (e1) { /* */ }
-        tryBoot();
         return;
       }
-      window.setTimeout(widgetLoading, 40);
+      window.setTimeout(wait, 80);
     }
 
-    widgetLoading();
+    wait();
 
     window.setTimeout(function () {
-      if (!inDashboard()) tryBoot();
-    }, 1500);
+      if (!painted && typeof widget !== 'undefined' && widget && widget.body) {
+        onLoad();
+      }
+    }, 2000);
   //]]>
   </script>
-</body>
+</head>
+<body></body>
 </html>
