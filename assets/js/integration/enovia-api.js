@@ -85,10 +85,15 @@ var EnoviaApi = (function () {
 
   function extractMembers(response) {
     if (!response) return [];
+    if (Array.isArray(response)) return response;
     if (Array.isArray(response.member)) return response.member;
     if (Array.isArray(response.data)) return response.data;
-    if (Array.isArray(response)) return response;
-    if (response.member && response.member.member) return response.member.member;
+    if (Array.isArray(response.infos)) return response.infos;
+    if (Array.isArray(response.results)) return response.results;
+    if (Array.isArray(response.items)) return response.items;
+    if (response.member && Array.isArray(response.member.member)) return response.member.member;
+    if (response.data && Array.isArray(response.data.items)) return response.data.items;
+    if (response.data && Array.isArray(response.data.member)) return response.data.member;
     return [];
   }
 

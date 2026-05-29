@@ -156,6 +156,11 @@ var App = (function () {
         if (msg.indexOf('Varredura falhou') < 0) {
           msg = 'Varredura falhou: ' + msg;
         }
+        if (typeof BomService !== 'undefined' && BomService.reset) {
+          BomService.reset();
+          lastLoadedId = null;
+          refreshUI();
+        }
         setStatus(msg, 'error');
       })
       .finally(function () {
@@ -221,8 +226,10 @@ var App = (function () {
       url = BomSnapshot.resolveUrl(APP_CONFIG.SNAPSHOT_URL);
     }
     if (url) return loadSnapshotFromUrl(url);
-    var cached = typeof BomSnapshot !== 'undefined' ? BomSnapshot.loadSession() : null;
-    if (cached) return applySnapshotPayload(cached, 'sessão');
+    if (!APP_CONFIG.WAIT_FOR_USER_SCAN) {
+      var cached = typeof BomSnapshot !== 'undefined' ? BomSnapshot.loadSession() : null;
+      if (cached) return applySnapshotPayload(cached, 'sessão');
+    }
     return Promise.resolve();
   }
 

@@ -10,7 +10,13 @@ var ProductSearchService = (function () {
     'Physical Product',
     'PhysicalProduct',
     'dspfl:PhysicalProduct',
-    'i3dx:Physical'
+    'i3dx:Physical',
+    'dseng:EngItem',
+    'EngItem',
+    'Provide',
+    'Product',
+    'Assembly',
+    'Part'
   ];
 
   function isPhysicalProductHit(item) {
@@ -29,7 +35,11 @@ var ProductSearchService = (function () {
   }
 
   function normalizeHit(raw) {
-    var id = raw.physicalid || raw.objectId || raw.id || raw.resourceid;
+    var id =
+      raw.physicalid || raw.physicalId || raw.objectId || raw.id ||
+      raw.resourceid || raw.resourceId || raw.pid ||
+      (raw.resource && (raw.resource.id || raw.resource.resourceid)) ||
+      (raw.info && (raw.info.id || raw.info.physicalid));
     if (!id) return null;
     return {
       physicalid: id,
@@ -47,19 +57,33 @@ var ProductSearchService = (function () {
     };
   }
 
-  function parseResponse(response) {
-    var members = EnoviaApi.extractMembers(response);
-    if (!members.length && response.results) {
-      members = response.results;
-    }
-    return members
-      .map(normalizeHit)
-      .filter(Boolean)
-      .filter(isPhysicalProductHit);
+  function nameMatchesTerm(hit, term) {
+    if (!term || !hit) return false;
+    var t = String(term).toLowerCase();
+    var n = (hit.name || hit.displayName || '').toLowerCase();
+    return n === t || n.indexOf(t) === 0 || t.indexOf(n) === 0;
   }
 
-  function search(term) {
-    return SearchApi.search(term).then(parseResponse);
+  function parseResponse(response, term) {
+    var members = EnoviaApi.extractMembers(response);
+    if (!members.length && response && response.results) {
+      members = response.results;
+    }
+    var all = members.map(normalizeHit).filter(Boolean);
+    var physical = all.filter(isPhysicalProductHit);
+    if (term) {
+      var exact = all.filter(function (h) { return nameMatchesTerm(h, term); });
+      if (exact.length) return exact;
+    }
+    return physical.length ? physical : all;
+  }
+
+  function search(term, options) {
+    options = options || {};
+    var t = String(term || '').trim();
+    return SearchApi.search(t, options).then(function (res) {
+      return parseResponse(res, t);
+    });
   }
 
   function getDemoResults(term) {

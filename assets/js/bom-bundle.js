@@ -10,7 +10,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260531b',
+    BUILD: 'bom20260531c',
     /** Não carrega BOM automático no boot — só após Varrer */
     WAIT_FOR_USER_SCAN: true,
     /** Sprint 1: API primeiro; cola só com ALLOW_PASTE_FALLBACK true */
@@ -1187,10 +1187,15 @@ var EnoviaApi = (function () {
 
   function extractMembers(response) {
     if (!response) return [];
+    if (Array.isArray(response)) return response;
     if (Array.isArray(response.member)) return response.member;
     if (Array.isArray(response.data)) return response.data;
-    if (Array.isArray(response)) return response;
-    if (response.member && response.member.member) return response.member.member;
+    if (Array.isArray(response.infos)) return response.infos;
+    if (Array.isArray(response.results)) return response.results;
+    if (Array.isArray(response.items)) return response.items;
+    if (response.member && Array.isArray(response.member.member)) return response.member.member;
+    if (response.data && Array.isArray(response.data.items)) return response.data.items;
+    if (response.data && Array.isArray(response.data.member)) return response.data.member;
     return [];
   }
 
@@ -1226,10 +1231,18 @@ var SearchApi = (function () {
     top = top || APP_CONFIG.SEARCH.TOP;
     var enc = encodeURIComponent(term);
     var modelerBase = CompassServices.buildRestBase(spaceUrl);
+    var m = APP_CONFIG.MODELERS || {};
+    var eng = m.ENG_ITEM || 'dseng';
+    var engType = m.ENG_ITEM_TYPE || 'dseng:EngItem';
     return [
       modelerBase + '/search?searchStr=' + enc + '&$top=' + top,
       modelerBase + '/search?q=' + enc + '&$top=' + top,
-      spaceUrl + '/resources/v1/modeler/search?searchStr=' + enc + '&$top=' + top
+      modelerBase + '/' + eng + '/' + engType + '/search?searchStr=' + enc + '&$top=' + top,
+      modelerBase + '/dsxcad/dsxcad:VPMReference/search?searchStr=' + enc + '&$top=' + top,
+      modelerBase + '/dspfl/dspfl:PhysicalProduct/search?searchStr=' + enc + '&$top=' + top,
+      spaceUrl + '/resources/v1/modeler/search?searchStr=' + enc + '&$top=' + top,
+      spaceUrl + '/resources/v1/federated/search?searchStr=' + enc + '&$top=' + top,
+      spaceUrl + '/resources/v1/federated/search?q=' + enc + '&$top=' + top
     ];
   }
 
@@ -1270,7 +1283,13 @@ var ProductSearchService = (function () {
     'Physical Product',
     'PhysicalProduct',
     'dspfl:PhysicalProduct',
-    'i3dx:Physical'
+    'i3dx:Physical',
+    'dseng:EngItem',
+    'EngItem',
+    'Provide',
+    'Product',
+    'Assembly',
+    'Part'
   ];
 
   function isPhysicalProductHit(item) {
@@ -1289,7 +1308,11 @@ var ProductSearchService = (function () {
   }
 
   function normalizeHit(raw) {
-    var id = raw.physicalid || raw.objectId || raw.id || raw.resourceid;
+    var id =
+      raw.physicalid || raw.physicalId || raw.objectId || raw.id ||
+      raw.resourceid || raw.resourceId || raw.pid ||
+      (raw.resource && (raw.resource.id || raw.resource.resourceid)) ||
+      (raw.info && (raw.info.id || raw.info.physicalid));
     if (!id) return null;
     return {
       physicalid: id,
@@ -1307,19 +1330,33 @@ var ProductSearchService = (function () {
     };
   }
 
-  function parseResponse(response) {
-    var members = EnoviaApi.extractMembers(response);
-    if (!members.length && response.results) {
-      members = response.results;
-    }
-    return members
-      .map(normalizeHit)
-      .filter(Boolean)
-      .filter(isPhysicalProductHit);
+  function nameMatchesTerm(hit, term) {
+    if (!term || !hit) return false;
+    var t = String(term).toLowerCase();
+    var n = (hit.name || hit.displayName || '').toLowerCase();
+    return n === t || n.indexOf(t) === 0 || t.indexOf(n) === 0;
   }
 
-  function search(term) {
-    return SearchApi.search(term).then(parseResponse);
+  function parseResponse(response, term) {
+    var members = EnoviaApi.extractMembers(response);
+    if (!members.length && response && response.results) {
+      members = response.results;
+    }
+    var all = members.map(normalizeHit).filter(Boolean);
+    var physical = all.filter(isPhysicalProductHit);
+    if (term) {
+      var exact = all.filter(function (h) { return nameMatchesTerm(h, term); });
+      if (exact.length) return exact;
+    }
+    return physical.length ? physical : all;
+  }
+
+  function search(term, options) {
+    options = options || {};
+    var t = String(term || '').trim();
+    return SearchApi.search(t, options).then(function (res) {
+      return parseResponse(res, t);
+    });
   }
 
   function getDemoResults(term) {
@@ -2638,7 +2675,16 @@ var ExplorerScanner = (function () {
           : null);
       if (!space) return null;
       SearchApi.init(space);
-      return ProductSearchService.search(term, { top: 20 }).then(function (hits) {
+      var tries = [term];
+      if (term.indexOf('*') < 0) tries.push('*' + term + '*');
+      function tryTerm(idx) {
+        if (idx >= tries.length) return Promise.resolve([]);
+        return ProductSearchService.search(tries[idx], { top: 40 }).then(function (hits) {
+          if (hits && hits.length) return hits;
+          return tryTerm(idx + 1);
+        });
+      }
+      return tryTerm(0).then(function (hits) {
         var hit = pickSearchHit(term, hits);
         if (!hit || !isValidId(hit.physicalid)) return null;
         if (typeof ProductExplorerBridge !== 'undefined') {
@@ -2646,7 +2692,8 @@ var ExplorerScanner = (function () {
         }
         return hit;
       });
-    }).catch(function () {
+    }).catch(function (err) {
+      console.warn('[ExplorerScanner] busca 3DSpace:', err && err.message ? err.message : err);
       return null;
     });
   }
@@ -4148,6 +4195,11 @@ var App = (function () {
         if (msg.indexOf('Varredura falhou') < 0) {
           msg = 'Varredura falhou: ' + msg;
         }
+        if (typeof BomService !== 'undefined' && BomService.reset) {
+          BomService.reset();
+          lastLoadedId = null;
+          refreshUI();
+        }
         setStatus(msg, 'error');
       })
       .finally(function () {
@@ -4213,8 +4265,10 @@ var App = (function () {
       url = BomSnapshot.resolveUrl(APP_CONFIG.SNAPSHOT_URL);
     }
     if (url) return loadSnapshotFromUrl(url);
-    var cached = typeof BomSnapshot !== 'undefined' ? BomSnapshot.loadSession() : null;
-    if (cached) return applySnapshotPayload(cached, 'sessão');
+    if (!APP_CONFIG.WAIT_FOR_USER_SCAN) {
+      var cached = typeof BomSnapshot !== 'undefined' ? BomSnapshot.loadSession() : null;
+      if (cached) return applySnapshotPayload(cached, 'sessão');
+    }
     return Promise.resolve();
   }
 

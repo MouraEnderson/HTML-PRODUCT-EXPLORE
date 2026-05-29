@@ -140,7 +140,16 @@ var ExplorerScanner = (function () {
           : null);
       if (!space) return null;
       SearchApi.init(space);
-      return ProductSearchService.search(term, { top: 20 }).then(function (hits) {
+      var tries = [term];
+      if (term.indexOf('*') < 0) tries.push('*' + term + '*');
+      function tryTerm(idx) {
+        if (idx >= tries.length) return Promise.resolve([]);
+        return ProductSearchService.search(tries[idx], { top: 40 }).then(function (hits) {
+          if (hits && hits.length) return hits;
+          return tryTerm(idx + 1);
+        });
+      }
+      return tryTerm(0).then(function (hits) {
         var hit = pickSearchHit(term, hits);
         if (!hit || !isValidId(hit.physicalid)) return null;
         if (typeof ProductExplorerBridge !== 'undefined') {
@@ -148,7 +157,8 @@ var ExplorerScanner = (function () {
         }
         return hit;
       });
-    }).catch(function () {
+    }).catch(function (err) {
+      console.warn('[ExplorerScanner] busca 3DSpace:', err && err.message ? err.message : err);
       return null;
     });
   }

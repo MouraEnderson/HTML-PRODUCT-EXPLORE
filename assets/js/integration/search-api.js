@@ -15,10 +15,18 @@ var SearchApi = (function () {
     top = top || APP_CONFIG.SEARCH.TOP;
     var enc = encodeURIComponent(term);
     var modelerBase = CompassServices.buildRestBase(spaceUrl);
+    var m = APP_CONFIG.MODELERS || {};
+    var eng = m.ENG_ITEM || 'dseng';
+    var engType = m.ENG_ITEM_TYPE || 'dseng:EngItem';
     return [
       modelerBase + '/search?searchStr=' + enc + '&$top=' + top,
       modelerBase + '/search?q=' + enc + '&$top=' + top,
-      spaceUrl + '/resources/v1/modeler/search?searchStr=' + enc + '&$top=' + top
+      modelerBase + '/' + eng + '/' + engType + '/search?searchStr=' + enc + '&$top=' + top,
+      modelerBase + '/dsxcad/dsxcad:VPMReference/search?searchStr=' + enc + '&$top=' + top,
+      modelerBase + '/dspfl/dspfl:PhysicalProduct/search?searchStr=' + enc + '&$top=' + top,
+      spaceUrl + '/resources/v1/modeler/search?searchStr=' + enc + '&$top=' + top,
+      spaceUrl + '/resources/v1/federated/search?searchStr=' + enc + '&$top=' + top,
+      spaceUrl + '/resources/v1/federated/search?q=' + enc + '&$top=' + top
     ];
   }
 
