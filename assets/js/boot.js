@@ -7,7 +7,7 @@ var BomBoot = (function (global) {
   'use strict';
 
   var REPO = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-  var VER = 'snapshot20260601';
+  var VER = 'snapshot20260601d';
 
   var SCRIPTS = [
     'assets/js/config.js',
@@ -23,6 +23,7 @@ var BomBoot = (function (global) {
     'assets/js/services/physical-product-service.js',
     'assets/js/services/file-import-service.js',
     'assets/js/services/bom-snapshot.js',
+    'assets/js/services/explorer-scanner.js',
     'assets/js/services/bom-service.js',
     'assets/js/processing/bom-normalizer.js',
     'assets/js/processing/metrics-engine.js',

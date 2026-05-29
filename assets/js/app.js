@@ -112,6 +112,46 @@ var App = (function () {
     ]);
   }
 
+  function runExplorerScan(btnEl) {
+    if (typeof ExplorerScanner === 'undefined') {
+      setStatus('Varredura falhou: módulo scanner não carregou.', 'error');
+      return;
+    }
+    if (loading) return;
+    setLoading(true);
+    if (btnEl) {
+      btnEl.disabled = true;
+      btnEl.textContent = 'Varrendo…';
+    }
+    setStatus('Varredura em andamento…', 'info');
+    ExplorerScanner.scan()
+      .then(function (res) {
+        APP_CONFIG.IMPORT_MODE = true;
+        APP_CONFIG.DEMO_MODE = false;
+        if (res.meta) {
+          lastLoadedId = res.meta.rootPhysicalId;
+          var lbl = byId('selectionLabel');
+          if (lbl) lbl.textContent = res.meta.productName;
+        }
+        refreshUI();
+        setStatus(res.message || 'Varredura concluída.', 'ok');
+      })
+      .catch(function (err) {
+        var msg = (err && err.message) ? err.message : String(err);
+        if (msg.indexOf('Varredura falhou') < 0) {
+          msg = 'Varredura falhou: ' + msg;
+        }
+        setStatus(msg, 'error');
+      })
+      .finally(function () {
+        setLoading(false);
+        if (btnEl) {
+          btnEl.disabled = false;
+          btnEl.textContent = 'Varrer estrutura Explorer';
+        }
+      });
+  }
+
   function applySnapshotPayload(payload, sourceLabel) {
     setLoading(true);
     return BomSnapshot.applyPayload(payload)
@@ -270,6 +310,13 @@ var App = (function () {
         refreshUI();
       }
     );
+
+    var btnScan = byId('btnScanExplorer');
+    if (btnScan) {
+      btnScan.addEventListener('click', function () {
+        runExplorerScan(btnScan);
+      });
+    }
 
     var btnExample = byId('btnLoadExample');
     if (btnExample) {
@@ -726,6 +773,7 @@ var App = (function () {
     run: run,
     start: start,
     runFallback: runFallback,
+    runExplorerScan: runExplorerScan,
     reloadFromExplorer: reloadFromExplorer,
     loadBom: loadBom,
     loadSnapshotFromUrl: loadSnapshotFromUrl,

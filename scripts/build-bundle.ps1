@@ -13,6 +13,9 @@ $files = @(
   'assets\js\integration\product-explorer-bridge.js',
   'assets\js\services\attribute-service.js',
   'assets\js\services\physical-product-service.js',
+  'assets\js\services\file-import-service.js',
+  'assets\js\services\bom-snapshot.js',
+  'assets\js\services\explorer-scanner.js',
   'assets\js\services\bom-service.js',
   'assets\js\processing\bom-normalizer.js',
   'assets\js\processing\metrics-engine.js',
@@ -22,9 +25,10 @@ $files = @(
   'assets\js\ui\filters.js',
   'assets\js\ui\data-table.js',
   'assets\js\ui\explorer-sync-panel.js',
+  'assets\js\ui\snapshot-panel.js',
   'assets\js\app.js'
 )
-$parts = @('/* BOM Analytics bundle 20260530 */')
+$parts = @('/* BOM Analytics bundle snapshot20260601d */')
 foreach ($f in $files) {
   $parts += ";/* --- $f --- */"
   $parts += [IO.File]::ReadAllText((Join-Path $root $f))
