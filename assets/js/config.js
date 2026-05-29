@@ -8,10 +8,11 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260601d',
+    BUILD: 'bom20260601e',
 
     /** Se *-space falhar (DNS), tenta mesmo tenant via *-ifwe/enovia */
     SPACE_FALLBACK_VIA_IFWE: true,
+    PREFER_IFWE_FIRST: true,
 
     /** Tenant cloud: objetos usam prefixo prd- (ex. prd-R1132100929518-00511496) */
     PHYSICAL_ID_PREFIX: 'prd-',
@@ -142,7 +143,8 @@
      * Preencha Mont10: Explorer → raiz → Propriedades → ID físico.
      */
     STRUCTURE_IDS: {
-      Mont10: 'prd-R1132100929518-00511496'
+      Mont10: '89765370FFF30200500C474F00184933',
+      'prd-R1132100929518-00511496': '89765370FFF30200500C474F00184933'
     },
 
     PLATFORM: {

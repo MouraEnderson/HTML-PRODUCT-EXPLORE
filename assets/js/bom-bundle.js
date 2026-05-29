@@ -10,10 +10,11 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260601d',
+    BUILD: 'bom20260601e',
 
     /** Se *-space falhar (DNS), tenta mesmo tenant via *-ifwe/enovia */
     SPACE_FALLBACK_VIA_IFWE: true,
+    PREFER_IFWE_FIRST: true,
 
     /** Tenant cloud: objetos usam prefixo prd- (ex. prd-R1132100929518-00511496) */
     PHYSICAL_ID_PREFIX: 'prd-',
@@ -144,7 +145,8 @@
      * Preencha Mont10: Explorer → raiz → Propriedades → ID físico.
      */
     STRUCTURE_IDS: {
-      Mont10: 'prd-R1132100929518-00511496'
+      Mont10: '89765370FFF30200500C474F00184933',
+      'prd-R1132100929518-00511496': '89765370FFF30200500C474F00184933'
     },
 
     PLATFORM: {
@@ -694,6 +696,9 @@ var CompassServices = (function () {
       seen[u] = true;
       list.push(u);
     }
+    if (APP_CONFIG.PREFER_IFWE_FIRST !== false && APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== false) {
+      add(ifweSpaceUrl());
+    }
     add(normalizeSpaceUrl(primary));
     if (APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== false) {
       add(ifweSpaceUrl());
@@ -710,30 +715,45 @@ var CompassServices = (function () {
     });
   }
 
+  function applyVerifiedSpaceUrl(url) {
+    cache.spaceUrl = String(url || '').replace(/\/$/, '');
+    cache.spaceUrlVerified = true;
+    return cache.spaceUrl;
+  }
+
+  function swapUrlHost(url, fromHost, toHost) {
+    if (!url || !fromHost || !toHost || url.indexOf(fromHost) < 0) return null;
+    return url.replace(fromHost, toHost);
+  }
+
   function ensureWorkingSpaceUrl(platformId) {
-    if (cache.spaceUrl && cache.spaceUrlVerified) {
+    if (cache.spaceUrlVerified && cache.spaceUrl) {
       return Promise.resolve(cache.spaceUrl);
     }
-    return get3DSpaceUrl(platformId).then(function (primary) {
-      var candidates = spaceUrlCandidates(primary);
-      var idx = 0;
-      function tryNext() {
-        if (idx >= candidates.length) {
-          return Promise.reject(new Error(
-            '3DSpace inacessível (space e ifwe). Verifique DNS/VPN *-space.3dexperience.3ds.com'
-          ));
-        }
-        var url = candidates[idx++];
-        return probeSpaceUrl(url).then(function (ok) {
-          cache.spaceUrl = ok;
-          cache.spaceUrlVerified = true;
-          return ok;
-        }).catch(function () {
-          return tryNext();
-        });
-      }
-      return tryNext();
+    cache.spaceUrlVerified = false;
+    return probeCandidates(spaceUrlCandidates(null)).catch(function () {
+      return get3DSpaceUrl(platformId).then(function (primary) {
+        return probeCandidates(spaceUrlCandidates(primary));
+      });
     });
+  }
+
+  function probeCandidates(candidates) {
+    var idx = 0;
+    function tryNext() {
+      if (idx >= candidates.length) {
+        return Promise.reject(new Error(
+          '3DSpace inacessível (space e ifwe). Verifique DNS/VPN *-space.3dexperience.3ds.com'
+        ));
+      }
+      var url = candidates[idx++];
+      return probeSpaceUrl(url).then(function (ok) {
+        return applyVerifiedSpaceUrl(ok);
+      }).catch(function () {
+        return tryNext();
+      });
+    }
+    return tryNext();
   }
 
   function get3DSpaceUrl(platformId) {
@@ -745,7 +765,7 @@ var CompassServices = (function () {
       cache.spaceUrl = PlatformBridge.getSpaceUrl();
       return Promise.resolve(cache.spaceUrl);
     }
-    if (cache.spaceUrl) return Promise.resolve(cache.spaceUrl);
+    if (cache.spaceUrlVerified && cache.spaceUrl) return Promise.resolve(cache.spaceUrl);
 
     var fallback = tenantSpaceUrl();
 
@@ -826,6 +846,8 @@ var CompassServices = (function () {
   return {
     get3DSpaceUrl: get3DSpaceUrl,
     ensureWorkingSpaceUrl: ensureWorkingSpaceUrl,
+    applyVerifiedSpaceUrl: applyVerifiedSpaceUrl,
+    swapUrlHost: swapUrlHost,
     normalizeSpaceUrl: normalizeSpaceUrl,
     ifweSpaceUrl: ifweSpaceUrl,
     fetchCsrfToken: fetchCsrfToken,
@@ -925,6 +947,21 @@ var WafClient = (function () {
       (url || '').indexOf('/enovia') >= 0;
   }
 
+  function ifweRetryUrl(url) {
+    if (!APP_CONFIG.TENANT_DEFAULTS || APP_CONFIG.SPACE_FALLBACK_VIA_IFWE === false) return null;
+    var sh = APP_CONFIG.TENANT_DEFAULTS.spaceHost;
+    var ih = APP_CONFIG.TENANT_DEFAULTS.platformHost;
+    if (typeof CompassServices !== 'undefined' && CompassServices.swapUrlHost) {
+      return CompassServices.swapUrlHost(url, sh, ih);
+    }
+    if (!sh || !ih || url.indexOf(sh) < 0) return null;
+    return url.replace(sh, ih);
+  }
+
+  function isNetworkZero(msg) {
+    return /ResponseCode.*0|NetworkError/i.test(msg || '');
+  }
+
   function request(method, url, options) {
     options = options || {};
     var headers = Object.assign({}, PlatformContext.getHeaders(), options.headers || {});
@@ -933,19 +970,19 @@ var WafClient = (function () {
       return Promise.reject(new Error('DEMO_MODE: use BomService mock'));
     }
 
-    function doRequest() {
+    function runOnce(targetUrl, retried) {
       var WAF = getWAFData();
       if (!WAF || !WAF.authenticatedRequest) {
-        if (is3DSpaceUrl(url)) {
+        if (is3DSpaceUrl(targetUrl)) {
           return Promise.reject(new Error(
             'API ENOVIA bloqueada (sem WAFData). Use Additional App no 3DDashboard ou HTML no 3DSpace.'
           ));
         }
-        return Promise.reject(new Error('WAFData não disponível para: ' + url));
+        return Promise.reject(new Error('WAFData não disponível para: ' + targetUrl));
       }
 
       return new Promise(function (resolve, reject) {
-        WAF.authenticatedRequest(url, {
+        WAF.authenticatedRequest(targetUrl, {
           method: method,
           headers: headers,
           data: options.body,
@@ -955,16 +992,37 @@ var WafClient = (function () {
           },
           onFailure: function (err) {
             var msg = (err && (err.message || err.error)) || 'WAF request failed';
-            if (/ResponseCode.*0|NetworkError/i.test(msg) && /space\.3dexperience/i.test(url)) {
+            if (!retried && isNetworkZero(msg)) {
+              var alt = ifweRetryUrl(targetUrl);
+              if (alt && alt !== targetUrl) {
+                if (typeof CompassServices !== 'undefined' && CompassServices.applyVerifiedSpaceUrl) {
+                  var baseMatch = alt.match(/^(https:\/\/[^/]+\/enovia)/i);
+                  var base = baseMatch ? baseMatch[1] : null;
+                  if (base) {
+                    CompassServices.applyVerifiedSpaceUrl(base);
+                    try {
+                      if (typeof EnoviaApi !== 'undefined' && EnoviaApi.init) EnoviaApi.init(base);
+                      if (typeof SearchApi !== 'undefined' && SearchApi.init) SearchApi.init(base);
+                    } catch (eInit) { /* */ }
+                  }
+                }
+                runOnce(alt, true).then(resolve).catch(reject);
+                return;
+              }
+            }
+            if (isNetworkZero(msg) && /space\.3dexperience/i.test(targetUrl)) {
               msg =
-                'NetworkError (código 0): não alcançou o host 3DSpace. ' +
-                'Muitas redes só resolvem *-ifwe (dashboard). Build bom20260601d tenta ifwe automaticamente. ' +
-                'Peça ao TI liberar DNS de *-space.3dexperience.3ds.com. URL: ' + url;
+                'NetworkError (código 0): host *-space inacessível. Tentativa via ifwe também falhou. ' +
+                'Peça ao TI liberar DNS ou teste VPN. URL: ' + targetUrl;
             }
             reject(new Error(msg));
           }
         });
       });
+    }
+
+    function doRequest() {
+      return runOnce(url, false);
     }
 
     if (typeof WafBootstrap !== 'undefined') {

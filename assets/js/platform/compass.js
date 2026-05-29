@@ -53,6 +53,9 @@ var CompassServices = (function () {
       seen[u] = true;
       list.push(u);
     }
+    if (APP_CONFIG.PREFER_IFWE_FIRST !== false && APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== false) {
+      add(ifweSpaceUrl());
+    }
     add(normalizeSpaceUrl(primary));
     if (APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== false) {
       add(ifweSpaceUrl());
@@ -69,30 +72,45 @@ var CompassServices = (function () {
     });
   }
 
+  function applyVerifiedSpaceUrl(url) {
+    cache.spaceUrl = String(url || '').replace(/\/$/, '');
+    cache.spaceUrlVerified = true;
+    return cache.spaceUrl;
+  }
+
+  function swapUrlHost(url, fromHost, toHost) {
+    if (!url || !fromHost || !toHost || url.indexOf(fromHost) < 0) return null;
+    return url.replace(fromHost, toHost);
+  }
+
   function ensureWorkingSpaceUrl(platformId) {
-    if (cache.spaceUrl && cache.spaceUrlVerified) {
+    if (cache.spaceUrlVerified && cache.spaceUrl) {
       return Promise.resolve(cache.spaceUrl);
     }
-    return get3DSpaceUrl(platformId).then(function (primary) {
-      var candidates = spaceUrlCandidates(primary);
-      var idx = 0;
-      function tryNext() {
-        if (idx >= candidates.length) {
-          return Promise.reject(new Error(
-            '3DSpace inacessível (space e ifwe). Verifique DNS/VPN *-space.3dexperience.3ds.com'
-          ));
-        }
-        var url = candidates[idx++];
-        return probeSpaceUrl(url).then(function (ok) {
-          cache.spaceUrl = ok;
-          cache.spaceUrlVerified = true;
-          return ok;
-        }).catch(function () {
-          return tryNext();
-        });
-      }
-      return tryNext();
+    cache.spaceUrlVerified = false;
+    return probeCandidates(spaceUrlCandidates(null)).catch(function () {
+      return get3DSpaceUrl(platformId).then(function (primary) {
+        return probeCandidates(spaceUrlCandidates(primary));
+      });
     });
+  }
+
+  function probeCandidates(candidates) {
+    var idx = 0;
+    function tryNext() {
+      if (idx >= candidates.length) {
+        return Promise.reject(new Error(
+          '3DSpace inacessível (space e ifwe). Verifique DNS/VPN *-space.3dexperience.3ds.com'
+        ));
+      }
+      var url = candidates[idx++];
+      return probeSpaceUrl(url).then(function (ok) {
+        return applyVerifiedSpaceUrl(ok);
+      }).catch(function () {
+        return tryNext();
+      });
+    }
+    return tryNext();
   }
 
   function get3DSpaceUrl(platformId) {
@@ -104,7 +122,7 @@ var CompassServices = (function () {
       cache.spaceUrl = PlatformBridge.getSpaceUrl();
       return Promise.resolve(cache.spaceUrl);
     }
-    if (cache.spaceUrl) return Promise.resolve(cache.spaceUrl);
+    if (cache.spaceUrlVerified && cache.spaceUrl) return Promise.resolve(cache.spaceUrl);
 
     var fallback = tenantSpaceUrl();
 
@@ -185,6 +203,8 @@ var CompassServices = (function () {
   return {
     get3DSpaceUrl: get3DSpaceUrl,
     ensureWorkingSpaceUrl: ensureWorkingSpaceUrl,
+    applyVerifiedSpaceUrl: applyVerifiedSpaceUrl,
+    swapUrlHost: swapUrlHost,
     normalizeSpaceUrl: normalizeSpaceUrl,
     ifweSpaceUrl: ifweSpaceUrl,
     fetchCsrfToken: fetchCsrfToken,
