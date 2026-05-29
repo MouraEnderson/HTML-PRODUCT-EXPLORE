@@ -6,232 +6,184 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <title>BOM Analytics v2</title>
   <style type="text/css">
-    .bom-root { min-height: 420px; background: #f0f6fa; font-family: "Segoe UI", sans-serif; color: #1a2332; }
-    .bom-ver { margin: 0; padding: 10px 12px; background: #1565c0; color: #fff; font-size: 13px; font-weight: bold; }
-    .bom-h1 { margin: 0; padding: 10px 14px; background: #fff; border-bottom: 1px solid #dde3ea; font-size: 16px; color: #005686; }
-    .bom-st { padding: 8px 14px; font-size: 13px; background: #e3f2fd; color: #0d47a1; }
-    .bom-st-ok { background: #e8f5e9; color: #1b5e20; }
-    .bom-st-err { background: #ffebee; color: #b71c1c; }
-    .bom-panel { margin: 10px 14px; padding: 12px; background: #fff; border-radius: 8px; }
-    .bom-btn { display: block; width: 100%; padding: 12px; margin-top: 10px; background: #2e7d32; color: #fff; border: 0; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; }
-    .bom-btn:disabled { background: #9e9e9e; }
-    .bom-paste-hint { margin: 0 0 6px; font-size: 13px; font-weight: bold; color: #0d47a1; }
-    #pasteArea { display: block !important; width: 100%; min-height: 72px; padding: 10px; border: 4px solid #1976d2 !important; border-radius: 8px; background: #bbdefb !important; font-size: 11px; font-family: Consolas, monospace; box-sizing: border-box; }
-    .bom-charts { padding: 8px 14px; }
-    .bom-chart { display: inline-block; width: 48%; min-height: 80px; margin: 1%; background: #fff; border: 1px solid #dde3ea; }
-    .bom-table-wrap { margin: 8px 14px; background: #fff; border: 1px solid #dde3ea; max-height: 160px; overflow: auto; }
+    .bom-ver { margin: 0; padding: 10px 12px; background: #0d47a1; color: #fff; font-size: 14px; font-weight: bold; }
+    .bom-h1 { margin: 0; padding: 10px 14px; background: #fff; font-size: 16px; color: #005686; }
+    .bom-st { padding: 10px 14px; font-size: 14px; background: #e3f2fd; color: #0d47a1; font-weight: bold; }
+    .bom-st-ok { background: #c8e6c9; color: #1b5e20; }
+    .bom-st-err { background: #ffcdd2; color: #b71c1c; }
+    .bom-panel { margin: 10px 14px; padding: 12px; background: #fff; }
+    .bom-btn { display: block; width: 100%; padding: 14px; margin-top: 10px; background: #2e7d32; color: #fff; border: 0; font-size: 16px; font-weight: bold; cursor: pointer; }
+    .bom-btn:disabled { background: #757575; }
+    .bom-hint { margin: 0 0 8px; font-size: 13px; color: #1565c0; font-weight: bold; }
+    #pasteArea { display: block; width: 100%; height: 80px; padding: 8px; border: 4px solid #1565c0; background: #bbdefb; font: 12px Consolas, monospace; box-sizing: border-box; }
+    .bom-kpi { padding: 10px 14px; font-size: 14px; line-height: 1.6; background: #fff; margin: 8px 14px; border: 1px solid #ccc; }
+    .bom-table-wrap { margin: 8px 14px; background: #fff; border: 1px solid #ccc; max-height: 140px; overflow: auto; }
     .bom-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .bom-table th, .bom-table td { border: 1px solid #e0e0e0; padding: 4px 6px; }
-    .bom-hidden { display: none; }
-    .bom-kpi { padding: 6px 14px; font-size: 13px; line-height: 1.5; }
+    .bom-table th, .bom-table td { border: 1px solid #ddd; padding: 4px 8px; }
   </style>
   <script type="text/javascript">
   //<![CDATA[
-    window.__3DX_TRUSTED_WIDGET__ = true;
-    window.__3DX_BOOT_DEFER__ = true;
+    var BOM_V2 = 'bom20260530d-SOLO';
 
-    var BOM_BUILD = 'bom20260530c';
-    var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
+    function rootEl() {
+      return window.__3DX_UI_ROOT__ || (typeof widget !== 'undefined' && widget.body ? widget.body : null);
+    }
 
-    function uiRoot() { return window.__3DX_UI_ROOT__ || null; }
+    function $(id) {
+      var r = rootEl();
+      return r ? r.querySelector('#' + id) : null;
+    }
 
-    function setBar(msg, kind) {
-      var el = uiRoot() && uiRoot().querySelector('#statusBar');
+    function status(msg, ok, err) {
+      var el = $('statusBar');
       if (!el) return;
       el.textContent = msg;
       el.className = 'bom-st';
-      if (kind === 'ok') el.className = 'bom-st bom-st-ok';
-      if (kind === 'error') el.className = 'bom-st bom-st-err';
+      if (ok) el.className = 'bom-st bom-st-ok';
+      if (err) el.className = 'bom-st bom-st-err';
     }
 
-    function paint() {
-      if (!widget || !widget.body) return;
-      var b = widget.body;
-      b.innerHTML = '';
-      b.style.minHeight = '420px';
-
-      var ver = document.createElement('p');
-      ver.className = 'bom-ver';
-      ver.textContent = 'BOM Analytics v2 — ' + BOM_BUILD + ' — cole e Varrer (sem travar)';
-      b.appendChild(ver);
-
-      var h1 = document.createElement('div');
-      h1.className = 'bom-h1';
-      h1.innerHTML = 'Estrutura: <strong id="selectionLabel">-</strong>';
-      b.appendChild(h1);
-
-      var st = document.createElement('div');
-      st.id = 'statusBar';
-      st.className = 'bom-st';
-      st.textContent = 'Cole Mont10+M1+M2 na caixa azul → Varrer';
-      b.appendChild(st);
-
-      var panel = document.createElement('div');
-      panel.className = 'bom-panel';
-
-      var hint = document.createElement('p');
-      hint.className = 'bom-paste-hint';
-      hint.textContent = 'Explorer: Ctrl+A → Ctrl+C → Ctrl+V → Varrer';
-      panel.appendChild(hint);
-
-      var ta = document.createElement('textarea');
-      ta.id = 'pasteArea';
-      ta.setAttribute('placeholder', 'CAIXA AZUL — cole aqui');
-      panel.appendChild(ta);
-
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.id = 'btnScanExplorer';
-      btn.className = 'bom-btn';
-      btn.textContent = 'Varrer estrutura Explorer';
-      btn.onclick = function () { runScan(btn); };
-      panel.appendChild(btn);
-
-      b.appendChild(panel);
-
-      var kpi = document.createElement('div');
-      kpi.id = 'kpiGrid';
-      kpi.className = 'bom-kpi';
-      b.appendChild(kpi);
-
-      var tw = document.createElement('div');
-      tw.className = 'bom-table-wrap';
-      tw.innerHTML =
-        '<div style="padding:6px;font-weight:bold">E-BOM — <span id="tableProductLabel">-</span></div>' +
-        '<table id="bomTable" class="bom-table"><thead><tr></tr></thead><tbody></tbody></table>';
-      b.appendChild(tw);
-
-      window.__3DX_UI_ROOT__ = b;
-    }
-
-    function parseLine(line) {
-      var raw = String(line || '').trim();
-      if (!raw || /^(t[ií]tulo|title|nome|revision)/i.test(raw)) return null;
-      var nameM = raw.match(/^(Mont\d*|M\d+)\b/i);
-      if (!nameM) return null;
-      var name = nameM[1];
-      var revM = raw.match(/([\d]+\.[\d]+)/);
-      var state = /Aprovado/i.test(raw) ? 'Aprovado' : '';
-      return {
-        name: name,
-        title: name,
-        revision: revM ? revM[1] : '',
-        state: state,
-        maturity: state,
-        approval: state ? 'Approved' : 'Unknown',
-        level: /^mont/i.test(name) ? 0 : 1,
-        physicalid: 'IMP_' + name
-      };
-    }
-
-    function quickParse(text) {
+    function parseExplorerPaste(text) {
       var lines = String(text || '').split(/\r?\n/);
       var items = [];
+      var seen = {};
       lines.forEach(function (line) {
-        var row = parseLine(line);
-        if (row) items.push(row);
+        var raw = line.trim();
+        if (!raw) return;
+        if (/^(t[ií]tulo|title|nome|revision|tipo|propriet)/i.test(raw)) return;
+        var m = raw.match(/\b(Mont\d*|M\d+)\b/gi);
+        if (!m) return;
+        m.forEach(function (token) {
+          var name = token.replace(/\s/g, '');
+          var key = name.toLowerCase();
+          if (seen[key]) return;
+          seen[key] = true;
+          var revM = raw.match(/([\d]+\.[\d]+)/);
+          var ok = /Aprovado/i.test(raw);
+          items.push({
+            name: name,
+            revision: revM ? revM[1] : '',
+            state: ok ? 'Aprovado' : ''
+          });
+        });
       });
-      if (items.length < 2) return null;
-      if (!items.some(function (it) { return /^mont/i.test(it.name); })) return null;
-      return items;
+      items.sort(function (a, b) {
+        if (/^mont/i.test(a.name)) return -1;
+        if (/^mont/i.test(b.name)) return 1;
+        return a.name.localeCompare(b.name);
+      });
+      return items.length >= 2 ? items : null;
     }
 
-    function quickRender(items) {
-      var root = uiRoot();
-      if (!root) return;
-      var rootName = items[0].name;
-      var appr = items.filter(function (it) { return /Aprovado/i.test(it.state); }).length;
-      var lbl = root.querySelector('#selectionLabel');
-      var kpi = root.querySelector('#kpiGrid');
-      var tbody = root.querySelector('#bomTable tbody');
-      var thead = root.querySelector('#bomTable thead tr');
-      if (lbl) lbl.textContent = rootName;
-      var tl = root.querySelector('#tableProductLabel');
-      if (tl) tl.textContent = rootName;
+    function render(items) {
+      var mont = items[0];
+      items.forEach(function (it) {
+        if (/^mont/i.test(it.name)) mont = it;
+      });
+      var appr = items.filter(function (it) { return it.state === 'Aprovado'; }).length;
+      var lbl = $('selectionLabel');
+      if (lbl) lbl.textContent = mont.name;
+      var kpi = $('kpiGrid');
       if (kpi) {
         kpi.innerHTML =
-          '<div><strong>' + items.length + '</strong> Total de itens</div>' +
-          '<div><strong>' + appr + '</strong> Aprovados</div>';
+          '<div><b>' + items.length + '</b> Total de itens</div>' +
+          '<div><b>' + appr + '</b> Aprovados</div>' +
+          '<div><b>' + items.length + '</b> Physical Products</div>';
       }
+      var thead = rootEl() && rootEl().querySelector('#bomTable thead tr');
+      var tbody = rootEl() && rootEl().querySelector('#bomTable tbody');
       if (thead) thead.innerHTML = '<th>Nome</th><th>Rev</th><th>Estado</th>';
       if (tbody) {
         tbody.innerHTML = items.map(function (it) {
           return '<tr><td>' + it.name + '</td><td>' + it.revision + '</td><td>' + it.state + '</td></tr>';
         }).join('');
       }
+      var tl = $('tableProductLabel');
+      if (tl) tl.textContent = mont.name;
     }
 
-    function finishBtn(btn) {
-      if (!btn) return;
-      btn.disabled = false;
-      btn.textContent = 'Varrer estrutura Explorer';
-    }
-
-    function runScan(btn) {
-      var area = uiRoot() && uiRoot().querySelector('#pasteArea');
-      var text = area && area.value ? area.value.trim() : '';
-      if (!text) {
-        setBar('Cole na caixa azul (Ctrl+V) antes de Varrer.', 'error');
+    function onVarrerClick() {
+      status('Processando…', false, false);
+      var btn = $('btnScanExplorer');
+      var area = $('pasteArea');
+      var text = area ? area.value : '';
+      if (!text || !text.trim()) {
+        status('ERRO: cole na caixa azul (Ctrl+V) primeiro.', false, true);
         return;
       }
       if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Varrendo…';
+        btn.value = 'Varrendo…';
+        if (btn.textContent !== undefined) btn.textContent = 'Varrendo…';
       }
-      setBar('Varrendo…', 'info');
-
-      window.setTimeout(function () {
-        try {
-          var items = quickParse(text);
-          if (items) {
-            quickRender(items);
-            setBar('Varredura concluída: ' + items.length + ' itens — ' + items[0].name, 'ok');
-            if (typeof App !== 'undefined' && App.runExplorerScan) {
-              try {
-                APP_CONFIG = window.APP_CONFIG || {};
-                APP_CONFIG.IMPORT_MODE = true;
-              } catch (e1) { /* */ }
-            }
-            finishBtn(btn);
-            return;
-          }
-          setBar('Não achei Mont10/M1/M2. Ctrl+A na grade inteira → Ctrl+C → cole de novo.', 'error');
-        } catch (ex) {
-          setBar('Erro: ' + (ex.message || ex), 'error');
+      try {
+        var items = parseExplorerPaste(text);
+        if (!items) {
+          status('ERRO: não achei Mont10/M1/M2. Ctrl+A na grade → Ctrl+C → cole de novo.', false, true);
+        } else {
+          render(items);
+          status('OK: ' + items.length + ' itens — ' + items[0].name, true, false);
         }
-        finishBtn(btn);
-      }, 50);
-    }
-
-    function loadScript(url, optional, next) {
-      var s = document.createElement('script');
-      s.src = url;
-      s.onload = function () { if (next) next(null); };
-      s.onerror = function () { if (optional) { if (next) next(null); } else if (next) next('erro'); };
-      document.getElementsByTagName('head')[0].appendChild(s);
-    }
-
-    function startBundle() {
-      loadScript(GH + 'assets/js/bom-bundle.js?v=' + BOM_BUILD, true, function () {
-        if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
-        if (typeof App !== 'undefined' && App.run) App.run();
-      });
-    }
-
-    function executeInit() {
-      paint();
-      startBundle();
-    }
-
-    function widgetLoading() {
-      if (widget) {
-        widget.addEvent('onLoad', executeInit);
-        if (widget.body) window.setTimeout(executeInit, 0);
-      } else {
-        window.setTimeout(widgetLoading, 100);
+      } catch (ex) {
+        status('ERRO: ' + (ex.message || ex), false, true);
+      }
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Varrer estrutura Explorer';
       }
     }
-    widgetLoading();
+
+    function bindButton() {
+      var btn = $('btnScanExplorer');
+      if (!btn) return;
+      if (btn.getAttribute('data-bom-bound') === '1') return;
+      btn.setAttribute('data-bom-bound', '1');
+      if (btn.addEventListener) {
+        btn.addEventListener('click', onVarrerClick, false);
+      } else if (btn.attachEvent) {
+        btn.attachEvent('onclick', onVarrerClick);
+      } else {
+        btn.onclick = onVarrerClick;
+      }
+    }
+
+    function paint() {
+      if (typeof widget === 'undefined' || !widget.body) return;
+      var b = widget.body;
+      b.innerHTML =
+        '<p class="bom-ver">BOM v2 SOLO — ' + BOM_V2 + '</p>' +
+        '<div class="bom-h1">Estrutura: <strong id="selectionLabel">-</strong></div>' +
+        '<div id="statusBar" class="bom-st">Clique Varrer após colar na caixa azul</div>' +
+        '<div class="bom-panel">' +
+        '<p class="bom-hint">Explorer: Ctrl+A → Ctrl+C → Ctrl+V na caixa → Varrer</p>' +
+        '<textarea id="pasteArea" placeholder="CAIXA AZUL — cole aqui"></textarea>' +
+        '<button type="button" id="btnScanExplorer" class="bom-btn">Varrer estrutura Explorer</button>' +
+        '</div>' +
+        '<div id="kpiGrid" class="bom-kpi"></div>' +
+        '<div class="bom-table-wrap">' +
+        '<table id="bomTable" class="bom-table"><thead><tr></tr></thead><tbody></tbody></table>' +
+        '</div>';
+      b.style.minHeight = '400px';
+      window.__3DX_UI_ROOT__ = b;
+      bindButton();
+      status('Pronto. Cole e clique Varrer.', false, false);
+    }
+
+    function init() {
+      paint();
+      bindButton();
+    }
+
+    function boot() {
+      if (typeof widget !== 'undefined' && widget) {
+        if (widget.addEvent) widget.addEvent('onLoad', init);
+        if (widget.addEvent) widget.addEvent('onRefresh', init);
+        if (widget.body) init();
+      } else {
+        window.setTimeout(boot, 80);
+      }
+    }
+    boot();
   //]]>
   </script>
 </head>

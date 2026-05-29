@@ -115,7 +115,10 @@ var App = (function () {
       setStatus('Varredura falhou: módulo scanner não carregou.', 'error');
       return;
     }
-    if (loading) return;
+    if (loading) {
+      loading = false;
+      setLoading(false);
+    }
     setLoading(true);
     if (btnEl) {
       btnEl.disabled = true;
