@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: '3dspace20260530',
+    BUILD: 'snapshot20260601',
 
     /** Somente Explorer → gráficos + tabela */
     EXPLORER_ONLY: true,
@@ -18,6 +18,8 @@
     SHOW_ISSUES_PANEL: false,
     SHOW_PLATFORM_SEARCH: false,
     AUTO_LOAD_DEMO_DRONE: false,
+    DEMO_ON_API_FAIL: false,
+    SNAPSHOT_FIRST: true,
     AUTO_SYNC_EXPLORER_MS: 15000,
     SKIP_PP_ENRICH: true,
     BOM_FAST_DEPTH: 3,
@@ -182,6 +184,9 @@
     APP_CONFIG.WIDGET_MODE = 'forced_trusted';
   }
 
+  if (query.snapshot || query.snap || query.data) {
+    APP_CONFIG.SNAPSHOT_URL = query.snapshot || query.snap || query.data;
+  }
   if (query.physicalid) {
     APP_CONFIG.URL_PHYSICAL_ID = query.physicalid;
   }

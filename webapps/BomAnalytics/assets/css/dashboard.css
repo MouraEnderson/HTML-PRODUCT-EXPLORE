@@ -573,6 +573,18 @@ body.ui-clean .issues-panel {
   display: none !important;
 }
 
+.snapshot-panel {
+  margin: 0.5rem 0.75rem;
+  padding: 0.65rem 0.75rem;
+  background: #e8f4fc;
+  border: 1px solid #90caf9;
+  border-radius: 8px;
+}
+.snapshot-hint { margin: 0 0 0.5rem; font-size: 0.85rem; color: #1565c0; }
+.snapshot-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.5rem; }
+.snapshot-link { font-size: 0.85rem; color: #005686; }
+.btn-primary { background: #005686; color: #fff; border: none; padding: 0.4rem 0.85rem; border-radius: 4px; cursor: pointer; }
+
 body.ui-explorer-only .dashboard-explorer {
   padding: 8px 12px 14px;
 }

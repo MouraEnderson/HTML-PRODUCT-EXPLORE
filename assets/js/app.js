@@ -112,6 +112,65 @@ var App = (function () {
     ]);
   }
 
+  function applySnapshotPayload(payload, sourceLabel) {
+    setLoading(true);
+    return BomSnapshot.applyPayload(payload)
+      .then(function (meta) {
+        APP_CONFIG.IMPORT_MODE = true;
+        APP_CONFIG.DEMO_MODE = false;
+        lastLoadedId = meta.rootPhysicalId;
+        var lbl = byId('selectionLabel');
+        if (lbl) lbl.textContent = meta.productName;
+        var tableLbl = byId('tableProductLabel');
+        if (tableLbl) tableLbl.textContent = meta.productName;
+        refreshUI();
+        setStatus(
+          'Snapshot: ' + meta.productName + ' — ' + meta.itemCount + ' itens (' + (sourceLabel || 'JSON') + ')',
+          'ok'
+        );
+      })
+      .finally(function () {
+        setLoading(false);
+      });
+  }
+
+  function loadSnapshotFromUrl(url) {
+    if (!url) return Promise.resolve();
+    setLoading(true);
+    setStatus('Carregando snapshot…', 'info');
+    return BomSnapshot.fetchAndApply(url)
+      .then(function (meta) {
+        APP_CONFIG.IMPORT_MODE = true;
+        APP_CONFIG.DEMO_MODE = false;
+        lastLoadedId = meta.rootPhysicalId;
+        var lbl = byId('selectionLabel');
+        if (lbl) lbl.textContent = meta.productName;
+        var tableLbl = byId('tableProductLabel');
+        if (tableLbl) tableLbl.textContent = meta.productName;
+        refreshUI();
+        setStatus('Snapshot: ' + meta.productName + ' — ' + meta.itemCount + ' itens', 'ok');
+      })
+      .catch(function (err) {
+        setStatus('Snapshot: ' + (err.message || err), 'error');
+      })
+      .finally(function () {
+        setLoading(false);
+      });
+  }
+
+  function tryLoadSnapshotFirst() {
+    var url = typeof BomSnapshot !== 'undefined' && BomSnapshot.getParamUrl
+      ? BomSnapshot.getParamUrl()
+      : null;
+    if (!url && APP_CONFIG.SNAPSHOT_URL) {
+      url = BomSnapshot.resolveUrl(APP_CONFIG.SNAPSHOT_URL);
+    }
+    if (url) return loadSnapshotFromUrl(url);
+    var cached = typeof BomSnapshot !== 'undefined' ? BomSnapshot.loadSession() : null;
+    if (cached) return applySnapshotPayload(cached, 'sessão');
+    return Promise.resolve();
+  }
+
   function loadBom(physicalId) {
     if (!physicalId || loading) return Promise.resolve();
     if (physicalId === lastLoadedId && BomService.getNodeCount() > 1) {
@@ -120,7 +179,7 @@ var App = (function () {
     setLoading(true);
     setStatus('Carregando E-BOM…', 'info');
 
-    if (APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.DEMO_MODE) {
+    if (APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.DEMO_MODE && !APP_CONFIG.IMPORT_MODE) {
       return loadBomFromSelectionOnly(physicalId).finally(function () {
         setLoading(false);
       });
@@ -277,8 +336,6 @@ var App = (function () {
       '.drop-zone',
       '.explorer-sync-panel',
       '.platform-search.panel',
-      '.paste-panel',
-      '.drop-zone',
       '.split-panel',
       '.issues-panel',
       '.header-actions .search-group'
@@ -310,6 +367,16 @@ var App = (function () {
       ExplorerSyncPanel.init({
         onSelect: onSelection,
         onStatus: setStatusPublic
+      });
+    }
+    if (typeof SnapshotPanel !== 'undefined') {
+      SnapshotPanel.init({
+        onSnapshot: function (payload, label) {
+          applySnapshotPayload(payload, label);
+        },
+        onError: function (msg) {
+          setStatus(msg, 'error');
+        }
       });
     }
     toggleCrossOriginUI();
@@ -401,7 +468,14 @@ var App = (function () {
 
   function runFallback() {
     if (BomService.getNodeCount() > 1) return;
-    loadDefaultExplorerProduct();
+    if (APP_CONFIG.AUTO_LOAD_DEMO_DRONE) {
+      loadDefaultExplorerProduct();
+      return;
+    }
+    setStatus(
+      'Cole a estrutura do Explorer abaixo ou use collect.html → ?snapshot=data/arquivo.json',
+      'warn'
+    );
   }
 
   function reloadFromExplorer() {
@@ -477,14 +551,9 @@ var App = (function () {
       return;
     }
     setStatus(
-      'GitHub: não lê Explorer. Abra Mont10 → ↻ Sincronizar ou cole Physical ID. Demo: aguarde…',
-      'warn'
+      'Cole a grade do Explorer (caixa abaixo) ou abra collect.html para gerar JSON.',
+      'info'
     );
-    window.setTimeout(function () {
-      if (BomService.getNodeCount() <= 1) {
-        loadDemoBom('DEMO Drone (não é Mont10). Estrutura real = Passo C 3DSpace.');
-      }
-    }, 1500);
     window.setTimeout(function () {
       pullExplorerSelection();
       var later = ProductExplorerBridge.getSelection();
@@ -527,17 +596,22 @@ var App = (function () {
         return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
       })
       .then(function () {
-        setStatus('Carregando E-BOM…', 'info');
-        trySyncThenLoad();
+        return tryLoadSnapshotFirst().then(function () {
+          if (BomService.getNodeCount() > 1) return;
+          setStatus('Carregando E-BOM…', 'info');
+          trySyncThenLoad();
+        });
       })
       .catch(function (err) {
         console.error(err);
         try {
           initAppCore(getTenantSpaceUrl());
         } catch (eInit) { /* */ }
-        return loadDemoBom(
-          'Sem API no GitHub. Gráficos = demo Drone. BOM do Explorer = publicar no 3DSpace.'
-        );
+        return tryLoadSnapshotFirst().then(function () {
+          if (BomService.getNodeCount() <= 1) {
+            setStatus('API indisponível — cole estrutura do Explorer ou use ?snapshot=', 'warn');
+          }
+        });
       });
   }
 
@@ -550,11 +624,10 @@ var App = (function () {
       try {
         initAppCore(null);
         runHealthCheck();
-        trySyncThenLoad();
-        setStatus(
-          'Modo Web Page Reader — só 1 item. Use Additional App (widget-uwa.html).',
-          'warn'
-        );
+        return tryLoadSnapshotFirst().then(function () {
+          if (BomService.getNodeCount() > 1) return;
+          trySyncThenLoad();
+        });
       } catch (err) {
         console.error(err);
         setStatus('Erro: ' + (err.message || err), 'error');
@@ -572,7 +645,10 @@ var App = (function () {
       })
       .then(function (spaceUrl) {
         initAppCore(spaceUrl);
-        trySyncThenLoad();
+        return tryLoadSnapshotFirst().then(function () {
+          if (BomService.getNodeCount() > 1) return;
+          trySyncThenLoad();
+        });
       })
       .catch(function (err) {
         console.error(err);
@@ -581,8 +657,10 @@ var App = (function () {
           return loadBom('DEMO_ROOT_001');
         }
         initAppCore(getTenantSpaceUrl());
-        runFallback();
-        setStatus('API limitada: ' + (err.message || err), 'warn');
+        return tryLoadSnapshotFirst().then(function () {
+          if (BomService.getNodeCount() <= 1) runFallback();
+          setStatus('API limitada: ' + (err.message || err), 'warn');
+        });
       });
   }
 
@@ -626,6 +704,8 @@ var App = (function () {
     runFallback: runFallback,
     reloadFromExplorer: reloadFromExplorer,
     loadBom: loadBom,
+    loadSnapshotFromUrl: loadSnapshotFromUrl,
+    applySnapshotPayload: applySnapshotPayload,
     loadPhysicalProduct: loadPhysicalProduct,
     refreshUI: refreshUI,
     setStatus: setStatusPublic,

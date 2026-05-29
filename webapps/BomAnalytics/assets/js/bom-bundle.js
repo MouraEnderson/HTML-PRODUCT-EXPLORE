@@ -1,4 +1,4 @@
-/* BOM Analytics bundle 20260530 */
+/* BOM Analytics bundle snapshot20260601 */
 ;/* --- assets\js\config.js --- */
 /**
  * @file config.js
@@ -10,7 +10,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: '3dspace20260530',
+    BUILD: 'snapshot20260601',
 
     /** Somente Explorer → gráficos + tabela */
     EXPLORER_ONLY: true,
@@ -20,6 +20,8 @@
     SHOW_ISSUES_PANEL: false,
     SHOW_PLATFORM_SEARCH: false,
     AUTO_LOAD_DEMO_DRONE: false,
+    DEMO_ON_API_FAIL: false,
+    SNAPSHOT_FIRST: true,
     AUTO_SYNC_EXPLORER_MS: 15000,
     SKIP_PP_ENRICH: true,
     BOM_FAST_DEPTH: 3,
@@ -184,6 +186,9 @@
     APP_CONFIG.WIDGET_MODE = 'forced_trusted';
   }
 
+  if (query.snapshot || query.snap || query.data) {
+    APP_CONFIG.SNAPSHOT_URL = query.snapshot || query.snap || query.data;
+  }
   if (query.physicalid) {
     APP_CONFIG.URL_PHYSICAL_ID = query.physicalid;
   }
@@ -1504,6 +1509,510 @@ var PhysicalProductService = (function () {
   };
 })();
 
+;/* --- assets\js\services\file-import-service.js --- */
+/**
+ * @file services/file-import-service.js
+ * Importa estrutura Product Explorer via colar (Ctrl+C) ou arquivo opcional.
+ */
+var FileImportService = (function () {
+  'use strict';
+
+  var COLUMN_ALIASES = {
+    level: ['nivel', 'nível', 'level', 'n', 'depth', 'profundidade'],
+    name: ['name', 'nome', 'title', 'titulo', 'título', 'display name', 'displayname'],
+    title: ['title', 'titulo', 'título', 'description', 'descricao'],
+    type: ['type', 'tipo', 'display type', 'policy', 'tipologia'],
+    revision: ['revision', 'revisao', 'revisão', 'rev', 'majorrevision'],
+    state: ['state', 'estado', 'maturity', 'maturidade', 'current', 'status'],
+    quantity: ['quantity', 'quantidade', 'qty', 'qtd', 'amount'],
+    owner: ['owner', 'proprietario', 'proprietário', 'creator'],
+    organization: ['organization', 'organizacao', 'organização', 'org'],
+    collabSpace: ['collabspace', 'collaborative space', 'espaco', 'espaço', 'project'],
+    approval: ['approval', 'aprovacao', 'aprovação', 'approval status'],
+    physicalid: ['physicalid', 'physical id', 'id', 'objectid', 'object id'],
+    parent: ['parent', 'pai', 'parentid', 'parent id', 'parent name']
+  };
+
+  var STATUS_LABELS = [
+    'crítico', 'critico', 'atenção', 'atencao', 'ok', 'alerta', 'warning', 'info',
+    'released', 'in work', 'aprovado', 'pendente', 'bloqueado', 'normal'
+  ];
+
+  /** Corrige MÃ¡quinas → Máquinas (UTF-8 lido como Latin-1). */
+  function fixMojibake(s) {
+    var str = String(s == null ? '' : s);
+    if (!str || str.indexOf('Ã') < 0) return str;
+    try {
+      var bytes = new Uint8Array(str.length);
+      for (var i = 0; i < str.length; i++) bytes[i] = str.charCodeAt(i) & 0xff;
+      var fixed = new TextDecoder('utf-8').decode(bytes);
+      if (fixed.indexOf('Ã') < 0 && fixed.indexOf('\uFFFD') < 0) return fixed;
+    } catch (e) { /* ignore */ }
+    return str
+      .replace(/Ã¡/g, 'á').replace(/Ã©/g, 'é').replace(/Ã­/g, 'í')
+      .replace(/Ã³/g, 'ó').replace(/Ãº/g, 'ú').replace(/Ã§/g, 'ç')
+      .replace(/Ã£/g, 'ã').replace(/Ãµ/g, 'õ').replace(/Ã‰/g, 'É')
+      .replace(/Ã‡/g, 'Ç').replace(/Ãƒ/g, 'ã').replace(/Ã"/g, 'Ó');
+  }
+
+  function cleanCell(v) {
+    return fixMojibake(String(v == null ? '' : v)).trim();
+  }
+
+  function isStatusLabel(name) {
+    var t = cleanCell(name).toLowerCase();
+    if (!t || t.length > 48) return false;
+    if (t.indexOf('|') >= 0 || t.indexOf('3dexperience') >= 0) return false;
+    if (STATUS_LABELS.indexOf(t) >= 0) return true;
+    return /^(cr[ií]tico|aten[cç][aã]o|alerta)$/i.test(t);
+  }
+
+  function normHeader(h) {
+    return cleanCell(h).toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  function mapColumns(headers) {
+    var map = {};
+    headers.forEach(function (h, i) {
+      var nh = normHeader(h);
+      if (!nh) return;
+      Object.keys(COLUMN_ALIASES).forEach(function (key) {
+        if (map[key] !== undefined) return;
+        if (COLUMN_ALIASES[key].some(function (a) { return nh === a || nh.indexOf(a) >= 0; })) {
+          map[key] = i;
+        }
+      });
+    });
+    return map;
+  }
+
+  function cell(row, colMap, key, def) {
+    if (colMap[key] === undefined) return def;
+    var v = row[colMap[key]];
+    return v === undefined || v === null || v === '' ? def : v;
+  }
+
+  function looksLikeHeader(row) {
+    if (!row || !row.length) return false;
+    var joined = row.map(function (c) { return normHeader(c); }).join(' ');
+    return COLUMN_ALIASES.name.some(function (a) { return joined.indexOf(a) >= 0; }) ||
+      COLUMN_ALIASES.level.some(function (a) { return joined.indexOf(a) >= 0; }) ||
+      joined.indexOf('nome') >= 0 ||
+      joined.indexOf('title') >= 0;
+  }
+
+  function leadingDepth(str) {
+    var s = String(str || '');
+    var tabs = (s.match(/^\t*/) || [''])[0].length;
+    if (tabs > 0) return { depth: tabs, text: s.replace(/^\t+/, '').trim() };
+    var spaces = (s.match(/^ */) || [''])[0].length;
+    return { depth: Math.floor(spaces / 2), text: s.trim() };
+  }
+
+  function splitLine(line) {
+    if (line.indexOf('\t') >= 0) return line.split('\t').map(function (c) { return c.replace(/^"|"$/g, '').trim(); });
+    if (line.indexOf(';') >= 0) return line.split(';').map(function (c) { return c.replace(/^"|"$/g, '').trim(); });
+    return line.split(',').map(function (c) { return c.replace(/^"|"$/g, '').trim(); });
+  }
+
+  function textToRows(text) {
+    var lines = String(text || '').split(/\r?\n/).filter(function (l) { return l.trim(); });
+    if (!lines.length) throw new Error('Nada colado. Copie linhas no Product Explorer (Ctrl+C) e cole de novo.');
+    return lines.map(splitLine);
+  }
+
+  function normalizeSheetRows(rows) {
+    return rows
+      .map(function (row) {
+        return row.map(function (c) { return cleanCell(c); });
+      })
+      .filter(function (row) {
+        return row.some(function (c) { return c; });
+      });
+  }
+
+  /** Lista vertical (1 coluna): empresa na linha N, status na N+1. */
+  function buildItemsFromSingleColumn(lines) {
+    var items = [];
+    var start = 0;
+    if (lines.length && looksLikeHeader([lines[0]])) start = 1;
+
+    for (var i = start; i < lines.length; i++) {
+      var name = cleanCell(lines[i]);
+      if (!name) continue;
+      if (isStatusLabel(name) && items.length) {
+        items[items.length - 1].state = name;
+        items[items.length - 1].maturity = name;
+        continue;
+      }
+      items.push({
+        physicalid: 'IMP_' + (items.length + 1) + '_' + name.replace(/\W/g, '_').slice(0, 36),
+        name: name,
+        title: name,
+        type: '',
+        displayType: '',
+        revision: '',
+        state: '',
+        maturity: '',
+        quantity: 1,
+        owner: '',
+        organization: '',
+        collabSpace: '',
+        approval: 'Unknown',
+        level: 0,
+        parentKey: '',
+        rowIndex: items.length + 1
+      });
+    }
+    if (!items.length) {
+      throw new Error('Nenhuma linha reconhecida no arquivo.');
+    }
+    return items;
+  }
+
+  function isMostlySingleColumn(rows) {
+    if (!rows.length) return false;
+    var oneCol = 0;
+    rows.forEach(function (row) {
+      var filled = row.filter(function (c) { return c; });
+      if (filled.length <= 1) oneCol++;
+    });
+    return oneCol >= rows.length * 0.85;
+  }
+
+  function smartParseRows(rows) {
+    rows = normalizeSheetRows(rows);
+    if (!rows.length) throw new Error('Arquivo vazio.');
+
+    if (isMostlySingleColumn(rows)) {
+      var lines = rows.map(function (row) {
+        var filled = row.filter(function (c) { return c; });
+        return filled[0] || '';
+      });
+      return buildItemsFromSingleColumn(lines);
+    }
+
+    if (looksLikeHeader(rows[0])) return parseRows(rows);
+    return parseRowsWithoutHeader(rows);
+  }
+
+  /** Colar da grade/árvore do Explorer (TSV, com ou sem cabeçalho). */
+  function parseText(text) {
+    var rows = textToRows(text).map(function (row) {
+      return row.map(function (c) { return cleanCell(c); });
+    });
+    if (rows.length === 1 && rows[0].length === 1) {
+      return buildItemsFromSingleColumn([rows[0][0]]);
+    }
+    return smartParseRows(rows);
+  }
+
+  function parseRowsWithoutHeader(rows) {
+    var colMap = {};
+    var first = rows[0];
+    if (first.length >= 2 && /^\d+$/.test(String(first[0]).trim())) {
+      colMap.level = 0;
+      colMap.name = 1;
+      colMap.title = 2;
+      colMap.type = 3;
+      colMap.revision = 4;
+      colMap.state = 5;
+    } else {
+      colMap.name = 0;
+      colMap.title = 1;
+      colMap.type = 2;
+      colMap.revision = 3;
+      colMap.state = 4;
+    }
+    return buildItemsFromRows(rows, colMap, true);
+  }
+
+  function parseRows(rows) {
+    if (!rows || rows.length < 2) {
+      throw new Error('Dados insuficientes. Copie pelo menos o cabeçalho e uma linha do Explorer.');
+    }
+    var headers = rows[0].map(function (c) { return String(c || ''); });
+    var colMap = mapColumns(headers);
+    if (colMap.name === undefined && colMap.title === undefined) {
+      colMap.name = 0;
+      colMap.level = colMap.level !== undefined ? colMap.level : (headers.length > 1 ? 1 : undefined);
+    }
+    return buildItemsFromRows(rows.slice(1), colMap, false);
+  }
+
+  function buildItemsFromRows(dataRows, colMap, inferIndent) {
+    var items = [];
+    var stackLevel = 0;
+    for (var r = 0; r < dataRows.length; r++) {
+      var row = dataRows[r];
+      if (!row || !row.length) continue;
+
+      var level = 0;
+      var name = '';
+      if (inferIndent && colMap.level === undefined) {
+        var lead = leadingDepth(row[colMap.name] !== undefined ? row[colMap.name] : row[0]);
+        level = lead.depth;
+        name = lead.text;
+        if (colMap.name !== undefined && row[colMap.name] !== undefined) {
+          row = row.slice();
+          row[colMap.name] = lead.text;
+        }
+      } else {
+        level = parseInt(cell(row, colMap, 'level', ''), 10);
+        if (isNaN(level)) level = stackLevel;
+      }
+
+      if (!name) name = cleanCell(cell(row, colMap, 'name', '')) || cleanCell(cell(row, colMap, 'title', ''));
+      if (!name) continue;
+      if (isStatusLabel(name) && items.length) {
+        items[items.length - 1].state = name;
+        items[items.length - 1].maturity = name;
+        continue;
+      }
+      stackLevel = level;
+
+      var pid = cell(row, colMap, 'physicalid', '') || ('IMP_' + (r + 1) + '_' + name.replace(/\W/g, '_').slice(0, 40));
+      items.push({
+        physicalid: String(pid),
+        name: String(name),
+        title: cell(row, colMap, 'title', name),
+        type: cell(row, colMap, 'type', 'VPMReference'),
+        displayType: cell(row, colMap, 'type', 'Physical Product'),
+        revision: cell(row, colMap, 'revision', ''),
+        state: cell(row, colMap, 'state', ''),
+        maturity: cell(row, colMap, 'state', ''),
+        quantity: parseFloat(cell(row, colMap, 'quantity', '1')) || 1,
+        owner: cell(row, colMap, 'owner', ''),
+        organization: cell(row, colMap, 'organization', ''),
+        collabSpace: cell(row, colMap, 'collabSpace', ''),
+        approval: cell(row, colMap, 'approval', 'Unknown'),
+        level: level,
+        parentKey: cell(row, colMap, 'parent', ''),
+        rowIndex: r + 1
+      });
+    }
+    if (!items.length) {
+      throw new Error('Nenhuma linha válida. Selecione a tabela E-BOM no Explorer, Ctrl+C, cole aqui.');
+    }
+    return items;
+  }
+
+  function parseXlsx(file) {
+    return new Promise(function (resolve, reject) {
+      if (typeof XLSX === 'undefined') {
+        reject(new Error('Biblioteca XLSX não carregada.'));
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        try {
+          var wb = XLSX.read(e.target.result, { type: 'array' });
+          var sheet = wb.Sheets[wb.SheetNames[0]];
+          var rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+          resolve(smartParseRows(rows));
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = function () { reject(new Error('Falha ao ler arquivo.')); };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  function parseCsv(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        try {
+          resolve(parseText(e.target.result));
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = function () { reject(new Error('Falha ao ler arquivo.')); };
+      reader.readAsText(file, 'UTF-8');
+    });
+  }
+
+  function parseTextAsync(text) {
+    return Promise.resolve(parseText(text));
+  }
+
+  function parseFile(file) {
+    var name = (file.name || '').toLowerCase();
+    if (name.endsWith('.xlsx') || name.endsWith('.xls')) return parseXlsx(file);
+    if (name.endsWith('.csv') || name.endsWith('.txt')) return parseCsv(file);
+    return Promise.reject(new Error('Formato não suportado. Cole do Explorer (Ctrl+C) ou use .txt.'));
+  }
+
+  return {
+    parseFile: parseFile,
+    parseText: parseText,
+    parseTextAsync: parseTextAsync,
+    parseRows: parseRows
+  };
+})();
+
+;/* --- assets\js\services\bom-snapshot.js --- */
+/**
+ * @file services/bom-snapshot.js
+ * Snapshot E-BOM (JSON) — coleta offline e leitura no widget GitHub.
+ */
+var BomSnapshot = (function () {
+  'use strict';
+
+  var FORMAT_VERSION = 1;
+  var SESSION_KEY = '3dx_bom_snapshot_v1';
+  var GITHUB_BASE = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
+
+  function resolveUrl(pathOrUrl) {
+    if (!pathOrUrl) return null;
+    var p = String(pathOrUrl).trim();
+    if (/^https?:\/\//i.test(p)) return p;
+    var base = GITHUB_BASE;
+    try {
+      if (typeof location !== 'undefined' && location.hostname.indexOf('github.io') >= 0) {
+        var dir = location.pathname.replace(/\/[^/]*$/, '/');
+        base = location.origin + dir;
+      }
+    } catch (e) { /* */ }
+    return base + p.replace(/^\//, '');
+  }
+
+  function getParamUrl() {
+    var q = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
+    var raw = q.snapshot || q.snap || q.data || '';
+    return raw ? resolveUrl(raw) : null;
+  }
+
+  function normalizePayload(data) {
+    if (!data) return null;
+    if (Array.isArray(data)) {
+      return { version: FORMAT_VERSION, productName: 'E-BOM', items: data };
+    }
+    if (data.items && Array.isArray(data.items)) {
+      return {
+        version: data.version || FORMAT_VERSION,
+        productName: data.productName || data.name || data.title || 'E-BOM',
+        rootPhysicalId: data.rootPhysicalId || null,
+        exportedAt: data.exportAt || data.exportedAt || null,
+        items: data.items
+      };
+    }
+    return null;
+  }
+
+  function itemsFromPayload(payload) {
+    var norm = normalizePayload(payload);
+    if (!norm || !norm.items.length) return null;
+    return norm.items.map(function (it, idx) {
+      var level = it.level != null ? parseInt(it.level, 10) : 0;
+      if (isNaN(level)) level = 0;
+      return {
+        level: level,
+        physicalid: it.physicalid || it.physicalId || ('snap_' + idx),
+        name: it.name || it.title || 'Item ' + idx,
+        title: it.title || it.name || '',
+        type: it.type || it.displayType || 'Physical Product',
+        displayType: it.displayType || it.type || 'Physical Product',
+        revision: it.revision || '—',
+        state: it.state || it.maturity || '—',
+        maturity: it.maturity || it.state || '—',
+        owner: it.owner || '—',
+        organization: it.organization || '',
+        collabSpace: it.collabSpace || '',
+        approval: it.approval || 'Unknown',
+        quantity: it.quantity || 1
+      };
+    });
+  }
+
+  function metaFromPayload(payload, items) {
+    var norm = normalizePayload(payload);
+    var root = norm && norm.rootPhysicalId;
+    if (!root && items.length) root = items[0].physicalid;
+    return {
+      productName: (norm && norm.productName) || (items[0] && (items[0].title || items[0].name)) || 'E-BOM',
+      rootPhysicalId: root,
+      itemCount: items.length,
+      exportedAt: norm && norm.exportedAt
+    };
+  }
+
+  function buildFromImported(items, productName) {
+    return {
+      version: FORMAT_VERSION,
+      productName: productName || 'E-BOM',
+      exportedAt: new Date().toISOString(),
+      rootPhysicalId: items.length ? items[0].physicalid : null,
+      items: items
+    };
+  }
+
+  function saveSession(payload) {
+    try {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+    } catch (e) { /* */ }
+  }
+
+  function loadSession() {
+    try {
+      var raw = sessionStorage.getItem(SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function fetchJson(url) {
+    return fetch(url, { cache: 'no-store' }).then(function (r) {
+      if (!r.ok) throw new Error('Snapshot HTTP ' + r.status + ' — ' + url);
+      return r.json();
+    });
+  }
+
+  function applyPayload(payload) {
+    var items = itemsFromPayload(payload);
+    if (!items || !items.length) {
+      return Promise.reject(new Error('Snapshot vazio ou formato inválido'));
+    }
+    var meta = metaFromPayload(payload, items);
+    return BomService.loadFromImportedItems(items).then(function () {
+      saveSession(normalizePayload(payload));
+      return meta;
+    });
+  }
+
+  function fetchAndApply(url) {
+    return fetchJson(url).then(applyPayload);
+  }
+
+  function downloadJson(payload, filename) {
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename || 'bom-snapshot.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  return {
+    FORMAT_VERSION: FORMAT_VERSION,
+    GITHUB_BASE: GITHUB_BASE,
+    resolveUrl: resolveUrl,
+    getParamUrl: getParamUrl,
+    normalizePayload: normalizePayload,
+    itemsFromPayload: itemsFromPayload,
+    buildFromImported: buildFromImported,
+    saveSession: saveSession,
+    loadSession: loadSession,
+    fetchJson: fetchJson,
+    applyPayload: applyPayload,
+    fetchAndApply: fetchAndApply,
+    downloadJson: downloadJson
+  };
+})();
+
 ;/* --- assets\js\services\bom-service.js --- */
 /**
  * @file services/bom-service.js
@@ -2562,6 +3071,86 @@ var ExplorerSyncPanel = (function () {
   };
 })();
 
+;/* --- assets\js\ui\snapshot-panel.js --- */
+/**
+ * @file ui/snapshot-panel.js
+ * Colar estrutura do Explorer ou carregar arquivo JSON no widget.
+ */
+var SnapshotPanel = (function () {
+  'use strict';
+
+  function init(options) {
+    options = options || {};
+    var btn = document.getElementById('btnImportPaste');
+    var area = document.getElementById('pasteArea');
+    var fileInput = document.getElementById('snapshotFileInput');
+    var btnFile = document.getElementById('btnLoadSnapshotFile');
+
+    if (btn && area) {
+      btn.addEventListener('click', function () {
+        importText(area.value, options);
+      });
+      area.addEventListener('paste', function (e) {
+        var t = (e.clipboardData && e.clipboardData.getData('text/plain')) || '';
+        if (t) {
+          e.preventDefault();
+          area.value = t;
+          importText(t, options);
+        }
+      });
+    }
+
+    if (btnFile && fileInput) {
+      btnFile.addEventListener('click', function () {
+        fileInput.click();
+      });
+      fileInput.addEventListener('change', function () {
+        if (!fileInput.files || !fileInput.files[0]) return;
+        var reader = new FileReader();
+        reader.onload = function () {
+          try {
+            var data = JSON.parse(reader.result);
+            if (options.onSnapshot) options.onSnapshot(data, 'arquivo JSON');
+          } catch (err) {
+            if (options.onError) options.onError('JSON inválido: ' + (err.message || err));
+          }
+        };
+        reader.readAsText(fileInput.files[0], 'UTF-8');
+      });
+    }
+  }
+
+  function importText(text, options) {
+    var trimmed = String(text || '').trim();
+    if (!trimmed) {
+      if (options.onError) options.onError('Cole a grade do Explorer (Ctrl+C).');
+      return;
+    }
+    if (trimmed.charAt(0) === '{' || trimmed.charAt(0) === '[') {
+      try {
+        var data = JSON.parse(trimmed);
+        if (options.onSnapshot) options.onSnapshot(data, 'JSON colado');
+        return;
+      } catch (e) { /* segue como TSV */ }
+    }
+    if (typeof FileImportService === 'undefined') {
+      if (options.onError) options.onError('Parser não carregado.');
+      return;
+    }
+    FileImportService.parseTextAsync(trimmed)
+      .then(function (items) {
+        if (!items.length) throw new Error('Nenhuma linha reconhecida');
+        var payload = BomSnapshot.buildFromImported(items, items[0].name || items[0].title);
+        if (options.onSnapshot) options.onSnapshot(payload, 'cola Explorer');
+      })
+      .catch(function (err) {
+        if (options.onError) options.onError(err.message || err);
+      });
+  }
+
+  return { init: init, importText: importText };
+})();
+
 ;/* --- assets\js\app.js --- */
 /**
  * @file app.js
@@ -2677,6 +3266,65 @@ var App = (function () {
     ]);
   }
 
+  function applySnapshotPayload(payload, sourceLabel) {
+    setLoading(true);
+    return BomSnapshot.applyPayload(payload)
+      .then(function (meta) {
+        APP_CONFIG.IMPORT_MODE = true;
+        APP_CONFIG.DEMO_MODE = false;
+        lastLoadedId = meta.rootPhysicalId;
+        var lbl = byId('selectionLabel');
+        if (lbl) lbl.textContent = meta.productName;
+        var tableLbl = byId('tableProductLabel');
+        if (tableLbl) tableLbl.textContent = meta.productName;
+        refreshUI();
+        setStatus(
+          'Snapshot: ' + meta.productName + ' — ' + meta.itemCount + ' itens (' + (sourceLabel || 'JSON') + ')',
+          'ok'
+        );
+      })
+      .finally(function () {
+        setLoading(false);
+      });
+  }
+
+  function loadSnapshotFromUrl(url) {
+    if (!url) return Promise.resolve();
+    setLoading(true);
+    setStatus('Carregando snapshot…', 'info');
+    return BomSnapshot.fetchAndApply(url)
+      .then(function (meta) {
+        APP_CONFIG.IMPORT_MODE = true;
+        APP_CONFIG.DEMO_MODE = false;
+        lastLoadedId = meta.rootPhysicalId;
+        var lbl = byId('selectionLabel');
+        if (lbl) lbl.textContent = meta.productName;
+        var tableLbl = byId('tableProductLabel');
+        if (tableLbl) tableLbl.textContent = meta.productName;
+        refreshUI();
+        setStatus('Snapshot: ' + meta.productName + ' — ' + meta.itemCount + ' itens', 'ok');
+      })
+      .catch(function (err) {
+        setStatus('Snapshot: ' + (err.message || err), 'error');
+      })
+      .finally(function () {
+        setLoading(false);
+      });
+  }
+
+  function tryLoadSnapshotFirst() {
+    var url = typeof BomSnapshot !== 'undefined' && BomSnapshot.getParamUrl
+      ? BomSnapshot.getParamUrl()
+      : null;
+    if (!url && APP_CONFIG.SNAPSHOT_URL) {
+      url = BomSnapshot.resolveUrl(APP_CONFIG.SNAPSHOT_URL);
+    }
+    if (url) return loadSnapshotFromUrl(url);
+    var cached = typeof BomSnapshot !== 'undefined' ? BomSnapshot.loadSession() : null;
+    if (cached) return applySnapshotPayload(cached, 'sessão');
+    return Promise.resolve();
+  }
+
   function loadBom(physicalId) {
     if (!physicalId || loading) return Promise.resolve();
     if (physicalId === lastLoadedId && BomService.getNodeCount() > 1) {
@@ -2685,7 +3333,7 @@ var App = (function () {
     setLoading(true);
     setStatus('Carregando E-BOM…', 'info');
 
-    if (APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.DEMO_MODE) {
+    if (APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.DEMO_MODE && !APP_CONFIG.IMPORT_MODE) {
       return loadBomFromSelectionOnly(physicalId).finally(function () {
         setLoading(false);
       });
@@ -2842,8 +3490,6 @@ var App = (function () {
       '.drop-zone',
       '.explorer-sync-panel',
       '.platform-search.panel',
-      '.paste-panel',
-      '.drop-zone',
       '.split-panel',
       '.issues-panel',
       '.header-actions .search-group'
@@ -2875,6 +3521,16 @@ var App = (function () {
       ExplorerSyncPanel.init({
         onSelect: onSelection,
         onStatus: setStatusPublic
+      });
+    }
+    if (typeof SnapshotPanel !== 'undefined') {
+      SnapshotPanel.init({
+        onSnapshot: function (payload, label) {
+          applySnapshotPayload(payload, label);
+        },
+        onError: function (msg) {
+          setStatus(msg, 'error');
+        }
       });
     }
     toggleCrossOriginUI();
@@ -2966,7 +3622,14 @@ var App = (function () {
 
   function runFallback() {
     if (BomService.getNodeCount() > 1) return;
-    loadDefaultExplorerProduct();
+    if (APP_CONFIG.AUTO_LOAD_DEMO_DRONE) {
+      loadDefaultExplorerProduct();
+      return;
+    }
+    setStatus(
+      'Cole a estrutura do Explorer abaixo ou use collect.html → ?snapshot=data/arquivo.json',
+      'warn'
+    );
   }
 
   function reloadFromExplorer() {
@@ -3042,14 +3705,9 @@ var App = (function () {
       return;
     }
     setStatus(
-      'GitHub: não lê Explorer. Abra Mont10 → ↻ Sincronizar ou cole Physical ID. Demo: aguarde…',
-      'warn'
+      'Cole a grade do Explorer (caixa abaixo) ou abra collect.html para gerar JSON.',
+      'info'
     );
-    window.setTimeout(function () {
-      if (BomService.getNodeCount() <= 1) {
-        loadDemoBom('DEMO Drone (não é Mont10). Estrutura real = Passo C 3DSpace.');
-      }
-    }, 1500);
     window.setTimeout(function () {
       pullExplorerSelection();
       var later = ProductExplorerBridge.getSelection();
@@ -3092,17 +3750,22 @@ var App = (function () {
         return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
       })
       .then(function () {
-        setStatus('Carregando E-BOM…', 'info');
-        trySyncThenLoad();
+        return tryLoadSnapshotFirst().then(function () {
+          if (BomService.getNodeCount() > 1) return;
+          setStatus('Carregando E-BOM…', 'info');
+          trySyncThenLoad();
+        });
       })
       .catch(function (err) {
         console.error(err);
         try {
           initAppCore(getTenantSpaceUrl());
         } catch (eInit) { /* */ }
-        return loadDemoBom(
-          'Sem API no GitHub. Gráficos = demo Drone. BOM do Explorer = publicar no 3DSpace.'
-        );
+        return tryLoadSnapshotFirst().then(function () {
+          if (BomService.getNodeCount() <= 1) {
+            setStatus('API indisponível — cole estrutura do Explorer ou use ?snapshot=', 'warn');
+          }
+        });
       });
   }
 
@@ -3115,11 +3778,10 @@ var App = (function () {
       try {
         initAppCore(null);
         runHealthCheck();
-        trySyncThenLoad();
-        setStatus(
-          'Modo Web Page Reader — só 1 item. Use Additional App (widget-uwa.html).',
-          'warn'
-        );
+        return tryLoadSnapshotFirst().then(function () {
+          if (BomService.getNodeCount() > 1) return;
+          trySyncThenLoad();
+        });
       } catch (err) {
         console.error(err);
         setStatus('Erro: ' + (err.message || err), 'error');
@@ -3137,7 +3799,10 @@ var App = (function () {
       })
       .then(function (spaceUrl) {
         initAppCore(spaceUrl);
-        trySyncThenLoad();
+        return tryLoadSnapshotFirst().then(function () {
+          if (BomService.getNodeCount() > 1) return;
+          trySyncThenLoad();
+        });
       })
       .catch(function (err) {
         console.error(err);
@@ -3146,8 +3811,10 @@ var App = (function () {
           return loadBom('DEMO_ROOT_001');
         }
         initAppCore(getTenantSpaceUrl());
-        runFallback();
-        setStatus('API limitada: ' + (err.message || err), 'warn');
+        return tryLoadSnapshotFirst().then(function () {
+          if (BomService.getNodeCount() <= 1) runFallback();
+          setStatus('API limitada: ' + (err.message || err), 'warn');
+        });
       });
   }
 
@@ -3191,6 +3858,8 @@ var App = (function () {
     runFallback: runFallback,
     reloadFromExplorer: reloadFromExplorer,
     loadBom: loadBom,
+    loadSnapshotFromUrl: loadSnapshotFromUrl,
+    applySnapshotPayload: applySnapshotPayload,
     loadPhysicalProduct: loadPhysicalProduct,
     refreshUI: refreshUI,
     setStatus: setStatusPublic,

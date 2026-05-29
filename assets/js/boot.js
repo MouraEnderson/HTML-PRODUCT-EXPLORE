@@ -7,7 +7,7 @@ var BomBoot = (function (global) {
   'use strict';
 
   var REPO = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-  var VER = '20260529';
+  var VER = 'snapshot20260601';
 
   var SCRIPTS = [
     'assets/js/config.js',
@@ -21,6 +21,8 @@ var BomBoot = (function (global) {
     'assets/js/integration/product-explorer-bridge.js',
     'assets/js/services/attribute-service.js',
     'assets/js/services/physical-product-service.js',
+    'assets/js/services/file-import-service.js',
+    'assets/js/services/bom-snapshot.js',
     'assets/js/services/bom-service.js',
     'assets/js/processing/bom-normalizer.js',
     'assets/js/processing/metrics-engine.js',
@@ -30,6 +32,7 @@ var BomBoot = (function (global) {
     'assets/js/ui/filters.js',
     'assets/js/ui/data-table.js',
     'assets/js/ui/explorer-sync-panel.js',
+    'assets/js/ui/snapshot-panel.js',
     'assets/js/app.js'
   ];
 

@@ -35,14 +35,23 @@
   <header class="app-header explorer-header">
     <h1>BOM Analytics</h1>
     <p class="explorer-product">Product Structure Explorer: <strong id="selectionLabel">—</strong></p>
-    <button type="button" class="btn-sync-explorer" id="btnSyncExplorer">↻ Sincronizar Explorer</button>
+    <button type="button" class="ui-hidden" id="btnSyncExplorer">↻</button>
     <button type="button" class="ui-hidden" id="btnRefresh">refresh</button>
   </header>
-  <div id="statusBar" class="status-bar">Aguardando… 3dspace20260530</div>
-  <div class="explorer-id-row">
-    <label for="explorerObjectId">Physical ID:</label>
-    <input type="text" id="explorerObjectId" placeholder="Cole ID do Explorer" />
-    <button type="button" id="btnLoadObjectId">Carregar</button>
+  <div id="statusBar" class="status-bar">Aguardando… snapshot</div>
+  <section class="snapshot-panel" id="snapshotPanel">
+    <p class="snapshot-hint">Explorer → Ctrl+C na grade → cole abaixo → Importar</p>
+    <textarea id="pasteArea" class="paste-area" rows="4" placeholder="Ctrl+V…"></textarea>
+    <div class="snapshot-actions">
+      <button type="button" id="btnImportPaste" class="btn-primary">Importar estrutura</button>
+      <button type="button" id="btnLoadSnapshotFile">Arquivo .json</button>
+      <input type="file" id="snapshotFileInput" accept=".json" class="ui-hidden" />
+      <a href="collect.html" target="_blank" rel="noopener">Coletor JSON</a>
+    </div>
+  </section>
+  <div class="explorer-id-row ui-hidden" aria-hidden="true">
+    <input type="text" id="explorerObjectId" />
+    <button type="button" id="btnLoadObjectId"></button>
   </div>
   <div class="ui-hidden" aria-hidden="true">
     <input type="text" id="explorerObjectName" />
