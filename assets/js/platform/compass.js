@@ -7,6 +7,7 @@ var CompassServices = (function () {
 
   var cache = {
     spaceUrl: null,
+    spaceUrlVerified: false,
     federatedUrl: null
   };
 
@@ -28,6 +29,72 @@ var CompassServices = (function () {
     return 'https://' + APP_CONFIG.TENANT_DEFAULTS.spaceHost + '/enovia';
   }
 
+  function ifweSpaceUrl() {
+    if (!APP_CONFIG.TENANT_DEFAULTS || !APP_CONFIG.TENANT_DEFAULTS.platformHost) return null;
+    return 'https://' + APP_CONFIG.TENANT_DEFAULTS.platformHost + '/enovia';
+  }
+
+  /** Garante envId correto no host (evita URL errada do Compass). */
+  function normalizeSpaceUrl(url) {
+    var env = APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.envId;
+    var u = String(url || '').replace(/\/$/, '');
+    if (!u || (env && u.indexOf(env) < 0)) {
+      return tenantSpaceUrl() ? tenantSpaceUrl().replace(/\/$/, '') : u;
+    }
+    return u;
+  }
+
+  function spaceUrlCandidates(primary) {
+    var list = [];
+    var seen = {};
+    function add(u) {
+      u = String(u || '').replace(/\/$/, '');
+      if (!u || seen[u]) return;
+      seen[u] = true;
+      list.push(u);
+    }
+    add(normalizeSpaceUrl(primary));
+    if (APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== false) {
+      add(ifweSpaceUrl());
+    }
+    add(tenantSpaceUrl());
+    return list;
+  }
+
+  function probeSpaceUrl(url) {
+    if (!url || typeof WafClient === 'undefined') return Promise.reject(new Error('sem WafClient'));
+    var ping = url.replace(/\/$/, '') + '/resources/v1/application/CSRF';
+    return WafClient.get(ping).then(function () {
+      return url.replace(/\/$/, '');
+    });
+  }
+
+  function ensureWorkingSpaceUrl(platformId) {
+    if (cache.spaceUrl && cache.spaceUrlVerified) {
+      return Promise.resolve(cache.spaceUrl);
+    }
+    return get3DSpaceUrl(platformId).then(function (primary) {
+      var candidates = spaceUrlCandidates(primary);
+      var idx = 0;
+      function tryNext() {
+        if (idx >= candidates.length) {
+          return Promise.reject(new Error(
+            '3DSpace inacessível (space e ifwe). Verifique DNS/VPN *-space.3dexperience.3ds.com'
+          ));
+        }
+        var url = candidates[idx++];
+        return probeSpaceUrl(url).then(function (ok) {
+          cache.spaceUrl = ok;
+          cache.spaceUrlVerified = true;
+          return ok;
+        }).catch(function () {
+          return tryNext();
+        });
+      }
+      return tryNext();
+    });
+  }
+
   function get3DSpaceUrl(platformId) {
     if (APP_CONFIG.DEMO_MODE) {
       cache.spaceUrl = 'https://demo-3dspace.example.com/3dspace';
@@ -46,7 +113,7 @@ var CompassServices = (function () {
       function done(url) {
         if (settled) return;
         settled = true;
-        cache.spaceUrl = url.replace(/\/$/, '');
+        cache.spaceUrl = normalizeSpaceUrl(url);
         resolve(cache.spaceUrl);
       }
       function fail(err) {
@@ -117,10 +184,14 @@ var CompassServices = (function () {
 
   return {
     get3DSpaceUrl: get3DSpaceUrl,
+    ensureWorkingSpaceUrl: ensureWorkingSpaceUrl,
+    normalizeSpaceUrl: normalizeSpaceUrl,
+    ifweSpaceUrl: ifweSpaceUrl,
     fetchCsrfToken: fetchCsrfToken,
     buildRestBase: buildRestBase,
     clearCache: function () {
       cache.spaceUrl = null;
+      cache.spaceUrlVerified = false;
       cache.federatedUrl = null;
     }
   };

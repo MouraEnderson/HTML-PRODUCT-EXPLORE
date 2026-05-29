@@ -812,6 +812,9 @@ var App = (function () {
 
     return chain
       .then(function () {
+        if (CompassServices.ensureWorkingSpaceUrl) {
+          return CompassServices.ensureWorkingSpaceUrl(PlatformContext.getState().platformId);
+        }
         return CompassServices.get3DSpaceUrl(PlatformContext.getState().platformId);
       })
       .then(function (spaceUrl) {

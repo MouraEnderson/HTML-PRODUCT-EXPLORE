@@ -10,7 +10,10 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260601c',
+    BUILD: 'bom20260601d',
+
+    /** Se *-space falhar (DNS), tenta mesmo tenant via *-ifwe/enovia */
+    SPACE_FALLBACK_VIA_IFWE: true,
 
     /** Tenant cloud: objetos usam prefixo prd- (ex. prd-R1132100929518-00511496) */
     PHYSICAL_ID_PREFIX: 'prd-',
@@ -645,6 +648,7 @@ var CompassServices = (function () {
 
   var cache = {
     spaceUrl: null,
+    spaceUrlVerified: false,
     federatedUrl: null
   };
 
@@ -666,6 +670,72 @@ var CompassServices = (function () {
     return 'https://' + APP_CONFIG.TENANT_DEFAULTS.spaceHost + '/enovia';
   }
 
+  function ifweSpaceUrl() {
+    if (!APP_CONFIG.TENANT_DEFAULTS || !APP_CONFIG.TENANT_DEFAULTS.platformHost) return null;
+    return 'https://' + APP_CONFIG.TENANT_DEFAULTS.platformHost + '/enovia';
+  }
+
+  /** Garante envId correto no host (evita URL errada do Compass). */
+  function normalizeSpaceUrl(url) {
+    var env = APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.envId;
+    var u = String(url || '').replace(/\/$/, '');
+    if (!u || (env && u.indexOf(env) < 0)) {
+      return tenantSpaceUrl() ? tenantSpaceUrl().replace(/\/$/, '') : u;
+    }
+    return u;
+  }
+
+  function spaceUrlCandidates(primary) {
+    var list = [];
+    var seen = {};
+    function add(u) {
+      u = String(u || '').replace(/\/$/, '');
+      if (!u || seen[u]) return;
+      seen[u] = true;
+      list.push(u);
+    }
+    add(normalizeSpaceUrl(primary));
+    if (APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== false) {
+      add(ifweSpaceUrl());
+    }
+    add(tenantSpaceUrl());
+    return list;
+  }
+
+  function probeSpaceUrl(url) {
+    if (!url || typeof WafClient === 'undefined') return Promise.reject(new Error('sem WafClient'));
+    var ping = url.replace(/\/$/, '') + '/resources/v1/application/CSRF';
+    return WafClient.get(ping).then(function () {
+      return url.replace(/\/$/, '');
+    });
+  }
+
+  function ensureWorkingSpaceUrl(platformId) {
+    if (cache.spaceUrl && cache.spaceUrlVerified) {
+      return Promise.resolve(cache.spaceUrl);
+    }
+    return get3DSpaceUrl(platformId).then(function (primary) {
+      var candidates = spaceUrlCandidates(primary);
+      var idx = 0;
+      function tryNext() {
+        if (idx >= candidates.length) {
+          return Promise.reject(new Error(
+            '3DSpace inacessível (space e ifwe). Verifique DNS/VPN *-space.3dexperience.3ds.com'
+          ));
+        }
+        var url = candidates[idx++];
+        return probeSpaceUrl(url).then(function (ok) {
+          cache.spaceUrl = ok;
+          cache.spaceUrlVerified = true;
+          return ok;
+        }).catch(function () {
+          return tryNext();
+        });
+      }
+      return tryNext();
+    });
+  }
+
   function get3DSpaceUrl(platformId) {
     if (APP_CONFIG.DEMO_MODE) {
       cache.spaceUrl = 'https://demo-3dspace.example.com/3dspace';
@@ -684,7 +754,7 @@ var CompassServices = (function () {
       function done(url) {
         if (settled) return;
         settled = true;
-        cache.spaceUrl = url.replace(/\/$/, '');
+        cache.spaceUrl = normalizeSpaceUrl(url);
         resolve(cache.spaceUrl);
       }
       function fail(err) {
@@ -755,10 +825,14 @@ var CompassServices = (function () {
 
   return {
     get3DSpaceUrl: get3DSpaceUrl,
+    ensureWorkingSpaceUrl: ensureWorkingSpaceUrl,
+    normalizeSpaceUrl: normalizeSpaceUrl,
+    ifweSpaceUrl: ifweSpaceUrl,
     fetchCsrfToken: fetchCsrfToken,
     buildRestBase: buildRestBase,
     clearCache: function () {
       cache.spaceUrl = null;
+      cache.spaceUrlVerified = false;
       cache.federatedUrl = null;
     }
   };
@@ -881,6 +955,12 @@ var WafClient = (function () {
           },
           onFailure: function (err) {
             var msg = (err && (err.message || err.error)) || 'WAF request failed';
+            if (/ResponseCode.*0|NetworkError/i.test(msg) && /space\.3dexperience/i.test(url)) {
+              msg =
+                'NetworkError (código 0): não alcançou o host 3DSpace. ' +
+                'Muitas redes só resolvem *-ifwe (dashboard). Build bom20260601d tenta ifwe automaticamente. ' +
+                'Peça ao TI liberar DNS de *-space.3dexperience.3ds.com. URL: ' + url;
+            }
             reject(new Error(msg));
           }
         });
@@ -1203,11 +1283,17 @@ var EnoviaApi = (function () {
     return WafClient.get(url);
   }
 
-  /** Tenta carregar raiz por VPMReference, Physical Product ou EngItem. */
+  /** Tenta carregar raiz — prd- = Physical Product / VPM primeiro (cloud). */
   function getProductRoot(physicalId, expand) {
-    return getVpmReference(physicalId, expand)
-      .catch(function () { return getPhysicalProduct(physicalId, expand); })
-      .catch(function () { return getEngItem(physicalId, expand); });
+    var id = apiId(physicalId);
+    if (/^prd-/i.test(id)) {
+      return getPhysicalProduct(id, expand)
+        .catch(function () { return getVpmReference(id, expand); })
+        .catch(function () { return getEngItem(id, expand); });
+    }
+    return getVpmReference(id, expand)
+      .catch(function () { return getPhysicalProduct(id, expand); })
+      .catch(function () { return getEngItem(id, expand); });
   }
 
   function getEngItemBomExpand(physicalId) {
@@ -2917,22 +3003,33 @@ var ExplorerScanner = (function () {
   }
 
   function ensureSpaceApi() {
-    var space =
-      (typeof PlatformBridge !== 'undefined' && PlatformBridge.getSpaceUrl && PlatformBridge.getSpaceUrl()) ||
-      (APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.spaceHost
-        ? 'https://' + APP_CONFIG.TENANT_DEFAULTS.spaceHost + '/enovia'
-        : null);
-    if (!space) return Promise.reject(new Error('URL 3DSpace não configurada'));
-    try {
-      EnoviaApi.init(space);
-    } catch (e) { /* */ }
     var chain = PlatformContext.init();
-    if (typeof CompassServices !== 'undefined' && CompassServices.fetchCsrfToken) {
+    if (typeof CompassServices !== 'undefined' && CompassServices.ensureWorkingSpaceUrl) {
       chain = chain.then(function () {
-        return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
+        return CompassServices.ensureWorkingSpaceUrl(
+          PlatformContext.getState().platformId
+        );
       });
+    } else {
+      var space =
+        (typeof PlatformBridge !== 'undefined' && PlatformBridge.getSpaceUrl && PlatformBridge.getSpaceUrl()) ||
+        (APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.spaceHost
+          ? 'https://' + APP_CONFIG.TENANT_DEFAULTS.spaceHost + '/enovia'
+          : null);
+      if (!space) return Promise.reject(new Error('URL 3DSpace não configurada'));
+      chain = chain.then(function () { return space; });
     }
-    return chain;
+    return chain.then(function (space) {
+      if (!space) return Promise.reject(new Error('URL 3DSpace não configurada'));
+      try {
+        EnoviaApi.init(space);
+        if (typeof SearchApi !== 'undefined') SearchApi.init(space);
+      } catch (e) { /* */ }
+      if (typeof CompassServices !== 'undefined' && CompassServices.fetchCsrfToken) {
+        return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
+      }
+      return null;
+    });
   }
 
   function saveRootName(name) {
@@ -5042,6 +5139,9 @@ var App = (function () {
 
     return chain
       .then(function () {
+        if (CompassServices.ensureWorkingSpaceUrl) {
+          return CompassServices.ensureWorkingSpaceUrl(PlatformContext.getState().platformId);
+        }
         return CompassServices.get3DSpaceUrl(PlatformContext.getState().platformId);
       })
       .then(function (spaceUrl) {

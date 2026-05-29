@@ -272,22 +272,33 @@ var ExplorerScanner = (function () {
   }
 
   function ensureSpaceApi() {
-    var space =
-      (typeof PlatformBridge !== 'undefined' && PlatformBridge.getSpaceUrl && PlatformBridge.getSpaceUrl()) ||
-      (APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.spaceHost
-        ? 'https://' + APP_CONFIG.TENANT_DEFAULTS.spaceHost + '/enovia'
-        : null);
-    if (!space) return Promise.reject(new Error('URL 3DSpace não configurada'));
-    try {
-      EnoviaApi.init(space);
-    } catch (e) { /* */ }
     var chain = PlatformContext.init();
-    if (typeof CompassServices !== 'undefined' && CompassServices.fetchCsrfToken) {
+    if (typeof CompassServices !== 'undefined' && CompassServices.ensureWorkingSpaceUrl) {
       chain = chain.then(function () {
-        return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
+        return CompassServices.ensureWorkingSpaceUrl(
+          PlatformContext.getState().platformId
+        );
       });
+    } else {
+      var space =
+        (typeof PlatformBridge !== 'undefined' && PlatformBridge.getSpaceUrl && PlatformBridge.getSpaceUrl()) ||
+        (APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.spaceHost
+          ? 'https://' + APP_CONFIG.TENANT_DEFAULTS.spaceHost + '/enovia'
+          : null);
+      if (!space) return Promise.reject(new Error('URL 3DSpace não configurada'));
+      chain = chain.then(function () { return space; });
     }
-    return chain;
+    return chain.then(function (space) {
+      if (!space) return Promise.reject(new Error('URL 3DSpace não configurada'));
+      try {
+        EnoviaApi.init(space);
+        if (typeof SearchApi !== 'undefined') SearchApi.init(space);
+      } catch (e) { /* */ }
+      if (typeof CompassServices !== 'undefined' && CompassServices.fetchCsrfToken) {
+        return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
+      }
+      return null;
+    });
   }
 
   function saveRootName(name) {

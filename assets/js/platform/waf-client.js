@@ -48,6 +48,12 @@ var WafClient = (function () {
           },
           onFailure: function (err) {
             var msg = (err && (err.message || err.error)) || 'WAF request failed';
+            if (/ResponseCode.*0|NetworkError/i.test(msg) && /space\.3dexperience/i.test(url)) {
+              msg =
+                'NetworkError (código 0): não alcançou o host 3DSpace. ' +
+                'Muitas redes só resolvem *-ifwe (dashboard). Build bom20260601d tenta ifwe automaticamente. ' +
+                'Peça ao TI liberar DNS de *-space.3dexperience.3ds.com. URL: ' + url;
+            }
             reject(new Error(msg));
           }
         });

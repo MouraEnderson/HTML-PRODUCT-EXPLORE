@@ -8,7 +8,10 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260601c',
+    BUILD: 'bom20260601d',
+
+    /** Se *-space falhar (DNS), tenta mesmo tenant via *-ifwe/enovia */
+    SPACE_FALLBACK_VIA_IFWE: true,
 
     /** Tenant cloud: objetos usam prefixo prd- (ex. prd-R1132100929518-00511496) */
     PHYSICAL_ID_PREFIX: 'prd-',

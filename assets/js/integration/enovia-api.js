@@ -71,11 +71,17 @@ var EnoviaApi = (function () {
     return WafClient.get(url);
   }
 
-  /** Tenta carregar raiz por VPMReference, Physical Product ou EngItem. */
+  /** Tenta carregar raiz — prd- = Physical Product / VPM primeiro (cloud). */
   function getProductRoot(physicalId, expand) {
-    return getVpmReference(physicalId, expand)
-      .catch(function () { return getPhysicalProduct(physicalId, expand); })
-      .catch(function () { return getEngItem(physicalId, expand); });
+    var id = apiId(physicalId);
+    if (/^prd-/i.test(id)) {
+      return getPhysicalProduct(id, expand)
+        .catch(function () { return getVpmReference(id, expand); })
+        .catch(function () { return getEngItem(id, expand); });
+    }
+    return getVpmReference(id, expand)
+      .catch(function () { return getPhysicalProduct(id, expand); })
+      .catch(function () { return getEngItem(id, expand); });
   }
 
   function getEngItemBomExpand(physicalId) {
