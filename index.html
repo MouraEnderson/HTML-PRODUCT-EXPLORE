@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>3DEXPERIENCE — BOM Analytics | Product Explorer</title>
+  <link rel="stylesheet" href="assets/css/dashboard.css" />
+  <!-- CDN: ajuste versões conforme política corporativa / allowlist WAF -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>BOM Analytics Dashboard</h1>
+      <div class="subtitle">3DEXPERIENCE · Product Explorer · E-BOM · ENOVIA</div>
+    </div>
+    <div class="selection-info">
+      Seleção: <strong id="selectionLabel">—</strong>
+    </div>
+    <div class="toolbar">
+      <button type="button" class="btn btn-primary" id="btnRefresh">Atualizar</button>
+      <button type="button" class="btn" id="btnExport">Exportar Excel</button>
+      <button type="button" class="btn" id="btnExpandAll" title="Use expansão na árvore por performance">Expandir</button>
+    </div>
+  </header>
+
+  <div id="statusBar" class="status-bar">Inicializando...</div>
+
+  <section class="platform-search panel" aria-label="Busca Physical Product">
+    <div class="panel-header">Buscar Physical Product na 3DEXPERIENCE</div>
+    <div class="platform-search-body">
+      <input type="search" id="platformSearchInput" placeholder="Nome do produto (ex.: Drone, SKA, Assembly)..." autocomplete="off" />
+      <button type="button" class="btn btn-primary" id="btnPlatformSearch">Buscar</button>
+    </div>
+    <div id="platformSearchResults" class="platform-search-results"></div>
+  </section>
+
+  <main class="main-grid">
+    <section id="kpiGrid" class="kpi-grid" aria-label="Indicadores KPI"></section>
+
+    <section class="filters-bar" aria-label="Filtros">
+      <input type="search" id="searchInput" placeholder="Pesquisa rápida (nome, ID, owner...)" />
+      <select id="filterMaturity" aria-label="Maturidade">
+        <option value="all">Todas maturidades</option>
+        <option value="released">Released</option>
+        <option value="in_work">In Work</option>
+        <option value="obsolete">Obsolete</option>
+        <option value="other">Outros</option>
+      </select>
+      <select id="filterType" aria-label="Tipo">
+        <option value="all">Todos os tipos</option>
+      </select>
+      <select id="filterApproval" aria-label="Aprovação">
+        <option value="all">Aprovação — todos</option>
+        <option value="approved">Aprovados</option>
+        <option value="pending">Pendentes</option>
+      </select>
+      <select id="filterPP" aria-label="Physical Product">
+        <option value="all">Physical Product — todos</option>
+        <option value="yes">Com PP</option>
+        <option value="no">Sem PP</option>
+      </select>
+    </section>
+
+    <section class="charts-grid" aria-label="Gráficos">
+      <div class="chart-card"><canvas id="chartMaturity"></canvas></div>
+      <div class="chart-card"><canvas id="chartType"></canvas></div>
+      <div class="chart-card"><canvas id="chartRevision"></canvas></div>
+      <div class="chart-card"><canvas id="chartApproval"></canvas></div>
+    </section>
+
+    <section class="split-panel">
+      <div class="panel">
+        <div class="panel-header">Estrutura E-BOM</div>
+        <div id="bomTree" class="bom-tree"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">Colunas Product Explorer (E-BOM)</div>
+        <div class="table-scroll table-scroll-wide">
+          <table id="bomTable" class="data-table">
+            <thead><tr></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel issues-panel">
+      <div class="panel-header">Anomalias e Governança</div>
+      <ul id="issuesList"></ul>
+    </section>
+  </main>
+
+  <div id="loadingOverlay" class="loading-overlay hidden">Carregando estrutura de produto...</div>
+
+  <!-- Config -->
+  <script src="assets/js/config.js"></script>
+  <!-- Platform -->
+  <script src="assets/js/platform/context.js"></script>
+  <script src="assets/js/platform/compass.js"></script>
+  <script src="assets/js/platform/waf-client.js"></script>
+  <!-- Integration -->
+  <script src="assets/js/integration/3dx-content-parser.js"></script>
+  <script src="assets/js/integration/enovia-api.js"></script>
+  <script src="assets/js/integration/search-api.js"></script>
+  <script src="assets/js/integration/product-explorer-bridge.js"></script>
+  <!-- Services -->
+  <script src="assets/js/services/product-search-service.js"></script>
+  <script src="assets/js/services/attribute-service.js"></script>
+  <script src="assets/js/services/physical-product-service.js"></script>
+  <script src="assets/js/services/bom-service.js"></script>
+  <!-- Processing -->
+  <script src="assets/js/processing/bom-normalizer.js"></script>
+  <script src="assets/js/processing/metrics-engine.js"></script>
+  <script src="assets/js/processing/anomaly-detector.js"></script>
+  <!-- UI -->
+  <script src="assets/js/ui/kpi-cards.js"></script>
+  <script src="assets/js/ui/charts-manager.js"></script>
+  <script src="assets/js/ui/filters.js"></script>
+  <script src="assets/js/ui/data-table.js"></script>
+  <script src="assets/js/ui/bom-tree.js"></script>
+  <script src="assets/js/ui/product-search-panel.js"></script>
+  <!-- App -->
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
