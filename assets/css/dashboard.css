@@ -618,6 +618,38 @@ body.ui-explorer-only .btn-sync-explorer:hover {
   color: #fff;
 }
 
+body.ui-explorer-only .explorer-id-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: #f8f9fa;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8rem;
+}
+
+body.ui-explorer-only .explorer-id-row label {
+  color: var(--text-muted);
+}
+
+body.ui-explorer-only .explorer-id-row input {
+  flex: 1;
+  min-width: 200px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+body.ui-explorer-only .explorer-id-row button {
+  padding: 6px 12px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
 body.ui-explorer-only .charts-main {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

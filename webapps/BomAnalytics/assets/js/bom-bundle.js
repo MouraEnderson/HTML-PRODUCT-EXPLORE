@@ -10,7 +10,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'waf20260530',
+    BUILD: '3dspace20260530',
 
     /** Somente Explorer → gráficos + tabela */
     EXPLORER_ONLY: true,
@@ -123,8 +123,11 @@
     },
 
     PLATFORM: {
-      SEARCH_APP_IDS: ['ENX3DSEARCH_AP', '3DSEARCH_AP', 'SEARCH_AP']
+      SEARCH_APP_IDS: ['ENX3DSEARCH_AP', '3DSEARCH_AP', 'SEARCH_AP'],
+      EXPLORER_APP_IDS: ['ENOSCEN_AP', 'ENOPSTR_AP', 'ENX3DSEARCH_AP']
     },
+    /** Se API falhar no GitHub, mostra BOM demo (~20 itens) em vez de 1 linha */
+    DEMO_ON_API_FAIL: true,
 
     CHART_COLORS: {
       primary: '#005686',
@@ -835,6 +838,13 @@ var WafClient = (function () {
 var ThreeDXContentParser = (function () {
   'use strict';
 
+  function isValidPhysicalId(id) {
+    if (!id) return false;
+    id = String(id).trim();
+    if (id.length < 16) return false;
+    return /^[0-9A-Fa-f]{16,}$/.test(id);
+  }
+
   function tryParseJson(encoded) {
     try {
       return JSON.parse(decodeURIComponent(encoded));
@@ -859,23 +869,58 @@ var ThreeDXContentParser = (function () {
     return tryParseJson(raw);
   }
 
+  function pickBestItem(items) {
+    if (!items || !items.length) return null;
+    var best = null;
+    var bestScore = -1;
+    items.forEach(function (item) {
+      var id = item.objectId || item.resourceid || item.physicalid || item.id || '';
+      if (!isValidPhysicalId(id)) return;
+      var name = item.displayName || item.name || item.title || '';
+      var score = name.length;
+      var type = (item.objectType || item.type || '').toLowerCase();
+      var dtype = (item.displayType || '').toLowerCase();
+      if (type.indexOf('vpm') >= 0 || type.indexOf('eng') >= 0) score += 40;
+      if (dtype.indexOf('physical') >= 0 || dtype.indexOf('product') >= 0) score += 30;
+      if (name.indexOf('Assembly') >= 0 || name.indexOf('SKA') >= 0) score += 50;
+      if (score > bestScore) {
+        bestScore = score;
+        best = item;
+      }
+    });
+    if (best) return best;
+    for (var i = 0; i < items.length; i++) {
+      var pid = items[i].objectId || items[i].resourceid || items[i].physicalid;
+      if (isValidPhysicalId(pid)) return items[i];
+    }
+    return items[0];
+  }
+
   function parseLocations() {
-    var sources = [window.location.hash, window.location.search];
+    var sources = [window.location.hash, window.location.search, window.location.href];
     try {
       if (window.parent && window.parent !== window && window.parent.location) {
         sources.push(window.parent.location.hash);
         sources.push(window.parent.location.search);
+        sources.push(window.parent.location.href);
       }
     } catch (e) { /* cross-origin */ }
     try {
       if (window.top && window.top.location) {
         sources.push(window.top.location.hash);
         sources.push(window.top.location.search);
+        sources.push(window.top.location.href);
       }
     } catch (e2) { /* */ }
     for (var i = 0; i < sources.length; i++) {
-      var parsed = extractFromHash(sources[i]);
+      var src = sources[i] || '';
+      var parsed = extractFromHash(src);
       if (parsed) return parsed;
+      var m = src.match(/X3DContentId=([^&]+)/);
+      if (m && m[1]) {
+        parsed = tryParseJson(m[1]);
+        if (parsed) return parsed;
+      }
     }
     return null;
   }
@@ -884,19 +929,22 @@ var ThreeDXContentParser = (function () {
     if (!content || !content.data || !content.data.items || !content.data.items.length) {
       return null;
     }
-    var item = content.data.items[0];
+    var item = pickBestItem(content.data.items);
+    if (!item) return null;
+    var pid = item.objectId || item.resourceid || item.physicalid || item.id;
+    if (!isValidPhysicalId(pid)) return null;
     return {
-      physicalid: item.objectId || item.resourceid,
-      type: item.objectType || 'VPMReference',
-      name: item.displayName || item.objectId,
-      displayName: item.displayName || item.objectId,
-      displayType: item.displayType || '',
+      physicalid: pid,
+      type: item.objectType || item.type || 'VPMReference',
+      name: item.displayName || item.name || item.title || pid,
+      displayName: item.displayName || item.name || item.title || pid,
+      displayType: item.displayType || 'Physical Product',
       envId: item.envId || null,
       serviceId: item.serviceId || '3DSpace',
       contextId: item.contextId || null,
       i3dx: item.i3dx || null,
       widgetId: content.widgetId || null,
-      source: content.source || null
+      source: content.source || 'hash'
     };
   }
 
@@ -910,13 +958,12 @@ var ThreeDXContentParser = (function () {
     };
   }
 
-  /** Texto/JSON colado ou arrastado do 3DEXPERIENCE (Physical Product). */
   function parseJsonTextLoose(text) {
     var t = String(text || '');
     var idM = t.match(/"objectId"\s*:\s*"([^"]+)"/i) ||
       t.match(/"physicalid"\s*:\s*"([^"]+)"/i) ||
       t.match(/"resourceid"\s*:\s*"([^"]+)"/i);
-    if (!idM) return null;
+    if (!idM || !isValidPhysicalId(idM[1])) return null;
     var nameM = t.match(/"displayName"\s*:\s*"([^"]+)"/i);
     var typeM = t.match(/"objectType"\s*:\s*"([^"]+)"/i) ||
       t.match(/"type"\s*:\s*"([^"]+)"/i);
@@ -952,7 +999,7 @@ var ThreeDXContentParser = (function () {
     }
 
     var id = obj.objectId || obj.physicalid || obj.id || obj.resourceid;
-    if (!id) return null;
+    if (!isValidPhysicalId(id)) return null;
 
     return {
       physicalid: id,
@@ -974,7 +1021,9 @@ var ThreeDXContentParser = (function () {
     parseJsonTextLoose: parseJsonTextLoose,
     toSelection: toSelection,
     toPlatformContext: toPlatformContext,
-    extractFromHash: extractFromHash
+    extractFromHash: extractFromHash,
+    isValidPhysicalId: isValidPhysicalId,
+    pickBestItem: pickBestItem
   };
 })();
 
@@ -1090,7 +1139,7 @@ var EnoviaApi = (function () {
 ;/* --- assets\js\integration\product-explorer-bridge.js --- */
 /**
  * @file integration/product-explorer-bridge.js
- * Ponte de seleção com Product Explorer / widgets 3DDashboard.
+ * Ponte de seleção com Product Structure Explorer / widgets 3DDashboard.
  */
 var ProductExplorerBridge = (function () {
   'use strict';
@@ -1106,24 +1155,45 @@ var ProductExplorerBridge = (function () {
     'productexplorer.selection',
     'DS/Selection/selected',
     'objectSelected',
-    'selectedObjectChanged'
+    'selectedObjectChanged',
+    'ENOSCEN_selection',
+    'ENOPSTR_selection',
+    '3DXContent',
+    'selection'
   ];
+
+  function isValidId(id) {
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.isValidPhysicalId) {
+      return ThreeDXContentParser.isValidPhysicalId(id);
+    }
+    return id && String(id).length >= 16;
+  }
 
   function normalizeSelection(payload) {
     if (!payload) return null;
-    var obj = payload.data || payload.object || payload.item || payload;
-    var physicalid = obj.physicalid || obj.id || obj.objectId || obj['dseno:physicalid'];
-    if (!physicalid) return null;
+    var obj = payload.data || payload.object || payload.item || payload.selection || payload;
+    if (obj.items && obj.items.length && typeof ThreeDXContentParser !== 'undefined') {
+      var fromItems = ThreeDXContentParser.toSelection({ data: { items: obj.items } });
+      if (fromItems) return fromItems;
+    }
+    var physicalid = obj.physicalid || obj.objectId || obj.id || obj.resourceid || obj['dseno:physicalid'];
+    if (!isValidId(physicalid)) return null;
+    var displayName = obj.displayName || obj.title || obj.name || obj['dseno:name'] || '';
+    if (displayName.length <= 2 && !isNaN(displayName)) {
+      displayName = obj.title || obj.name || physicalid;
+    }
     return {
       physicalid: physicalid,
       type: obj.type || obj.objectType || obj['dseno:type'] || 'VPMReference',
-      name: obj.name || obj.title || obj['dseno:name'] || '',
-      displayName: obj.displayName || obj.title || obj.name || physicalid
+      name: displayName || physicalid,
+      displayName: displayName || physicalid,
+      displayType: obj.displayType || 'Physical Product',
+      source: obj.source || 'normalize'
     };
   }
 
   function setSelection(sel, opts) {
-    if (!sel || !sel.physicalid) return;
+    if (!sel || !isValidId(sel.physicalid)) return;
     currentSelection = sel;
     if (opts && opts.silent) return;
     listeners.forEach(function (fn) {
@@ -1154,6 +1224,12 @@ var ProductExplorerBridge = (function () {
       try { data = JSON.parse(data); } catch (e) { return; }
     }
 
+    if (data.protocol === '3DXContent' && data.data && data.data.items) {
+      var sel3dx = ThreeDXContentParser.toSelection(data);
+      if (sel3dx) setSelection(sel3dx);
+      return;
+    }
+
     if (data.physicalid || data.objectId || data.resourceid) {
       var direct = normalizeSelection(data);
       if (direct) {
@@ -1161,17 +1237,17 @@ var ProductExplorerBridge = (function () {
         return;
       }
     }
-    if (data.protocol === '3DXContent' && data.data && data.data.items) {
-      var sel3dx = ThreeDXContentParser.toSelection(data);
-      if (sel3dx) setSelection(sel3dx);
-      return;
-    }
     if (data.items && data.items.length) {
-      var selItems = normalizeSelection(data.items[0]);
+      var selItems = normalizeSelection({ items: data.items });
       if (selItems) setSelection(selItems);
       return;
     }
-    var type = data.type || data.event || data.name;
+    if (data.data && data.data.items) {
+      var selData = ThreeDXContentParser.toSelection(data);
+      if (selData) setSelection(selData);
+      return;
+    }
+    var type = data.type || data.event || data.name || data.messageName;
     if (MESSAGE_TYPES.indexOf(type) === -1 && !data.physicalid && !data.object && !data.objectId) return;
     var sel = normalizeSelection(data);
     if (sel) setSelection(sel);
@@ -1185,8 +1261,14 @@ var ProductExplorerBridge = (function () {
     };
   }
 
+  function readHashSelection() {
+    if (typeof ThreeDXContentParser === 'undefined') return null;
+    var content = ThreeDXContentParser.parseLocations();
+    return content ? ThreeDXContentParser.toSelection(content) : null;
+  }
+
   function initFromQuery() {
-    if (APP_QUERY.physicalid) {
+    if (APP_QUERY.physicalid && isValidId(APP_QUERY.physicalid)) {
       setSelection({
         physicalid: APP_QUERY.physicalid,
         type: APP_QUERY.type || 'VPMReference',
@@ -1197,28 +1279,8 @@ var ProductExplorerBridge = (function () {
   }
 
   function initFrom3DXDeepLink() {
-    if (typeof ThreeDXContentParser === 'undefined') return;
-    var content = ThreeDXContentParser.parseLocations();
-    var sel = ThreeDXContentParser.toSelection(content);
+    var sel = readHashSelection();
     if (sel) setSelection(sel);
-  }
-
-  function initWidgetEvents() {
-    if (typeof widget === 'undefined') return;
-    if (widget.addEvent) {
-      widget.addEvent('onLoad', function () {
-        var val = widget.getValue && widget.getValue('selectedObject');
-        if (val) setSelection(normalizeSelection(val));
-      });
-    }
-    if (widget.addEvents) {
-      widget.addEvents({
-        onRefresh: function () {
-          var val = widget.getValue && widget.getValue('selectedObject');
-          if (val) setSelection(normalizeSelection(val));
-        }
-      });
-    }
   }
 
   function initPlatformSelection() {
@@ -1228,14 +1290,29 @@ var ProductExplorerBridge = (function () {
       req(['DS/Selection/Selection'], function (Selection) {
         if (Selection && Selection.getSelection) {
           Selection.getSelection().then(function (items) {
-            if (items && items.length) setSelection(normalizeSelection(items[0]));
-          });
+            if (!items || !items.length) return;
+            var sel = normalizeSelection(items[0]);
+            if (sel) setSelection(sel);
+          }).catch(function () { /* */ });
         }
       });
-    } catch (e) { /* opcional */ }
+    } catch (e) { /* */ }
+    try {
+      req(['DS/PlatformAPI/PlatformAPI'], function (PlatformAPI) {
+        if (PlatformAPI && PlatformAPI.getSelection) {
+          PlatformAPI.getSelection().then(function (items) {
+            if (!items || !items.length) return;
+            var sel2 = normalizeSelection(items[0]);
+            if (sel2) setSelection(sel2);
+          }).catch(function () { /* */ });
+        }
+      });
+    } catch (e2) { /* */ }
   }
 
   function pollSelection() {
+    var fromHash = readHashSelection();
+    if (fromHash) setSelection(fromHash);
     initPlatformSelection();
     if (typeof PlatformBridge !== 'undefined') {
       PlatformBridge.requestDashboardSelection();
@@ -1243,28 +1320,20 @@ var ProductExplorerBridge = (function () {
   }
 
   function startContentPoll() {
-    window.setInterval(function () {
-      if (typeof ThreeDXContentParser === 'undefined') return;
-      var content = ThreeDXContentParser.parseLocations();
-      var sel = content ? ThreeDXContentParser.toSelection(content) : null;
-      if (!sel || !sel.physicalid) return;
-      if (!currentSelection || currentSelection.physicalid !== sel.physicalid) {
-        setSelection(sel);
-      }
-    }, 2500);
+    window.setInterval(pollSelection, 2000);
   }
 
   function init() {
     window.addEventListener('message', onMessage, false);
     initFromQuery();
     initFrom3DXDeepLink();
-    initWidgetEvents();
-    initPlatformSelection();
+    pollSelection();
     startContentPoll();
     return {
       getSelection: function () { return currentSelection; },
       subscribe: subscribe,
-      setSelection: setSelection
+      setSelection: setSelection,
+      pollSelection: pollSelection
     };
   }
 
@@ -1273,7 +1342,9 @@ var ProductExplorerBridge = (function () {
     subscribe: subscribe,
     setSelection: setSelection,
     getSelection: function () { return currentSelection; },
-    normalizeSelection: normalizeSelection
+    normalizeSelection: normalizeSelection,
+    pollSelection: pollSelection,
+    readHashSelection: readHashSelection
   };
 })();
 
@@ -2631,25 +2702,12 @@ var App = (function () {
       })
       .catch(function (err) {
         console.error(err);
-        var msg = err.message || String(err);
-        var sel = ProductExplorerBridge.getSelection();
-        if (sel && (msg.indexOf('Failed to fetch') >= 0 || msg.indexOf('WAF') >= 0)) {
-          return BomService.loadRootFromSelection(sel).then(function () {
-            refreshUI();
-            setStatus(
-              'Preview local (sem API). Deploy 3DSpace para BOM completa: ' +
-              (sel.displayName || sel.physicalid),
-              'warn'
-            );
-          });
+        if (APP_CONFIG.DEMO_ON_API_FAIL !== false) {
+          return loadDemoBom(
+            'GitHub não acessa API ENOVIA. Demo com ~20 itens. Estrutura real: deploy 3DSpace.'
+          );
         }
-        if (sel) {
-          return BomService.loadRootFromSelection(sel).then(function () {
-            refreshUI();
-            setStatus('Exibindo raiz do Explorer (' + (sel.displayName || sel.physicalid) + ').', 'warn');
-          });
-        }
-        setStatus('Erro: ' + msg, 'error');
+        setStatus('Erro: ' + (err.message || err), 'error');
       })
       .finally(function () {
         setLoading(false);
@@ -2719,12 +2777,32 @@ var App = (function () {
       }
     );
 
+    var btnSync = byId('btnSyncExplorer');
+    if (btnSync) {
+      btnSync.addEventListener('click', function () {
+        pullExplorerSelection();
+        var fromHash = ProductExplorerBridge.readHashSelection && ProductExplorerBridge.readHashSelection();
+        var sel = fromHash || ProductExplorerBridge.getSelection();
+        if (sel && isValidPhysicalId(sel.physicalid)) {
+          lastLoadedId = null;
+          var lbl = byId('selectionLabel');
+          if (lbl) lbl.textContent = sel.displayName || sel.physicalid;
+          loadBom(sel.physicalid);
+          setStatus('Explorer: ' + (sel.displayName || sel.physicalid), 'ok');
+        } else {
+          setStatus(
+            'Clique na raiz do assembly no Explorer (01_SKA_Drone…), depois ↻ Sincronizar.',
+            'warn'
+          );
+          loadDemoBom();
+        }
+      });
+    }
+
     var btnRef = byId('btnRefresh');
     if (btnRef) {
       btnRef.addEventListener('click', function () {
-        var sel = ProductExplorerBridge.getSelection();
-        if (sel) loadBom(sel.physicalid);
-        else setStatus('Abra um produto no Product Structure Explorer.', 'warn');
+        reloadFromExplorer();
       });
     }
 
@@ -2805,11 +2883,12 @@ var App = (function () {
   }
 
   function pullExplorerSelection() {
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.pollSelection) {
+      ProductExplorerBridge.pollSelection();
+    }
     if (typeof PlatformBridge !== 'undefined') {
       PlatformBridge.requestDashboardSelection();
     }
-    var btn = byId('btnSyncExplorer');
-    if (btn) btn.click();
   }
 
   function scheduleExplorerSync() {
@@ -2906,35 +2985,71 @@ var App = (function () {
     return h ? ('https://' + h + '/enovia') : null;
   }
 
-  function loadDefaultExplorerProduct() {
+  function isValidPhysicalId(id) {
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.isValidPhysicalId) {
+      return ThreeDXContentParser.isValidPhysicalId(id);
+    }
+    return id && String(id).length >= 16;
+  }
+
+  function loadDemoBom(statusMsg) {
     var d = APP_CONFIG.TENANT_DEFAULTS || {};
-    if (!d.defaultPhysicalId) return;
-    onSelection({
+    if (!d.defaultPhysicalId) return Promise.resolve();
+    APP_CONFIG.DEMO_MODE = true;
+    APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
+    var sel = {
       physicalid: d.defaultPhysicalId,
       displayName: d.defaultDisplayName || d.defaultPhysicalId,
       name: d.defaultDisplayName || d.defaultPhysicalId,
       type: 'VPMReference',
       displayType: 'Physical Product'
+    };
+    ProductExplorerBridge.setSelection(sel, { silent: true });
+    var lbl = byId('selectionLabel');
+    if (lbl) lbl.textContent = sel.displayName;
+    return BomService.loadRoot(d.defaultPhysicalId).then(function () {
+      lastLoadedId = d.defaultPhysicalId;
+      refreshUI();
+      setStatus(
+        statusMsg || ('Demonstração: ' + BomService.getNodeCount() + ' itens. BOM real = 3DSpace.'),
+        'warn'
+      );
     });
   }
 
+  function loadDefaultExplorerProduct() {
+    return loadDemoBom('Carregando demonstração do Drone…');
+  }
+
   function trySyncThenLoad() {
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.pollSelection) {
+      ProductExplorerBridge.pollSelection();
+    }
     pullExplorerSelection();
-    if (typeof ThreeDXContentParser !== 'undefined') {
-      var content = ThreeDXContentParser.parseLocations();
-      var fromHash = content ? ThreeDXContentParser.toSelection(content) : null;
-      if (fromHash && fromHash.physicalid) {
-        ProductExplorerBridge.setSelection(fromHash, { silent: true });
-        loadBom(fromHash.physicalid);
-        return;
-      }
+    var fromHash = typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.readHashSelection
+      ? ProductExplorerBridge.readHashSelection()
+      : null;
+    if (fromHash && isValidPhysicalId(fromHash.physicalid)) {
+      ProductExplorerBridge.setSelection(fromHash, { silent: true });
+      var lbl = byId('selectionLabel');
+      if (lbl) lbl.textContent = fromHash.displayName || fromHash.physicalid;
+      loadBom(fromHash.physicalid);
+      return;
     }
     var sel = ProductExplorerBridge.getSelection();
-    if (sel && sel.physicalid) {
+    if (sel && isValidPhysicalId(sel.physicalid)) {
       loadBom(sel.physicalid);
       return;
     }
-    loadDefaultExplorerProduct();
+    setStatus(
+      'GitHub: não lê Explorer. Abra Mont10 → ↻ Sincronizar ou cole Physical ID. Demo: aguarde…',
+      'warn'
+    );
+    window.setTimeout(function () {
+      if (BomService.getNodeCount() <= 1) {
+        loadDemoBom('DEMO Drone (não é Mont10). Estrutura real = Passo C 3DSpace.');
+      }
+    }, 1500);
     window.setTimeout(function () {
       pullExplorerSelection();
       var later = ProductExplorerBridge.getSelection();
@@ -2982,16 +3097,12 @@ var App = (function () {
       })
       .catch(function (err) {
         console.error(err);
-        var msg = err.message || String(err);
-        if (msg.indexOf('Failed to fetch') >= 0 || msg.indexOf('WAFData') >= 0) {
-          setStatus(
-            'API ENOVIA: instale no 3DSpace (BomAnalytics-3DSpace.zip) — GitHub não acessa 3DSpace. Ver SOLUCAO-FINAL.md',
-            'error'
-          );
-        } else {
-          setStatus('Erro API: ' + msg, 'error');
-        }
-        runFallback();
+        try {
+          initAppCore(getTenantSpaceUrl());
+        } catch (eInit) { /* */ }
+        return loadDemoBom(
+          'Sem API no GitHub. Gráficos = demo Drone. BOM do Explorer = publicar no 3DSpace.'
+        );
       });
   }
 

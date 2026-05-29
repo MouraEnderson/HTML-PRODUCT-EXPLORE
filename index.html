@@ -38,11 +38,14 @@
     <button type="button" class="btn-sync-explorer" id="btnSyncExplorer">↻ Sincronizar Explorer</button>
     <button type="button" class="ui-hidden" id="btnRefresh">refresh</button>
   </header>
-  <div id="statusBar" class="status-bar">Aguardando… v20260528</div>
+  <div id="statusBar" class="status-bar">Aguardando… 3dspace20260530</div>
+  <div class="explorer-id-row">
+    <label for="explorerObjectId">Physical ID:</label>
+    <input type="text" id="explorerObjectId" placeholder="Cole ID do Explorer" />
+    <button type="button" id="btnLoadObjectId">Carregar</button>
+  </div>
   <div class="ui-hidden" aria-hidden="true">
-    <input type="text" id="explorerObjectId" />
     <input type="text" id="explorerObjectName" />
-    <button id="btnLoadObjectId"></button>
     <select id="filterMaturity"><option value="all">all</option></select>
     <select id="filterType"><option value="all">all</option></select>
     <select id="filterApproval"><option value="all">all</option></select>

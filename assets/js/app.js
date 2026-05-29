@@ -476,7 +476,15 @@ var App = (function () {
       loadBom(sel.physicalid);
       return;
     }
-    loadDemoBom('Selecione o assembly no Explorer → ↻ Sincronizar. Demo Drone abaixo.');
+    setStatus(
+      'GitHub: não lê Explorer. Abra Mont10 → ↻ Sincronizar ou cole Physical ID. Demo: aguarde…',
+      'warn'
+    );
+    window.setTimeout(function () {
+      if (BomService.getNodeCount() <= 1) {
+        loadDemoBom('DEMO Drone (não é Mont10). Estrutura real = Passo C 3DSpace.');
+      }
+    }, 1500);
     window.setTimeout(function () {
       pullExplorerSelection();
       var later = ProductExplorerBridge.getSelection();

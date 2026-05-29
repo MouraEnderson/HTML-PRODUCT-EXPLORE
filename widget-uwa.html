@@ -7,7 +7,7 @@
   <link rel="stylesheet" type="text/css" href="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/css/dashboard.css?v=ghpages" />
   <script type="text/javascript">window.__3DX_TRUSTED_WIDGET__=true;window.__3DX_BOOT_DEFER__=true;</script>
   <script type="text/javascript" src="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/vendor/chart.umd.min.js"></script>
-  <script type="text/javascript" src="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/js/bom-bundle.js?v=final20260530"></script>
+  <script type="text/javascript" src="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/js/bom-bundle.js?v=3dspace20260530"></script>
   <script type="text/javascript">
   //<![CDATA[
     function bomMount() {
@@ -63,11 +63,14 @@
     <button type="button" class="btn-sync-explorer" id="btnSyncExplorer" title="Ler produto aberto no Explorer">↻ Sincronizar Explorer</button>
     <button type="button" class="ui-hidden" id="btnRefresh">refresh</button>
   </header>
-  <div id="statusBar" class="status-bar">Preparando… final20260530</div>
+  <div id="statusBar" class="status-bar">Preparando… 3dspace20260530</div>
+  <div class="explorer-id-row">
+    <label for="explorerObjectId">Physical ID (Explorer → Propriedades):</label>
+    <input type="text" id="explorerObjectId" placeholder="Cole o ID físico do Mont10…" />
+    <button type="button" id="btnLoadObjectId">Carregar</button>
+  </div>
   <div class="ui-hidden" aria-hidden="true">
-    <input type="text" id="explorerObjectId" />
     <input type="text" id="explorerObjectName" />
-    <button id="btnLoadObjectId"></button>
     <select id="filterMaturity"><option value="all">all</option></select>
     <select id="filterType"><option value="all">all</option></select>
     <select id="filterApproval"><option value="all">all</option></select>

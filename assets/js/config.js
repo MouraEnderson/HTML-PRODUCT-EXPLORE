@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'final20260530',
+    BUILD: '3dspace20260530',
 
     /** Somente Explorer → gráficos + tabela */
     EXPLORER_ONLY: true,
