@@ -4,28 +4,47 @@
 <head>
   <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
   <title>BOM Analytics</title>
-  <link rel="stylesheet" type="text/css" href="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/css/dashboard.css?v=ghpages" />
+  <link rel="stylesheet" type="text/css" href="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/css/dashboard.css?v=snapshot2b" />
   <script type="text/javascript">window.__3DX_TRUSTED_WIDGET__=true;window.__3DX_BOOT_DEFER__=true;</script>
   <script type="text/javascript" src="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/vendor/chart.umd.min.js"></script>
-  <script type="text/javascript" src="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/js/bom-bundle.js?v=snapshot20260601"></script>
+  <script type="text/javascript" src="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/js/bom-bundle.js?v=snapshot20260601b"></script>
   <script type="text/javascript">
   //<![CDATA[
+    var __bomMounted = false;
+
+    function bomGetMountTarget() {
+      try {
+        if (typeof widget !== 'undefined' && widget && widget.body) return widget.body;
+      } catch (e1) { /* */ }
+      return document.body;
+    }
+
     function bomMount() {
+      if (__bomMounted) return true;
       var tpl = document.getElementById('bom-app-template');
-      if (!tpl || !widget || !widget.body) return;
-      widget.body.innerHTML = tpl.innerHTML;
-      widget.body.className = 'ui-explorer-only';
-      window.__3DX_TRUSTED_WIDGET__ = true;
-      window.__3DX_BOOT_DEFER__ = true;
+      if (!tpl) return false;
+      var target = bomGetMountTarget();
+      if (!target) return false;
+      if (target.querySelector && target.querySelector('#statusBar')) {
+        __bomMounted = true;
+        return true;
+      }
+      target.innerHTML = tpl.innerHTML;
+      target.className = 'ui-explorer-only';
+      __bomMounted = true;
+      return true;
     }
 
     function bomStartApp() {
-      var bar = widget.body.querySelector('#statusBar');
+      if (!bomMount()) return;
+      var bar = bomGetMountTarget().querySelector('#statusBar');
       if (typeof App === 'undefined') {
-        if (bar) bar.textContent = 'Bundle não carregou — aguarde 1 min e Ctrl+F5';
+        if (bar) bar.textContent = 'Aguarde bundle… ou Ctrl+F5 (v snapshot2b)';
         return;
       }
-      try { App.run(); } catch (e) {
+      try {
+        App.run();
+      } catch (e) {
         if (bar) bar.textContent = 'Erro: ' + (e.message || e);
       }
     }
@@ -33,7 +52,8 @@
     function bomOnLoad() {
       bomMount();
       if (typeof require !== 'undefined') {
-        require(['DS/WAFData/WAFData', 'DS/i3DXCompassServices/i3DXCompassServices', 'DS/PlatformAPI/PlatformAPI'],
+        require(
+          ['DS/WAFData/WAFData', 'DS/i3DXCompassServices/i3DXCompassServices', 'DS/PlatformAPI/PlatformAPI'],
           function (WAF, Compass, PlatformAPI) {
             window.WAFData = WAF;
             window.__3DX_COMPASS__ = Compass;
@@ -46,26 +66,41 @@
         bomStartApp();
       }
     }
+
+    function bomScheduleBoot() {
+      bomOnLoad();
+      window.setTimeout(bomOnLoad, 80);
+      window.setTimeout(bomOnLoad, 400);
+      window.setTimeout(bomOnLoad, 1200);
+    }
+
     if (typeof widget !== 'undefined' && widget.addEvent) {
-      widget.addEvent('onLoad', bomOnLoad);
+      widget.addEvent('onLoad', bomScheduleBoot);
       widget.addEvent('onRefresh', function () {
         if (typeof App !== 'undefined' && App.reloadFromExplorer) App.reloadFromExplorer();
       });
     }
+    if (document.addEventListener) {
+      document.addEventListener('DOMContentLoaded', bomScheduleBoot);
+    }
+    bomScheduleBoot();
   //]]>
   </script>
 </head>
-<body>
-<div id="bom-app-template" style="display:none">
+<body class="ui-explorer-only">
+  <div id="bom-boot-fallback" style="padding:8px;font-family:sans-serif;font-size:12px;color:#005686;">
+    Carregando BOM Analytics…
+  </div>
+  <div id="bom-app-template" style="display:none">
   <header class="app-header explorer-header">
     <h1>BOM Analytics</h1>
     <p class="explorer-product">Product Structure Explorer: <strong id="selectionLabel">—</strong></p>
-    <button type="button" class="btn-sync-explorer ui-hidden" id="btnSyncExplorer">↻ Sincronizar</button>
+    <button type="button" class="ui-hidden" id="btnSyncExplorer">↻</button>
     <button type="button" class="ui-hidden" id="btnRefresh">refresh</button>
   </header>
-  <div id="statusBar" class="status-bar">Preparando… snapshot</div>
+  <div id="statusBar" class="status-bar">Preparando… cole estrutura do Explorer</div>
   <section class="snapshot-panel" id="snapshotPanel">
-    <p class="snapshot-hint"><strong>1.</strong> Explorer: abra Mont10 → selecione linhas da grade → <strong>Ctrl+C</strong></p>
+    <p class="snapshot-hint"><strong>1.</strong> Explorer Mont10 → selecione linhas → <strong>Ctrl+C</strong></p>
     <textarea id="pasteArea" class="paste-area" rows="4" placeholder="Cole aqui (Ctrl+V)…"></textarea>
     <div class="snapshot-actions">
       <button type="button" id="btnImportPaste" class="btn-primary">Importar estrutura</button>
@@ -74,13 +109,10 @@
       <a class="snapshot-link" href="https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/collect.html" target="_blank" rel="noopener">Coletor JSON</a>
     </div>
   </section>
-  <div class="explorer-id-row ui-hidden" aria-hidden="true">
-    <label for="explorerObjectId">Physical ID:</label>
-    <input type="text" id="explorerObjectId" />
-    <button type="button" id="btnLoadObjectId">Carregar</button>
-  </div>
   <div class="ui-hidden" aria-hidden="true">
+    <input type="text" id="explorerObjectId" />
     <input type="text" id="explorerObjectName" />
+    <button type="button" id="btnLoadObjectId"></button>
     <select id="filterMaturity"><option value="all">all</option></select>
     <select id="filterType"><option value="all">all</option></select>
     <select id="filterApproval"><option value="all">all</option></select>
@@ -102,7 +134,7 @@
       </div>
     </section>
   </main>
-  <div id="loadingOverlay" class="loading-overlay hidden">Carregando E-BOM…</div>
-</div>
+  <div id="loadingOverlay" class="loading-overlay hidden">Carregando…</div>
+  </div>
 </body>
 </html>

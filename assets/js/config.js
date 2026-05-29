@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'snapshot20260601',
+    BUILD: 'snapshot20260601b',
 
     /** Somente Explorer → gráficos + tabela */
     EXPLORER_ONLY: true,

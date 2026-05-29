@@ -10,7 +10,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'snapshot20260601',
+    BUILD: 'snapshot20260601b',
 
     /** Somente Explorer → gráficos + tabela */
     EXPLORER_ONLY: true,
@@ -3824,8 +3824,16 @@ var App = (function () {
 
   function run() {
     if (typeof WidgetRuntime !== 'undefined') WidgetRuntime.markTrusted();
-    APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
+    var onGithub =
+      typeof location !== 'undefined' &&
+      location.hostname &&
+      location.hostname.indexOf('github.io') >= 0;
+    if (!onGithub) {
+      APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
+    }
     stripLegacyUI();
+    var fb = document.getElementById('bom-boot-fallback');
+    if (fb && fb.parentNode) fb.parentNode.removeChild(fb);
     bootstrap().catch(function (err) {
       console.error('[App] bootstrap failed', err);
       setStatus('Erro: ' + (err.message || err), 'error');
