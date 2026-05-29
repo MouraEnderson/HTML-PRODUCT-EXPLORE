@@ -73,8 +73,45 @@ var ThreeDXContentParser = (function () {
     };
   }
 
+  /** Texto/JSON colado ou arrastado do 3DEXPERIENCE (Physical Product). */
+  function parseJsonText(text) {
+    var trimmed = String(text || '').trim();
+    if (!trimmed || (trimmed.charAt(0) !== '{' && trimmed.charAt(0) !== '[')) {
+      return null;
+    }
+    var obj = tryParseJson(trimmed);
+    if (!obj) return null;
+
+    if (obj.protocol === '3DXContent') {
+      return toSelection(obj);
+    }
+    if (obj.data && obj.data.items && obj.data.items.length) {
+      return toSelection(obj);
+    }
+    if (obj.items && obj.items.length) {
+      return toSelection({ data: { items: obj.items } });
+    }
+
+    var id = obj.objectId || obj.physicalid || obj.id || obj.resourceid;
+    if (!id) return null;
+
+    return {
+      physicalid: id,
+      type: obj.objectType || obj.type || 'VPMReference',
+      name: obj.displayName || obj.name || id,
+      displayName: obj.displayName || obj.name || id,
+      displayType: obj.displayType || 'Physical Product',
+      envId: obj.envId || null,
+      serviceId: obj.serviceId || '3DSpace',
+      contextId: obj.contextId || obj.context || null,
+      i3dx: obj.i3dx || null,
+      source: obj.source || 'drop'
+    };
+  }
+
   return {
     parseLocations: parseLocations,
+    parseJsonText: parseJsonText,
     toSelection: toSelection,
     toPlatformContext: toPlatformContext,
     extractFromHash: extractFromHash

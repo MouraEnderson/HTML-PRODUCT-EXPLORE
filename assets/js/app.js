@@ -166,6 +166,19 @@ var App = (function () {
         refreshUI();
         setStatus('Importado: ' + fileName + ' — ' + count + ' itens na estrutura.', 'ok');
       },
+      on3DXProduct: function (sel, count) {
+        APP_CONFIG.IMPORT_MODE = false;
+        refreshUI();
+        var msg =
+          'Produto: ' + (sel.displayName || sel.physicalid) + ' — ' + count + ' itens. ';
+        if (APP_CONFIG.CROSS_ORIGIN_WIDGET) {
+          msg += 'Filhos em preview (GitHub). BOM real da plataforma: publicar no 3DSpace.';
+          setStatus(msg, 'warn');
+        } else {
+          msg += 'E-BOM carregada da plataforma.';
+          setStatus(msg, 'ok');
+        }
+      },
       onError: function (msg) {
         setStatus('Importação: ' + msg, 'error');
       }

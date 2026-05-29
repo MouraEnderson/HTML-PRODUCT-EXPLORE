@@ -1,6 +1,6 @@
 /**
  * @file ui/drop-zone.js
- * Colar estrutura do Product Explorer (Ctrl+C) — sem arquivo.
+ * Colar E-BOM, arrastar Physical Product (JSON 3DXContent), ou arquivo.
  */
 var DropZone = (function () {
   'use strict';
@@ -11,14 +11,27 @@ var DropZone = (function () {
     var pasteArea = document.getElementById('pasteArea');
     if (!zone) return;
 
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(function (ev) {
+      zone.addEventListener(ev, prevent, false);
+    });
+    zone.addEventListener('dragover', function () {
+      zone.classList.add('drag-over');
+    });
+    zone.addEventListener('dragleave', function () {
+      zone.classList.remove('drag-over');
+    });
+    zone.addEventListener('drop', function (e) {
+      zone.classList.remove('drag-over');
+      onDrop(e, options, pasteArea);
+    });
+
     if (pasteArea) {
       pasteArea.addEventListener('paste', function (e) {
-        var text = '';
-        if (e.clipboardData) text = e.clipboardData.getData('text/plain') || '';
+        var text = extractClipboardText(e);
         if (text) {
           e.preventDefault();
           pasteArea.value = text;
-          processPaste(text, options);
+          processInput(text, options);
         }
       });
     }
@@ -26,7 +39,7 @@ var DropZone = (function () {
     var btnImport = document.getElementById('btnImportPaste');
     if (btnImport && pasteArea) {
       btnImport.addEventListener('click', function () {
-        processPaste(pasteArea.value, options);
+        processInput(pasteArea.value, options);
       });
     }
 
@@ -35,17 +48,15 @@ var DropZone = (function () {
       btnClip.addEventListener('click', function () {
         if (!navigator.clipboard || !navigator.clipboard.readText) {
           if (options.onError) {
-            options.onError('Use Ctrl+V na caixa de texto (leitura automática bloqueada no widget).');
+            options.onError('Use Ctrl+V na caixa ou arraste o produto do Explorer.');
           }
           return;
         }
         navigator.clipboard.readText().then(function (text) {
           if (pasteArea) pasteArea.value = text;
-          processPaste(text, options);
+          processInput(text, options);
         }).catch(function () {
-          if (options.onError) {
-            options.onError('Clique na caixa abaixo e pressione Ctrl+V.');
-          }
+          if (options.onError) options.onError('Ctrl+V na caixa ou arraste o Physical Product.');
         });
       });
     }
@@ -59,7 +70,7 @@ var DropZone = (function () {
           '1\tASM_Fuselage\tFuselage\tVPMReference\tB\tIN_WORK\n' +
           '2\tPRT_Frame_01\tFrame\tVPMPart\tA\tRELEASED';
         if (pasteArea) pasteArea.value = sample;
-        processPaste(sample, options);
+        processInput(sample, options);
       });
     }
 
@@ -87,23 +98,95 @@ var DropZone = (function () {
     e.stopPropagation();
   }
 
-  function processPaste(text, options) {
-    if (!text || !String(text).trim()) {
-      if (options.onError) options.onError('Nada para importar. Copie linhas no Explorer primeiro.');
+  function extractClipboardText(e) {
+    if (!e.clipboardData) return '';
+    return e.clipboardData.getData('text/plain') || e.clipboardData.getData('text') || '';
+  }
+
+  function extractDropText(e) {
+    var dt = e.dataTransfer;
+    if (!dt) return '';
+    var text = dt.getData('text/plain') || dt.getData('text') || '';
+    if (text) return text;
+    try {
+      text = dt.getData('application/json') || '';
+    } catch (err) { /* */ }
+    return text;
+  }
+
+  function onDrop(e, options, pasteArea) {
+    var dt = e.dataTransfer;
+    if (dt && dt.files && dt.files.length) {
+      handleFiles(dt.files[0], options);
       return;
     }
-    var label = document.getElementById('dropZoneLabel');
-    if (label) label.textContent = 'Processando dados colados...';
+    var text = extractDropText(e);
+    if (text && pasteArea) pasteArea.value = text;
+    processInput(text, options);
+  }
 
-    FileImportService.parseTextAsync(text)
+  function processInput(text, options) {
+    var trimmed = String(text || '').trim();
+    if (!trimmed) {
+      if (options.onError) {
+        options.onError('Arraste o Physical Product do Explorer para a caixa ou cole a E-BOM (Ctrl+C).');
+      }
+      return;
+    }
+
+    var sel = typeof ThreeDXContentParser !== 'undefined'
+      ? ThreeDXContentParser.parseJsonText(trimmed)
+      : null;
+
+    if (sel && sel.physicalid) {
+      import3DXProduct(sel, options);
+      return;
+    }
+
+    var label = document.getElementById('dropZoneLabel');
+    if (label) label.textContent = 'Processando linhas da E-BOM...';
+
+    FileImportService.parseTextAsync(trimmed)
       .then(function (items) {
         return BomService.loadFromImportedItems(items);
       })
       .then(function () {
-        finishImport(options, 'dados colados do Explorer');
+        finishImport(options, 'E-BOM colada');
       })
       .catch(function (err) {
-        if (label) label.textContent = 'Cole aqui a estrutura copiada do Product Explorer';
+        if (label) label.textContent = 'Arraste o produto ou cole linhas da grade E-BOM';
+        if (options.onError) {
+          options.onError(
+            (err.message || err) + ' — Se arrastou um produto, solte na caixa azul e clique Importar.'
+          );
+        }
+      });
+  }
+
+  function import3DXProduct(sel, options) {
+    var label = document.getElementById('dropZoneLabel');
+    if (label) label.textContent = 'Vinculando: ' + (sel.displayName || sel.physicalid) + '...';
+
+    ProductExplorerBridge.setSelection(sel);
+
+    BomService.loadFrom3DXProduct(sel)
+      .then(function () {
+        var n = BomService.getNodeCount();
+        var selLabel = document.getElementById('selectionLabel');
+        if (selLabel) {
+          selLabel.textContent = (sel.displayName || sel.name) + ' (' + sel.physicalid + ')';
+        }
+        if (options.on3DXProduct) {
+          options.on3DXProduct(sel, n);
+        } else {
+          finishImport(options, sel.displayName || 'produto 3DEXPERIENCE');
+        }
+        if (label) {
+          label.textContent = 'Produto: ' + (sel.displayName || sel.physicalid) + ' (' + n + ' itens)';
+        }
+      })
+      .catch(function (err) {
+        if (label) label.textContent = 'Arraste o produto ou cole linhas da grade E-BOM';
         if (options.onError) options.onError(err.message || err);
       });
   }
@@ -120,7 +203,7 @@ var DropZone = (function () {
         finishImport(options, file.name);
       })
       .catch(function (err) {
-        if (label) label.textContent = 'Cole aqui a estrutura copiada do Product Explorer';
+        if (label) label.textContent = 'Arraste o produto ou cole linhas da grade E-BOM';
         if (options.onError) options.onError(err.message || err);
       });
   }

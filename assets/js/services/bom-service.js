@@ -150,6 +150,31 @@ var BomService = (function () {
     return Promise.resolve(index);
   }
 
+  /** Produto arrastado/colido (JSON 3DXContent) — raiz real + preview filhos no GitHub. */
+  function loadFrom3DXProduct(sel) {
+    return loadRootFromSelection({
+      physicalid: sel.physicalid,
+      name: sel.displayName || sel.name || sel.physicalid,
+      title: sel.displayName || sel.name || sel.physicalid,
+      displayType: sel.displayType || 'Physical Product',
+      type: sel.type || 'VPMReference'
+    }).then(function () {
+      if (APP_CONFIG.CROSS_ORIGIN_WIDGET || APP_CONFIG.DEMO_MODE) {
+        if (index[rootId]) {
+          index[rootId].name = sel.displayName || index[rootId].name;
+          index[rootId].title = sel.displayName || index[rootId].title;
+          index[rootId].displayType = sel.displayType || index[rootId].displayType;
+          index[rootId].isAssembly = true;
+          index[rootId].expanded = true;
+        }
+        buildDemoSubtree(rootId, 1, 4);
+        return PhysicalProductService.enrichNodes(index);
+      }
+      if (index[rootId]) index[rootId].loaded = false;
+      return loadTreeRecursive(rootId, APP_CONFIG.BOM_INITIAL_DEPTH + 2, 1);
+    });
+  }
+
   function loadRootFromSelection(attrs) {
     reset();
     rootId = attrs.physicalid;
@@ -274,6 +299,7 @@ var BomService = (function () {
     reset: reset,
     loadRoot: loadRoot,
     loadRootFromSelection: loadRootFromSelection,
+    loadFrom3DXProduct: loadFrom3DXProduct,
     loadFromImportedItems: loadFromImportedItems,
     expandNode: expandNode,
     collapseNode: collapseNode,

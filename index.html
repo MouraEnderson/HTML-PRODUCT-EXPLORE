@@ -70,11 +70,12 @@
   <section id="dropZone" class="drop-zone panel paste-panel collapsed-fallback" aria-label="Fallback manual">
     <div class="panel-header">Fallback manual (não substitui o Explorer)</div>
     <div class="drop-zone-inner">
-      <p id="dropZoneLabel" class="drop-label">Só use se ainda não houver HTML no 3DSpace — cópia manual da grade E-BOM</p>
-      <details class="paste-details">
-        <summary>Colar do Explorer (temporário)</summary>
+      <p id="dropZoneLabel" class="drop-label">Arraste o <strong>Physical Product</strong> do Explorer para a caixa — ou cole linhas da E-BOM</p>
+      <details class="paste-details" open>
+        <summary>Arrastar produto ou colar E-BOM</summary>
       <ol class="paste-steps">
-        <li>Aba <strong>EXPLORE</strong> → produto aberto → selecione linhas da E-BOM → <strong>Ctrl+C</strong> → <strong>Ctrl+V</strong> abaixo.</li>
+        <li><strong>Produto:</strong> arraste o assembly (ex.: Drone) da árvore do Explorer para a caixa → <strong>Importar estrutura</strong>.</li>
+        <li><strong>E-BOM completa:</strong> selecione linhas na grade → Ctrl+C → Ctrl+V → Importar.</li>
       </ol>
       <textarea id="pasteArea" class="paste-area" rows="8" placeholder="Cole aqui (Ctrl+V) o texto copiado do Product Explorer..."></textarea>
       <div class="paste-actions">
