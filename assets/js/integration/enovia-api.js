@@ -12,9 +12,16 @@ var EnoviaApi = (function () {
     return restBase;
   }
 
+  function apiId(physicalId) {
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.normalizePhysicalId) {
+      return ThreeDXContentParser.normalizePhysicalId(physicalId);
+    }
+    return physicalId;
+  }
+
   function engItemUrl(physicalId) {
     var m = APP_CONFIG.MODELERS;
-    return restBase + '/' + m.ENG_ITEM + '/' + m.ENG_ITEM_TYPE + '/' + encodeURIComponent(physicalId);
+    return restBase + '/' + m.ENG_ITEM + '/' + m.ENG_ITEM_TYPE + '/' + encodeURIComponent(apiId(physicalId));
   }
 
   function engInstanceChildrenUrl(parentPhysicalId, skip, top) {
@@ -22,7 +29,7 @@ var EnoviaApi = (function () {
     top = top || APP_CONFIG.BOM_LAZY_BATCH_SIZE;
     var m = APP_CONFIG.MODELERS;
     return (
-      restBase + '/' + m.ENG_ITEM + '/' + parentPhysicalId +
+      restBase + '/' + m.ENG_ITEM + '/' + encodeURIComponent(apiId(parentPhysicalId)) +
       '/dseng:EngInstance?$skip=' + skip + '&$top=' + top
     );
   }
@@ -36,12 +43,12 @@ var EnoviaApi = (function () {
   }
 
   function vpmReferenceUrl(physicalId) {
-    return restBase + '/dsxcad/dsxcad:VPMReference/' + encodeURIComponent(physicalId);
+    return restBase + '/dsxcad/dsxcad:VPMReference/' + encodeURIComponent(apiId(physicalId));
   }
 
   function physicalProductUrl(physicalId) {
     var m = APP_CONFIG.MODELERS;
-    return restBase + '/' + m.PHYSICAL_PRODUCT + '/' + m.PHYS_PRODUCT_TYPE + '/' + encodeURIComponent(physicalId);
+    return restBase + '/' + m.PHYSICAL_PRODUCT + '/' + m.PHYS_PRODUCT_TYPE + '/' + encodeURIComponent(apiId(physicalId));
   }
 
   function getEngItem(physicalId, expand) {

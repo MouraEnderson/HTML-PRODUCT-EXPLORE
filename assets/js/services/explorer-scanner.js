@@ -21,11 +21,19 @@ var ExplorerScanner = (function () {
     return APP_CONFIG && APP_CONFIG.CAN_USE_ENOVIA_API;
   }
 
+  function normalizeId(id) {
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.normalizePhysicalId) {
+      return ThreeDXContentParser.normalizePhysicalId(id);
+    }
+    return String(id || '').trim();
+  }
+
   function isValidId(id) {
+    id = normalizeId(id);
     if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.isValidPhysicalId) {
       return ThreeDXContentParser.isValidPhysicalId(id);
     }
-    return id && String(id).length >= 16;
+    return id && String(id).length >= 8;
   }
 
   function clearBadSelection() {
@@ -52,7 +60,7 @@ var ExplorerScanner = (function () {
 
   function resolveFromUrlQuery() {
     var q = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
-    var id = String(q.physicalid || APP_CONFIG.URL_PHYSICAL_ID || '').trim();
+    var id = normalizeId(q.physicalid || APP_CONFIG.URL_PHYSICAL_ID || '');
     if (!id || !isValidId(id)) return null;
     var name = q.displayName || q.name || q.structure || q.rootName || getLabelStructureName() || id;
     return {
@@ -67,7 +75,7 @@ var ExplorerScanner = (function () {
 
   function readManualPhysicalId() {
     var el = document.getElementById('explorerObjectId');
-    var id = el && el.value ? String(el.value).trim() : '';
+    var id = normalizeId(el && el.value ? el.value : '');
     if (!isValidId(id)) return null;
     var nameEl = document.getElementById('explorerObjectName');
     var label = nameEl && nameEl.value ? String(nameEl.value).trim() : id;
@@ -136,7 +144,7 @@ var ExplorerScanner = (function () {
     var reg = APP_CONFIG.STRUCTURE_IDS || {};
     var key = String(term || '').trim();
     if (!key) return null;
-    var id = reg[key] || reg[key.toLowerCase()] || reg[key.toUpperCase()];
+    var id = normalizeId(reg[key] || reg[key.toLowerCase()] || reg[key.toUpperCase()]);
     if (!id || !isValidId(id)) return null;
     return {
       physicalid: id,

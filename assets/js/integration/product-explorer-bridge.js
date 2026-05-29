@@ -27,11 +27,19 @@ var ProductExplorerBridge = (function () {
     'getStructureRoot'
   ];
 
+  function normalizeId(id) {
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.normalizePhysicalId) {
+      return ThreeDXContentParser.normalizePhysicalId(id);
+    }
+    return id;
+  }
+
   function isValidId(id) {
+    id = normalizeId(id);
     if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.isValidPhysicalId) {
       return ThreeDXContentParser.isValidPhysicalId(id);
     }
-    return id && String(id).length >= 16;
+    return id && String(id).length >= 8;
   }
 
   function labelText(v) {
@@ -57,7 +65,9 @@ var ProductExplorerBridge = (function () {
       var fromItems = ThreeDXContentParser.toSelection({ data: { items: obj.items } });
       if (fromItems) return fromItems;
     }
-    var physicalid = obj.physicalid || obj.objectId || obj.id || obj.resourceid || obj['dseno:physicalid'];
+    var physicalid = normalizeId(
+      obj.physicalid || obj.objectId || obj.id || obj.resourceid || obj['dseno:physicalid']
+    );
     if (!isValidId(physicalid)) return null;
     var displayName = labelText(obj.displayName) || labelText(obj.title) || labelText(obj.name) || labelText(obj['dseno:name']);
     if (displayName.length <= 2 && !isNaN(displayName)) {
@@ -110,7 +120,9 @@ var ProductExplorerBridge = (function () {
   }
 
   function setSelection(sel, opts) {
-    if (!sel || !isValidId(sel.physicalid) || isBadDashboardSelection(sel)) return;
+    if (!sel || !sel.physicalid || isBadDashboardSelection(sel)) return;
+    sel = Object.assign({}, sel, { physicalid: normalizeId(sel.physicalid) });
+    if (!isValidId(sel.physicalid)) return;
     currentSelection = sel;
     if (opts && opts.silent) return;
     listeners.forEach(function (fn) {

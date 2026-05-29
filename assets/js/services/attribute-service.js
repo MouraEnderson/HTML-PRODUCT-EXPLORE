@@ -22,12 +22,20 @@ var AttributeService = (function () {
     return isNaN(d.getTime()) ? null : d;
   }
 
+  function normalizePid(id) {
+    if (!id) return id;
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.normalizePhysicalId) {
+      return ThreeDXContentParser.normalizePhysicalId(id);
+    }
+    return id;
+  }
+
   function extractFromMember(member) {
     var ce = member['dseno:CustomerAttributes'] || member.customerAttributes || {};
     var eng = member['dseng:EnterpriseReference'] || member.enterpriseReference || {};
 
     return {
-      physicalid: pick(member, ['physicalid', 'id']),
+      physicalid: normalizePid(pick(member, ['physicalid', 'id'])),
       name: pick(member, ['name', 'dseno:name', 'title']),
       title: pick(member, ['title', 'dseno:title', 'name']),
       description: pick(member, ['description', 'dseno:description']),

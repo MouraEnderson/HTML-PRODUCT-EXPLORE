@@ -5,13 +5,28 @@
 var ThreeDXContentParser = (function () {
   'use strict';
 
+  function normalizePhysicalId(id) {
+    id = String(id || '').trim();
+    if (!id) return id;
+    if (/^prd-/i.test(id)) return id;
+    // Hex ENOVIA legado (demo / on-prem) — sem prefixo prd-
+    if (/^[0-9A-Fa-f]{16,}$/.test(id)) return id;
+    if (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.NORMALIZE_PRD_IDS === false) return id;
+    var prefix =
+      (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.PHYSICAL_ID_PREFIX) || 'prd-';
+    return prefix + id.replace(/^prd-/i, '');
+  }
+
   function isValidPhysicalId(id) {
     if (!id) return false;
-    id = String(id).trim();
+    id = normalizePhysicalId(String(id).trim());
     if (id.length < 8) return false;
     // Hex ENOVIA clássico (ex. 32 caracteres)
     if (/^[0-9A-Fa-f]{16,}$/.test(id)) return true;
-    // Referência cloud / tenant (ex. R1132100929518-00511496)
+    // Referência cloud com prefixo prd- (ex. prd-R1132100929518-00511496)
+    if (/^prd-[A-Za-z0-9][A-Za-z0-9_.-]{6,120}$/i.test(id)) return true;
+    // Referência cloud sem prefixo (ex. R1132100929518-00511496)
+    if (/^R\d{10,}-[A-Za-z0-9_.-]+$/i.test(id)) return true;
     if (/^[A-Za-z0-9][A-Za-z0-9_.-]{7,127}$/.test(id)) return true;
     return false;
   }
@@ -194,6 +209,7 @@ var ThreeDXContentParser = (function () {
     toPlatformContext: toPlatformContext,
     extractFromHash: extractFromHash,
     isValidPhysicalId: isValidPhysicalId,
+    normalizePhysicalId: normalizePhysicalId,
     pickBestItem: pickBestItem
   };
 })();

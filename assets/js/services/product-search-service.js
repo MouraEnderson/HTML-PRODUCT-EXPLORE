@@ -41,6 +41,9 @@ var ProductSearchService = (function () {
       (raw.resource && (raw.resource.id || raw.resource.resourceid)) ||
       (raw.info && (raw.info.id || raw.info.physicalid));
     if (!id) return null;
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.normalizePhysicalId) {
+      id = ThreeDXContentParser.normalizePhysicalId(id);
+    }
     return {
       physicalid: id,
       type: raw.type || raw.objectType || 'VPMReference',

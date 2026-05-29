@@ -197,7 +197,15 @@ var BomService = (function () {
     return Promise.resolve(index);
   }
 
+  function normalizePid(id) {
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.normalizePhysicalId) {
+      return ThreeDXContentParser.normalizePhysicalId(id);
+    }
+    return id;
+  }
+
   function loadRoot(physicalId) {
+    physicalId = normalizePid(physicalId);
     reset();
     rootId = physicalId;
 

@@ -10,7 +10,11 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260531e',
+    BUILD: 'bom20260601a',
+
+    /** Tenant cloud: objetos usam prefixo prd- (ex. prd-R1132100929518-00511496) */
+    PHYSICAL_ID_PREFIX: 'prd-',
+    NORMALIZE_PRD_IDS: true,
     /** Não carrega BOM automático no boot — só após Varrer */
     WAIT_FOR_USER_SCAN: true,
     /** Sprint 1: API primeiro; cola só com ALLOW_PASTE_FALLBACK true */
@@ -137,7 +141,7 @@
      * Preencha Mont10: Explorer → raiz → Propriedades → ID físico.
      */
     STRUCTURE_IDS: {
-      Mont10: 'R1132100929518-00511496'
+      Mont10: 'prd-R1132100929518-00511496'
     },
 
     PLATFORM: {
@@ -918,13 +922,28 @@ var WafClient = (function () {
 var ThreeDXContentParser = (function () {
   'use strict';
 
+  function normalizePhysicalId(id) {
+    id = String(id || '').trim();
+    if (!id) return id;
+    if (/^prd-/i.test(id)) return id;
+    // Hex ENOVIA legado (demo / on-prem) — sem prefixo prd-
+    if (/^[0-9A-Fa-f]{16,}$/.test(id)) return id;
+    if (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.NORMALIZE_PRD_IDS === false) return id;
+    var prefix =
+      (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.PHYSICAL_ID_PREFIX) || 'prd-';
+    return prefix + id.replace(/^prd-/i, '');
+  }
+
   function isValidPhysicalId(id) {
     if (!id) return false;
-    id = String(id).trim();
+    id = normalizePhysicalId(String(id).trim());
     if (id.length < 8) return false;
     // Hex ENOVIA clássico (ex. 32 caracteres)
     if (/^[0-9A-Fa-f]{16,}$/.test(id)) return true;
-    // Referência cloud / tenant (ex. R1132100929518-00511496)
+    // Referência cloud com prefixo prd- (ex. prd-R1132100929518-00511496)
+    if (/^prd-[A-Za-z0-9][A-Za-z0-9_.-]{6,120}$/i.test(id)) return true;
+    // Referência cloud sem prefixo (ex. R1132100929518-00511496)
+    if (/^R\d{10,}-[A-Za-z0-9_.-]+$/i.test(id)) return true;
     if (/^[A-Za-z0-9][A-Za-z0-9_.-]{7,127}$/.test(id)) return true;
     return false;
   }
@@ -1107,6 +1126,7 @@ var ThreeDXContentParser = (function () {
     toPlatformContext: toPlatformContext,
     extractFromHash: extractFromHash,
     isValidPhysicalId: isValidPhysicalId,
+    normalizePhysicalId: normalizePhysicalId,
     pickBestItem: pickBestItem
   };
 })();
@@ -1126,9 +1146,16 @@ var EnoviaApi = (function () {
     return restBase;
   }
 
+  function apiId(physicalId) {
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.normalizePhysicalId) {
+      return ThreeDXContentParser.normalizePhysicalId(physicalId);
+    }
+    return physicalId;
+  }
+
   function engItemUrl(physicalId) {
     var m = APP_CONFIG.MODELERS;
-    return restBase + '/' + m.ENG_ITEM + '/' + m.ENG_ITEM_TYPE + '/' + encodeURIComponent(physicalId);
+    return restBase + '/' + m.ENG_ITEM + '/' + m.ENG_ITEM_TYPE + '/' + encodeURIComponent(apiId(physicalId));
   }
 
   function engInstanceChildrenUrl(parentPhysicalId, skip, top) {
@@ -1136,7 +1163,7 @@ var EnoviaApi = (function () {
     top = top || APP_CONFIG.BOM_LAZY_BATCH_SIZE;
     var m = APP_CONFIG.MODELERS;
     return (
-      restBase + '/' + m.ENG_ITEM + '/' + parentPhysicalId +
+      restBase + '/' + m.ENG_ITEM + '/' + encodeURIComponent(apiId(parentPhysicalId)) +
       '/dseng:EngInstance?$skip=' + skip + '&$top=' + top
     );
   }
@@ -1150,12 +1177,12 @@ var EnoviaApi = (function () {
   }
 
   function vpmReferenceUrl(physicalId) {
-    return restBase + '/dsxcad/dsxcad:VPMReference/' + encodeURIComponent(physicalId);
+    return restBase + '/dsxcad/dsxcad:VPMReference/' + encodeURIComponent(apiId(physicalId));
   }
 
   function physicalProductUrl(physicalId) {
     var m = APP_CONFIG.MODELERS;
-    return restBase + '/' + m.PHYSICAL_PRODUCT + '/' + m.PHYS_PRODUCT_TYPE + '/' + encodeURIComponent(physicalId);
+    return restBase + '/' + m.PHYSICAL_PRODUCT + '/' + m.PHYS_PRODUCT_TYPE + '/' + encodeURIComponent(apiId(physicalId));
   }
 
   function getEngItem(physicalId, expand) {
@@ -1349,6 +1376,9 @@ var ProductSearchService = (function () {
       (raw.resource && (raw.resource.id || raw.resource.resourceid)) ||
       (raw.info && (raw.info.id || raw.info.physicalid));
     if (!id) return null;
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.normalizePhysicalId) {
+      id = ThreeDXContentParser.normalizePhysicalId(id);
+    }
     return {
       physicalid: id,
       type: raw.type || raw.objectType || 'VPMReference',
@@ -1467,11 +1497,19 @@ var ProductExplorerBridge = (function () {
     'getStructureRoot'
   ];
 
+  function normalizeId(id) {
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.normalizePhysicalId) {
+      return ThreeDXContentParser.normalizePhysicalId(id);
+    }
+    return id;
+  }
+
   function isValidId(id) {
+    id = normalizeId(id);
     if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.isValidPhysicalId) {
       return ThreeDXContentParser.isValidPhysicalId(id);
     }
-    return id && String(id).length >= 16;
+    return id && String(id).length >= 8;
   }
 
   function labelText(v) {
@@ -1497,7 +1535,9 @@ var ProductExplorerBridge = (function () {
       var fromItems = ThreeDXContentParser.toSelection({ data: { items: obj.items } });
       if (fromItems) return fromItems;
     }
-    var physicalid = obj.physicalid || obj.objectId || obj.id || obj.resourceid || obj['dseno:physicalid'];
+    var physicalid = normalizeId(
+      obj.physicalid || obj.objectId || obj.id || obj.resourceid || obj['dseno:physicalid']
+    );
     if (!isValidId(physicalid)) return null;
     var displayName = labelText(obj.displayName) || labelText(obj.title) || labelText(obj.name) || labelText(obj['dseno:name']);
     if (displayName.length <= 2 && !isNaN(displayName)) {
@@ -1550,7 +1590,9 @@ var ProductExplorerBridge = (function () {
   }
 
   function setSelection(sel, opts) {
-    if (!sel || !isValidId(sel.physicalid) || isBadDashboardSelection(sel)) return;
+    if (!sel || !sel.physicalid || isBadDashboardSelection(sel)) return;
+    sel = Object.assign({}, sel, { physicalid: normalizeId(sel.physicalid) });
+    if (!isValidId(sel.physicalid)) return;
     currentSelection = sel;
     if (opts && opts.silent) return;
     listeners.forEach(function (fn) {
@@ -1755,12 +1797,20 @@ var AttributeService = (function () {
     return isNaN(d.getTime()) ? null : d;
   }
 
+  function normalizePid(id) {
+    if (!id) return id;
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.normalizePhysicalId) {
+      return ThreeDXContentParser.normalizePhysicalId(id);
+    }
+    return id;
+  }
+
   function extractFromMember(member) {
     var ce = member['dseno:CustomerAttributes'] || member.customerAttributes || {};
     var eng = member['dseng:EnterpriseReference'] || member.enterpriseReference || {};
 
     return {
-      physicalid: pick(member, ['physicalid', 'id']),
+      physicalid: normalizePid(pick(member, ['physicalid', 'id'])),
       name: pick(member, ['name', 'dseno:name', 'title']),
       title: pick(member, ['title', 'dseno:title', 'name']),
       description: pick(member, ['description', 'dseno:description']),
@@ -2591,11 +2641,19 @@ var ExplorerScanner = (function () {
     return APP_CONFIG && APP_CONFIG.CAN_USE_ENOVIA_API;
   }
 
+  function normalizeId(id) {
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.normalizePhysicalId) {
+      return ThreeDXContentParser.normalizePhysicalId(id);
+    }
+    return String(id || '').trim();
+  }
+
   function isValidId(id) {
+    id = normalizeId(id);
     if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.isValidPhysicalId) {
       return ThreeDXContentParser.isValidPhysicalId(id);
     }
-    return id && String(id).length >= 16;
+    return id && String(id).length >= 8;
   }
 
   function clearBadSelection() {
@@ -2622,7 +2680,7 @@ var ExplorerScanner = (function () {
 
   function resolveFromUrlQuery() {
     var q = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
-    var id = String(q.physicalid || APP_CONFIG.URL_PHYSICAL_ID || '').trim();
+    var id = normalizeId(q.physicalid || APP_CONFIG.URL_PHYSICAL_ID || '');
     if (!id || !isValidId(id)) return null;
     var name = q.displayName || q.name || q.structure || q.rootName || getLabelStructureName() || id;
     return {
@@ -2637,7 +2695,7 @@ var ExplorerScanner = (function () {
 
   function readManualPhysicalId() {
     var el = document.getElementById('explorerObjectId');
-    var id = el && el.value ? String(el.value).trim() : '';
+    var id = normalizeId(el && el.value ? el.value : '');
     if (!isValidId(id)) return null;
     var nameEl = document.getElementById('explorerObjectName');
     var label = nameEl && nameEl.value ? String(nameEl.value).trim() : id;
@@ -2706,7 +2764,7 @@ var ExplorerScanner = (function () {
     var reg = APP_CONFIG.STRUCTURE_IDS || {};
     var key = String(term || '').trim();
     if (!key) return null;
-    var id = reg[key] || reg[key.toLowerCase()] || reg[key.toUpperCase()];
+    var id = normalizeId(reg[key] || reg[key.toLowerCase()] || reg[key.toUpperCase()]);
     if (!id || !isValidId(id)) return null;
     return {
       physicalid: id,
@@ -3169,7 +3227,15 @@ var BomService = (function () {
     return Promise.resolve(index);
   }
 
+  function normalizePid(id) {
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.normalizePhysicalId) {
+      return ThreeDXContentParser.normalizePhysicalId(id);
+    }
+    return id;
+  }
+
   function loadRoot(physicalId) {
+    physicalId = normalizePid(physicalId);
     reset();
     rootId = physicalId;
 
@@ -4444,6 +4510,11 @@ var App = (function () {
   function applyUrlParamsToUI() {
     var q = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
     var id = String(q.physicalid || APP_CONFIG.URL_PHYSICAL_ID || '').trim();
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.normalizePhysicalId) {
+      id = ThreeDXContentParser.normalizePhysicalId(id);
+    } else if (/^R\d{10,}-/i.test(id) && !/^prd-/i.test(id)) {
+      id = 'prd-' + id;
+    }
     if (!id) return;
     var idEl = byId('explorerObjectId');
     if (idEl) idEl.value = id;
