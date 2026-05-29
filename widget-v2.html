@@ -18,9 +18,17 @@
     .bom-hint { margin: 0 0 10px; font-size: 13px; color: #1565c0; }
     .bom-fallback { margin-top: 12px; font-size: 12px; color: #666; }
     .bom-fallback textarea { width: 100%; height: 48px; margin-top: 6px; font-size: 11px; }
-    .bom-charts { padding: 8px 14px; }
-    .bom-chart { display: inline-block; width: 48%; min-height: 90px; margin: 1%; background: #fff; border: 1px solid #dde3ea; }
-    .bom-table-wrap { margin: 8px 14px; background: #fff; border: 1px solid #dde3ea; max-height: 200px; overflow: auto; }
+    #kpiGrid { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 14px !important; }
+    .kpi-card { flex: 1 1 22%; min-width: 72px; background: #fff; border-left: 4px solid #005686; border-radius: 6px; padding: 8px 6px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .kpi-value { display: block; font-size: 20px; font-weight: 700; color: #0d47a1; }
+    .kpi-label { display: block; font-size: 10px; color: #546e7a; line-height: 1.2; margin-top: 2px; }
+    .kpi-card.kpi-success { border-left-color: #2e7d32; }
+    .kpi-card.kpi-warning { border-left-color: #ed6c02; }
+    .kpi-card.kpi-danger { border-left-color: #c62828; }
+    .bom-charts { padding: 6px 10px; display: flex; flex-wrap: wrap; }
+    .bom-chart { display: inline-block; width: 48%; height: 130px; min-height: 130px; margin: 1%; background: #fff; border: 1px solid #dde3ea; position: relative; }
+    .bom-chart canvas { width: 100% !important; height: 110px !important; }
+    .bom-table-wrap { margin: 8px 14px; background: #fff; border: 1px solid #dde3ea; max-height: 180px; overflow: auto; display: block; }
     .bom-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     .bom-table th, .bom-table td { border: 1px solid #e0e0e0; padding: 4px 6px; }
     .bom-hidden { display: none; }
@@ -31,7 +39,7 @@
     window.__3DX_BOOT_DEFER__ = true;
     window.__3DX_DEFAULT_SNAPSHOT__ = 'data/mont10.json';
 
-    var BOM_BUILD = 'bom20260601g';
+    var BOM_BUILD = 'bom20260601h';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
 
     (function parseEmbedEarly() {
@@ -177,11 +185,22 @@
       });
     }
 
+    function loadCss(next) {
+      var l = document.createElement('link');
+      l.rel = 'stylesheet';
+      l.href = GH + 'assets/css/dashboard.css?v=' + BOM_BUILD;
+      l.onload = function () { if (next) next(); };
+      l.onerror = function () { if (next) next(); };
+      document.getElementsByTagName('head')[0].appendChild(l);
+    }
+
     function executeInit() {
       paint();
-      setBar('Carregando WAFData e API…', 'info');
-      loadWaf(function () {
-        startBundle();
+      setBar('Carregando Mont10…', 'info');
+      loadCss(function () {
+        loadWaf(function () {
+          startBundle();
+        });
       });
     }
 

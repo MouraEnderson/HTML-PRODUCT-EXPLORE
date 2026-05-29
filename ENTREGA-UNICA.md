@@ -3,12 +3,12 @@
 ## URL do Additional App (cole no Platform Manager)
 
 ```
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v2.html?snapshot=data/mont10.json&v=entrega2
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v2.html?snapshot=data/mont10.json&v=bom20260601h
 ```
 
 **Conta GitHub:** `mouraenderson` (com **e**).
 
-**Build:** `bom20260601g` — snapshot carrega no frame 3DDashboard (sem depender de `?query` no iframe interno).
+**Build:** `bom20260601h` — Mont10 embutido (sem depender de fetch GitHub) + KPIs/gráficos com CSS no iframe.
 
 ## O que você deve ver (sem clicar Varrer)
 
@@ -23,7 +23,7 @@ https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v2.html?snapshot=dat
 
 1. **Ctrl+Shift+R** na aba LISTA 3DX.
 2. Remova o widget BOM e adicione de novo com a URL acima (pode manter só `widget-v2.html` — o snapshot padrão já vem embutido no build **f**).
-3. Confira a faixa azul: **build bom20260601g**.
+3. Confira a faixa azul: **build bom20260601h**.
 
 ## Atualizar dados reais do Explorer
 

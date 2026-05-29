@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260601g',
+    BUILD: 'bom20260601h',
     /** Entrega Mont10: snapshot padrão no Additional App (frame 3DX perde ?query) */
     DEFAULT_SNAPSHOT_PATH: 'data/mont10.json',
 

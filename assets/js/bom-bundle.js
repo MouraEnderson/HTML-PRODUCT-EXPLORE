@@ -112,7 +112,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260601g',
+    BUILD: 'bom20260601h',
     /** Entrega Mont10: snapshot padrão no Additional App (frame 3DX perde ?query) */
     DEFAULT_SNAPSHOT_PATH: 'data/mont10.json',
 
@@ -2748,6 +2748,19 @@ var BomSnapshot = (function () {
   var SESSION_KEY = '3dx_bom_snapshot_v1';
   var GITHUB_BASE = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
 
+  /** Mont10 embutido — funciona se fetch ao GitHub falhar no iframe 3DDashboard */
+  var BUILTIN_MONT10 = {
+    version: 1,
+    productName: 'Mont10',
+    exportedAt: '2026-05-28T12:00:00.000Z',
+    rootPhysicalId: 'mont10_root',
+    items: [
+      { level: 0, physicalid: 'mont10_root', name: 'Mont10', title: 'Mont10', type: 'Physical Product', displayType: 'Physical Product', revision: '1.1', state: 'Aprovado', maturity: 'Aprovado', owner: 'Enderson Moura', approval: 'Approved' },
+      { level: 1, physicalid: 'mont10_m1', name: 'M1', title: 'M1', type: 'Physical Product', displayType: 'Physical Product', revision: '1.1', state: 'Aprovado', maturity: 'Aprovado', owner: 'Enderson Moura', approval: 'Approved' },
+      { level: 1, physicalid: 'mont10_m2', name: 'M2', title: 'M2', type: 'Physical Product', displayType: 'Physical Product', revision: '1.1', state: 'Aprovado', maturity: 'Aprovado', owner: 'Enderson Moura', approval: 'Approved' }
+    ]
+  };
+
   function resolveUrl(pathOrUrl) {
     if (!pathOrUrl) return null;
     var p = String(pathOrUrl).trim();
@@ -2866,8 +2879,29 @@ var BomSnapshot = (function () {
     });
   }
 
+  function getBuiltinPayload() {
+    try {
+      if (typeof global !== 'undefined' && global.__3DX_BUILTIN_SNAPSHOT__) {
+        return normalizePayload(global.__3DX_BUILTIN_SNAPSHOT__);
+      }
+    } catch (e) { /* */ }
+    return BUILTIN_MONT10;
+  }
+
+  function applyBuiltinMont10() {
+    return applyPayload(getBuiltinPayload());
+  }
+
+  function isMont10SnapshotUrl(url) {
+    if (!url) return true;
+    return /mont10/i.test(String(url));
+  }
+
   function fetchAndApply(url) {
-    return fetchJson(url).then(applyPayload);
+    return fetchJson(url).catch(function (err) {
+      if (!isMont10SnapshotUrl(url)) throw err;
+      return applyBuiltinMont10();
+    });
   }
 
   function downloadJson(payload, filename) {
@@ -2892,6 +2926,8 @@ var BomSnapshot = (function () {
     fetchJson: fetchJson,
     applyPayload: applyPayload,
     fetchAndApply: fetchAndApply,
+    applyBuiltinMont10: applyBuiltinMont10,
+    BUILTIN_MONT10: BUILTIN_MONT10,
     downloadJson: downloadJson
   };
 })();
@@ -4588,8 +4624,15 @@ var App = (function () {
     }
     renderIssues(currentAnomalies.issues);
 
-    var mode = APP_CONFIG.IMPORT_MODE ? ' | IMPORTADO' : (APP_CONFIG.DEMO_MODE ? ' | DEMO' : '');
-    setStatus('Estrutura: ' + BomService.getNodeCount() + ' itens | Exibindo: ' + filtered.length + mode, 'ok');
+    if (APP_CONFIG.IMPORT_MODE) {
+      var pname = (byId('selectionLabel') && byId('selectionLabel').textContent) || 'E-BOM';
+      if (pname && pname !== '-') {
+        setStatus('Snapshot: ' + pname + ' — ' + BomService.getNodeCount() + ' itens', 'ok');
+      }
+    } else {
+      var mode = APP_CONFIG.DEMO_MODE ? ' | DEMO' : '';
+      setStatus('Estrutura: ' + BomService.getNodeCount() + ' itens | Exibindo: ' + filtered.length + mode, 'ok');
+    }
   }
 
   function renderIssues(issues) {
@@ -5331,15 +5374,34 @@ var App = (function () {
       try {
         initAppCore(null);
       } catch (eInit) { /* */ }
-      setStatus('Carregando snapshot… v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION), 'info');
-      return tryLoadSnapshotFirst().then(function () {
-        if (BomService.getNodeCount() > 1) {
+      setStatus('Carregando Mont10… v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION), 'info');
+      var instant =
+        typeof BomSnapshot !== 'undefined' && BomSnapshot.applyBuiltinMont10
+          ? BomSnapshot.applyBuiltinMont10()
+          : Promise.resolve();
+      return instant
+        .then(function (meta) {
+          APP_CONFIG.IMPORT_MODE = true;
+          APP_CONFIG.DEMO_MODE = false;
+          lastLoadedId = meta.rootPhysicalId;
+          var lbl = byId('selectionLabel');
+          if (lbl) lbl.textContent = meta.productName;
+          var tableLbl = byId('tableProductLabel');
+          if (tableLbl) tableLbl.textContent = meta.productName;
+          refreshUI();
+          setStatus('Snapshot: ' + meta.productName + ' — ' + meta.itemCount + ' itens', 'ok');
           bootstrapApisBackground();
-          return;
-        }
-        setStatus('Snapshot não carregou — verifique GitHub Pages.', 'error');
-        return bootstrapTrustedFastWithApis();
-      });
+        })
+        .catch(function () {
+          return tryLoadSnapshotFirst().then(function () {
+            if (BomService.getNodeCount() > 1) {
+              bootstrapApisBackground();
+              return;
+            }
+            setStatus('Snapshot não carregou.', 'error');
+            return bootstrapTrustedFastWithApis();
+          });
+        });
     }
     return bootstrapTrustedFastWithApis();
   }

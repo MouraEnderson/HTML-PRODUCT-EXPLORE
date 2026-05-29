@@ -93,8 +93,15 @@ var App = (function () {
     }
     renderIssues(currentAnomalies.issues);
 
-    var mode = APP_CONFIG.IMPORT_MODE ? ' | IMPORTADO' : (APP_CONFIG.DEMO_MODE ? ' | DEMO' : '');
-    setStatus('Estrutura: ' + BomService.getNodeCount() + ' itens | Exibindo: ' + filtered.length + mode, 'ok');
+    if (APP_CONFIG.IMPORT_MODE) {
+      var pname = (byId('selectionLabel') && byId('selectionLabel').textContent) || 'E-BOM';
+      if (pname && pname !== '-') {
+        setStatus('Snapshot: ' + pname + ' — ' + BomService.getNodeCount() + ' itens', 'ok');
+      }
+    } else {
+      var mode = APP_CONFIG.DEMO_MODE ? ' | DEMO' : '';
+      setStatus('Estrutura: ' + BomService.getNodeCount() + ' itens | Exibindo: ' + filtered.length + mode, 'ok');
+    }
   }
 
   function renderIssues(issues) {
@@ -836,15 +843,34 @@ var App = (function () {
       try {
         initAppCore(null);
       } catch (eInit) { /* */ }
-      setStatus('Carregando snapshot… v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION), 'info');
-      return tryLoadSnapshotFirst().then(function () {
-        if (BomService.getNodeCount() > 1) {
+      setStatus('Carregando Mont10… v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION), 'info');
+      var instant =
+        typeof BomSnapshot !== 'undefined' && BomSnapshot.applyBuiltinMont10
+          ? BomSnapshot.applyBuiltinMont10()
+          : Promise.resolve();
+      return instant
+        .then(function (meta) {
+          APP_CONFIG.IMPORT_MODE = true;
+          APP_CONFIG.DEMO_MODE = false;
+          lastLoadedId = meta.rootPhysicalId;
+          var lbl = byId('selectionLabel');
+          if (lbl) lbl.textContent = meta.productName;
+          var tableLbl = byId('tableProductLabel');
+          if (tableLbl) tableLbl.textContent = meta.productName;
+          refreshUI();
+          setStatus('Snapshot: ' + meta.productName + ' — ' + meta.itemCount + ' itens', 'ok');
           bootstrapApisBackground();
-          return;
-        }
-        setStatus('Snapshot não carregou — verifique GitHub Pages.', 'error');
-        return bootstrapTrustedFastWithApis();
-      });
+        })
+        .catch(function () {
+          return tryLoadSnapshotFirst().then(function () {
+            if (BomService.getNodeCount() > 1) {
+              bootstrapApisBackground();
+              return;
+            }
+            setStatus('Snapshot não carregou.', 'error');
+            return bootstrapTrustedFastWithApis();
+          });
+        });
     }
     return bootstrapTrustedFastWithApis();
   }
