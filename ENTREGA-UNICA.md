@@ -1,36 +1,40 @@
-# Entrega — BOM Analytics Mont10 (dashboard 3DDashboard)
+# BOM Analytics — Explorer aberto (Fase 2)
 
-## URL do Additional App (cole no Platform Manager)
+## URL Additional App
 
 ```
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v2.html?snapshot=data/mont10.json&v=bom20260601j
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v2.html?v=bom20260602a
 ```
 
-**Conta GitHub:** `mouraenderson` (com **e**).
+**Build:** `bom20260602a` — lê o título do **Product Structure Explorer** no dashboard e carrega a BOM via API (sem depender de Mont10 fixo).
 
-**Build:** `bom20260601j` — Mont10 ao abrir **sem Varrer**; API só no botão verde.
+## Comportamento
 
-## O que você deve ver (sem clicar Varrer)
+1. Abra qualquer assembly no Explorer (Mont10, Drone, etc.).
+2. O BOM detecta o nome no título do widget Explorer.
+3. Carrega automaticamente (debounce ~2s) — **não precisa Varrer**.
+4. **Varrer** = forçar atualização manual.
 
-| Campo | Valor |
-|-------|--------|
-| Estrutura | **Mont10** |
-| Status | **Snapshot: Mont10 — 3 itens** |
-| KPIs | 3 total, 3 aprovados |
-| Tabela | Mont10, M1, M2 — Aprovado |
+## O que você deve ver
 
-## Se o dashboard ainda mostrar build antigo (`bom20260601e`)
+- **Estrutura:** nome igual ao Explorer (ex. `01_SKA_Drone Assembly_…` ou `Mont10`)
+- KPIs e tabela com a contagem real (ex. Drone ~19+, Mont10 = 3)
+- Status: `Carregado: … — N itens` ou mensagem de varredura
 
-1. **Ctrl+Shift+R** na aba LISTA 3DX.
-2. Remova o widget BOM e adicione de novo com a URL acima (pode manter só `widget-v2.html` — o snapshot padrão já vem embutido no build **f**).
-3. Confira a faixa azul: **build bom20260601j**.
+## Se API retornar 403/0
 
-## Atualizar dados reais do Explorer
+- Confirme build **bom20260602a** na faixa azul.
+- **Ctrl+Shift+R** no dashboard.
+- A API ENOVIA precisa responder no tenant (`*-space` ou `*-ifwe`); o widget tenta ambos.
 
-1. Explorer Mont10 → grade → **Ctrl+C**
-2. https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/collect.html → colar → **Gerar JSON** → **Baixar**
-3. Substituir `data/mont10.json` no repositório GitHub (commit).
+## Snapshot offline (opcional)
 
-## Varrer (futuro)
+Só com parâmetro explícito:
 
-Quando a API ENOVIA responder no tenant, o botão verde continua disponível; a entrega atual usa **snapshot** para não depender de rede `*-space`.
+```
+?snapshot=data/mont10.json
+```
+
+## Atualizar STRUCTURE_IDS (opcional)
+
+Explorer → raiz → Propriedades → ID físico → adicione em `assets/js/config.js` em `STRUCTURE_IDS` para busca mais rápida.

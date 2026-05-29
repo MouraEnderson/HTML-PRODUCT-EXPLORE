@@ -8,13 +8,13 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260601j',
-    /** Entrega Mont10: snapshot padrão no Additional App (frame 3DX perde ?query) */
+    BUILD: 'bom20260602a',
+    /** Fallback offline só com ?snapshot= na URL */
     DEFAULT_SNAPSHOT_PATH: 'data/mont10.json',
 
     /** Se *-space falhar (DNS), tenta mesmo tenant via *-ifwe/enovia */
     SPACE_FALLBACK_VIA_IFWE: true,
-    PREFER_IFWE_FIRST: true,
+    PREFER_IFWE_FIRST: false,
 
     /** Tenant cloud: objetos usam prefixo prd- (ex. prd-R1132100929518-00511496) */
     PHYSICAL_ID_PREFIX: 'prd-',
@@ -25,7 +25,7 @@
     USE_API_SCAN_FIRST: true,
     ALLOW_PASTE_FALLBACK: false,
     SCAN_TIMEOUT_MS: 90000,
-    AUTO_SCAN_ON_SELECTION: false,
+    AUTO_SCAN_ON_SELECTION: true,
     CAN_USE_ENOVIA_API: false,
 
     /** Somente Explorer → gráficos + tabela */
@@ -37,15 +37,16 @@
     SHOW_PLATFORM_SEARCH: false,
     AUTO_LOAD_DEMO_DRONE: false,
     DEMO_ON_API_FAIL: false,
-    SNAPSHOT_FIRST: true,
-    /** 3DDashboard: Mont10 no boot; API só no botão Varrer */
-    SNAPSHOT_DELIVERY_MODE: true,
-    AUTO_SYNC_EXPLORER_MS: 15000,
+    SNAPSHOT_FIRST: false,
+    SNAPSHOT_DELIVERY_MODE: false,
+    /** Poll título do Explorer no dashboard (estrutura aberta) */
+    AUTO_SYNC_EXPLORER_MS: 2500,
+    STRUCTURE_SYNC_DEBOUNCE_MS: 1800,
     SKIP_PP_ENRICH: true,
     BOM_FAST_DEPTH: 3,
     USE_FAST_BOOT: true,
     /** Se Explorer não responder em N ms, carrega produto padrão do tenant */
-    EXPLORER_FALLBACK_MS: 0,
+    EXPLORER_FALLBACK_MS: 3000,
 
     /** Limite de nós na árvore (proteção memória) */
     BOM_MAX_NODES: 50000,
@@ -148,7 +149,11 @@
      */
     STRUCTURE_IDS: {
       Mont10: '89765370FFF30200500C474F00184933',
-      'prd-R1132100929518-00511496': '89765370FFF30200500C474F00184933'
+      'prd-R1132100929518-00511496': '89765370FFF30200500C474F00184933',
+      '01_SKA_Drone Assembly_130520206': '132FB3CE26D70E006A18D1870000316D',
+      '01_SKA_Drone Assembly_130520208': '132FB3CE26D70E006A18D1870000316D',
+      '01_SKA_Drone': '132FB3CE26D70E006A18D1870000316D',
+      'prd-R1132100929518-01172440': '132FB3CE26D70E006A18D1870000316D'
     },
 
     PLATFORM: {
@@ -203,6 +208,9 @@
       APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
       APP_CONFIG.CAN_USE_ENOVIA_API = true;
       APP_CONFIG.WIDGET_MODE = trusted ? 'additional_app' : '3dexperience_host';
+      APP_CONFIG.SNAPSHOT_DELIVERY_MODE = false;
+      APP_CONFIG.WAIT_FOR_USER_SCAN = false;
+      APP_CONFIG.AUTO_SCAN_ON_SELECTION = true;
       return;
     }
 
@@ -219,9 +227,6 @@
 
   if (query.snapshot || query.snap || query.data) {
     APP_CONFIG.SNAPSHOT_URL = query.snapshot || query.snap || query.data;
-    APP_CONFIG.WAIT_FOR_USER_SCAN = false;
-  } else if (global.__3DX_TRUSTED_WIDGET__ && APP_CONFIG.DEFAULT_SNAPSHOT_PATH) {
-    APP_CONFIG.SNAPSHOT_URL = APP_CONFIG.DEFAULT_SNAPSHOT_PATH;
     APP_CONFIG.WAIT_FOR_USER_SCAN = false;
   }
   if (query.physicalid) {

@@ -6,6 +6,7 @@ var ProductExplorerBridge = (function () {
   'use strict';
 
   var listeners = [];
+  var structureListeners = [];
   var currentSelection = null;
   var structureNameHint = null;
 
@@ -117,11 +118,19 @@ var ProductExplorerBridge = (function () {
     return m ? m[1].trim() : null;
   }
 
+  function notifyStructureChange(name) {
+    structureListeners.forEach(function (fn) {
+      try { fn(name); } catch (e) { console.error('[Bridge structure]', e); }
+    });
+  }
+
   function setStructureNameHint(name) {
     var n = String(name || '').trim();
     if (!n || n === '-') return;
     if (/^(enderson|moura|login|user)/i.test(n)) return;
+    if (n === structureNameHint) return;
     structureNameHint = n;
+    notifyStructureChange(n);
   }
 
   function getStructureNameHint() {
@@ -268,10 +277,32 @@ var ProductExplorerBridge = (function () {
     } catch (e2) { /* */ }
   }
 
+  function pollDashboardExplorerChrome() {
+    var found = null;
+    try {
+      var doc = window.top && window.top.document;
+      if (!doc || !doc.body) return null;
+      var nodes = doc.querySelectorAll('div, span, p, h1, h2, h3, td, th, a, li');
+      for (var i = 0; i < nodes.length; i++) {
+        var text = (nodes[i].textContent || '').trim();
+        if (text.length < 12 || text.length > 120) continue;
+        if (text.indexOf('Product Structure Explorer') < 0) continue;
+        var n = extractStructureNameFromText(text);
+        if (n && n.length > 1) {
+          found = n;
+          break;
+        }
+      }
+    } catch (e) { /* */ }
+    if (found) setStructureNameHint(found);
+    return found;
+  }
+
   function pollStructureHint() {
     if (typeof PlatformBridge !== 'undefined' && PlatformBridge.requestExplorerStructure) {
       PlatformBridge.requestExplorerStructure();
     }
+    pollDashboardExplorerChrome();
     try {
       var titles = [document.title || ''];
       if (window.widget && window.widget.getTitle) {
@@ -282,6 +313,11 @@ var ProductExplorerBridge = (function () {
         if (n) setStructureNameHint(n);
       });
     } catch (e) { /* */ }
+  }
+
+  function subscribeStructure(fn) {
+    structureListeners.push(fn);
+    if (structureNameHint) fn(structureNameHint);
   }
 
   function pollSelection() {
@@ -325,6 +361,8 @@ var ProductExplorerBridge = (function () {
     normalizeSelection: normalizeSelection,
     pollSelection: pollSelection,
     pollStructureHint: pollStructureHint,
+    pollDashboardExplorerChrome: pollDashboardExplorerChrome,
+    subscribeStructure: subscribeStructure,
     readHashSelection: readHashSelection
   };
 })();

@@ -112,13 +112,13 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260601j',
-    /** Entrega Mont10: snapshot padrão no Additional App (frame 3DX perde ?query) */
+    BUILD: 'bom20260602a',
+    /** Fallback offline só com ?snapshot= na URL */
     DEFAULT_SNAPSHOT_PATH: 'data/mont10.json',
 
     /** Se *-space falhar (DNS), tenta mesmo tenant via *-ifwe/enovia */
     SPACE_FALLBACK_VIA_IFWE: true,
-    PREFER_IFWE_FIRST: true,
+    PREFER_IFWE_FIRST: false,
 
     /** Tenant cloud: objetos usam prefixo prd- (ex. prd-R1132100929518-00511496) */
     PHYSICAL_ID_PREFIX: 'prd-',
@@ -129,7 +129,7 @@
     USE_API_SCAN_FIRST: true,
     ALLOW_PASTE_FALLBACK: false,
     SCAN_TIMEOUT_MS: 90000,
-    AUTO_SCAN_ON_SELECTION: false,
+    AUTO_SCAN_ON_SELECTION: true,
     CAN_USE_ENOVIA_API: false,
 
     /** Somente Explorer → gráficos + tabela */
@@ -141,15 +141,16 @@
     SHOW_PLATFORM_SEARCH: false,
     AUTO_LOAD_DEMO_DRONE: false,
     DEMO_ON_API_FAIL: false,
-    SNAPSHOT_FIRST: true,
-    /** 3DDashboard: Mont10 no boot; API só no botão Varrer */
-    SNAPSHOT_DELIVERY_MODE: true,
-    AUTO_SYNC_EXPLORER_MS: 15000,
+    SNAPSHOT_FIRST: false,
+    SNAPSHOT_DELIVERY_MODE: false,
+    /** Poll título do Explorer no dashboard (estrutura aberta) */
+    AUTO_SYNC_EXPLORER_MS: 2500,
+    STRUCTURE_SYNC_DEBOUNCE_MS: 1800,
     SKIP_PP_ENRICH: true,
     BOM_FAST_DEPTH: 3,
     USE_FAST_BOOT: true,
     /** Se Explorer não responder em N ms, carrega produto padrão do tenant */
-    EXPLORER_FALLBACK_MS: 0,
+    EXPLORER_FALLBACK_MS: 3000,
 
     /** Limite de nós na árvore (proteção memória) */
     BOM_MAX_NODES: 50000,
@@ -252,7 +253,11 @@
      */
     STRUCTURE_IDS: {
       Mont10: '89765370FFF30200500C474F00184933',
-      'prd-R1132100929518-00511496': '89765370FFF30200500C474F00184933'
+      'prd-R1132100929518-00511496': '89765370FFF30200500C474F00184933',
+      '01_SKA_Drone Assembly_130520206': '132FB3CE26D70E006A18D1870000316D',
+      '01_SKA_Drone Assembly_130520208': '132FB3CE26D70E006A18D1870000316D',
+      '01_SKA_Drone': '132FB3CE26D70E006A18D1870000316D',
+      'prd-R1132100929518-01172440': '132FB3CE26D70E006A18D1870000316D'
     },
 
     PLATFORM: {
@@ -307,6 +312,9 @@
       APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
       APP_CONFIG.CAN_USE_ENOVIA_API = true;
       APP_CONFIG.WIDGET_MODE = trusted ? 'additional_app' : '3dexperience_host';
+      APP_CONFIG.SNAPSHOT_DELIVERY_MODE = false;
+      APP_CONFIG.WAIT_FOR_USER_SCAN = false;
+      APP_CONFIG.AUTO_SCAN_ON_SELECTION = true;
       return;
     }
 
@@ -323,9 +331,6 @@
 
   if (query.snapshot || query.snap || query.data) {
     APP_CONFIG.SNAPSHOT_URL = query.snapshot || query.snap || query.data;
-    APP_CONFIG.WAIT_FOR_USER_SCAN = false;
-  } else if (global.__3DX_TRUSTED_WIDGET__ && APP_CONFIG.DEFAULT_SNAPSHOT_PATH) {
-    APP_CONFIG.SNAPSHOT_URL = APP_CONFIG.DEFAULT_SNAPSHOT_PATH;
     APP_CONFIG.WAIT_FOR_USER_SCAN = false;
   }
   if (query.physicalid) {
@@ -1766,6 +1771,7 @@ var ProductExplorerBridge = (function () {
   'use strict';
 
   var listeners = [];
+  var structureListeners = [];
   var currentSelection = null;
   var structureNameHint = null;
 
@@ -1877,11 +1883,19 @@ var ProductExplorerBridge = (function () {
     return m ? m[1].trim() : null;
   }
 
+  function notifyStructureChange(name) {
+    structureListeners.forEach(function (fn) {
+      try { fn(name); } catch (e) { console.error('[Bridge structure]', e); }
+    });
+  }
+
   function setStructureNameHint(name) {
     var n = String(name || '').trim();
     if (!n || n === '-') return;
     if (/^(enderson|moura|login|user)/i.test(n)) return;
+    if (n === structureNameHint) return;
     structureNameHint = n;
+    notifyStructureChange(n);
   }
 
   function getStructureNameHint() {
@@ -2028,10 +2042,32 @@ var ProductExplorerBridge = (function () {
     } catch (e2) { /* */ }
   }
 
+  function pollDashboardExplorerChrome() {
+    var found = null;
+    try {
+      var doc = window.top && window.top.document;
+      if (!doc || !doc.body) return null;
+      var nodes = doc.querySelectorAll('div, span, p, h1, h2, h3, td, th, a, li');
+      for (var i = 0; i < nodes.length; i++) {
+        var text = (nodes[i].textContent || '').trim();
+        if (text.length < 12 || text.length > 120) continue;
+        if (text.indexOf('Product Structure Explorer') < 0) continue;
+        var n = extractStructureNameFromText(text);
+        if (n && n.length > 1) {
+          found = n;
+          break;
+        }
+      }
+    } catch (e) { /* */ }
+    if (found) setStructureNameHint(found);
+    return found;
+  }
+
   function pollStructureHint() {
     if (typeof PlatformBridge !== 'undefined' && PlatformBridge.requestExplorerStructure) {
       PlatformBridge.requestExplorerStructure();
     }
+    pollDashboardExplorerChrome();
     try {
       var titles = [document.title || ''];
       if (window.widget && window.widget.getTitle) {
@@ -2042,6 +2078,11 @@ var ProductExplorerBridge = (function () {
         if (n) setStructureNameHint(n);
       });
     } catch (e) { /* */ }
+  }
+
+  function subscribeStructure(fn) {
+    structureListeners.push(fn);
+    if (structureNameHint) fn(structureNameHint);
   }
 
   function pollSelection() {
@@ -2085,6 +2126,8 @@ var ProductExplorerBridge = (function () {
     normalizeSelection: normalizeSelection,
     pollSelection: pollSelection,
     pollStructureHint: pollStructureHint,
+    pollDashboardExplorerChrome: pollDashboardExplorerChrome,
+    subscribeStructure: subscribeStructure,
     readHashSelection: readHashSelection
   };
 })();
@@ -3136,11 +3179,25 @@ var ExplorerScanner = (function () {
     var key = String(term || '').trim();
     if (!key) return null;
     var id = normalizeId(reg[key] || reg[key.toLowerCase()] || reg[key.toUpperCase()]);
+    var matchedKey = key;
+    if (!id || !isValidId(id)) {
+      var keys = Object.keys(reg);
+      var tLow = key.toLowerCase();
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        var kLow = k.toLowerCase();
+        if (tLow.indexOf(kLow) >= 0 || kLow.indexOf(tLow) >= 0) {
+          id = normalizeId(reg[k]);
+          matchedKey = k;
+          break;
+        }
+      }
+    }
     if (!id || !isValidId(id)) return null;
     return {
       physicalid: id,
       type: 'VPMReference',
-      name: key,
+      name: matchedKey,
       displayName: key,
       displayType: 'Physical Product',
       source: 'structure-registry'
@@ -4619,14 +4676,13 @@ var App = (function () {
   }
 
   function isSnapshotDeliveryMode() {
-    if (APP_CONFIG.SNAPSHOT_DELIVERY_MODE === false) return false;
-    return !!(
-      APP_CONFIG.SNAPSHOT_URL ||
-      APP_CONFIG.DEFAULT_SNAPSHOT_PATH ||
-      APP_CONFIG.SNAPSHOT_FIRST ||
-      root.__3DX_TRUSTED_WIDGET__
-    );
+    if (APP_CONFIG.SNAPSHOT_DELIVERY_MODE === true) return true;
+    if (APP_CONFIG.CAN_USE_ENOVIA_API) return false;
+    return !!(APP_CONFIG.SNAPSHOT_URL || APP_CONFIG.SNAPSHOT_FIRST);
   }
+
+  var lastSyncedStructure = null;
+  var structureSyncTimer = null;
 
   function allowApiLoad() {
     return !!root.__3DX_ALLOW_API__;
@@ -4932,30 +4988,68 @@ var App = (function () {
 
   var autoScanTimer = null;
 
+  function syncOpenExplorerStructure(force) {
+    if (!APP_CONFIG.CAN_USE_ENOVIA_API || typeof ExplorerScanner === 'undefined') return;
+    if (typeof ProductExplorerBridge !== 'undefined') {
+      if (ProductExplorerBridge.pollDashboardExplorerChrome) {
+        ProductExplorerBridge.pollDashboardExplorerChrome();
+      }
+      ProductExplorerBridge.pollStructureHint();
+      ProductExplorerBridge.pollSelection();
+    }
+    var hint = typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getStructureNameHint
+      ? ProductExplorerBridge.getStructureNameHint()
+      : null;
+    var sel = typeof ProductExplorerBridge !== 'undefined' ? ProductExplorerBridge.getSelection() : null;
+    var key = hint || (sel && (sel.displayName || sel.name)) || '';
+    if (!key) return;
+    var label = byId('selectionLabel');
+    if (label) label.textContent = key;
+    if (!force && key === lastSyncedStructure && BomService.getNodeCount() > 1) return;
+    if (loading && !force) return;
+    if (structureSyncTimer) window.clearTimeout(structureSyncTimer);
+    structureSyncTimer = window.setTimeout(function () {
+      lastSyncedStructure = key;
+      root.__3DX_ALLOW_API__ = true;
+      setLoading(true);
+      setStatus('Carregando estrutura aberta: ' + key + '…', 'info');
+      apiTimeout(
+        ExplorerScanner.scan(),
+        APP_CONFIG.SCAN_TIMEOUT_MS || 90000,
+        'Timeout ao carregar ' + key
+      )
+        .then(function (res) {
+          APP_CONFIG.DEMO_MODE = false;
+          APP_CONFIG.IMPORT_MODE = res.mode !== 'api';
+          if (res.meta) lastLoadedId = res.meta.rootPhysicalId;
+          refreshUI();
+          setStatus(res.message || ('Carregado: ' + key + ' — ' + BomService.getNodeCount() + ' itens'), 'ok');
+        })
+        .catch(function (err) {
+          var msg = (err && err.message) ? err.message : String(err);
+          setStatus('API: ' + msg, 'error');
+        })
+        .finally(function () {
+          root.__3DX_ALLOW_API__ = false;
+          setLoading(false);
+        });
+    }, APP_CONFIG.STRUCTURE_SYNC_DEBOUNCE_MS || 1800);
+  }
+
   function onSelection(sel) {
     if (!sel || !sel.physicalid) return;
     var label = byId('selectionLabel');
     if (label) {
       label.textContent = (sel.displayName || sel.name || sel.physicalid);
     }
-    if (isSnapshotDeliveryMode() && !allowApiLoad()) {
-      return;
-    }
     if (APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.CAN_USE_ENOVIA_API) {
       return;
     }
-    if (
-      APP_CONFIG.AUTO_SCAN_ON_SELECTION &&
-      APP_CONFIG.CAN_USE_ENOVIA_API &&
-      typeof ExplorerScanner !== 'undefined'
-    ) {
-      if (autoScanTimer) window.clearTimeout(autoScanTimer);
-      autoScanTimer = window.setTimeout(function () {
-        var btn = byId('btnScanExplorer');
-        runExplorerScan(btn);
-      }, 1200);
+    if (APP_CONFIG.CAN_USE_ENOVIA_API && typeof ExplorerScanner !== 'undefined') {
+      syncOpenExplorerStructure(false);
       return;
     }
+    if (isSnapshotDeliveryMode() && !allowApiLoad()) return;
     loadBom(sel.physicalid);
   }
 
@@ -5178,6 +5272,11 @@ var App = (function () {
     }
     ProductExplorerBridge.init();
     ProductExplorerBridge.subscribe(onSelection);
+    if (ProductExplorerBridge.subscribeStructure) {
+      ProductExplorerBridge.subscribeStructure(function (name) {
+        syncOpenExplorerStructure(false);
+      });
+    }
     initUI();
     if (typeof ExplorerSyncPanel !== 'undefined') {
       ExplorerSyncPanel.init({
@@ -5217,7 +5316,10 @@ var App = (function () {
   function startExplorerPoll() {
     var ms = APP_CONFIG.AUTO_SYNC_EXPLORER_MS || 0;
     if (ms < 2000) return;
-    setInterval(pullExplorerSelection, ms);
+    setInterval(function () {
+      pullExplorerSelection();
+      syncOpenExplorerStructure(false);
+    }, ms);
   }
 
   function toggleCrossOriginUI() {
@@ -5270,8 +5372,10 @@ var App = (function () {
   function bootstrap() {
     setStatus('BOM Analytics v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION) + ' — iniciando…', 'info');
     var watchdog = window.setTimeout(function () {
-      if (BomService.getNodeCount() <= 1) {
-        if (isSnapshotDeliveryMode() && typeof BomSnapshot !== 'undefined' && BomSnapshot.applyBuiltinMont10) {
+        if (BomService.getNodeCount() <= 1) {
+        if (APP_CONFIG.CAN_USE_ENOVIA_API) {
+          syncOpenExplorerStructure(true);
+        } else if (isSnapshotDeliveryMode() && typeof BomSnapshot !== 'undefined' && BomSnapshot.applyBuiltinMont10) {
           BomSnapshot.applyBuiltinMont10().then(function (meta) {
             APP_CONFIG.IMPORT_MODE = true;
             var lbl = byId('selectionLabel');
@@ -5370,6 +5474,10 @@ var App = (function () {
   }
 
   function trySyncThenLoad() {
+    if (APP_CONFIG.CAN_USE_ENOVIA_API) {
+      syncOpenExplorerStructure(true);
+      return;
+    }
     if (isSnapshotDeliveryMode()) {
       if (BomService.getNodeCount() > 1) return;
       if (typeof BomSnapshot !== 'undefined' && BomSnapshot.applyBuiltinMont10) {
@@ -5424,7 +5532,10 @@ var App = (function () {
     );
     if (APP_CONFIG.EXPLORER_FALLBACK_MS === 0) return;
     window.setTimeout(function () {
-      if (isSnapshotDeliveryMode()) return;
+      if (APP_CONFIG.CAN_USE_ENOVIA_API) {
+        syncOpenExplorerStructure(true);
+        return;
+      }
       pullExplorerSelection();
       var later = ProductExplorerBridge.getSelection();
       if (later && later.physicalid && later.physicalid !== lastLoadedId) {
@@ -5464,7 +5575,7 @@ var App = (function () {
       })
       .then(function (spaceUrl) {
         var space = spaceUrl || getTenantSpaceUrl();
-        if (space && !BomService.getNodeCount()) initAppCore(space);
+        if (space) initAppCore(space);
         if (space) return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
         return null;
       })
@@ -5475,40 +5586,7 @@ var App = (function () {
 
   function bootstrapTrustedFast() {
     APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
-
-    if (hasSnapshotConfigured()) {
-      setStatus('Carregando Mont10… v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION), 'info');
-      var instant =
-        typeof BomSnapshot !== 'undefined' && BomSnapshot.applyBuiltinMont10
-          ? BomSnapshot.applyBuiltinMont10()
-          : Promise.resolve();
-      return instant
-        .then(function (meta) {
-          APP_CONFIG.IMPORT_MODE = true;
-          APP_CONFIG.DEMO_MODE = false;
-          lastLoadedId = meta.rootPhysicalId;
-          try {
-            initAppCore(getTenantSpaceUrl());
-          } catch (eInit) { /* */ }
-          var lbl = byId('selectionLabel');
-          if (lbl) lbl.textContent = meta.productName;
-          var tableLbl = byId('tableProductLabel');
-          if (tableLbl) tableLbl.textContent = meta.productName;
-          refreshUI();
-          setStatus('Snapshot: ' + meta.productName + ' — ' + meta.itemCount + ' itens (sem Varrer)', 'ok');
-          bootstrapApisBackground();
-        })
-        .catch(function () {
-          return tryLoadSnapshotFirst().then(function () {
-            if (BomService.getNodeCount() > 1) {
-              bootstrapApisBackground();
-              return;
-            }
-            setStatus('Snapshot não carregou.', 'error');
-            return bootstrapTrustedFastWithApis();
-          });
-        });
-    }
+    APP_CONFIG.SNAPSHOT_DELIVERY_MODE = false;
     return bootstrapTrustedFastWithApis();
   }
 
@@ -5538,15 +5616,15 @@ var App = (function () {
         return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
       })
       .then(function () {
-        return tryLoadSnapshotFirst().then(function () {
-          if (BomService.getNodeCount() > 1) return;
-          if (APP_CONFIG.WAIT_FOR_USER_SCAN) {
-            setStatus('Selecione a raiz no Explorer → clique Varrer estrutura.', 'info');
-            return;
-          }
-          setStatus('Carregando E-BOM…', 'info');
-          trySyncThenLoad();
-        });
+        if (APP_CONFIG.SNAPSHOT_URL) {
+          return tryLoadSnapshotFirst().then(function () {
+            if (BomService.getNodeCount() > 1) return;
+            trySyncThenLoad();
+          });
+        }
+        setStatus('Lendo estrutura aberta no Explorer…', 'info');
+        trySyncThenLoad();
+        return null;
       })
       .catch(function (err) {
         console.error(err);

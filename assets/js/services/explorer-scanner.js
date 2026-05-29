@@ -163,11 +163,25 @@ var ExplorerScanner = (function () {
     var key = String(term || '').trim();
     if (!key) return null;
     var id = normalizeId(reg[key] || reg[key.toLowerCase()] || reg[key.toUpperCase()]);
+    var matchedKey = key;
+    if (!id || !isValidId(id)) {
+      var keys = Object.keys(reg);
+      var tLow = key.toLowerCase();
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        var kLow = k.toLowerCase();
+        if (tLow.indexOf(kLow) >= 0 || kLow.indexOf(tLow) >= 0) {
+          id = normalizeId(reg[k]);
+          matchedKey = k;
+          break;
+        }
+      }
+    }
     if (!id || !isValidId(id)) return null;
     return {
       physicalid: id,
       type: 'VPMReference',
-      name: key,
+      name: matchedKey,
       displayName: key,
       displayType: 'Physical Product',
       source: 'structure-registry'

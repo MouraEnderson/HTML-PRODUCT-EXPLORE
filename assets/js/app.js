@@ -44,14 +44,13 @@ var App = (function () {
   }
 
   function isSnapshotDeliveryMode() {
-    if (APP_CONFIG.SNAPSHOT_DELIVERY_MODE === false) return false;
-    return !!(
-      APP_CONFIG.SNAPSHOT_URL ||
-      APP_CONFIG.DEFAULT_SNAPSHOT_PATH ||
-      APP_CONFIG.SNAPSHOT_FIRST ||
-      root.__3DX_TRUSTED_WIDGET__
-    );
+    if (APP_CONFIG.SNAPSHOT_DELIVERY_MODE === true) return true;
+    if (APP_CONFIG.CAN_USE_ENOVIA_API) return false;
+    return !!(APP_CONFIG.SNAPSHOT_URL || APP_CONFIG.SNAPSHOT_FIRST);
   }
+
+  var lastSyncedStructure = null;
+  var structureSyncTimer = null;
 
   function allowApiLoad() {
     return !!root.__3DX_ALLOW_API__;
@@ -357,30 +356,68 @@ var App = (function () {
 
   var autoScanTimer = null;
 
+  function syncOpenExplorerStructure(force) {
+    if (!APP_CONFIG.CAN_USE_ENOVIA_API || typeof ExplorerScanner === 'undefined') return;
+    if (typeof ProductExplorerBridge !== 'undefined') {
+      if (ProductExplorerBridge.pollDashboardExplorerChrome) {
+        ProductExplorerBridge.pollDashboardExplorerChrome();
+      }
+      ProductExplorerBridge.pollStructureHint();
+      ProductExplorerBridge.pollSelection();
+    }
+    var hint = typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getStructureNameHint
+      ? ProductExplorerBridge.getStructureNameHint()
+      : null;
+    var sel = typeof ProductExplorerBridge !== 'undefined' ? ProductExplorerBridge.getSelection() : null;
+    var key = hint || (sel && (sel.displayName || sel.name)) || '';
+    if (!key) return;
+    var label = byId('selectionLabel');
+    if (label) label.textContent = key;
+    if (!force && key === lastSyncedStructure && BomService.getNodeCount() > 1) return;
+    if (loading && !force) return;
+    if (structureSyncTimer) window.clearTimeout(structureSyncTimer);
+    structureSyncTimer = window.setTimeout(function () {
+      lastSyncedStructure = key;
+      root.__3DX_ALLOW_API__ = true;
+      setLoading(true);
+      setStatus('Carregando estrutura aberta: ' + key + '…', 'info');
+      apiTimeout(
+        ExplorerScanner.scan(),
+        APP_CONFIG.SCAN_TIMEOUT_MS || 90000,
+        'Timeout ao carregar ' + key
+      )
+        .then(function (res) {
+          APP_CONFIG.DEMO_MODE = false;
+          APP_CONFIG.IMPORT_MODE = res.mode !== 'api';
+          if (res.meta) lastLoadedId = res.meta.rootPhysicalId;
+          refreshUI();
+          setStatus(res.message || ('Carregado: ' + key + ' — ' + BomService.getNodeCount() + ' itens'), 'ok');
+        })
+        .catch(function (err) {
+          var msg = (err && err.message) ? err.message : String(err);
+          setStatus('API: ' + msg, 'error');
+        })
+        .finally(function () {
+          root.__3DX_ALLOW_API__ = false;
+          setLoading(false);
+        });
+    }, APP_CONFIG.STRUCTURE_SYNC_DEBOUNCE_MS || 1800);
+  }
+
   function onSelection(sel) {
     if (!sel || !sel.physicalid) return;
     var label = byId('selectionLabel');
     if (label) {
       label.textContent = (sel.displayName || sel.name || sel.physicalid);
     }
-    if (isSnapshotDeliveryMode() && !allowApiLoad()) {
-      return;
-    }
     if (APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.CAN_USE_ENOVIA_API) {
       return;
     }
-    if (
-      APP_CONFIG.AUTO_SCAN_ON_SELECTION &&
-      APP_CONFIG.CAN_USE_ENOVIA_API &&
-      typeof ExplorerScanner !== 'undefined'
-    ) {
-      if (autoScanTimer) window.clearTimeout(autoScanTimer);
-      autoScanTimer = window.setTimeout(function () {
-        var btn = byId('btnScanExplorer');
-        runExplorerScan(btn);
-      }, 1200);
+    if (APP_CONFIG.CAN_USE_ENOVIA_API && typeof ExplorerScanner !== 'undefined') {
+      syncOpenExplorerStructure(false);
       return;
     }
+    if (isSnapshotDeliveryMode() && !allowApiLoad()) return;
     loadBom(sel.physicalid);
   }
 
@@ -603,6 +640,11 @@ var App = (function () {
     }
     ProductExplorerBridge.init();
     ProductExplorerBridge.subscribe(onSelection);
+    if (ProductExplorerBridge.subscribeStructure) {
+      ProductExplorerBridge.subscribeStructure(function (name) {
+        syncOpenExplorerStructure(false);
+      });
+    }
     initUI();
     if (typeof ExplorerSyncPanel !== 'undefined') {
       ExplorerSyncPanel.init({
@@ -642,7 +684,10 @@ var App = (function () {
   function startExplorerPoll() {
     var ms = APP_CONFIG.AUTO_SYNC_EXPLORER_MS || 0;
     if (ms < 2000) return;
-    setInterval(pullExplorerSelection, ms);
+    setInterval(function () {
+      pullExplorerSelection();
+      syncOpenExplorerStructure(false);
+    }, ms);
   }
 
   function toggleCrossOriginUI() {
@@ -695,8 +740,10 @@ var App = (function () {
   function bootstrap() {
     setStatus('BOM Analytics v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION) + ' — iniciando…', 'info');
     var watchdog = window.setTimeout(function () {
-      if (BomService.getNodeCount() <= 1) {
-        if (isSnapshotDeliveryMode() && typeof BomSnapshot !== 'undefined' && BomSnapshot.applyBuiltinMont10) {
+        if (BomService.getNodeCount() <= 1) {
+        if (APP_CONFIG.CAN_USE_ENOVIA_API) {
+          syncOpenExplorerStructure(true);
+        } else if (isSnapshotDeliveryMode() && typeof BomSnapshot !== 'undefined' && BomSnapshot.applyBuiltinMont10) {
           BomSnapshot.applyBuiltinMont10().then(function (meta) {
             APP_CONFIG.IMPORT_MODE = true;
             var lbl = byId('selectionLabel');
@@ -795,6 +842,10 @@ var App = (function () {
   }
 
   function trySyncThenLoad() {
+    if (APP_CONFIG.CAN_USE_ENOVIA_API) {
+      syncOpenExplorerStructure(true);
+      return;
+    }
     if (isSnapshotDeliveryMode()) {
       if (BomService.getNodeCount() > 1) return;
       if (typeof BomSnapshot !== 'undefined' && BomSnapshot.applyBuiltinMont10) {
@@ -849,7 +900,10 @@ var App = (function () {
     );
     if (APP_CONFIG.EXPLORER_FALLBACK_MS === 0) return;
     window.setTimeout(function () {
-      if (isSnapshotDeliveryMode()) return;
+      if (APP_CONFIG.CAN_USE_ENOVIA_API) {
+        syncOpenExplorerStructure(true);
+        return;
+      }
       pullExplorerSelection();
       var later = ProductExplorerBridge.getSelection();
       if (later && later.physicalid && later.physicalid !== lastLoadedId) {
@@ -889,7 +943,7 @@ var App = (function () {
       })
       .then(function (spaceUrl) {
         var space = spaceUrl || getTenantSpaceUrl();
-        if (space && !BomService.getNodeCount()) initAppCore(space);
+        if (space) initAppCore(space);
         if (space) return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
         return null;
       })
@@ -900,40 +954,7 @@ var App = (function () {
 
   function bootstrapTrustedFast() {
     APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
-
-    if (hasSnapshotConfigured()) {
-      setStatus('Carregando Mont10… v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION), 'info');
-      var instant =
-        typeof BomSnapshot !== 'undefined' && BomSnapshot.applyBuiltinMont10
-          ? BomSnapshot.applyBuiltinMont10()
-          : Promise.resolve();
-      return instant
-        .then(function (meta) {
-          APP_CONFIG.IMPORT_MODE = true;
-          APP_CONFIG.DEMO_MODE = false;
-          lastLoadedId = meta.rootPhysicalId;
-          try {
-            initAppCore(getTenantSpaceUrl());
-          } catch (eInit) { /* */ }
-          var lbl = byId('selectionLabel');
-          if (lbl) lbl.textContent = meta.productName;
-          var tableLbl = byId('tableProductLabel');
-          if (tableLbl) tableLbl.textContent = meta.productName;
-          refreshUI();
-          setStatus('Snapshot: ' + meta.productName + ' — ' + meta.itemCount + ' itens (sem Varrer)', 'ok');
-          bootstrapApisBackground();
-        })
-        .catch(function () {
-          return tryLoadSnapshotFirst().then(function () {
-            if (BomService.getNodeCount() > 1) {
-              bootstrapApisBackground();
-              return;
-            }
-            setStatus('Snapshot não carregou.', 'error');
-            return bootstrapTrustedFastWithApis();
-          });
-        });
-    }
+    APP_CONFIG.SNAPSHOT_DELIVERY_MODE = false;
     return bootstrapTrustedFastWithApis();
   }
 
@@ -963,15 +984,15 @@ var App = (function () {
         return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
       })
       .then(function () {
-        return tryLoadSnapshotFirst().then(function () {
-          if (BomService.getNodeCount() > 1) return;
-          if (APP_CONFIG.WAIT_FOR_USER_SCAN) {
-            setStatus('Selecione a raiz no Explorer → clique Varrer estrutura.', 'info');
-            return;
-          }
-          setStatus('Carregando E-BOM…', 'info');
-          trySyncThenLoad();
-        });
+        if (APP_CONFIG.SNAPSHOT_URL) {
+          return tryLoadSnapshotFirst().then(function () {
+            if (BomService.getNodeCount() > 1) return;
+            trySyncThenLoad();
+          });
+        }
+        setStatus('Lendo estrutura aberta no Explorer…', 'info');
+        trySyncThenLoad();
+        return null;
       })
       .catch(function (err) {
         console.error(err);
