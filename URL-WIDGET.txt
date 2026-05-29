@@ -1,14 +1,13 @@
-URL do Additional App (Widget + Externo) — use EXATAMENTE:
+=== TESTE RÁPIDO (Chrome, fora do 3DX) ===
+https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/widget-min.html
 
+=== Additional App (1 arquivo JS — jsDelivr) ===
+https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/widget-uwa.html
+
+=== GitHub Pages (alternativa) ===
 https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-uwa.html
 
-Alternativa (também UWA):
+=== 3DSpace — SOLUÇÃO DEFINITIVA (admin deploy) ===
+https://r1132100929518-us1-space.3dexperience.3ds.com/enovia/webapps/BomAnalytics/index.html
 
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/index.html
-
-Com produto fixo (teste):
-
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/index.html?physicalid=132FB3CE26D70E006A18D1870000316D&displayName=01_SKA_Drone%20Assembly_130520208
-
-Após publicar no GitHub: no dashboard, remova o widget antigo e adicione de novo.
-Ctrl+F5 no navegador. Status deve mostrar "v20260529" (não "Inicializando…" nem "app.js não carregou").
+Leia: SOLUCAO-FINAL.md

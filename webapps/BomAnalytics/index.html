@@ -1,182 +1,75 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" xmlns:widget="http://www.netvibes.com/ns/">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <title>3DEXPERIENCE — BOM Analytics | Product Explorer</title>
-  <script>
-    (function () {
-      var CDN = 'https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/';
-      var host = (location.hostname || '').toLowerCase();
-      window.__3DX_ASSET_ROOT__ = 'assets/';
-      if (host.indexOf('3dexperience.3ds.com') >= 0) return;
-      window.__3DX_ASSET_ROOT__ = CDN;
-      var base = document.createElement('base');
-      base.href = CDN;
-      document.head.appendChild(base);
-    })();
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>BOM Analytics</title>
+  <script type="text/javascript">
+    window.__3DX_TRUSTED_WIDGET__ = true;
+    window.__3DX_BOOT_DEFER__ = true;
   </script>
-  <link rel="stylesheet" href="assets/css/dashboard.css" />
-  <!-- CDN: ajuste versões conforme política corporativa / allowlist WAF -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js" crossorigin="anonymous"></script>
+  <script type="text/javascript" src="assets/vendor/chart.umd.min.js"></script>
+  <script type="text/javascript">
+  //<![CDATA[
+    var BOM_VER = '20260528';
+    function bomEntry() {
+      var s = document.createElement('script');
+      s.src = 'assets/js/boot.js?v=' + BOM_VER;
+      s.onload = function () {
+        var target = (typeof widget !== 'undefined' && widget.body) ? widget.body : document.body;
+        BomBoot.run(target);
+      };
+      document.head.appendChild(s);
+    }
+    if (typeof widget !== 'undefined' && widget.addEvent) {
+      widget.addEvent('onLoad', bomEntry);
+    } else {
+      document.addEventListener('DOMContentLoaded', bomEntry);
+    }
+  //]]>
+  </script>
 </head>
 <body>
-  <header class="app-header">
-    <div>
-      <h1>BOM Analytics Dashboard</h1>
-      <div class="subtitle">3DEXPERIENCE · Product Explorer · E-BOM · ENOVIA</div>
-    </div>
-    <div class="selection-info">
-      Seleção: <strong id="selectionLabel">—</strong>
-    </div>
-    <div class="toolbar">
-      <button type="button" class="btn btn-primary" id="btnRefresh">Atualizar</button>
-      <button type="button" class="btn" id="btnExport">Exportar Excel</button>
-      <button type="button" class="btn" id="btnExpandAll" title="Use expansão na árvore por performance">Expandir</button>
-    </div>
+<div id="bom-app-template" style="display:none">
+  <header class="app-header explorer-header">
+    <h1>BOM Analytics</h1>
+    <p class="explorer-product">Product Structure Explorer: <strong id="selectionLabel">—</strong></p>
+    <button type="button" class="ui-hidden" id="btnSyncExplorer">sync</button>
+    <button type="button" class="ui-hidden" id="btnRefresh">refresh</button>
   </header>
-
-  <div id="externalBanner" class="external-banner hidden">Modo Web Page Reader: arraste o Excel/CSV exportado do Product Explorer na área abaixo (recomendado).</div>
-
-  <section id="dropZone" class="drop-zone panel" aria-label="Importar estrutura">
-    <div class="panel-header">Arrastar estrutura do Product Explorer</div>
-    <div class="drop-zone-inner">
-      <div class="drop-icon">📂</div>
-      <p id="dropZoneLabel" class="drop-label">Solte aqui o <strong>Excel ou CSV</strong> exportado do Product Explorer</p>
-      <p class="drop-hint">No Explorer: estrutura aberta → Exportar / Excel → arraste o arquivo para esta área</p>
-      <label class="btn btn-primary file-btn">
-        Escolher arquivo
-        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.txt" hidden />
-      </label>
-    </div>
-  </section>
-  <div id="statusBar" class="status-bar">Inicializando...</div>
-
-  <section class="panel explorer-sync-panel" aria-label="Sincronizar Product Explorer">
-    <div class="panel-header">Vincular ao Product Explorer (aba EXPLORE)</div>
-    <div class="explorer-sync-body">
-      <p class="sync-intro">Carregue o produto no <strong>Product Structure Explorer</strong> (aba EXPLORE), depois vincule aqui.</p>
-      <div class="sync-row">
-        <button type="button" class="btn btn-primary" id="btnSyncExplorer">Sincronizar com Explorer</button>
-        <button type="button" class="btn" id="btnCopyHelp">Como funciona?</button>
-      </div>
-      <div id="syncHelpText" class="sync-help">
-        <ol>
-          <li>Abra a aba <strong>EXPLORE</strong> e carregue o Physical Product (ex.: Drone).</li>
-          <li>Volte à aba <strong>PRODUCTEXPLORE</strong> e clique <strong>Sincronizar</strong>.</li>
-          <li>Se não atualizar: copie o <strong>Physical ID</strong> do Explorer e cole abaixo → <strong>Carregar objeto</strong>.</li>
-          <li>Para BOM completa no HTML: coloque os dois widgets na <strong>mesma aba</strong> ou publique o HTML no 3DSpace.</li>
-        </ol>
-      </div>
-      <div class="sync-manual">
-        <input type="text" id="explorerObjectId" placeholder="Physical ID (ex.: 132FB3CE26D70E006A18D1870000316D)" />
-        <input type="text" id="explorerObjectName" placeholder="Nome (opcional, ex.: 01_SKA_Drone Assembly)" />
-        <button type="button" class="btn btn-primary" id="btnLoadObjectId">Carregar objeto</button>
-      </div>
-    </div>
-  </section>
-
-  <section class="platform-search panel hidden-cross-origin" aria-label="Busca Physical Product">
-    <div class="panel-header">Buscar na barra Pesquisar (alternativa)</div>
-    <div class="platform-search-body">
-      <input type="search" id="platformSearchInput" placeholder="Termo para copiar na Pesquisar do topo..." autocomplete="off" />
-      <button type="button" class="btn" id="btnPlatformSearch">Enviar ao Pesquisar</button>
-    </div>
-    <div id="platformSearchResults" class="platform-search-results"></div>
-  </section>
-
-  <main class="main-grid">
-    <section id="kpiGrid" class="kpi-grid" aria-label="Indicadores KPI"></section>
-
-    <section class="filters-bar" aria-label="Filtros">
-      <input type="search" id="searchInput" placeholder="Pesquisa rápida (nome, ID, owner...)" />
-      <select id="filterMaturity" aria-label="Maturidade">
-        <option value="all">Todas maturidades</option>
-        <option value="released">Released</option>
-        <option value="in_work">In Work</option>
-        <option value="obsolete">Obsolete</option>
-        <option value="other">Outros</option>
-      </select>
-      <select id="filterType" aria-label="Tipo">
-        <option value="all">Todos os tipos</option>
-      </select>
-      <select id="filterApproval" aria-label="Aprovação">
-        <option value="all">Aprovação — todos</option>
-        <option value="approved">Aprovados</option>
-        <option value="pending">Pendentes</option>
-      </select>
-      <select id="filterPP" aria-label="Physical Product">
-        <option value="all">Physical Product — todos</option>
-        <option value="yes">Com PP</option>
-        <option value="no">Sem PP</option>
-      </select>
-    </section>
-
-    <section class="charts-grid" aria-label="Gráficos">
+  <div id="statusBar" class="status-bar">Aguardando… v20260528</div>
+  <div class="ui-hidden" aria-hidden="true">
+    <input type="text" id="explorerObjectId" />
+    <input type="text" id="explorerObjectName" />
+    <button id="btnLoadObjectId"></button>
+    <select id="filterMaturity"><option value="all">all</option></select>
+    <select id="filterType"><option value="all">all</option></select>
+    <select id="filterApproval"><option value="all">all</option></select>
+    <select id="filterPP"><option value="all">all</option></select>
+  </div>
+  <main class="dashboard-explorer">
+    <section id="kpiGrid" class="kpi-grid kpi-compact"></section>
+    <section class="charts-grid charts-main">
       <div class="chart-card"><canvas id="chartMaturity"></canvas></div>
       <div class="chart-card"><canvas id="chartType"></canvas></div>
       <div class="chart-card"><canvas id="chartRevision"></canvas></div>
       <div class="chart-card"><canvas id="chartApproval"></canvas></div>
     </section>
-
-    <section class="split-panel">
-      <div class="panel">
-        <div class="panel-header">Estrutura E-BOM</div>
-        <div id="bomTree" class="bom-tree"></div>
+    <section class="panel table-panel">
+      <div class="panel-header">E-BOM — <span id="tableProductLabel">—</span></div>
+      <div class="filter-row">
+        <input type="search" id="searchInput" placeholder="Filtrar tabela…" />
       </div>
-      <div class="panel">
-        <div class="panel-header">Colunas Product Explorer (E-BOM)</div>
-        <div class="table-scroll table-scroll-wide">
-          <table id="bomTable" class="data-table">
-            <thead><tr></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
+      <div class="table-scroll table-scroll-wide">
+        <table id="bomTable" class="data-table">
+          <thead><tr></tr></thead>
+          <tbody></tbody>
+        </table>
       </div>
-    </section>
-
-    <section class="panel issues-panel">
-      <div class="panel-header">Anomalias e Governança</div>
-      <ul id="issuesList"></ul>
     </section>
   </main>
-
-  <div id="loadingOverlay" class="loading-overlay hidden">Carregando estrutura de produto...</div>
-
-  <!-- Config -->
-  <script src="assets/js/config.js"></script>
-  <!-- Platform -->
-  <script src="assets/js/platform/platform-bridge.js"></script>
-  <script src="assets/js/platform/context.js"></script>
-  <script src="assets/js/platform/compass.js"></script>
-  <script src="assets/js/platform/waf-client.js"></script>
-  <!-- Integration -->
-  <script src="assets/js/integration/3dx-content-parser.js"></script>
-  <script src="assets/js/integration/enovia-api.js"></script>
-  <script src="assets/js/integration/search-api.js"></script>
-  <script src="assets/js/integration/product-explorer-bridge.js"></script>
-  <!-- Services -->
-  <script src="assets/js/services/file-import-service.js"></script>
-  <script src="assets/js/services/product-search-service.js"></script>
-  <script src="assets/js/services/attribute-service.js"></script>
-  <script src="assets/js/services/physical-product-service.js"></script>
-  <script src="assets/js/services/bom-service.js"></script>
-  <!-- Processing -->
-  <script src="assets/js/processing/bom-normalizer.js"></script>
-  <script src="assets/js/processing/metrics-engine.js"></script>
-  <script src="assets/js/processing/anomaly-detector.js"></script>
-  <!-- UI -->
-  <script src="assets/js/ui/kpi-cards.js"></script>
-  <script src="assets/js/ui/charts-manager.js"></script>
-  <script src="assets/js/ui/filters.js"></script>
-  <script src="assets/js/ui/data-table.js"></script>
-  <script src="assets/js/ui/bom-tree.js"></script>
-  <script src="assets/js/ui/product-search-panel.js"></script>
-  <script src="assets/js/ui/explorer-sync-panel.js"></script>
-  <script src="assets/js/ui/drop-zone.js"></script>
-  <!-- App -->
-  <script src="assets/js/app.js"></script>
+  <div id="loadingOverlay" class="loading-overlay hidden">Carregando E-BOM…</div>
+</div>
 </body>
 </html>
