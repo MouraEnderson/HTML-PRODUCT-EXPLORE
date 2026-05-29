@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <title>BOM Analytics</title>
   <script>
     (function () {
@@ -11,8 +11,6 @@
       var host = (location.hostname || '').toLowerCase();
       var onGithub = host.indexOf('github.io') >= 0;
       var onLocal = host === 'localhost' || host === '127.0.0.1';
-      window.__3DX_REPO_BASE__ = REPO;
-      window.__3DX_USE_LOCAL_ASSETS__ = onGithub || onLocal;
       if (!onGithub && !onLocal) {
         var base = document.createElement('base');
         base.href = REPO;
@@ -25,105 +23,89 @@
         document.head.appendChild(s);
       }
       loadScript('assets/vendor/chart.umd.min.js');
-      loadScript('assets/vendor/xlsx.full.min.js');
     })();
   </script>
-  <link rel="stylesheet" href="assets/css/dashboard.css?v=20260603" />
+  <link rel="stylesheet" href="assets/css/dashboard.css?v=20260605" />
 </head>
-<body class="ui-clean">
-  <header class="app-header clean-header">
-    <div class="header-product">
-      <h1>BOM Analytics</h1>
-      <p class="selection-line">Explorer: <strong id="selectionLabel">nenhum produto</strong></p>
-    </div>
-    <div class="header-actions">
-      <button type="button" class="btn btn-primary" id="btnSyncExplorer" title="Usa o produto aberto no Product Structure Explorer">Do Explorer</button>
-      <div class="search-group">
-        <input type="search" id="platformSearchInput" placeholder="Nome do produto…" autocomplete="off" />
-        <button type="button" class="btn btn-primary" id="btnPlatformSearch">Pesquisar</button>
-      </div>
-      <button type="button" class="btn" id="btnRefresh">Atualizar</button>
-      <button type="button" class="btn btn-ghost" id="btnExport" title="Exportar Excel">Excel</button>
-    </div>
+<body class="ui-explorer-only">
+  <header class="app-header explorer-header">
+    <h1>BOM Analytics</h1>
+    <p class="explorer-product">Product Structure Explorer: <strong id="selectionLabel">—</strong></p>
+    <button type="button" class="ui-hidden" id="btnSyncExplorer">sync</button>
+    <button type="button" class="ui-hidden" id="btnRefresh">refresh</button>
   </header>
 
-  <div id="platformSearchResults" class="platform-search-results"></div>
-  <div id="statusBar" class="status-bar">Inicializando…</div>
+  <div id="statusBar" class="status-bar">Aguardando produto no Explorer…</div>
 
-  <!-- IDs usados pelo JS (ocultos) -->
   <div class="ui-hidden" aria-hidden="true">
-    <input type="text" id="explorerObjectId" value="" />
-    <input type="text" id="explorerObjectName" value="" />
-    <button type="button" id="btnLoadObjectId"></button>
-    <button type="button" id="btnCopyHelp"></button>
+    <div id="platformSearchResults"></div>
+    <input type="search" id="platformSearchInput" />
+    <button id="btnPlatformSearch"></button>
+    <input type="text" id="explorerObjectId" />
+    <input type="text" id="explorerObjectName" />
+    <button id="btnLoadObjectId"></button>
+    <button id="btnCopyHelp"></button>
     <div id="syncHelpText"></div>
     <section id="dropZone"></section>
     <input type="file" id="fileInput" />
-    <button id="btnLoadDrone"></button>
-    <button id="btnImportPaste"></button>
-    <button id="btnSampleImport"></button>
-    <textarea id="pasteArea"></textarea>
-    <div id="externalBanner" class="hidden"></div>
     <select id="filterMaturity"><option value="all">all</option></select>
     <select id="filterType"><option value="all">all</option></select>
     <select id="filterApproval"><option value="all">all</option></select>
     <select id="filterPP"><option value="all">all</option></select>
-    <button id="btnExpandAll"></button>
+    <div id="bomTree"></div>
   </div>
 
-  <main class="main-clean">
-    <section id="kpiGrid" class="kpi-grid kpi-compact" aria-label="Resumo"></section>
+  <main class="dashboard-explorer">
+    <section id="kpiGrid" class="kpi-grid kpi-compact" aria-label="Indicadores"></section>
 
-    <div class="filter-row">
-      <input type="search" id="searchInput" placeholder="Filtrar na lista…" />
-    </div>
+    <section class="charts-grid charts-main" aria-label="Gráficos">
+      <div class="chart-card"><canvas id="chartMaturity"></canvas></div>
+      <div class="chart-card"><canvas id="chartType"></canvas></div>
+      <div class="chart-card"><canvas id="chartRevision"></canvas></div>
+      <div class="chart-card"><canvas id="chartApproval"></canvas></div>
+    </section>
 
-    <section class="split-panel split-clean">
-      <div class="panel">
-        <div class="panel-header">Estrutura</div>
-        <div id="bomTree" class="bom-tree"></div>
+    <section class="panel table-panel">
+      <div class="panel-header">E-BOM — <span id="tableProductLabel">—</span></div>
+      <div class="filter-row">
+        <input type="search" id="searchInput" placeholder="Filtrar tabela…" />
       </div>
-      <div class="panel">
-        <div class="panel-header">Detalhes</div>
-        <div class="table-scroll table-scroll-wide">
-          <table id="bomTable" class="data-table">
-            <thead><tr></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
+      <div class="table-scroll table-scroll-wide">
+        <table id="bomTable" class="data-table">
+          <thead><tr></tr></thead>
+          <tbody></tbody>
+        </table>
       </div>
     </section>
   </main>
 
-  <div id="loadingOverlay" class="loading-overlay hidden">Carregando E-BOM…</div>
+  <div id="loadingOverlay" class="loading-overlay hidden">Carregando E-BOM do Explorer…</div>
 
-  <script src="assets/js/config.js?v=20260603"></script>
-  <script src="assets/js/platform/widget-runtime.js?v=20260603"></script>
-  <script src="assets/js/platform/platform-bridge.js?v=20260603"></script>
-  <script src="assets/js/platform/context.js?v=20260603"></script>
-  <script src="assets/js/platform/compass.js?v=20260603"></script>
-  <script src="assets/js/platform/waf-client.js?v=20260603"></script>
-  <script src="assets/js/integration/3dx-content-parser.js?v=20260603"></script>
-  <script src="assets/js/integration/enovia-api.js?v=20260603"></script>
-  <script src="assets/js/integration/search-api.js?v=20260603"></script>
-  <script src="assets/js/integration/product-explorer-bridge.js?v=20260603"></script>
-  <script src="assets/js/services/file-import-service.js?v=20260603"></script>
-  <script src="assets/js/services/product-search-service.js?v=20260603"></script>
-  <script src="assets/js/services/attribute-service.js?v=20260603"></script>
-  <script src="assets/js/services/physical-product-service.js?v=20260603"></script>
-  <script src="assets/js/services/bom-service.js?v=20260603"></script>
-  <script src="assets/js/processing/bom-normalizer.js?v=20260603"></script>
-  <script src="assets/js/processing/metrics-engine.js?v=20260603"></script>
-  <script src="assets/js/processing/anomaly-detector.js?v=20260603"></script>
-  <script src="assets/js/ui/kpi-cards.js?v=20260603"></script>
-  <script src="assets/js/ui/charts-manager.js?v=20260603"></script>
-  <script src="assets/js/ui/filters.js?v=20260603"></script>
-  <script src="assets/js/ui/data-table.js?v=20260603"></script>
-  <script src="assets/js/ui/bom-tree.js?v=20260603"></script>
-  <script src="assets/js/ui/product-search-panel.js?v=20260603"></script>
-  <script src="assets/js/ui/explorer-sync-panel.js?v=20260603"></script>
-  <script src="assets/js/ui/drop-zone.js?v=20260603"></script>
-  <script src="assets/js/app.js?v=20260603"></script>
+  <script src="assets/js/config.js?v=20260605"></script>
+  <script src="assets/js/platform/widget-runtime.js?v=20260605"></script>
+  <script src="assets/js/platform/platform-bridge.js?v=20260605"></script>
+  <script src="assets/js/platform/context.js?v=20260605"></script>
+  <script src="assets/js/platform/compass.js?v=20260605"></script>
+  <script src="assets/js/platform/waf-client.js?v=20260605"></script>
+  <script src="assets/js/integration/3dx-content-parser.js?v=20260605"></script>
+  <script src="assets/js/integration/enovia-api.js?v=20260605"></script>
+  <script src="assets/js/integration/search-api.js?v=20260605"></script>
+  <script src="assets/js/integration/product-explorer-bridge.js?v=20260605"></script>
+  <script src="assets/js/services/file-import-service.js?v=20260605"></script>
+  <script src="assets/js/services/product-search-service.js?v=20260605"></script>
+  <script src="assets/js/services/attribute-service.js?v=20260605"></script>
+  <script src="assets/js/services/physical-product-service.js?v=20260605"></script>
+  <script src="assets/js/services/bom-service.js?v=20260605"></script>
+  <script src="assets/js/processing/bom-normalizer.js?v=20260605"></script>
+  <script src="assets/js/processing/metrics-engine.js?v=20260605"></script>
+  <script src="assets/js/processing/anomaly-detector.js?v=20260605"></script>
+  <script src="assets/js/ui/kpi-cards.js?v=20260605"></script>
+  <script src="assets/js/ui/charts-manager.js?v=20260605"></script>
+  <script src="assets/js/ui/filters.js?v=20260605"></script>
+  <script src="assets/js/ui/data-table.js?v=20260605"></script>
+  <script src="assets/js/ui/bom-tree.js?v=20260605"></script>
+  <script src="assets/js/ui/explorer-sync-panel.js?v=20260605"></script>
+  <script src="assets/js/app.js?v=20260605"></script>
   <script>
     try {
       if (typeof widget !== 'undefined' && widget && typeof WidgetRuntime !== 'undefined') {

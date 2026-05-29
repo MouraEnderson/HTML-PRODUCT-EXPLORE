@@ -56,14 +56,24 @@ var ExplorerSyncPanel = (function () {
     if (btnSync) {
       btnSync.addEventListener('click', function () {
         requestSyncFromDashboard();
+        var current = ProductExplorerBridge.getSelection();
+        if (current && options.onSelect) {
+          options.onSelect(current);
+          if (options.onStatus) {
+            options.onStatus('Explorer: ' + (current.displayName || current.physicalid), 'ok');
+          }
+          return;
+        }
         var stored = loadStoredSelection();
         if (stored && options.onSelect) {
           options.onSelect(stored);
-          if (options.onStatus) options.onStatus('Produto do Explorer: ' + (stored.displayName || stored.physicalid), 'ok');
+          if (options.onStatus) {
+            options.onStatus('Explorer: ' + (stored.displayName || stored.physicalid), 'ok');
+          }
           return;
         }
         if (options.onStatus) {
-          options.onStatus('Abra o produto no Explorer (aba EXPLORE) e clique de novo.', 'info');
+          options.onStatus('Abra o produto no Product Structure Explorer (EXPLORE).', 'info');
         }
       });
     }

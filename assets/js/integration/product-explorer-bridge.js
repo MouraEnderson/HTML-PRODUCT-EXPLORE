@@ -125,12 +125,22 @@ var ProductExplorerBridge = (function () {
     } catch (e) { /* opcional */ }
   }
 
+  function pollSelection() {
+    initPlatformSelection();
+    if (typeof PlatformBridge !== 'undefined') {
+      PlatformBridge.requestDashboardSelection();
+    }
+  }
+
   function init() {
     window.addEventListener('message', onMessage, false);
     initFromQuery();
     initFrom3DXDeepLink();
     initWidgetEvents();
     initPlatformSelection();
+    if (APP_CONFIG && APP_CONFIG.EXPLORER_ONLY && APP_CONFIG.AUTO_SYNC_EXPLORER_MS) {
+      setInterval(pollSelection, APP_CONFIG.AUTO_SYNC_EXPLORER_MS);
+    }
     return {
       getSelection: function () { return currentSelection; },
       subscribe: subscribe,

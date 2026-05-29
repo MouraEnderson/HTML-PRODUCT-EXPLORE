@@ -564,6 +564,56 @@ table.data-table td {
 /* —— UI clean —— */
 .ui-hidden { display: none !important; }
 
+body.ui-clean .external-banner,
+body.ui-clean .goal-panel,
+body.ui-clean .paste-panel,
+body.ui-clean .drop-zone,
+body.ui-clean .explorer-sync-panel,
+body.ui-clean .issues-panel {
+  display: none !important;
+}
+
+body.ui-explorer-only .dashboard-explorer {
+  padding: 8px 12px 14px;
+}
+
+body.ui-explorer-only .explorer-header {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+body.ui-explorer-only .explorer-header h1 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--primary);
+}
+
+body.ui-explorer-only .explorer-product {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+body.ui-explorer-only .charts-main {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin: 10px 0;
+}
+
+body.ui-explorer-only .charts-main .chart-card {
+  min-height: 160px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+}
+
+body.ui-explorer-only .table-panel {
+  margin-top: 8px;
+}
+
 body.ui-clean .main-clean {
   padding: 10px 14px 16px;
   max-width: 100%;

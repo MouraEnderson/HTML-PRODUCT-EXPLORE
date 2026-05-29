@@ -13,7 +13,8 @@
   <script type="text/javascript">
   //<![CDATA[
     var BOM_REPO = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-    var BOM_APP = BOM_REPO + 'index.html';
+    var BOM_VER = '20260605';
+    var BOM_APP = BOM_REPO + 'index.html?v=' + BOM_VER;
 
     function bomMsg(text, isErr) {
       try {
@@ -58,7 +59,7 @@
       });
       widget.addEvent('onRefresh', function () {
         var f = document.getElementById('bomFrame');
-        if (f) f.src = f.src;
+        if (f) f.src = BOM_APP + '&_=' + Date.now();
       });
       try {
         if (widget.body) {

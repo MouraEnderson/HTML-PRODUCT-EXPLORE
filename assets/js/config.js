@@ -9,11 +9,15 @@
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.1.0',
 
-    /** UI enxuta: Explorer + Pesquisar + árvore/tabela */
+    /** Somente Explorer → gráficos + tabela */
+    EXPLORER_ONLY: true,
     UI_CLEAN: true,
-    SHOW_CHARTS: false,
+    SHOW_CHARTS: true,
+    SHOW_TREE: false,
     SHOW_ISSUES_PANEL: false,
+    SHOW_PLATFORM_SEARCH: false,
     AUTO_LOAD_DEMO_DRONE: false,
+    AUTO_SYNC_EXPLORER_MS: 4000,
 
     /** Limite de nós na árvore (proteção memória) */
     BOM_MAX_NODES: 50000,

@@ -37,8 +37,15 @@ var App = (function () {
       ChartsManager.destroyAll();
       ChartsManager.render(currentMetrics);
     }
-    BomTree.refresh(index, rootId);
+    if (APP_CONFIG.SHOW_TREE !== false && document.getElementById('bomTree')) {
+      BomTree.refresh(index, rootId);
+    }
     DataTable.setData(filtered);
+    var tableLbl = document.getElementById('tableProductLabel');
+    var sel = ProductExplorerBridge.getSelection();
+    if (tableLbl && sel) {
+      tableLbl.textContent = sel.displayName || sel.name || sel.physicalid;
+    }
     renderIssues(currentAnomalies.issues);
 
     var mode = APP_CONFIG.IMPORT_MODE ? ' | IMPORTADO' : (APP_CONFIG.DEMO_MODE ? ' | DEMO' : '');
@@ -109,6 +116,7 @@ var App = (function () {
   }
 
   function onSelection(sel) {
+    if (!sel || !sel.physicalid) return;
     var label = document.getElementById('selectionLabel');
     if (label) {
       label.textContent = (sel.displayName || sel.name || sel.physicalid);
@@ -151,9 +159,12 @@ var App = (function () {
     KpiCards.init('#kpiGrid');
     ChartsManager.init();
     DataTable.init('#bomTable');
-    BomTree.init('#bomTree', function (id) {
-      return BomService.expandNode(id);
-    });
+    var treeEl = document.getElementById('bomTree');
+    if (treeEl && APP_CONFIG.SHOW_TREE !== false) {
+      BomTree.init('#bomTree', function (id) {
+        return BomService.expandNode(id);
+      });
+    }
     Filters.init(
       {
         search: '#searchInput',
@@ -201,7 +212,34 @@ var App = (function () {
     }
   }
 
+  function stripLegacyUI() {
+    var selectors = [
+      '.external-banner',
+      '.goal-panel',
+      '.paste-panel',
+      '.drop-zone',
+      '.explorer-sync-panel',
+      '.platform-search.panel',
+      '.paste-panel',
+      '.drop-zone',
+      '.split-panel',
+      '.issues-panel',
+      '.header-actions .search-group'
+    ];
+    selectors.forEach(function (sel) {
+      document.querySelectorAll(sel).forEach(function (el) {
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+      });
+    });
+    var h1 = document.querySelector('.app-header h1');
+    if (h1 && h1.textContent.indexOf('Dashboard') >= 0) {
+      h1.textContent = 'BOM Analytics';
+    }
+    document.body.classList.add('ui-clean');
+  }
+
   function initAppCore(spaceUrl) {
+    stripLegacyUI();
     if (spaceUrl && spaceUrl !== 'demo') {
       EnoviaApi.init(spaceUrl);
       SearchApi.init(spaceUrl);
@@ -209,7 +247,9 @@ var App = (function () {
     ProductExplorerBridge.init();
     ProductExplorerBridge.subscribe(onSelection);
     initUI();
-    ProductSearchPanel.init({ onSelect: onSelection });
+    if (!APP_CONFIG.EXPLORER_ONLY && APP_CONFIG.SHOW_PLATFORM_SEARCH !== false) {
+      ProductSearchPanel.init({ onSelect: onSelection });
+    }
     ExplorerSyncPanel.init({
       onSelect: onSelection,
       onStatus: setStatusPublic
@@ -231,18 +271,29 @@ var App = (function () {
       });
     }
     toggleCrossOriginUI();
-    if (APP_CONFIG.UI_CLEAN) {
+    if (APP_CONFIG.EXPLORER_ONLY || APP_CONFIG.UI_CLEAN) {
       scheduleExplorerSync();
+      startExplorerPoll();
     }
   }
 
+  function pullExplorerSelection() {
+    if (typeof PlatformBridge !== 'undefined') {
+      PlatformBridge.requestDashboardSelection();
+    }
+    var btn = document.getElementById('btnSyncExplorer');
+    if (btn) btn.click();
+  }
+
   function scheduleExplorerSync() {
-    setTimeout(function () {
-      if (typeof ExplorerSyncPanel !== 'undefined') {
-        var btn = document.getElementById('btnSyncExplorer');
-        if (btn) btn.click();
-      }
-    }, 1200);
+    setTimeout(pullExplorerSelection, 800);
+    setTimeout(pullExplorerSelection, 2500);
+  }
+
+  function startExplorerPoll() {
+    var ms = APP_CONFIG.AUTO_SYNC_EXPLORER_MS || 0;
+    if (ms < 2000) return;
+    setInterval(pullExplorerSelection, ms);
   }
 
   function toggleCrossOriginUI() {
@@ -356,8 +407,9 @@ var App = (function () {
           });
         }
 
-        if (APP_CONFIG.UI_CLEAN && !APP_CONFIG.CROSS_ORIGIN_WIDGET) {
-          setStatus('Abra o produto no Explorer → Do Explorer.', 'info');
+        if (APP_CONFIG.EXPLORER_ONLY && !APP_CONFIG.CROSS_ORIGIN_WIDGET) {
+          setStatus('Abra o produto no Product Structure Explorer (aba EXPLORE).', 'info');
+          pullExplorerSelection();
           return Promise.resolve();
         }
 
@@ -390,6 +442,7 @@ var App = (function () {
   }
 
   function start() {
+    stripLegacyUI();
     bootstrap().catch(function (err) {
       console.error('[App] bootstrap failed', err);
       setStatus('Erro no bootstrap: ' + (err.message || err), 'error');
