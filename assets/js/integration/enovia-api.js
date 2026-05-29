@@ -7,7 +7,34 @@ var EnoviaApi = (function () {
 
   var restBase = null;
 
+  function defaultSpaceUrl() {
+    if (typeof PlatformBridge !== 'undefined' && PlatformBridge.getSpaceUrl) {
+      var u = PlatformBridge.getSpaceUrl();
+      if (u) return u;
+    }
+    if (typeof CompassServices !== 'undefined' && CompassServices.tenantSpaceUrl) {
+      return CompassServices.tenantSpaceUrl();
+    }
+    var h = APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.spaceHost;
+    return h ? 'https://' + h + '/enovia' : null;
+  }
+
+  function ensureRestBase() {
+    if (restBase && String(restBase).indexOf('null') < 0) return restBase;
+    restBase = null;
+    var space = defaultSpaceUrl();
+    if (space) init(space);
+    if (!restBase || String(restBase).indexOf('null') >= 0) {
+      throw new Error('3DSpace não conectado (URL inválida). Use os dados do snapshot Mont10.');
+    }
+    return restBase;
+  }
+
   function init(spaceUrl) {
+    if (!spaceUrl || spaceUrl === 'demo') {
+      restBase = null;
+      return null;
+    }
     restBase = CompassServices.buildRestBase(spaceUrl);
     return restBase;
   }
@@ -20,11 +47,13 @@ var EnoviaApi = (function () {
   }
 
   function engItemUrl(physicalId) {
+    ensureRestBase();
     var m = APP_CONFIG.MODELERS;
     return restBase + '/' + m.ENG_ITEM + '/' + m.ENG_ITEM_TYPE + '/' + encodeURIComponent(apiId(physicalId));
   }
 
   function engInstanceChildrenUrl(parentPhysicalId, skip, top) {
+    ensureRestBase();
     skip = skip || 0;
     top = top || APP_CONFIG.BOM_LAZY_BATCH_SIZE;
     var m = APP_CONFIG.MODELERS;
@@ -35,6 +64,7 @@ var EnoviaApi = (function () {
   }
 
   function physicalProductSearchUrl(relatedEngId) {
+    ensureRestBase();
     var m = APP_CONFIG.MODELERS;
     return (
       restBase + '/' + m.PHYSICAL_PRODUCT + '/' + m.PHYS_PRODUCT_TYPE +
@@ -43,10 +73,12 @@ var EnoviaApi = (function () {
   }
 
   function vpmReferenceUrl(physicalId) {
+    ensureRestBase();
     return restBase + '/dsxcad/dsxcad:VPMReference/' + encodeURIComponent(apiId(physicalId));
   }
 
   function physicalProductUrl(physicalId) {
+    ensureRestBase();
     var m = APP_CONFIG.MODELERS;
     return restBase + '/' + m.PHYSICAL_PRODUCT + '/' + m.PHYS_PRODUCT_TYPE + '/' + encodeURIComponent(apiId(physicalId));
   }
@@ -112,6 +144,8 @@ var EnoviaApi = (function () {
 
   return {
     init: init,
+    ensureRestBase: ensureRestBase,
+    defaultSpaceUrl: defaultSpaceUrl,
     getEngItem: getEngItem,
     getVpmReference: getVpmReference,
     getPhysicalProduct: getPhysicalProduct,

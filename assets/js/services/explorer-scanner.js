@@ -289,6 +289,12 @@ var ExplorerScanner = (function () {
       chain = chain.then(function () { return space; });
     }
     return chain.then(function (space) {
+      if (!space && typeof CompassServices !== 'undefined' && CompassServices.tenantSpaceUrl) {
+        space = CompassServices.tenantSpaceUrl();
+      }
+      if (!space && typeof CompassServices !== 'undefined' && CompassServices.ifweSpaceUrl) {
+        space = CompassServices.ifweSpaceUrl();
+      }
       if (!space) return Promise.reject(new Error('URL 3DSpace não configurada'));
       try {
         EnoviaApi.init(space);

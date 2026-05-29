@@ -8,7 +8,7 @@ https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v2.html?snapshot=dat
 
 **Conta GitHub:** `mouraenderson` (com **e**).
 
-**Build:** `bom20260601h` — Mont10 embutido (sem depender de fetch GitHub) + KPIs/gráficos com CSS no iframe.
+**Build:** `bom20260601i` — Mont10 embutido; Varrer não zera KPIs se API falhar (`null/dseng`).
 
 ## O que você deve ver (sem clicar Varrer)
 
@@ -23,7 +23,7 @@ https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v2.html?snapshot=dat
 
 1. **Ctrl+Shift+R** na aba LISTA 3DX.
 2. Remova o widget BOM e adicione de novo com a URL acima (pode manter só `widget-v2.html` — o snapshot padrão já vem embutido no build **f**).
-3. Confira a faixa azul: **build bom20260601h**.
+3. Confira a faixa azul: **build bom20260601i**.
 
 ## Atualizar dados reais do Explorer
 

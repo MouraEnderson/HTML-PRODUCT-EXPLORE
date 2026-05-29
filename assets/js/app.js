@@ -200,6 +200,13 @@ var App = (function () {
         if (msg.indexOf('Varredura falhou') < 0) {
           msg = 'Varredura falhou: ' + msg;
         }
+        if (hadSnapshot || APP_CONFIG.SNAPSHOT_URL) {
+          return restoreSnapshotAfterScanFail(msg).then(function (restored) {
+            if (!restored) {
+              setStatus(msg, 'error');
+            }
+          });
+        }
         if (typeof BomService !== 'undefined' && BomService.reset) {
           BomService.reset();
           lastLoadedId = null;
@@ -561,10 +568,11 @@ var App = (function () {
 
   function initAppCore(spaceUrl) {
     stripLegacyUI();
-    if (spaceUrl && spaceUrl !== 'demo') {
+    var base = spaceUrl && spaceUrl !== 'demo' ? spaceUrl : getTenantSpaceUrl();
+    if (base) {
       try {
-        EnoviaApi.init(spaceUrl);
-        if (typeof SearchApi !== 'undefined') SearchApi.init(spaceUrl);
+        EnoviaApi.init(base);
+        if (typeof SearchApi !== 'undefined') SearchApi.init(base);
       } catch (e) { /* */ }
     }
     ProductExplorerBridge.init();
@@ -841,7 +849,7 @@ var App = (function () {
 
     if (hasSnapshotConfigured()) {
       try {
-        initAppCore(null);
+        initAppCore(getTenantSpaceUrl());
       } catch (eInit) { /* */ }
       setStatus('Carregando Mont10… v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION), 'info');
       var instant =

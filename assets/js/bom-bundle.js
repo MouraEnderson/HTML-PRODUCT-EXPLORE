@@ -112,7 +112,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260601h',
+    BUILD: 'bom20260601i',
     /** Entrega Mont10: snapshot padrão no Additional App (frame 3DX perde ?query) */
     DEFAULT_SNAPSHOT_PATH: 'data/mont10.json',
 
@@ -954,6 +954,8 @@ var CompassServices = (function () {
   }
 
   return {
+    tenantSpaceUrl: tenantSpaceUrl,
+    ifweSpaceUrl: ifweSpaceUrl,
     get3DSpaceUrl: get3DSpaceUrl,
     ensureWorkingSpaceUrl: ensureWorkingSpaceUrl,
     applyVerifiedSpaceUrl: applyVerifiedSpaceUrl,
@@ -1387,7 +1389,34 @@ var EnoviaApi = (function () {
 
   var restBase = null;
 
+  function defaultSpaceUrl() {
+    if (typeof PlatformBridge !== 'undefined' && PlatformBridge.getSpaceUrl) {
+      var u = PlatformBridge.getSpaceUrl();
+      if (u) return u;
+    }
+    if (typeof CompassServices !== 'undefined' && CompassServices.tenantSpaceUrl) {
+      return CompassServices.tenantSpaceUrl();
+    }
+    var h = APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.spaceHost;
+    return h ? 'https://' + h + '/enovia' : null;
+  }
+
+  function ensureRestBase() {
+    if (restBase && String(restBase).indexOf('null') < 0) return restBase;
+    restBase = null;
+    var space = defaultSpaceUrl();
+    if (space) init(space);
+    if (!restBase || String(restBase).indexOf('null') >= 0) {
+      throw new Error('3DSpace não conectado (URL inválida). Use os dados do snapshot Mont10.');
+    }
+    return restBase;
+  }
+
   function init(spaceUrl) {
+    if (!spaceUrl || spaceUrl === 'demo') {
+      restBase = null;
+      return null;
+    }
     restBase = CompassServices.buildRestBase(spaceUrl);
     return restBase;
   }
@@ -1400,11 +1429,13 @@ var EnoviaApi = (function () {
   }
 
   function engItemUrl(physicalId) {
+    ensureRestBase();
     var m = APP_CONFIG.MODELERS;
     return restBase + '/' + m.ENG_ITEM + '/' + m.ENG_ITEM_TYPE + '/' + encodeURIComponent(apiId(physicalId));
   }
 
   function engInstanceChildrenUrl(parentPhysicalId, skip, top) {
+    ensureRestBase();
     skip = skip || 0;
     top = top || APP_CONFIG.BOM_LAZY_BATCH_SIZE;
     var m = APP_CONFIG.MODELERS;
@@ -1415,6 +1446,7 @@ var EnoviaApi = (function () {
   }
 
   function physicalProductSearchUrl(relatedEngId) {
+    ensureRestBase();
     var m = APP_CONFIG.MODELERS;
     return (
       restBase + '/' + m.PHYSICAL_PRODUCT + '/' + m.PHYS_PRODUCT_TYPE +
@@ -1423,10 +1455,12 @@ var EnoviaApi = (function () {
   }
 
   function vpmReferenceUrl(physicalId) {
+    ensureRestBase();
     return restBase + '/dsxcad/dsxcad:VPMReference/' + encodeURIComponent(apiId(physicalId));
   }
 
   function physicalProductUrl(physicalId) {
+    ensureRestBase();
     var m = APP_CONFIG.MODELERS;
     return restBase + '/' + m.PHYSICAL_PRODUCT + '/' + m.PHYS_PRODUCT_TYPE + '/' + encodeURIComponent(apiId(physicalId));
   }
@@ -1492,6 +1526,8 @@ var EnoviaApi = (function () {
 
   return {
     init: init,
+    ensureRestBase: ensureRestBase,
+    defaultSpaceUrl: defaultSpaceUrl,
     getEngItem: getEngItem,
     getVpmReference: getVpmReference,
     getPhysicalProduct: getPhysicalProduct,
@@ -3224,6 +3260,12 @@ var ExplorerScanner = (function () {
       chain = chain.then(function () { return space; });
     }
     return chain.then(function (space) {
+      if (!space && typeof CompassServices !== 'undefined' && CompassServices.tenantSpaceUrl) {
+        space = CompassServices.tenantSpaceUrl();
+      }
+      if (!space && typeof CompassServices !== 'undefined' && CompassServices.ifweSpaceUrl) {
+        space = CompassServices.ifweSpaceUrl();
+      }
       if (!space) return Promise.reject(new Error('URL 3DSpace não configurada'));
       try {
         EnoviaApi.init(space);
@@ -4731,6 +4773,13 @@ var App = (function () {
         if (msg.indexOf('Varredura falhou') < 0) {
           msg = 'Varredura falhou: ' + msg;
         }
+        if (hadSnapshot || APP_CONFIG.SNAPSHOT_URL) {
+          return restoreSnapshotAfterScanFail(msg).then(function (restored) {
+            if (!restored) {
+              setStatus(msg, 'error');
+            }
+          });
+        }
         if (typeof BomService !== 'undefined' && BomService.reset) {
           BomService.reset();
           lastLoadedId = null;
@@ -5092,10 +5141,11 @@ var App = (function () {
 
   function initAppCore(spaceUrl) {
     stripLegacyUI();
-    if (spaceUrl && spaceUrl !== 'demo') {
+    var base = spaceUrl && spaceUrl !== 'demo' ? spaceUrl : getTenantSpaceUrl();
+    if (base) {
       try {
-        EnoviaApi.init(spaceUrl);
-        if (typeof SearchApi !== 'undefined') SearchApi.init(spaceUrl);
+        EnoviaApi.init(base);
+        if (typeof SearchApi !== 'undefined') SearchApi.init(base);
       } catch (e) { /* */ }
     }
     ProductExplorerBridge.init();
@@ -5372,7 +5422,7 @@ var App = (function () {
 
     if (hasSnapshotConfigured()) {
       try {
-        initAppCore(null);
+        initAppCore(getTenantSpaceUrl());
       } catch (eInit) { /* */ }
       setStatus('Carregando Mont10… v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION), 'info');
       var instant =

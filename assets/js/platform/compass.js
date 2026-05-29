@@ -201,6 +201,8 @@ var CompassServices = (function () {
   }
 
   return {
+    tenantSpaceUrl: tenantSpaceUrl,
+    ifweSpaceUrl: ifweSpaceUrl,
     get3DSpaceUrl: get3DSpaceUrl,
     ensureWorkingSpaceUrl: ensureWorkingSpaceUrl,
     applyVerifiedSpaceUrl: applyVerifiedSpaceUrl,
