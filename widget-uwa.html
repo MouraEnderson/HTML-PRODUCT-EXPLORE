@@ -9,6 +9,7 @@
     window.__3DX_BOOT_DEFER__ = true;
   </script>
   <style type="text/css">
+    body { margin: 0; }
     .ui-explorer-only { min-height: 420px; background: #f0f6fa; font: 13px "Segoe UI", sans-serif; color: #1a2332; }
     .explorer-header { padding: 10px 14px; background: #fff; border-bottom: 1px solid #dde3ea; }
     .explorer-header h1 { margin: 0; font-size: 1rem; color: #005686; }
@@ -26,7 +27,6 @@
     }
     .btn-scan-main:disabled { background: #9e9e9e; cursor: wait; }
     .snapshot-steps { margin: 0 0 8px; font-size: 0.85rem; color: #0d47a1; }
-    .paste-area { width: 100%; box-sizing: border-box; margin-bottom: 8px; font-size: 12px; }
     .dashboard-explorer { padding: 8px 14px 16px; }
     .kpi-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
     .kpi-card { background: #fff; border: 1px solid #dde3ea; border-radius: 6px; padding: 8px 12px; min-width: 100px; }
@@ -42,21 +42,24 @@
     .ui-hidden { display: none !important; }
     .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.7); display: flex; align-items: center; justify-content: center; z-index: 99; }
     .loading-overlay.hidden { display: none; }
+    .chrome-hint { padding: 8px 14px; font-size: 12px; background: #fff8e1; color: #6d4c00; }
   </style>
 </head>
 <body>
-  <div id="bom-app-template" style="display:none">
+  <!-- Sempre visível (Chrome + 3DDashboard). Não usar display:none no template. -->
+  <div id="app-shell" class="ui-explorer-only">
+    <p class="chrome-hint" id="envHint">Carregando BOM Analytics…</p>
     <header class="app-header explorer-header">
       <h1>BOM Analytics</h1>
       <p class="explorer-product">Estrutura: <strong id="selectionLabel">—</strong></p>
     </header>
-    <div id="statusBar" class="status-bar status-info">Iniciando widget…</div>
+    <div id="statusBar" class="status-bar status-info">Iniciando…</div>
     <section class="snapshot-panel">
       <button type="button" id="btnScanExplorer" class="btn-scan-main">Varrer estrutura Explorer</button>
-      <p class="snapshot-steps">Mont10 no Explorer → clique <strong>Varrer</strong> (API ENOVIA + snapshot)</p>
-      <textarea id="pasteArea" class="paste-area ui-hidden" rows="2" placeholder="Reserva: colar grade…"></textarea>
+      <p class="snapshot-steps">Mont10 no Explorer → <strong>Varrer</strong> (API + snapshot + gráficos)</p>
     </section>
     <div class="ui-hidden" aria-hidden="true">
+      <textarea id="pasteArea" rows="2"></textarea>
       <button type="button" id="btnImportPaste"></button>
       <button type="button" id="btnLoadExample"></button>
       <button type="button" id="btnSyncExplorer"></button>
@@ -92,31 +95,42 @@
   <script type="text/javascript">
   //<![CDATA[
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-    var VER = 'uwa20260603';
-    var uiMounted = false;
+    var VER = 'uwa20260603b';
     var appStarted = false;
 
+    function getMountRoot() {
+      if (typeof widget !== 'undefined' && widget && widget.body) return widget.body;
+      return document.getElementById('app-shell');
+    }
+
     function setBar(msg, kind) {
-      var el = document.getElementById('statusBar');
-      if (!el && typeof widget !== 'undefined' && widget.body) {
-        el = widget.body.querySelector('#statusBar');
-      }
+      var root = getMountRoot();
+      if (!root) return;
+      var el = root.querySelector('#statusBar');
       if (!el) return;
       el.textContent = msg;
       el.className = 'status-bar status-' + (kind || 'info');
     }
 
-    function mountUi() {
-      if (uiMounted) return true;
-      if (typeof widget === 'undefined' || !widget || !widget.body) return false;
-      var tpl = document.getElementById('bom-app-template');
-      if (!tpl) return false;
-      widget.body.innerHTML = tpl.innerHTML;
+    function setEnvHint() {
+      var hint = document.getElementById('envHint');
+      if (!hint) return;
+      if (typeof widget !== 'undefined' && widget && widget.body) {
+        hint.textContent = 'Modo 3DDashboard (Additional App) — varredura API ativa.';
+      } else {
+        hint.textContent =
+          'Modo Chrome: interface visível; varredura real só no 3DDashboard (Additional App).';
+      }
+    }
+
+    function syncToWidgetBody() {
+      if (typeof widget === 'undefined' || !widget || !widget.body) return;
+      var shell = document.getElementById('app-shell');
+      if (!shell) return;
+      widget.body.innerHTML = shell.innerHTML;
       widget.body.className = 'ui-explorer-only';
       widget.body.style.minHeight = '420px';
-      uiMounted = true;
-      setBar('Interface OK — carregando APIs 3DEXPERIENCE…', 'info');
-      return true;
+      shell.style.display = 'none';
     }
 
     function getRequire() {
@@ -124,9 +138,6 @@
         if (typeof widget !== 'undefined' && widget && widget.requirejs) return widget.requirejs;
       } catch (e0) { /* */ }
       if (typeof require !== 'undefined') return require;
-      try {
-        if (window.parent && window.parent !== window && window.parent.require) return window.parent.require;
-      } catch (e1) { /* */ }
       return null;
     }
 
@@ -153,10 +164,10 @@
         }
         var req = getRequire();
         if (!req) {
-          reject(new Error('require AMD não disponível (confirme Additional App Widget)'));
+          reject(new Error('WAFData só no 3DDashboard (Additional App Widget)'));
           return;
         }
-        setBar('Carregando WAFData / Compass…', 'info');
+        setBar('Carregando WAFData…', 'info');
         req(
           ['DS/WAFData/WAFData', 'DS/i3DXCompassServices/i3DXCompassServices', 'DS/PlatformAPI/PlatformAPI'],
           function (WAF, Compass, PAPI) {
@@ -179,20 +190,21 @@
         if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
         if (typeof App !== 'undefined' && App.run) {
           App.run();
-          setBar('Pronto — abra Mont10 no Explorer e clique Varrer.', 'ok');
+          setBar('Pronto — Mont10 no Explorer → Varrer.', 'ok');
           return;
         }
-        setBar('Varredura falhou: App não inicializou (bundle incompleto).', 'error');
+        setBar('Bundle não carregou (menu ⋮ Atualizar no dashboard).', 'error');
       } catch (err) {
-        setBar('Varredura falhou: ' + (err.message || err), 'error');
+        setBar('Erro: ' + (err.message || err), 'error');
       }
     }
 
     function bootPipeline() {
-      if (!mountUi()) return;
+      setEnvHint();
+      syncToWidgetBody();
+      setBar('Carregando módulos BOM…', 'info');
       loadWafModules()
         .then(function () {
-          setBar('WAFData OK — carregando gráficos e módulos BOM…', 'info');
           return loadScript(GH + 'assets/vendor/chart.umd.min.js?v=' + VER, true);
         })
         .then(function () {
@@ -203,41 +215,41 @@
         })
         .catch(function (err) {
           var msg = (err && err.message) ? err.message : String(err);
-          setBar('Varredura falhou: ' + msg, 'error');
+          if (msg.indexOf('3DDashboard') >= 0) {
+            setBar(msg + ' — teste varredura no dashboard, não no Chrome.', 'warn');
+          } else {
+            setBar('Varredura falhou: ' + msg, 'error');
+          }
         });
     }
 
     function onWidgetReady() {
-      mountUi();
+      syncToWidgetBody();
       bootPipeline();
     }
 
     function widgetLoading() {
+      setEnvHint();
       if (typeof widget !== 'undefined' && widget && widget.addEvent) {
         widget.addEvent('onLoad', onWidgetReady);
         widget.addEvent('onRefresh', function () {
           if (typeof App !== 'undefined' && App.runExplorerScan) {
-            var b = widget.body && widget.body.querySelector('#btnScanExplorer');
+            var b = getMountRoot().querySelector('#btnScanExplorer');
             App.runExplorerScan(b);
           }
         });
-        if (widget.body) {
-          window.setTimeout(function () {
-            if (!appStarted) onWidgetReady();
-          }, 0);
-        }
+        window.setTimeout(onWidgetReady, 0);
         return;
       }
       window.setTimeout(widgetLoading, 100);
     }
 
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', bootPipeline);
+    } else {
+      bootPipeline();
+    }
     widgetLoading();
-    window.setTimeout(function () {
-      if (!uiMounted) {
-        mountUi();
-        if (!appStarted) bootPipeline();
-      }
-    }, 3000);
   //]]>
   </script>
 </body>
