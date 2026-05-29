@@ -8,9 +8,11 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260529a',
-    /** Varredura automática quando Explorer envia seleção (Additional App) */
-    AUTO_SCAN_ON_SELECTION: true,
+    BUILD: 'bom20260529c',
+    /** Evita varredura automática com seleção errada do dashboard */
+    AUTO_SCAN_ON_SELECTION: false,
+    /** Nome raiz no Explorer quando seleção automática falha (busca 3DSpace) */
+    EXPLORER_DEFAULT_NAME: 'Mont10',
     CAN_USE_ENOVIA_API: false,
 
     /** Somente Explorer → gráficos + tabela */
@@ -101,7 +103,7 @@
 
     /** Mapeamento estados de maturidade (customize tenant) */
     MATURITY_STATES: {
-      RELEASED: ['RELEASED', 'FROZEN', 'Released', 'Frozen'],
+      RELEASED: ['RELEASED', 'FROZEN', 'Released', 'Frozen', 'Aprovado', 'APROVADO', 'Approved'],
       IN_WORK: ['IN_WORK', 'PRIVATE', 'In Work', 'Work'],
       OBSOLETE: ['OBSOLETE', 'Obsolete', 'ABANDONED']
     },

@@ -30,19 +30,36 @@ var ProductExplorerBridge = (function () {
     return id && String(id).length >= 16;
   }
 
+  function labelText(v) {
+    if (v == null || v === '') return '';
+    if (typeof v === 'object') {
+      return String(v.label || v.displayName || v.name || v.title || '').trim();
+    }
+    var s = String(v).trim();
+    if (s.charAt(0) === '{' && s.indexOf('"label"') >= 0) {
+      try {
+        var o = JSON.parse(s);
+        return String(o.label || o.name || '').trim();
+      } catch (e) { /* */ }
+    }
+    return s;
+  }
+
   function normalizeSelection(payload) {
     if (!payload) return null;
     var obj = payload.data || payload.object || payload.item || payload.selection || payload;
+    if (obj.icon && obj.label && !obj.physicalid && !obj.objectId) return null;
     if (obj.items && obj.items.length && typeof ThreeDXContentParser !== 'undefined') {
       var fromItems = ThreeDXContentParser.toSelection({ data: { items: obj.items } });
       if (fromItems) return fromItems;
     }
     var physicalid = obj.physicalid || obj.objectId || obj.id || obj.resourceid || obj['dseno:physicalid'];
     if (!isValidId(physicalid)) return null;
-    var displayName = obj.displayName || obj.title || obj.name || obj['dseno:name'] || '';
+    var displayName = labelText(obj.displayName) || labelText(obj.title) || labelText(obj.name) || labelText(obj['dseno:name']);
     if (displayName.length <= 2 && !isNaN(displayName)) {
-      displayName = obj.title || obj.name || physicalid;
+      displayName = labelText(obj.title) || labelText(obj.name) || physicalid;
     }
+    if (!displayName || displayName.charAt(0) === '{') return null;
     return {
       physicalid: physicalid,
       type: obj.type || obj.objectType || obj['dseno:type'] || 'VPMReference',

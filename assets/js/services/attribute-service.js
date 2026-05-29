@@ -56,7 +56,9 @@ var AttributeService = (function () {
   }
 
   function classifyMaturity(state) {
-    var s = String(state || '').toUpperCase();
+    var raw = String(state || '').trim();
+    if (/^aprovado$/i.test(raw)) return 'released';
+    var s = raw.toUpperCase();
     var cfg = APP_CONFIG.MATURITY_STATES;
     if (cfg.RELEASED.some(function (x) { return s.indexOf(x.toUpperCase()) >= 0; })) return 'released';
     if (cfg.OBSOLETE.some(function (x) { return s.indexOf(x.toUpperCase()) >= 0; })) return 'obsolete';

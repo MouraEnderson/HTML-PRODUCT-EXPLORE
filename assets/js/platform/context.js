@@ -31,39 +31,58 @@ var PlatformContext = (function (global) {
     return null;
   }
 
-  function loadFromWidget() {
+  function applySecurityContext(ctx) {
+    if (!ctx) return false;
+    state.securityContext = ctx;
+    state.ready = true;
+    return true;
+  }
+
+  function tryPlatformApi(PAPI) {
     return new Promise(function (resolve) {
-      var PlatformAPI = global.__3DX_PLATFORM_API__;
-      if (PlatformAPI && PlatformAPI.getSecurityContext) {
-        PlatformAPI.getSecurityContext().then(function (ctx) {
-          state.securityContext = ctx;
-          return PlatformAPI.getTenant();
-        }).then(function (tenant) {
-          state.tenant = tenant;
-          state.ready = true;
-          resolve(true);
-        }).catch(function () {
-          resolve(false);
-        });
-        return;
-      }
-      var req = getRequire();
-      if (!req) {
+      if (!PAPI || typeof PAPI.getSecurityContext !== 'function') {
         resolve(false);
         return;
       }
       try {
-        req(['DS/PlatformAPI/PlatformAPI'], function (PAPI) {
-          PAPI.getSecurityContext().then(function (ctx) {
-            state.securityContext = ctx;
-            return PAPI.getTenant();
-          }).then(function (tenant) {
-            state.tenant = tenant;
-            state.ready = true;
-            resolve(true);
-          }).catch(function () {
+        Promise.resolve(PAPI.getSecurityContext())
+          .then(function (ctx) {
+            if (!applySecurityContext(ctx)) {
+              resolve(false);
+              return;
+            }
+            if (typeof PAPI.getTenant !== 'function') {
+              resolve(true);
+              return;
+            }
+            return Promise.resolve(PAPI.getTenant()).then(function (tenant) {
+              if (tenant) state.tenant = tenant;
+              resolve(true);
+            });
+          })
+          .catch(function () {
             resolve(false);
           });
+      } catch (e) {
+        resolve(false);
+      }
+    });
+  }
+
+  function loadFromWidget() {
+    var cached = global.__3DX_PLATFORM_API__;
+    if (cached) {
+      return tryPlatformApi(cached);
+    }
+    var req = getRequire();
+    if (!req) {
+      return Promise.resolve(false);
+    }
+    return new Promise(function (resolve) {
+      try {
+        req(['DS/PlatformAPI/PlatformAPI'], function (PAPI) {
+          if (PAPI) global.__3DX_PLATFORM_API__ = PAPI;
+          tryPlatformApi(PAPI).then(resolve);
         }, function () {
           resolve(false);
         });
@@ -99,6 +118,20 @@ var PlatformContext = (function (global) {
     return true;
   }
 
+  function applyTenantDefaults() {
+    if (!APP_CONFIG.TENANT_DEFAULTS || !APP_CONFIG.TENANT_DEFAULTS.securityContext) return;
+    if (!state.securityContext) {
+      state.securityContext = APP_CONFIG.TENANT_DEFAULTS.securityContext;
+    }
+    if (!state.tenant) {
+      state.tenant = APP_CONFIG.TENANT_DEFAULTS.envId || state.tenant;
+    }
+    if (!state.platformId) {
+      state.platformId = APP_CONFIG.TENANT_DEFAULTS.envId || state.platformId;
+    }
+    state.ready = !!state.securityContext;
+  }
+
   function init() {
     if (APP_CONFIG.DEMO_MODE) {
       state.securityContext = 'ctx::VPLMProjectLeader.Company Name.Default';
@@ -110,25 +143,17 @@ var PlatformContext = (function (global) {
     if (loadFrom3DXDeepLink()) {
       return Promise.resolve(state);
     }
-    if (!state.securityContext && APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.securityContext) {
-      state.securityContext = APP_CONFIG.TENANT_DEFAULTS.securityContext;
-      state.tenant = APP_CONFIG.TENANT_DEFAULTS.envId || state.tenant;
-      state.platformId = APP_CONFIG.TENANT_DEFAULTS.envId || state.platformId;
-      state.ready = true;
-    }
+    applyTenantDefaults();
 
-    return loadFromWidget().then(function (ok) {
-      if (ok) return state;
-      return loadFromWAF().then(function () {
-        if (!state.ready) loadFrom3DXDeepLink();
-        if (!state.ready && APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.securityContext) {
-          state.securityContext = APP_CONFIG.TENANT_DEFAULTS.securityContext;
-          state.tenant = APP_CONFIG.TENANT_DEFAULTS.envId;
-          state.platformId = APP_CONFIG.TENANT_DEFAULTS.envId;
-          state.ready = true;
-        }
-        return state;
-      });
+    return loadFromWAF().then(function () {
+      if (!state.ready) {
+        return loadFromWidget();
+      }
+      return true;
+    }).then(function () {
+      if (!state.ready) loadFrom3DXDeepLink();
+      applyTenantDefaults();
+      return state;
     });
   }
 

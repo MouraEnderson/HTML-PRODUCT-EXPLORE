@@ -10,6 +10,8 @@ $files = @(
   'assets\js\platform\waf-client.js',
   'assets\js\integration\3dx-content-parser.js',
   'assets\js\integration\enovia-api.js',
+  'assets\js\integration\search-api.js',
+  'assets\js\services\product-search-service.js',
   'assets\js\integration\product-explorer-bridge.js',
   'assets\js\services\attribute-service.js',
   'assets\js\services\physical-product-service.js',

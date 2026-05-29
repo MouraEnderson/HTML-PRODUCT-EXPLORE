@@ -29,8 +29,15 @@ var MetricsEngine = (function () {
       byRevision[rev] = (byRevision[rev] || 0) + 1;
 
       var appr = String(n.approval || '').toLowerCase();
-      if (appr.indexOf('approv') >= 0 && appr.indexOf('pending') < 0) byApproval.approved++;
-      else if (appr.indexOf('pending') >= 0) byApproval.pending++;
+      var matLabel = String(n.maturity || n.state || '').toLowerCase();
+      if (
+        (appr.indexOf('approv') >= 0 && appr.indexOf('pending') < 0) ||
+        matLabel.indexOf('aprov') >= 0 ||
+        matLabel === 'released' ||
+        matLabel === 'frozen'
+      ) {
+        byApproval.approved++;
+      } else if (appr.indexOf('pending') >= 0) byApproval.pending++;
       else byApproval.other++;
 
       if (n.isAssembly) assemblies++;

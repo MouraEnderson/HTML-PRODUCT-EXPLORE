@@ -129,7 +129,17 @@ var App = (function () {
         if (res.meta) {
           lastLoadedId = res.meta.rootPhysicalId;
           var lbl = byId('selectionLabel');
-          if (lbl) lbl.textContent = res.meta.productName;
+          if (lbl) {
+            var pn = res.meta.productName;
+            if (pn && typeof pn === 'object') pn = pn.label || pn.name || 'E-BOM';
+            if (typeof pn === 'string' && pn.charAt(0) === '{') {
+              try {
+                var o = JSON.parse(pn);
+                pn = o.label || o.name || 'E-BOM';
+              } catch (e2) { pn = 'E-BOM'; }
+            }
+            lbl.textContent = pn || 'E-BOM';
+          }
         }
         refreshUI();
         setStatus(res.message || 'Varredura concluída.', 'ok');

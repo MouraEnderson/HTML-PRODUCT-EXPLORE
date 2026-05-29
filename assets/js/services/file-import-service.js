@@ -47,6 +47,40 @@ var FileImportService = (function () {
     return fixMojibake(String(v == null ? '' : v)).trim();
   }
 
+  function isJsonBlob(s) {
+    var t = cleanCell(s);
+    return t.length > 2 && t.charAt(0) === '{' && t.indexOf('"') >= 0;
+  }
+
+  /** Explorer copia proprietário como JSON { icon, label }. */
+  function unwrapJsonCell(s) {
+    if (!isJsonBlob(s)) return cleanCell(s);
+    try {
+      var o = JSON.parse(s);
+      return cleanCell(o.label || o.name || o.displayName || o.title || '');
+    } catch (e) {
+      var m = String(s).match(/"label"\s*:\s*"([^"]+)"/i);
+      return m ? cleanCell(m[1]) : '';
+    }
+  }
+
+  function isProductName(name) {
+    var n = cleanCell(name);
+    if (!n || n.length < 2) return false;
+    if (isJsonBlob(n)) return false;
+    if (/^physical\s*product$/i.test(n)) return false;
+    return true;
+  }
+
+  function normalizeImportedState(state, approval) {
+    var s = cleanCell(state);
+    var a = cleanCell(approval);
+    if (/^aprovado$/i.test(s)) {
+      return { state: s, maturity: s, approval: a && a !== 'Unknown' ? a : 'Approved' };
+    }
+    return { state: s, maturity: s, approval: a || 'Unknown' };
+  }
+
   function isStatusLabel(name) {
     var t = cleanCell(name).toLowerCase();
     if (!t || t.length > 48) return false;
@@ -221,6 +255,9 @@ var FileImportService = (function () {
   }
 
   function parseRowsWithoutHeader(rows) {
+    if (rows.length && looksLikeHeader(rows[0])) {
+      return parseRows(rows);
+    }
     var colMap = {};
     var first = rows[0];
     if (first.length >= 2 && /^\d+$/.test(String(first[0]).trim())) {
@@ -230,6 +267,12 @@ var FileImportService = (function () {
       colMap.type = 3;
       colMap.revision = 4;
       colMap.state = 5;
+    } else if (first.length >= 5) {
+      colMap.name = 0;
+      colMap.revision = 1;
+      colMap.type = 2;
+      colMap.owner = 3;
+      colMap.state = 4;
     } else {
       colMap.name = 0;
       colMap.title = 1;
@@ -275,9 +318,11 @@ var FileImportService = (function () {
         if (isNaN(level)) level = stackLevel;
       }
 
-      if (!name) name = cleanCell(cell(row, colMap, 'name', '')) || cleanCell(cell(row, colMap, 'title', ''));
-      name = stripIconNoise(name);
-      if (!name) continue;
+      if (!name) {
+        name = cleanCell(cell(row, colMap, 'name', '')) || cleanCell(cell(row, colMap, 'title', ''));
+      }
+      name = stripIconNoise(unwrapJsonCell(name));
+      if (!isProductName(name)) continue;
       if (/^physical\s*product$/i.test(name)) continue;
       if (isStatusLabel(name) && items.length) {
         items[items.length - 1].state = name;
@@ -287,20 +332,24 @@ var FileImportService = (function () {
       stackLevel = level;
 
       var pid = cell(row, colMap, 'physicalid', '') || ('IMP_' + (r + 1) + '_' + name.replace(/\W/g, '_').slice(0, 40));
+      var st = normalizeImportedState(
+        cell(row, colMap, 'state', ''),
+        cell(row, colMap, 'approval', 'Unknown')
+      );
       items.push({
         physicalid: String(pid),
         name: String(name),
-        title: cell(row, colMap, 'title', name),
+        title: stripIconNoise(unwrapJsonCell(cell(row, colMap, 'title', name))) || String(name),
         type: cell(row, colMap, 'type', 'VPMReference'),
         displayType: cell(row, colMap, 'type', 'Physical Product'),
         revision: cell(row, colMap, 'revision', ''),
-        state: cell(row, colMap, 'state', ''),
-        maturity: cell(row, colMap, 'state', ''),
+        state: st.state,
+        maturity: st.maturity,
         quantity: parseFloat(cell(row, colMap, 'quantity', '1')) || 1,
-        owner: cell(row, colMap, 'owner', ''),
+        owner: unwrapJsonCell(cell(row, colMap, 'owner', '')),
         organization: cell(row, colMap, 'organization', ''),
         collabSpace: cell(row, colMap, 'collabSpace', ''),
-        approval: cell(row, colMap, 'approval', 'Unknown'),
+        approval: st.approval,
         level: level,
         parentKey: cell(row, colMap, 'parent', ''),
         rowIndex: r + 1

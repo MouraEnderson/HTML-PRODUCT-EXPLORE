@@ -10,9 +10,11 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260529a',
-    /** Varredura automática quando Explorer envia seleção (Additional App) */
-    AUTO_SCAN_ON_SELECTION: true,
+    BUILD: 'bom20260529c',
+    /** Evita varredura automática com seleção errada do dashboard */
+    AUTO_SCAN_ON_SELECTION: false,
+    /** Nome raiz no Explorer quando seleção automática falha (busca 3DSpace) */
+    EXPLORER_DEFAULT_NAME: 'Mont10',
     CAN_USE_ENOVIA_API: false,
 
     /** Somente Explorer → gráficos + tabela */
@@ -103,7 +105,7 @@
 
     /** Mapeamento estados de maturidade (customize tenant) */
     MATURITY_STATES: {
-      RELEASED: ['RELEASED', 'FROZEN', 'Released', 'Frozen'],
+      RELEASED: ['RELEASED', 'FROZEN', 'Released', 'Frozen', 'Aprovado', 'APROVADO', 'Approved'],
       IN_WORK: ['IN_WORK', 'PRIVATE', 'In Work', 'Work'],
       OBSOLETE: ['OBSOLETE', 'Obsolete', 'ABANDONED']
     },
@@ -444,39 +446,58 @@ var PlatformContext = (function (global) {
     return null;
   }
 
-  function loadFromWidget() {
+  function applySecurityContext(ctx) {
+    if (!ctx) return false;
+    state.securityContext = ctx;
+    state.ready = true;
+    return true;
+  }
+
+  function tryPlatformApi(PAPI) {
     return new Promise(function (resolve) {
-      var PlatformAPI = global.__3DX_PLATFORM_API__;
-      if (PlatformAPI && PlatformAPI.getSecurityContext) {
-        PlatformAPI.getSecurityContext().then(function (ctx) {
-          state.securityContext = ctx;
-          return PlatformAPI.getTenant();
-        }).then(function (tenant) {
-          state.tenant = tenant;
-          state.ready = true;
-          resolve(true);
-        }).catch(function () {
-          resolve(false);
-        });
-        return;
-      }
-      var req = getRequire();
-      if (!req) {
+      if (!PAPI || typeof PAPI.getSecurityContext !== 'function') {
         resolve(false);
         return;
       }
       try {
-        req(['DS/PlatformAPI/PlatformAPI'], function (PAPI) {
-          PAPI.getSecurityContext().then(function (ctx) {
-            state.securityContext = ctx;
-            return PAPI.getTenant();
-          }).then(function (tenant) {
-            state.tenant = tenant;
-            state.ready = true;
-            resolve(true);
-          }).catch(function () {
+        Promise.resolve(PAPI.getSecurityContext())
+          .then(function (ctx) {
+            if (!applySecurityContext(ctx)) {
+              resolve(false);
+              return;
+            }
+            if (typeof PAPI.getTenant !== 'function') {
+              resolve(true);
+              return;
+            }
+            return Promise.resolve(PAPI.getTenant()).then(function (tenant) {
+              if (tenant) state.tenant = tenant;
+              resolve(true);
+            });
+          })
+          .catch(function () {
             resolve(false);
           });
+      } catch (e) {
+        resolve(false);
+      }
+    });
+  }
+
+  function loadFromWidget() {
+    var cached = global.__3DX_PLATFORM_API__;
+    if (cached) {
+      return tryPlatformApi(cached);
+    }
+    var req = getRequire();
+    if (!req) {
+      return Promise.resolve(false);
+    }
+    return new Promise(function (resolve) {
+      try {
+        req(['DS/PlatformAPI/PlatformAPI'], function (PAPI) {
+          if (PAPI) global.__3DX_PLATFORM_API__ = PAPI;
+          tryPlatformApi(PAPI).then(resolve);
         }, function () {
           resolve(false);
         });
@@ -512,6 +533,20 @@ var PlatformContext = (function (global) {
     return true;
   }
 
+  function applyTenantDefaults() {
+    if (!APP_CONFIG.TENANT_DEFAULTS || !APP_CONFIG.TENANT_DEFAULTS.securityContext) return;
+    if (!state.securityContext) {
+      state.securityContext = APP_CONFIG.TENANT_DEFAULTS.securityContext;
+    }
+    if (!state.tenant) {
+      state.tenant = APP_CONFIG.TENANT_DEFAULTS.envId || state.tenant;
+    }
+    if (!state.platformId) {
+      state.platformId = APP_CONFIG.TENANT_DEFAULTS.envId || state.platformId;
+    }
+    state.ready = !!state.securityContext;
+  }
+
   function init() {
     if (APP_CONFIG.DEMO_MODE) {
       state.securityContext = 'ctx::VPLMProjectLeader.Company Name.Default';
@@ -523,25 +558,17 @@ var PlatformContext = (function (global) {
     if (loadFrom3DXDeepLink()) {
       return Promise.resolve(state);
     }
-    if (!state.securityContext && APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.securityContext) {
-      state.securityContext = APP_CONFIG.TENANT_DEFAULTS.securityContext;
-      state.tenant = APP_CONFIG.TENANT_DEFAULTS.envId || state.tenant;
-      state.platformId = APP_CONFIG.TENANT_DEFAULTS.envId || state.platformId;
-      state.ready = true;
-    }
+    applyTenantDefaults();
 
-    return loadFromWidget().then(function (ok) {
-      if (ok) return state;
-      return loadFromWAF().then(function () {
-        if (!state.ready) loadFrom3DXDeepLink();
-        if (!state.ready && APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.securityContext) {
-          state.securityContext = APP_CONFIG.TENANT_DEFAULTS.securityContext;
-          state.tenant = APP_CONFIG.TENANT_DEFAULTS.envId;
-          state.platformId = APP_CONFIG.TENANT_DEFAULTS.envId;
-          state.ready = true;
-        }
-        return state;
-      });
+    return loadFromWAF().then(function () {
+      if (!state.ready) {
+        return loadFromWidget();
+      }
+      return true;
+    }).then(function () {
+      if (!state.ready) loadFrom3DXDeepLink();
+      applyTenantDefaults();
+      return state;
     });
   }
 
@@ -1151,6 +1178,163 @@ var EnoviaApi = (function () {
   };
 })();
 
+;/* --- assets\js\integration\search-api.js --- */
+/**
+ * @file integration/search-api.js
+ * Busca federada 3DSpace / ENOVIA (Physical Product, VPMReference).
+ */
+var SearchApi = (function () {
+  'use strict';
+
+  var spaceUrl = null;
+
+  function init(base3DSpaceUrl) {
+    spaceUrl = base3DSpaceUrl.replace(/\/$/, '');
+  }
+
+  function searchUrls(term, top) {
+    top = top || APP_CONFIG.SEARCH.TOP;
+    var enc = encodeURIComponent(term);
+    var modelerBase = CompassServices.buildRestBase(spaceUrl);
+    return [
+      modelerBase + '/search?searchStr=' + enc + '&$top=' + top,
+      modelerBase + '/search?q=' + enc + '&$top=' + top,
+      spaceUrl + '/resources/v1/modeler/search?searchStr=' + enc + '&$top=' + top
+    ];
+  }
+
+  function trySearch(urls, index) {
+    index = index || 0;
+    if (index >= urls.length) {
+      return Promise.reject(new Error('Nenhum endpoint de busca respondeu no tenant.'));
+    }
+    return WafClient.get(urls[index]).catch(function () {
+      return trySearch(urls, index + 1);
+    });
+  }
+
+  function search(term, options) {
+    options = options || {};
+    if (!spaceUrl) {
+      return Promise.reject(new Error('3DSpace não inicializado.'));
+    }
+    return trySearch(searchUrls(term, options.top));
+  }
+
+  return {
+    init: init,
+    search: search
+  };
+})();
+
+;/* --- assets\js\services\product-search-service.js --- */
+/**
+ * @file services/product-search-service.js
+ * Normaliza resultados de busca → Physical Product / VPMReference.
+ */
+var ProductSearchService = (function () {
+  'use strict';
+
+  var PHYSICAL_HINTS = [
+    'VPMReference',
+    'Physical Product',
+    'PhysicalProduct',
+    'dspfl:PhysicalProduct',
+    'i3dx:Physical'
+  ];
+
+  function isPhysicalProductHit(item) {
+    var blob = [
+      item.type,
+      item.objectType,
+      item.displayType,
+      item.policy,
+      item['dseno:type'],
+      item.i3dx,
+      (item.objectTaxonomies || []).join(' ')
+    ].join(' ').toLowerCase();
+    return PHYSICAL_HINTS.some(function (h) {
+      return blob.indexOf(h.toLowerCase()) >= 0;
+    });
+  }
+
+  function normalizeHit(raw) {
+    var id = raw.physicalid || raw.objectId || raw.id || raw.resourceid;
+    if (!id) return null;
+    return {
+      physicalid: id,
+      type: raw.type || raw.objectType || 'VPMReference',
+      name: raw.name || raw.title || raw.displayName || id,
+      displayName: raw.displayName || raw.title || raw.name || id,
+      displayType: raw.displayType || raw['dseno:displayType'] || '',
+      revision: raw.revision || raw['dseno:revision'] || '',
+      state: raw.state || raw.current || raw.status || '',
+      owner: raw.owner || raw.creator || '',
+      organization: raw.organization || '',
+      collabSpace: raw.collabspace || raw.project || '',
+      description: raw.description || '',
+      i3dx: raw.i3dx || null
+    };
+  }
+
+  function parseResponse(response) {
+    var members = EnoviaApi.extractMembers(response);
+    if (!members.length && response.results) {
+      members = response.results;
+    }
+    return members
+      .map(normalizeHit)
+      .filter(Boolean)
+      .filter(isPhysicalProductHit);
+  }
+
+  function search(term) {
+    return SearchApi.search(term).then(parseResponse);
+  }
+
+  function getDemoResults(term) {
+    var all = [
+      {
+        physicalid: '132FB3CE26D70E006A18D1870000316D',
+        type: 'VPMReference',
+        name: '01_SKA_Drone Assembly_130520206',
+        displayName: '01_SKA_Drone Assembly_130520206',
+        displayType: 'Physical Product',
+        revision: 'A',
+        state: 'RELEASED',
+        owner: 'demo.owner',
+        organization: 'Company Name',
+        collabSpace: 'CS_IMPLANTACAO'
+      },
+      {
+        physicalid: 'DEMO_PP_002',
+        type: 'VPMReference',
+        name: '02_Motor_Assembly',
+        displayName: '02_Motor_Assembly',
+        displayType: 'Physical Product',
+        revision: 'B',
+        state: 'IN_WORK',
+        owner: 'demo.owner',
+        organization: 'Company Name',
+        collabSpace: 'CS_IMPLANTACAO'
+      }
+    ];
+    if (!term) return all;
+    var t = term.toLowerCase();
+    return all.filter(function (x) {
+      return (x.name + x.displayName).toLowerCase().indexOf(t) >= 0;
+    });
+  }
+
+  return {
+    search: search,
+    parseResponse: parseResponse,
+    getDemoResults: getDemoResults,
+    isPhysicalProductHit: isPhysicalProductHit,
+    normalizeHit: normalizeHit
+  };
+})();
+
 ;/* --- assets\js\integration\product-explorer-bridge.js --- */
 /**
  * @file integration/product-explorer-bridge.js
@@ -1184,19 +1368,36 @@ var ProductExplorerBridge = (function () {
     return id && String(id).length >= 16;
   }
 
+  function labelText(v) {
+    if (v == null || v === '') return '';
+    if (typeof v === 'object') {
+      return String(v.label || v.displayName || v.name || v.title || '').trim();
+    }
+    var s = String(v).trim();
+    if (s.charAt(0) === '{' && s.indexOf('"label"') >= 0) {
+      try {
+        var o = JSON.parse(s);
+        return String(o.label || o.name || '').trim();
+      } catch (e) { /* */ }
+    }
+    return s;
+  }
+
   function normalizeSelection(payload) {
     if (!payload) return null;
     var obj = payload.data || payload.object || payload.item || payload.selection || payload;
+    if (obj.icon && obj.label && !obj.physicalid && !obj.objectId) return null;
     if (obj.items && obj.items.length && typeof ThreeDXContentParser !== 'undefined') {
       var fromItems = ThreeDXContentParser.toSelection({ data: { items: obj.items } });
       if (fromItems) return fromItems;
     }
     var physicalid = obj.physicalid || obj.objectId || obj.id || obj.resourceid || obj['dseno:physicalid'];
     if (!isValidId(physicalid)) return null;
-    var displayName = obj.displayName || obj.title || obj.name || obj['dseno:name'] || '';
+    var displayName = labelText(obj.displayName) || labelText(obj.title) || labelText(obj.name) || labelText(obj['dseno:name']);
     if (displayName.length <= 2 && !isNaN(displayName)) {
-      displayName = obj.title || obj.name || physicalid;
+      displayName = labelText(obj.title) || labelText(obj.name) || physicalid;
     }
+    if (!displayName || displayName.charAt(0) === '{') return null;
     return {
       physicalid: physicalid,
       type: obj.type || obj.objectType || obj['dseno:type'] || 'VPMReference',
@@ -1422,7 +1623,9 @@ var AttributeService = (function () {
   }
 
   function classifyMaturity(state) {
-    var s = String(state || '').toUpperCase();
+    var raw = String(state || '').trim();
+    if (/^aprovado$/i.test(raw)) return 'released';
+    var s = raw.toUpperCase();
     var cfg = APP_CONFIG.MATURITY_STATES;
     if (cfg.RELEASED.some(function (x) { return s.indexOf(x.toUpperCase()) >= 0; })) return 'released';
     if (cfg.OBSOLETE.some(function (x) { return s.indexOf(x.toUpperCase()) >= 0; })) return 'obsolete';
@@ -1567,6 +1770,40 @@ var FileImportService = (function () {
 
   function cleanCell(v) {
     return fixMojibake(String(v == null ? '' : v)).trim();
+  }
+
+  function isJsonBlob(s) {
+    var t = cleanCell(s);
+    return t.length > 2 && t.charAt(0) === '{' && t.indexOf('"') >= 0;
+  }
+
+  /** Explorer copia proprietário como JSON { icon, label }. */
+  function unwrapJsonCell(s) {
+    if (!isJsonBlob(s)) return cleanCell(s);
+    try {
+      var o = JSON.parse(s);
+      return cleanCell(o.label || o.name || o.displayName || o.title || '');
+    } catch (e) {
+      var m = String(s).match(/"label"\s*:\s*"([^"]+)"/i);
+      return m ? cleanCell(m[1]) : '';
+    }
+  }
+
+  function isProductName(name) {
+    var n = cleanCell(name);
+    if (!n || n.length < 2) return false;
+    if (isJsonBlob(n)) return false;
+    if (/^physical\s*product$/i.test(n)) return false;
+    return true;
+  }
+
+  function normalizeImportedState(state, approval) {
+    var s = cleanCell(state);
+    var a = cleanCell(approval);
+    if (/^aprovado$/i.test(s)) {
+      return { state: s, maturity: s, approval: a && a !== 'Unknown' ? a : 'Approved' };
+    }
+    return { state: s, maturity: s, approval: a || 'Unknown' };
   }
 
   function isStatusLabel(name) {
@@ -1743,6 +1980,9 @@ var FileImportService = (function () {
   }
 
   function parseRowsWithoutHeader(rows) {
+    if (rows.length && looksLikeHeader(rows[0])) {
+      return parseRows(rows);
+    }
     var colMap = {};
     var first = rows[0];
     if (first.length >= 2 && /^\d+$/.test(String(first[0]).trim())) {
@@ -1752,6 +1992,12 @@ var FileImportService = (function () {
       colMap.type = 3;
       colMap.revision = 4;
       colMap.state = 5;
+    } else if (first.length >= 5) {
+      colMap.name = 0;
+      colMap.revision = 1;
+      colMap.type = 2;
+      colMap.owner = 3;
+      colMap.state = 4;
     } else {
       colMap.name = 0;
       colMap.title = 1;
@@ -1797,9 +2043,11 @@ var FileImportService = (function () {
         if (isNaN(level)) level = stackLevel;
       }
 
-      if (!name) name = cleanCell(cell(row, colMap, 'name', '')) || cleanCell(cell(row, colMap, 'title', ''));
-      name = stripIconNoise(name);
-      if (!name) continue;
+      if (!name) {
+        name = cleanCell(cell(row, colMap, 'name', '')) || cleanCell(cell(row, colMap, 'title', ''));
+      }
+      name = stripIconNoise(unwrapJsonCell(name));
+      if (!isProductName(name)) continue;
       if (/^physical\s*product$/i.test(name)) continue;
       if (isStatusLabel(name) && items.length) {
         items[items.length - 1].state = name;
@@ -1809,20 +2057,24 @@ var FileImportService = (function () {
       stackLevel = level;
 
       var pid = cell(row, colMap, 'physicalid', '') || ('IMP_' + (r + 1) + '_' + name.replace(/\W/g, '_').slice(0, 40));
+      var st = normalizeImportedState(
+        cell(row, colMap, 'state', ''),
+        cell(row, colMap, 'approval', 'Unknown')
+      );
       items.push({
         physicalid: String(pid),
         name: String(name),
-        title: cell(row, colMap, 'title', name),
+        title: stripIconNoise(unwrapJsonCell(cell(row, colMap, 'title', name))) || String(name),
         type: cell(row, colMap, 'type', 'VPMReference'),
         displayType: cell(row, colMap, 'type', 'Physical Product'),
         revision: cell(row, colMap, 'revision', ''),
-        state: cell(row, colMap, 'state', ''),
-        maturity: cell(row, colMap, 'state', ''),
+        state: st.state,
+        maturity: st.maturity,
         quantity: parseFloat(cell(row, colMap, 'quantity', '1')) || 1,
-        owner: cell(row, colMap, 'owner', ''),
+        owner: unwrapJsonCell(cell(row, colMap, 'owner', '')),
         organization: cell(row, colMap, 'organization', ''),
         collabSpace: cell(row, colMap, 'collabSpace', ''),
-        approval: cell(row, colMap, 'approval', 'Unknown'),
+        approval: st.approval,
         level: level,
         parentKey: cell(row, colMap, 'parent', ''),
         rowIndex: r + 1
@@ -2065,7 +2317,7 @@ var ExplorerScanner = (function () {
   }
 
   function canUseWafApi() {
-    if (typeof WAFData === 'undefined' || typeof EnoviaApi === 'undefined') return false;
+    if (typeof WAFData !== 'undefined' && WAFData.authenticatedRequest) return true;
     if (APP_CONFIG && APP_CONFIG.CAN_USE_ENOVIA_API) return true;
     try {
       if (typeof widget !== 'undefined' && widget) return true;
@@ -2089,6 +2341,76 @@ var ExplorerScanner = (function () {
     var fromHash = ProductExplorerBridge.readHashSelection && ProductExplorerBridge.readHashSelection();
     if (fromHash && isValidId(fromHash.physicalid)) return fromHash;
     return null;
+  }
+
+  function readManualPhysicalId() {
+    var el = document.getElementById('explorerObjectId');
+    var id = el && el.value ? String(el.value).trim() : '';
+    if (!isValidId(id)) return null;
+    var nameEl = document.getElementById('explorerObjectName');
+    var label = nameEl && nameEl.value ? String(nameEl.value).trim() : id;
+    return {
+      physicalid: id,
+      type: 'VPMReference',
+      name: label,
+      displayName: label,
+      displayType: 'Physical Product',
+      source: 'manual-id'
+    };
+  }
+
+  function pickSearchHit(term, hits) {
+    if (!hits || !hits.length) return null;
+    var t = String(term || '').toLowerCase();
+    var exact = hits.filter(function (h) {
+      var n = (h.name || h.displayName || '').toLowerCase();
+      return n === t || n.indexOf(t) === 0;
+    });
+    return exact.length ? exact[0] : hits[0];
+  }
+
+  function resolveSelectionBySearch(term) {
+    if (!canUseWafApi()) return Promise.resolve(null);
+    if (typeof SearchApi === 'undefined' || typeof ProductSearchService === 'undefined') {
+      return Promise.resolve(null);
+    }
+    return ensureSpaceApi().then(function () {
+      var space =
+        (typeof PlatformBridge !== 'undefined' && PlatformBridge.getSpaceUrl && PlatformBridge.getSpaceUrl()) ||
+        (APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.spaceHost
+          ? 'https://' + APP_CONFIG.TENANT_DEFAULTS.spaceHost + '/enovia'
+          : null);
+      if (!space) return null;
+      SearchApi.init(space);
+      return ProductSearchService.search(term).then(function (hits) {
+        var hit = pickSearchHit(term, hits);
+        if (!hit || !isValidId(hit.physicalid)) return null;
+        if (typeof ProductExplorerBridge !== 'undefined') {
+          ProductExplorerBridge.setSelection(hit, { silent: true });
+        }
+        return hit;
+      });
+    }).catch(function () {
+      return null;
+    });
+  }
+
+  /**
+   * Seleção Explorer → campo manual → busca ENOVIA (ex.: Mont10).
+   */
+  function resolveSelection() {
+    var sel = getSelection();
+    if (sel) return Promise.resolve(sel);
+
+    var manual = readManualPhysicalId();
+    if (manual) return Promise.resolve(manual);
+
+    var term =
+      (APP_CONFIG.EXPLORER_DEFAULT_NAME || 'Mont10').trim() ||
+      (APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.defaultDisplayName) ||
+      'Mont10';
+
+    return resolveSelectionBySearch(term);
   }
 
   function indexToSnapshot(index, rootId, productName) {
@@ -2122,9 +2444,11 @@ var ExplorerScanner = (function () {
     try {
       EnoviaApi.init(space);
     } catch (e) { /* */ }
-    var chain = Promise.resolve();
+    var chain = PlatformContext.init();
     if (typeof CompassServices !== 'undefined' && CompassServices.fetchCsrfToken) {
-      chain = CompassServices.fetchCsrfToken(space).catch(function () { return null; });
+      chain = chain.then(function () {
+        return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
+      });
     }
     return chain;
   }
@@ -2162,7 +2486,14 @@ var ExplorerScanner = (function () {
       if (!items || !items.length) {
         throw new Error('Nenhuma linha reconhecida na cópia do Explorer');
       }
-      var name = items[0].title || items[0].name || 'E-BOM';
+      var root = items[0];
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].level === 0 || i === 0) {
+          root = items[i];
+          break;
+        }
+      }
+      var name = root.title || root.name || 'E-BOM';
       var payload = BomSnapshot.buildFromImported(items, name);
       return BomSnapshot.applyPayload(payload).then(function (meta) {
         return {
@@ -2191,35 +2522,35 @@ var ExplorerScanner = (function () {
     return scanViaText(text, 'cola');
   }
 
+  function scanViaApiOrSelection() {
+    return resolveSelection().then(function (sel) {
+      if (canUseWafApi() && sel) {
+        return scanViaApi(sel);
+      }
+      return Promise.reject(new Error('Sem seleção/API'));
+    });
+  }
+
   /**
-   * Ordem: seleção+API → clipboard → caixa de cola.
+   * Ordem: clipboard (Ctrl+C) → API/seleção → caixa de cola.
    */
   function scan() {
     if (typeof PlatformBridge !== 'undefined' && PlatformBridge.requestDashboardSelection) {
       PlatformBridge.requestDashboardSelection();
     }
-    return wait(700).then(function () {
-      var sel = getSelection();
-      if (canUseWafApi() && sel) {
-        return scanViaApi(sel).catch(function (apiErr) {
-          return scanViaClipboard()
-            .catch(function () { return scanViaPasteArea(); })
-            .catch(function () {
-              throw new Error(
-                (apiErr && apiErr.message ? apiErr.message + '. ' : '') +
-                  'Copie a grade do Explorer (Ctrl+C) e clique Varrer novamente.'
-              );
-            });
-        });
-      }
+    return wait(200).then(function () {
       return scanViaClipboard()
-        .catch(function () { return scanViaPasteArea(); })
         .catch(function () {
+          return scanViaApiOrSelection();
+        })
+        .catch(function () {
+          return scanViaPasteArea();
+        })
+        .catch(function (apiErr) {
           var hint =
-            'Varredura falhou: abra Mont10, selecione linhas na grade, Ctrl+C, depois Varrer (ou cole na caixa).';
-          if (sel && !canUseWafApi()) {
-            hint =
-              'Varredura falhou: API bloqueada no GitHub. Ctrl+C na grade → Varrer (lê clipboard) ou cole → Varrer.';
+            'Varredura falhou: no Explorer selecione Mont10 + filhos (Ctrl+A na grade), Ctrl+C, depois Varrer.';
+          if (apiErr && apiErr.message && apiErr.message.indexOf('Sem seleção') < 0) {
+            hint = apiErr.message + ' ' + hint;
           }
           throw new Error(hint);
         });
@@ -2228,6 +2559,7 @@ var ExplorerScanner = (function () {
 
   return {
     scan: scan,
+    resolveSelection: resolveSelection,
     indexToSnapshot: indexToSnapshot,
     getSelection: getSelection
   };
@@ -2629,8 +2961,15 @@ var MetricsEngine = (function () {
       byRevision[rev] = (byRevision[rev] || 0) + 1;
 
       var appr = String(n.approval || '').toLowerCase();
-      if (appr.indexOf('approv') >= 0 && appr.indexOf('pending') < 0) byApproval.approved++;
-      else if (appr.indexOf('pending') >= 0) byApproval.pending++;
+      var matLabel = String(n.maturity || n.state || '').toLowerCase();
+      if (
+        (appr.indexOf('approv') >= 0 && appr.indexOf('pending') < 0) ||
+        matLabel.indexOf('aprov') >= 0 ||
+        matLabel === 'released' ||
+        matLabel === 'frozen'
+      ) {
+        byApproval.approved++;
+      } else if (appr.indexOf('pending') >= 0) byApproval.pending++;
       else byApproval.other++;
 
       if (n.isAssembly) assemblies++;
@@ -3503,7 +3842,17 @@ var App = (function () {
         if (res.meta) {
           lastLoadedId = res.meta.rootPhysicalId;
           var lbl = byId('selectionLabel');
-          if (lbl) lbl.textContent = res.meta.productName;
+          if (lbl) {
+            var pn = res.meta.productName;
+            if (pn && typeof pn === 'object') pn = pn.label || pn.name || 'E-BOM';
+            if (typeof pn === 'string' && pn.charAt(0) === '{') {
+              try {
+                var o = JSON.parse(pn);
+                pn = o.label || o.name || 'E-BOM';
+              } catch (e2) { pn = 'E-BOM'; }
+            }
+            lbl.textContent = pn || 'E-BOM';
+          }
         }
         refreshUI();
         setStatus(res.message || 'Varredura concluída.', 'ok');

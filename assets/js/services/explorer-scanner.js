@@ -12,7 +12,7 @@ var ExplorerScanner = (function () {
   }
 
   function canUseWafApi() {
-    if (typeof WAFData === 'undefined' || typeof EnoviaApi === 'undefined') return false;
+    if (typeof WAFData !== 'undefined' && WAFData.authenticatedRequest) return true;
     if (APP_CONFIG && APP_CONFIG.CAN_USE_ENOVIA_API) return true;
     try {
       if (typeof widget !== 'undefined' && widget) return true;
@@ -36,6 +36,76 @@ var ExplorerScanner = (function () {
     var fromHash = ProductExplorerBridge.readHashSelection && ProductExplorerBridge.readHashSelection();
     if (fromHash && isValidId(fromHash.physicalid)) return fromHash;
     return null;
+  }
+
+  function readManualPhysicalId() {
+    var el = document.getElementById('explorerObjectId');
+    var id = el && el.value ? String(el.value).trim() : '';
+    if (!isValidId(id)) return null;
+    var nameEl = document.getElementById('explorerObjectName');
+    var label = nameEl && nameEl.value ? String(nameEl.value).trim() : id;
+    return {
+      physicalid: id,
+      type: 'VPMReference',
+      name: label,
+      displayName: label,
+      displayType: 'Physical Product',
+      source: 'manual-id'
+    };
+  }
+
+  function pickSearchHit(term, hits) {
+    if (!hits || !hits.length) return null;
+    var t = String(term || '').toLowerCase();
+    var exact = hits.filter(function (h) {
+      var n = (h.name || h.displayName || '').toLowerCase();
+      return n === t || n.indexOf(t) === 0;
+    });
+    return exact.length ? exact[0] : hits[0];
+  }
+
+  function resolveSelectionBySearch(term) {
+    if (!canUseWafApi()) return Promise.resolve(null);
+    if (typeof SearchApi === 'undefined' || typeof ProductSearchService === 'undefined') {
+      return Promise.resolve(null);
+    }
+    return ensureSpaceApi().then(function () {
+      var space =
+        (typeof PlatformBridge !== 'undefined' && PlatformBridge.getSpaceUrl && PlatformBridge.getSpaceUrl()) ||
+        (APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.spaceHost
+          ? 'https://' + APP_CONFIG.TENANT_DEFAULTS.spaceHost + '/enovia'
+          : null);
+      if (!space) return null;
+      SearchApi.init(space);
+      return ProductSearchService.search(term).then(function (hits) {
+        var hit = pickSearchHit(term, hits);
+        if (!hit || !isValidId(hit.physicalid)) return null;
+        if (typeof ProductExplorerBridge !== 'undefined') {
+          ProductExplorerBridge.setSelection(hit, { silent: true });
+        }
+        return hit;
+      });
+    }).catch(function () {
+      return null;
+    });
+  }
+
+  /**
+   * Seleção Explorer → campo manual → busca ENOVIA (ex.: Mont10).
+   */
+  function resolveSelection() {
+    var sel = getSelection();
+    if (sel) return Promise.resolve(sel);
+
+    var manual = readManualPhysicalId();
+    if (manual) return Promise.resolve(manual);
+
+    var term =
+      (APP_CONFIG.EXPLORER_DEFAULT_NAME || 'Mont10').trim() ||
+      (APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.defaultDisplayName) ||
+      'Mont10';
+
+    return resolveSelectionBySearch(term);
   }
 
   function indexToSnapshot(index, rootId, productName) {
@@ -69,9 +139,11 @@ var ExplorerScanner = (function () {
     try {
       EnoviaApi.init(space);
     } catch (e) { /* */ }
-    var chain = Promise.resolve();
+    var chain = PlatformContext.init();
     if (typeof CompassServices !== 'undefined' && CompassServices.fetchCsrfToken) {
-      chain = CompassServices.fetchCsrfToken(space).catch(function () { return null; });
+      chain = chain.then(function () {
+        return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
+      });
     }
     return chain;
   }
@@ -109,7 +181,14 @@ var ExplorerScanner = (function () {
       if (!items || !items.length) {
         throw new Error('Nenhuma linha reconhecida na cópia do Explorer');
       }
-      var name = items[0].title || items[0].name || 'E-BOM';
+      var root = items[0];
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].level === 0 || i === 0) {
+          root = items[i];
+          break;
+        }
+      }
+      var name = root.title || root.name || 'E-BOM';
       var payload = BomSnapshot.buildFromImported(items, name);
       return BomSnapshot.applyPayload(payload).then(function (meta) {
         return {
@@ -138,35 +217,35 @@ var ExplorerScanner = (function () {
     return scanViaText(text, 'cola');
   }
 
+  function scanViaApiOrSelection() {
+    return resolveSelection().then(function (sel) {
+      if (canUseWafApi() && sel) {
+        return scanViaApi(sel);
+      }
+      return Promise.reject(new Error('Sem seleção/API'));
+    });
+  }
+
   /**
-   * Ordem: seleção+API → clipboard → caixa de cola.
+   * Ordem: clipboard (Ctrl+C) → API/seleção → caixa de cola.
    */
   function scan() {
     if (typeof PlatformBridge !== 'undefined' && PlatformBridge.requestDashboardSelection) {
       PlatformBridge.requestDashboardSelection();
     }
-    return wait(700).then(function () {
-      var sel = getSelection();
-      if (canUseWafApi() && sel) {
-        return scanViaApi(sel).catch(function (apiErr) {
-          return scanViaClipboard()
-            .catch(function () { return scanViaPasteArea(); })
-            .catch(function () {
-              throw new Error(
-                (apiErr && apiErr.message ? apiErr.message + '. ' : '') +
-                  'Copie a grade do Explorer (Ctrl+C) e clique Varrer novamente.'
-              );
-            });
-        });
-      }
+    return wait(200).then(function () {
       return scanViaClipboard()
-        .catch(function () { return scanViaPasteArea(); })
         .catch(function () {
+          return scanViaApiOrSelection();
+        })
+        .catch(function () {
+          return scanViaPasteArea();
+        })
+        .catch(function (apiErr) {
           var hint =
-            'Varredura falhou: abra Mont10, selecione linhas na grade, Ctrl+C, depois Varrer (ou cole na caixa).';
-          if (sel && !canUseWafApi()) {
-            hint =
-              'Varredura falhou: API bloqueada no GitHub. Ctrl+C na grade → Varrer (lê clipboard) ou cole → Varrer.';
+            'Varredura falhou: no Explorer selecione Mont10 + filhos (Ctrl+A na grade), Ctrl+C, depois Varrer.';
+          if (apiErr && apiErr.message && apiErr.message.indexOf('Sem seleção') < 0) {
+            hint = apiErr.message + ' ' + hint;
           }
           throw new Error(hint);
         });
@@ -175,6 +254,7 @@ var ExplorerScanner = (function () {
 
   return {
     scan: scan,
+    resolveSelection: resolveSelection,
     indexToSnapshot: indexToSnapshot,
     getSelection: getSelection
   };
