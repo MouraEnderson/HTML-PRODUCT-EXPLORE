@@ -6,7 +6,7 @@ var App = (function () {
   'use strict';
 
   function byId(id) {
-    var el = byId(id);
+    var el = document.getElementById(id);
     if (el) return el;
     try {
       if (typeof widget !== 'undefined' && widget && widget.body) {
