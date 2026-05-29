@@ -2,36 +2,69 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:widget="http://www.netvibes.com/ns/">
 <head>
   <meta charset="UTF-8" />
-  <title>BOM Analytics — teste UWA</title>
+  <title>BOM Analytics</title>
   <style>
     body { font-family: "Segoe UI", sans-serif; margin: 0; }
     .ok { padding: 16px; color: #1b5e20; font-weight: bold; font-size: 15px; background: #e8f5e9; }
     .hint { padding: 12px; font-size: 12px; color: #005686; background: #e3f2fd; }
+    .btn-v { display: block; width: 100%; padding: 12px; margin: 10px 0; background: #2e7d32; color: #fff; border: 0; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; }
+    .st { padding: 8px 12px; background: #e3f2fd; color: #0d47a1; font-size: 13px; }
   </style>
   <script type="text/javascript">
   //<![CDATA[
+    window.__3DX_TRUSTED_WIDGET__ = true;
+    window.__3DX_BOOT_DEFER__ = true;
+
     var HTML =
-      '<div class="ok">BOM Analytics — widget UWA OK</div>' +
-      '<div class="hint">Troque a URL do Additional App para <b>widget-uwa.html</b> e Ctrl+F5.</div>';
+      '<div class="ok">BOM Analytics - UWA OK</div>' +
+      '<div id="statusBar" class="st">Iniciando...</div>' +
+      '<button type="button" id="btnScanExplorer" class="btn-v">Varrer estrutura Explorer</button>' +
+      '<div class="hint">Mont10 no Explorer, depois Varrer</div>' +
+      '<div id="kpiGrid" style="padding:8px;"></div>' +
+      '<div style="display:none" id="hiddenFields">' +
+      '<textarea id="pasteArea"></textarea>' +
+      '<button id="btnImportPaste"></button><button id="btnLoadExample"></button>' +
+      '<button id="btnSyncExplorer"></button><button id="btnRefresh"></button>' +
+      '<input id="snapshotFileInput" type="file" /><input id="explorerObjectId" />' +
+      '<input id="explorerObjectName" /><button id="btnLoadObjectId"></button>' +
+      '<select id="filterMaturity"><option value="all">all</option></select>' +
+      '<select id="filterType"><option value="all">all</option></select>' +
+      '<select id="filterApproval"><option value="all">all</option></select>' +
+      '<select id="filterPP"><option value="all">all</option></select>' +
+      '<input id="searchInput" /><canvas id="chartMaturity"></canvas><canvas id="chartType"></canvas>' +
+      '<canvas id="chartRevision"></canvas><canvas id="chartApproval"></canvas>' +
+      '<table id="bomTable"><thead><tr></tr></thead><tbody></tbody></table>' +
+      '<span id="selectionLabel"></span><span id="tableProductLabel"></span>' +
+      '<div id="loadingOverlay"></div></div>';
 
     function onLoad() {
       if (!widget || !widget.body) return;
       widget.body.innerHTML = HTML;
+      window.setTimeout(function () {
+        var s = document.createElement('script');
+        s.src = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/js/widget-boot.js?v=uwa20260603g';
+        document.head.appendChild(s);
+      }, 400);
     }
 
     function wait() {
       if (typeof widget !== 'undefined' && widget && widget.addEvent) {
         widget.addEvent('onLoad', onLoad);
+        widget.addEvent('onRefresh', function () {
+          if (typeof App !== 'undefined' && App.runExplorerScan) {
+            App.runExplorerScan(widget.body.querySelector('#btnScanExplorer'));
+          }
+        });
         if (widget.body && !widget.body.innerHTML.replace(/\s/g, '')) {
           window.setTimeout(onLoad, 0);
         }
         return;
       }
-      setTimeout(wait, 80);
+      window.setTimeout(wait, 80);
     }
     wait();
   //]]>
   </script>
 </head>
-<body><p class="hint">Aguardando widget…</p></body>
+<body><p class="hint">Aguardando widget...</p></body>
 </html>
