@@ -3,7 +3,7 @@
 ## URL do Additional App (cole no Platform Manager)
 
 ```
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v2.html?snapshot=data/mont10.json&v=bom20260601i
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v2.html?snapshot=data/mont10.json&v=bom20260601j
 ```
 
 **Conta GitHub:** `mouraenderson` (com **e**).
