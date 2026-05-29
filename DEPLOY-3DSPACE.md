@@ -137,6 +137,12 @@ Alternativas:
 
 ---
 
+## Você já subiu no Bookmark Editor (pasta DEPLOY)
+
+Se carregou o `.7z` em **EXPLORE → DEPLOY** como Documento, isso **armazena** o pacote no ENOVIA, mas **não** ativa o site automaticamente. Siga: [DEPLOY-PASTA-DEPLOY.md](DEPLOY-PASTA-DEPLOY.md)
+
+---
+
 ## Suporte
 
 Após deploy, se der erro, envie print do **F12 → Console** com a URL 3DSpace aberta (não GitHub).

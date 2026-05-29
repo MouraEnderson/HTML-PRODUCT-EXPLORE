@@ -88,7 +88,7 @@ var App = (function () {
     setLoading(true);
     setStatus('Carregando E-BOM...', 'info');
 
-    if (APP_CONFIG.CROSS_ORIGIN_WIDGET) {
+    if (APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.DEMO_MODE) {
       return loadBomFromSelectionOnly(physicalId);
     }
 
@@ -178,9 +178,11 @@ var App = (function () {
 
     if (APP_CONFIG.CROSS_ORIGIN_WIDGET) {
       try {
+        var banner = document.getElementById('externalBanner');
+        if (banner) banner.classList.remove('hidden');
         initAppCore(null);
         setStatus(
-          'Widget Web Page Reader: clique Buscar → selecione no Product Explorer → Atualizar.',
+          'Modo externo: cole Physical ID → Carregar objeto → Atualizar (dados demo da estrutura).',
           'warn'
         );
       } catch (err) {
@@ -203,7 +205,10 @@ var App = (function () {
         initAppCore(spaceUrl);
         var sel = ProductExplorerBridge.getSelection();
         if (sel && !APP_CONFIG.CROSS_ORIGIN_WIDGET) return loadBom(sel.physicalid);
-        if (APP_CONFIG.DEMO_MODE) return loadBom('DEMO_ROOT_001');
+        if (APP_CONFIG.DEMO_MODE) {
+          var root = APP_CONFIG.DEMO_ROOT_ID || 'DEMO_ROOT_001';
+          return loadBom(root);
+        }
         setStatus('Busque um Physical Product ou selecione no Product Explorer.', 'info');
       })
       .catch(function (err) {

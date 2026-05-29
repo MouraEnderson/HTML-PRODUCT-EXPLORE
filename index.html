@@ -8,13 +8,13 @@
   <script>
     (function () {
       var CDN = 'https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/';
-      var host = location.hostname || '';
+      var host = (location.hostname || '').toLowerCase();
+      window.__3DX_ASSET_ROOT__ = 'assets/';
       if (host.indexOf('3dexperience.3ds.com') >= 0) return;
-      if (host.indexOf('github.io') < 0 && host !== 'localhost' && host !== '127.0.0.1') {
-        var base = document.createElement('base');
-        base.href = CDN;
-        document.head.appendChild(base);
-      }
+      window.__3DX_ASSET_ROOT__ = CDN;
+      var base = document.createElement('base');
+      base.href = CDN;
+      document.head.appendChild(base);
     })();
   </script>
   <link rel="stylesheet" href="assets/css/dashboard.css" />
@@ -38,6 +38,7 @@
     </div>
   </header>
 
+  <div id="externalBanner" class="external-banner hidden">Modo Web Page Reader (link externo): sincronização automática com Product Explorer não disponível. Use o Physical ID abaixo.</div>
   <div id="statusBar" class="status-bar">Inicializando...</div>
 
   <section class="panel explorer-sync-panel" aria-label="Sincronizar Product Explorer">

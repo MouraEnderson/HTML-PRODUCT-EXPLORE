@@ -80,6 +80,18 @@ body {
 
 .btn-primary:hover { background: #004670; }
 
+.external-banner {
+  background: #fff3e0;
+  color: #e65100;
+  padding: 10px 20px;
+  font-size: 0.85rem;
+  border-bottom: 1px solid #ffcc80;
+}
+
+.external-banner.hidden {
+  display: none;
+}
+
 .status-bar {
   padding: 6px 20px;
   font-size: 0.8rem;

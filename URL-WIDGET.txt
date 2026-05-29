@@ -1,13 +1,26 @@
-# URLs para widget 3DEXPERIENCE
+# URL para colar no Web Page Reader (copiar TUDO numa linha)
 
-## 1) GitHub Pages (principal — após ativar branch gh-pages)
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/index.html
+## RECOMENDADO — Drone já pré-configurado + assets via CDN
 
-Ativar em: Settings → Pages → Branch: gh-pages → Folder: / (root)
+https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/index.html?physicalid=132FB3CE26D70E006A18D1870000316D&displayName=01_SKA_Drone%20Assembly_130520206
 
-## 2) CDN jsDelivr (funciona AGORA, enquanto Pages não publica)
+## Genérico (sem produto)
+
 https://cdn.jsdelivr.net/gh/MouraEnderson/HTML-PRODUCT-EXPLORE@main/index.html
 
-## 3) NÃO usar (dá 404 ou HTML sem estilo)
-- https://github.com/MouraEnderson/HTML-PRODUCT-EXPLORE
-- https://raw.githubusercontent.com/.../index.html
+## O que NÃO funciona no Web Page Reader
+
+- Link 3DDrive (#app:X3DDRIV_AP/...)
+- Sincronizar automático com aba EXPLORE (bloqueio segurança)
+- APIs ENOVIA reais (precisa HTML no 3DSpace)
+
+## Depois de colar a URL
+
+1. Ctrl+F5 no dashboard
+2. Deve aparecer faixa laranja "Modo Web Page Reader"
+3. Physical ID já preenchido (URL Drone) → Carregar objeto → Atualizar
+4. KPIs e gráficos demo aparecem (não é BOM real do tenant)
+
+## Solução real (BOM do Explorer)
+
+Admin publica: https://r1132100929518-us1-space.3dexperience.3ds.com/enovia/webapps/BomAnalytics/index.html

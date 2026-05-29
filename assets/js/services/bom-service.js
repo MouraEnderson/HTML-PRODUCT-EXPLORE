@@ -172,9 +172,10 @@ var BomService = (function () {
 
   /* ---------- Demo data ---------- */
   function loadDemoTree(rootPhysicalId) {
+    var isDrone = rootPhysicalId === '132FB3CE26D70E006A18D1870000316D';
     var root = addNode({
       physicalid: rootPhysicalId,
-      name: 'Root Assembly',
+      name: isDrone ? '01_SKA_Drone Assembly_130520206' : 'Root Assembly',
       title: 'Produto Principal',
       type: 'VPMReference',
       revision: 'A',

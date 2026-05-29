@@ -24,8 +24,9 @@
     /** Auto-refresh quando seleção muda (ms); 0 = desligado */
     AUTO_REFRESH_MS: 0,
 
-    /** Modo demo via ?demo=true */
+    /** Modo demo via ?demo=true ou ?physicalid= em widget externo */
     DEMO_MODE: false,
+    DEMO_ROOT_ID: null,
 
     /** Busca Physical Product na plataforma */
     SEARCH: {
@@ -138,6 +139,11 @@
     _host.indexOf('github.io') >= 0 ||
     _host.indexOf('jsdelivr.net') >= 0 ||
     _host.indexOf('githubusercontent.com') >= 0;
+
+  if (APP_CONFIG.CROSS_ORIGIN_WIDGET && query.physicalid) {
+    APP_CONFIG.DEMO_MODE = true;
+    APP_CONFIG.DEMO_ROOT_ID = query.physicalid;
+  }
 
   global.APP_CONFIG = APP_CONFIG;
   global.APP_QUERY = query;
