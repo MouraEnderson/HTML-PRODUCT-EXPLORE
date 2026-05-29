@@ -9,7 +9,7 @@ var BomTree = (function () {
   var onExpandRequest = null;
 
   function init(selector, expandCallback) {
-    container = document.querySelector(selector);
+    container = (typeof qs3dx === 'function' ? qs3dx(selector) : document.querySelector(selector));
     onExpandRequest = expandCallback;
     if (container) {
       container.addEventListener('click', onClick);

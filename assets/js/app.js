@@ -5,13 +5,24 @@
 var App = (function () {
   'use strict';
 
+  function byId(id) {
+    var el = byId(id);
+    if (el) return el;
+    try {
+      if (typeof widget !== 'undefined' && widget && widget.body) {
+        return widget.body.querySelector('#' + id);
+      }
+    } catch (e) { /* UWA */ }
+    return null;
+  }
+
   var currentMetrics = null;
   var currentAnomalies = null;
   var loading = false;
   var lastLoadedId = null;
 
   function setStatus(msg, type) {
-    var el = document.getElementById('statusBar');
+    var el = byId('statusBar');
     if (!el) return;
     el.textContent = msg;
     el.className = 'status-bar status-' + (type || 'info');
@@ -19,7 +30,7 @@ var App = (function () {
 
   function setLoading(on) {
     loading = on;
-    var overlay = document.getElementById('loadingOverlay');
+    var overlay = byId('loadingOverlay');
     if (overlay) overlay.classList.toggle('hidden', !on);
   }
 
@@ -38,11 +49,11 @@ var App = (function () {
       ChartsManager.destroyAll();
       ChartsManager.render(currentMetrics);
     }
-    if (APP_CONFIG.SHOW_TREE !== false && document.getElementById('bomTree')) {
+    if (APP_CONFIG.SHOW_TREE !== false && byId('bomTree')) {
       BomTree.refresh(index, rootId);
     }
     DataTable.setData(filtered);
-    var tableLbl = document.getElementById('tableProductLabel');
+    var tableLbl = byId('tableProductLabel');
     var sel = ProductExplorerBridge.getSelection();
     if (tableLbl && sel) {
       tableLbl.textContent = sel.displayName || sel.name || sel.physicalid;
@@ -55,7 +66,7 @@ var App = (function () {
 
   function renderIssues(issues) {
     if (APP_CONFIG.SHOW_ISSUES_PANEL === false) return;
-    var el = document.getElementById('issuesList');
+    var el = byId('issuesList');
     if (!el) return;
     var top = issues.slice(0, 50);
     if (!top.length) {
@@ -88,6 +99,17 @@ var App = (function () {
     });
   }
 
+  function apiTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise(function (_, reject) {
+        window.setTimeout(function () {
+          reject(new Error(label || 'Tempo esgotado na API'));
+        }, ms || 18000);
+      })
+    ]);
+  }
+
   function loadBom(physicalId) {
     if (!physicalId || loading) return Promise.resolve();
     if (physicalId === lastLoadedId && BomService.getNodeCount() > 1) {
@@ -102,7 +124,7 @@ var App = (function () {
       });
     }
 
-    return BomService.loadRoot(physicalId)
+    return apiTimeout(BomService.loadRoot(physicalId), 18000, 'API E-BOM lenta ou indisponível')
       .then(function () {
         lastLoadedId = physicalId;
         refreshUI();
@@ -113,6 +135,13 @@ var App = (function () {
       })
       .catch(function (err) {
         console.error(err);
+        var sel = ProductExplorerBridge.getSelection();
+        if (sel) {
+          return BomService.loadRootFromSelection(sel).then(function () {
+            refreshUI();
+            setStatus('Exibindo raiz do Explorer (' + (sel.displayName || sel.physicalid) + ').', 'warn');
+          });
+        }
         setStatus('Erro: ' + (err.message || err), 'error');
       })
       .finally(function () {
@@ -122,7 +151,7 @@ var App = (function () {
 
   function onSelection(sel) {
     if (!sel || !sel.physicalid) return;
-    var label = document.getElementById('selectionLabel');
+    var label = byId('selectionLabel');
     if (label) {
       label.textContent = (sel.displayName || sel.name || sel.physicalid);
     }
@@ -135,7 +164,7 @@ var App = (function () {
     if (typeof ProductExplorerBridge.setSelection === 'function') {
       ProductExplorerBridge.setSelection(sel, { silent: true });
     }
-    document.getElementById('selectionLabel').textContent =
+    byId('selectionLabel').textContent =
       (sel.displayName || sel.name) + ' (' + sel.physicalid + ')';
     return BomService.loadFrom3DXProduct(sel)
       .then(function () {
@@ -164,7 +193,7 @@ var App = (function () {
     KpiCards.init('#kpiGrid');
     ChartsManager.init();
     DataTable.init('#bomTable');
-    var treeEl = document.getElementById('bomTree');
+    var treeEl = byId('bomTree');
     if (treeEl && APP_CONFIG.SHOW_TREE !== false) {
       BomTree.init('#bomTree', function (id) {
         return BomService.expandNode(id);
@@ -183,27 +212,30 @@ var App = (function () {
       }
     );
 
-    document.getElementById('btnRefresh').addEventListener('click', function () {
-      var sel = ProductExplorerBridge.getSelection();
-      if (sel) loadBom(sel.physicalid);
-      else setStatus('Selecione um objeto no Product Explorer.', 'warn');
-    });
+    var btnRef = byId('btnRefresh');
+    if (btnRef) {
+      btnRef.addEventListener('click', function () {
+        var sel = ProductExplorerBridge.getSelection();
+        if (sel) loadBom(sel.physicalid);
+        else setStatus('Abra um produto no Product Structure Explorer.', 'warn');
+      });
+    }
 
-    var btnExport = document.getElementById('btnExport');
+    var btnExport = byId('btnExport');
     if (btnExport) {
       btnExport.addEventListener('click', function () {
         DataTable.exportExcel();
       });
     }
 
-    var btnExpand = document.getElementById('btnExpandAll');
+    var btnExpand = byId('btnExpandAll');
     if (btnExpand) {
       btnExpand.addEventListener('click', function () {
         setStatus('Expanda níveis na árvore.', 'info');
       });
     }
 
-    var btnDrone = document.getElementById('btnLoadDrone');
+    var btnDrone = byId('btnLoadDrone');
     if (btnDrone) {
       btnDrone.addEventListener('click', function () {
         loadPhysicalProduct({
@@ -259,7 +291,7 @@ var App = (function () {
       onSelect: onSelection,
       onStatus: setStatusPublic
     });
-    if (!APP_CONFIG.UI_CLEAN && document.getElementById('dropZone')) {
+    if (!APP_CONFIG.UI_CLEAN && byId('dropZone')) {
       DropZone.init({
         onImported: function (count, fileName) {
           APP_CONFIG.IMPORT_MODE = true;
@@ -277,8 +309,10 @@ var App = (function () {
     }
     toggleCrossOriginUI();
     if (APP_CONFIG.EXPLORER_ONLY || APP_CONFIG.UI_CLEAN) {
-      scheduleExplorerSync();
-      startExplorerPoll();
+      window.setTimeout(function () {
+        scheduleExplorerSync();
+        startExplorerPoll();
+      }, 2000);
     }
   }
 
@@ -286,7 +320,7 @@ var App = (function () {
     if (typeof PlatformBridge !== 'undefined') {
       PlatformBridge.requestDashboardSelection();
     }
-    var btn = document.getElementById('btnSyncExplorer');
+    var btn = byId('btnSyncExplorer');
     if (btn) btn.click();
   }
 
@@ -349,20 +383,18 @@ var App = (function () {
   }
 
   function bootstrap() {
-    setLoading(true);
-    setStatus('Inicializando...', 'info');
-
-    return waitForTrustedWidget(4000).then(function () {
+    setStatus('Inicializando…', 'info');
+    var wait = (global.__3DX_TRUSTED_WIDGET__) ? Promise.resolve(true) : waitForTrustedWidget(3000);
+    return wait.then(function () {
       return bootstrapCore();
     });
   }
 
   function bootstrapCore() {
-    setLoading(true);
 
     if (APP_CONFIG.CROSS_ORIGIN_WIDGET) {
       try {
-        var banner = document.getElementById('externalBanner');
+        var banner = byId('externalBanner');
         if (banner) banner.classList.remove('hidden');
         initAppCore(null);
         runHealthCheck();
@@ -468,10 +500,17 @@ var App = (function () {
     }
   });
 
+  function forceStopLoading() {
+    setLoading(false);
+    var ov = byId('loadingOverlay');
+    if (ov) ov.classList.add('hidden');
+  }
+
   return {
     loadBom: loadBom,
     loadPhysicalProduct: loadPhysicalProduct,
     refreshUI: refreshUI,
-    setStatus: setStatusPublic
+    setStatus: setStatusPublic,
+    forceStopLoading: forceStopLoading
   };
 })();

@@ -182,6 +182,30 @@
     APP_CONFIG.DEMO_ROOT_ID = query.physicalid;
   }
 
+  function byId3dx(id) {
+    var el = document.getElementById(id);
+    if (el) return el;
+    try {
+      if (typeof widget !== 'undefined' && widget && widget.body) {
+        return widget.body.querySelector('#' + id);
+      }
+    } catch (e) { /* */ }
+    return null;
+  }
+
+  function qs3dx(sel) {
+    var el = document.querySelector(sel);
+    if (el) return el;
+    try {
+      if (typeof widget !== 'undefined' && widget && widget.body) {
+        return widget.body.querySelector(sel);
+      }
+    } catch (e) { /* */ }
+    return null;
+  }
+
+  global.byId3dx = byId3dx;
+  global.qs3dx = qs3dx;
   global.APP_CONFIG = APP_CONFIG;
   global.APP_QUERY = query;
 })(typeof window !== 'undefined' ? window : this);

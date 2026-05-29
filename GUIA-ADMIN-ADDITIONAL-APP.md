@@ -35,13 +35,17 @@ Documentação DS (PLM Coach / CAA): [Widget Dashboard Integration](https://libr
 
 1. Seção **Additional Apps** / **Apps adicionais** / **Third Party Apps**.
 2. **Create** / **Criar**.
-3. Preencha:
+3. Preencha (tela **Crie aplicativo adicional**):
 
-| Campo | Valor |
-|-------|--------|
-| **Short name** | `BOM Analytics` |
-| **Source code URL** | `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/index.html` |
-| **Configuration file URL** | (deixe vazio) |
+| Campo (PT) | Valor |
+|------------|--------|
+| **Nome abreviado** | `BOM Analytics` |
+| **Nome longo** | `Dashboard E-BOM — Product Explorer` |
+| **Tipo** | `Rede` |
+| **URL** | `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/index.html` |
+| **Compatibilidade do tipo de objeto** | `VPMReference, VPMRepReference, VPMPart` |
+| **Disponível para todos os membros** | Marcado (ou restrinja ao grupo LISTA 3DX) |
+| **Arquivo de configuração** | (se existir campo — deixe vazio) |
 
 URL alternativa (template UWA): `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-uwa.html`
 

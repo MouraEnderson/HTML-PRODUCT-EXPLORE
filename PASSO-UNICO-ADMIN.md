@@ -43,6 +43,8 @@ Com Additional App, o Drone (`01_SKA_Drone Assembly`) deve carregar na árvore a
 
 ## Se não achar “Additional Apps”
 
-Seu login precisa ser **Platform Manager** da instância `R1132100929518`. Sem esse papel, peça à Dassault ou ao parceiro — **não há outro caminho** para E-BOM real só com Web Page Reader.
+O menu **não aparece** na edição do dashboard. Procure o app **Platform Management** no **Compass** (pode chamar **Third Party Apps**).
+
+Se **não existir de jeito nenhum** → leia **`SEM-ADDITIONAL-APP.md`** (Caminho C: publicar no 3DSpace).
 
 Detalhes: `GUIA-ADMIN-ADDITIONAL-APP.md`

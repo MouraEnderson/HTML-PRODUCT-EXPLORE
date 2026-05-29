@@ -8,7 +8,7 @@
   <script type="text/javascript">
   //<![CDATA[
     var BOM_REPO = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-    var BOM_VER = '20260606';
+    var BOM_VER = '20260607';
     window.__3DX_TRUSTED_WIDGET__ = true;
 
     var BOM_SCRIPTS = [
@@ -61,9 +61,9 @@
     function bomMountBody() {
       var html = document.getElementById('bom-app-template');
       if (!html) return;
-      var target = (typeof widget !== 'undefined' && widget.body) ? widget.body : document.body;
-      target.innerHTML = html.innerHTML;
-      target.className = 'ui-explorer-only';
+      /* DOM no document — getElementById não acha nós só dentro de widget.body */
+      document.body.innerHTML = html.innerHTML;
+      document.body.className = 'ui-explorer-only';
     }
 
     function bomBoot() {
@@ -72,7 +72,14 @@
       bomLoadScript(0, function () {
         try {
           if (typeof WidgetRuntime !== 'undefined') WidgetRuntime.markTrusted();
+          var ov = document.getElementById('loadingOverlay');
+          if (ov) ov.classList.add('hidden');
         } catch (e1) { /* */ }
+        window.setTimeout(function () {
+          if (typeof App !== 'undefined' && App.forceStopLoading) {
+            App.forceStopLoading();
+          }
+        }, 22000);
       });
     }
 

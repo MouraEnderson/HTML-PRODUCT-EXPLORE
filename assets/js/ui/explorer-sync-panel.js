@@ -5,6 +5,10 @@
 var ExplorerSyncPanel = (function () {
   'use strict';
 
+  function el(id) {
+    return typeof byId3dx === 'function' ? byId3dx(id) : document.getElementById(id);
+  }
+
   var STORAGE_KEY = '3dx_pe_last_selection';
 
   function saveSelection(sel) {
@@ -30,11 +34,11 @@ var ExplorerSyncPanel = (function () {
   }
 
   function applyManualId() {
-    var input = document.getElementById('explorerObjectId');
+    var input = el('explorerObjectId');
     if (!input) return null;
     var id = input.value.trim();
     if (!id || id.length < 10) return null;
-    var nameInput = document.getElementById('explorerObjectName');
+    var nameInput = el('explorerObjectName');
     var sel = {
       physicalid: id,
       type: 'VPMReference',
@@ -49,9 +53,9 @@ var ExplorerSyncPanel = (function () {
 
   function init(options) {
     options = options || {};
-    var btnSync = document.getElementById('btnSyncExplorer');
-    var btnLoadId = document.getElementById('btnLoadObjectId');
-    var btnCopyHelp = document.getElementById('btnCopyHelp');
+    var btnSync = el('btnSyncExplorer');
+    var btnLoadId = el('btnLoadObjectId');
+    var btnCopyHelp = el('btnCopyHelp');
 
     if (btnSync) {
       btnSync.addEventListener('click', function () {
@@ -94,18 +98,18 @@ var ExplorerSyncPanel = (function () {
 
     if (btnCopyHelp) {
       btnCopyHelp.addEventListener('click', function () {
-        var el = document.getElementById('syncHelpText');
+        var el = el('syncHelpText');
         if (el) el.classList.toggle('open');
       });
     }
 
     ProductExplorerBridge.subscribe(function (sel) {
       saveSelection(sel);
-      if (document.getElementById('explorerObjectId')) {
-        document.getElementById('explorerObjectId').value = sel.physicalid || '';
+      if (el('explorerObjectId')) {
+        el('explorerObjectId').value = sel.physicalid || '';
       }
-      if (document.getElementById('explorerObjectName')) {
-        document.getElementById('explorerObjectName').value = sel.displayName || sel.name || '';
+      if (el('explorerObjectName')) {
+        el('explorerObjectName').value = sel.displayName || sel.name || '';
       }
     });
 
