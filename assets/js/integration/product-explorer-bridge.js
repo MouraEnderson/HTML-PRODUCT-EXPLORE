@@ -32,9 +32,10 @@ var ProductExplorerBridge = (function () {
     };
   }
 
-  function setSelection(sel) {
+  function setSelection(sel, opts) {
     if (!sel || !sel.physicalid) return;
     currentSelection = sel;
+    if (opts && opts.silent) return;
     listeners.forEach(function (fn) {
       try { fn(sel); } catch (e) { console.error('[Bridge]', e); }
     });
@@ -140,6 +141,7 @@ var ProductExplorerBridge = (function () {
   return {
     init: init,
     subscribe: subscribe,
+    setSelection: setSelection,
     getSelection: function () { return currentSelection; },
     normalizeSelection: normalizeSelection
   };

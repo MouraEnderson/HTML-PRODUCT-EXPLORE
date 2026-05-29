@@ -109,9 +109,20 @@ var DropZone = (function () {
     var text = dt.getData('text/plain') || dt.getData('text') || '';
     if (text) return text;
     try {
-      text = dt.getData('application/json') || '';
+      text = dt.getData('application/json') || dt.getData('text/uri-list') || '';
     } catch (err) { /* */ }
-    return text;
+    if (text) return text;
+    if (dt.types) {
+      for (var i = 0; i < dt.types.length; i++) {
+        try {
+          var part = dt.getData(dt.types[i]);
+          if (part && (part.indexOf('objectId') >= 0 || part.indexOf('3DXContent') >= 0)) {
+            return part;
+          }
+        } catch (err2) { /* */ }
+      }
+    }
+    return '';
   }
 
   function onDrop(e, options, pasteArea) {
@@ -122,7 +133,13 @@ var DropZone = (function () {
     }
     var text = extractDropText(e);
     if (text && pasteArea) pasteArea.value = text;
-    processInput(text, options);
+    if (text) {
+      processInput(text, options);
+    } else if (options.onError) {
+      options.onError(
+        'Arraste não trouxe dados (bloqueio entre abas). Solte na caixa, ou Ctrl+V o JSON, ou use Carregar Drone.'
+      );
+    }
   }
 
   function processInput(text, options) {
@@ -167,7 +184,9 @@ var DropZone = (function () {
     var label = document.getElementById('dropZoneLabel');
     if (label) label.textContent = 'Vinculando: ' + (sel.displayName || sel.physicalid) + '...';
 
-    ProductExplorerBridge.setSelection(sel);
+    if (typeof ProductExplorerBridge.setSelection === 'function') {
+      ProductExplorerBridge.setSelection(sel, { silent: true });
+    }
 
     BomService.loadFrom3DXProduct(sel)
       .then(function () {

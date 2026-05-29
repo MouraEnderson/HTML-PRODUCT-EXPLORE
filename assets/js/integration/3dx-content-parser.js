@@ -74,13 +74,35 @@ var ThreeDXContentParser = (function () {
   }
 
   /** Texto/JSON colado ou arrastado do 3DEXPERIENCE (Physical Product). */
+  function parseJsonTextLoose(text) {
+    var t = String(text || '');
+    var idM = t.match(/"objectId"\s*:\s*"([^"]+)"/i) ||
+      t.match(/"physicalid"\s*:\s*"([^"]+)"/i) ||
+      t.match(/"resourceid"\s*:\s*"([^"]+)"/i);
+    if (!idM) return null;
+    var nameM = t.match(/"displayName"\s*:\s*"([^"]+)"/i);
+    var typeM = t.match(/"objectType"\s*:\s*"([^"]+)"/i) ||
+      t.match(/"type"\s*:\s*"([^"]+)"/i);
+    return {
+      physicalid: idM[1],
+      type: typeM ? typeM[1] : 'VPMReference',
+      name: nameM ? nameM[1] : idM[1],
+      displayName: nameM ? nameM[1] : idM[1],
+      displayType: 'Physical Product',
+      source: 'loose-parse'
+    };
+  }
+
   function parseJsonText(text) {
     var trimmed = String(text || '').trim();
-    if (!trimmed || (trimmed.charAt(0) !== '{' && trimmed.charAt(0) !== '[')) {
-      return null;
+    if (!trimmed) return null;
+
+    if (trimmed.charAt(0) !== '{' && trimmed.charAt(0) !== '[') {
+      return parseJsonTextLoose(trimmed);
     }
+
     var obj = tryParseJson(trimmed);
-    if (!obj) return null;
+    if (!obj) return parseJsonTextLoose(trimmed);
 
     if (obj.protocol === '3DXContent') {
       return toSelection(obj);
@@ -112,6 +134,7 @@ var ThreeDXContentParser = (function () {
   return {
     parseLocations: parseLocations,
     parseJsonText: parseJsonText,
+    parseJsonTextLoose: parseJsonTextLoose,
     toSelection: toSelection,
     toPlatformContext: toPlatformContext,
     extractFromHash: extractFromHash

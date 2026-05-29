@@ -111,6 +111,37 @@ var App = (function () {
     loadBom(sel.physicalid);
   }
 
+  function loadPhysicalProduct(sel) {
+    if (!sel || !sel.physicalid) return Promise.resolve();
+    setLoading(true);
+    if (typeof ProductExplorerBridge.setSelection === 'function') {
+      ProductExplorerBridge.setSelection(sel, { silent: true });
+    }
+    document.getElementById('selectionLabel').textContent =
+      (sel.displayName || sel.name) + ' (' + sel.physicalid + ')';
+    return BomService.loadFrom3DXProduct(sel)
+      .then(function () {
+        APP_CONFIG.IMPORT_MODE = false;
+        refreshUI();
+        var n = BomService.getNodeCount();
+        if (APP_CONFIG.CROSS_ORIGIN_WIDGET) {
+          setStatus(
+            'Carregado: ' + (sel.displayName || sel.physicalid) + ' — ' + n +
+            ' itens (preview). BOM real: HTML no 3DSpace.',
+            'warn'
+          );
+        } else {
+          setStatus('Carregado: ' + (sel.displayName || sel.physicalid) + ' — ' + n + ' itens.', 'ok');
+        }
+      })
+      .catch(function (err) {
+        setStatus('Erro: ' + (err.message || err), 'error');
+      })
+      .finally(function () {
+        setLoading(false);
+      });
+  }
+
   function initUI() {
     KpiCards.init('#kpiGrid');
     ChartsManager.init();
@@ -144,6 +175,19 @@ var App = (function () {
     document.getElementById('btnExpandAll').addEventListener('click', function () {
       setStatus('Expansão total desabilitada por performance. Expanda por nível na árvore.', 'warn');
     });
+
+    var btnDrone = document.getElementById('btnLoadDrone');
+    if (btnDrone) {
+      btnDrone.addEventListener('click', function () {
+        loadPhysicalProduct({
+          physicalid: '132FB3CE26D70E006A18D1870000316D',
+          displayName: '01_SKA_Drone Assembly_130520206',
+          name: '01_SKA_Drone Assembly_130520206',
+          type: 'VPMReference',
+          displayType: 'Physical Product'
+        });
+      });
+    }
   }
 
   function initAppCore(spaceUrl) {
@@ -166,18 +210,8 @@ var App = (function () {
         refreshUI();
         setStatus('Importado: ' + fileName + ' — ' + count + ' itens na estrutura.', 'ok');
       },
-      on3DXProduct: function (sel, count) {
-        APP_CONFIG.IMPORT_MODE = false;
-        refreshUI();
-        var msg =
-          'Produto: ' + (sel.displayName || sel.physicalid) + ' — ' + count + ' itens. ';
-        if (APP_CONFIG.CROSS_ORIGIN_WIDGET) {
-          msg += 'Filhos em preview (GitHub). BOM real da plataforma: publicar no 3DSpace.';
-          setStatus(msg, 'warn');
-        } else {
-          msg += 'E-BOM carregada da plataforma.';
-          setStatus(msg, 'ok');
-        }
+      on3DXProduct: function (sel) {
+        loadPhysicalProduct(sel);
       },
       onError: function (msg) {
         setStatus('Importação: ' + msg, 'error');
@@ -286,5 +320,10 @@ var App = (function () {
     }
   });
 
-  return { loadBom: loadBom, refreshUI: refreshUI, setStatus: setStatusPublic };
+  return {
+    loadBom: loadBom,
+    loadPhysicalProduct: loadPhysicalProduct,
+    refreshUI: refreshUI,
+    setStatus: setStatusPublic
+  };
 })();
