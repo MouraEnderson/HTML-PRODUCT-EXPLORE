@@ -10,7 +10,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'sync20260530',
+    BUILD: 'final20260530',
 
     /** Somente Explorer → gráficos + tabela */
     EXPLORER_ONLY: true,
@@ -2702,35 +2702,12 @@ var App = (function () {
       })
       .catch(function (err) {
         console.error(err);
-        var msg = err.message || String(err);
-        var sel = ProductExplorerBridge.getSelection();
-        if (sel && (msg.indexOf('Failed to fetch') >= 0 || msg.indexOf('WAF') >= 0 || msg.indexOf('API') >= 0)) {
-          if (APP_CONFIG.DEMO_ON_API_FAIL) {
-            APP_CONFIG.DEMO_MODE = true;
-            return BomService.loadRoot(sel.physicalid).then(function () {
-              refreshUI();
-              setStatus(
-                'Demo (~20 itens) — BOM real: publique no 3DSpace. Explorer: ' +
-                (sel.displayName || sel.physicalid),
-                'warn'
-              );
-            });
-          }
-          return BomService.loadRootFromSelection(sel).then(function () {
-            refreshUI();
-            setStatus(
-              'Preview 1 item (sem API). Deploy 3DSpace: ' + (sel.displayName || sel.physicalid),
-              'warn'
-            );
-          });
+        if (APP_CONFIG.DEMO_ON_API_FAIL !== false) {
+          return loadDemoBom(
+            'GitHub não acessa API ENOVIA. Demo com ~20 itens. Estrutura real: deploy 3DSpace.'
+          );
         }
-        if (sel) {
-          return BomService.loadRootFromSelection(sel).then(function () {
-            refreshUI();
-            setStatus('Exibindo raiz do Explorer (' + (sel.displayName || sel.physicalid) + ').', 'warn');
-          });
-        }
-        setStatus('Erro: ' + msg, 'error');
+        setStatus('Erro: ' + (err.message || err), 'error');
       })
       .finally(function () {
         setLoading(false);
@@ -2806,14 +2783,18 @@ var App = (function () {
         pullExplorerSelection();
         var fromHash = ProductExplorerBridge.readHashSelection && ProductExplorerBridge.readHashSelection();
         var sel = fromHash || ProductExplorerBridge.getSelection();
-        if (sel && sel.physicalid) {
+        if (sel && isValidPhysicalId(sel.physicalid)) {
           lastLoadedId = null;
           var lbl = byId('selectionLabel');
           if (lbl) lbl.textContent = sel.displayName || sel.physicalid;
           loadBom(sel.physicalid);
           setStatus('Explorer: ' + (sel.displayName || sel.physicalid), 'ok');
         } else {
-          setStatus('Abra o assembly no Explorer (esquerda), depois clique Sincronizar.', 'warn');
+          setStatus(
+            'Clique na raiz do assembly no Explorer (01_SKA_Drone…), depois ↻ Sincronizar.',
+            'warn'
+          );
+          loadDemoBom();
         }
       });
     }
@@ -3004,16 +2985,40 @@ var App = (function () {
     return h ? ('https://' + h + '/enovia') : null;
   }
 
-  function loadDefaultExplorerProduct() {
+  function isValidPhysicalId(id) {
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.isValidPhysicalId) {
+      return ThreeDXContentParser.isValidPhysicalId(id);
+    }
+    return id && String(id).length >= 16;
+  }
+
+  function loadDemoBom(statusMsg) {
     var d = APP_CONFIG.TENANT_DEFAULTS || {};
-    if (!d.defaultPhysicalId) return;
-    onSelection({
+    if (!d.defaultPhysicalId) return Promise.resolve();
+    APP_CONFIG.DEMO_MODE = true;
+    APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
+    var sel = {
       physicalid: d.defaultPhysicalId,
       displayName: d.defaultDisplayName || d.defaultPhysicalId,
       name: d.defaultDisplayName || d.defaultPhysicalId,
       type: 'VPMReference',
       displayType: 'Physical Product'
+    };
+    ProductExplorerBridge.setSelection(sel, { silent: true });
+    var lbl = byId('selectionLabel');
+    if (lbl) lbl.textContent = sel.displayName;
+    return BomService.loadRoot(d.defaultPhysicalId).then(function () {
+      lastLoadedId = d.defaultPhysicalId;
+      refreshUI();
+      setStatus(
+        statusMsg || ('Demonstração: ' + BomService.getNodeCount() + ' itens. BOM real = 3DSpace.'),
+        'warn'
+      );
     });
+  }
+
+  function loadDefaultExplorerProduct() {
+    return loadDemoBom('Carregando demonstração do Drone…');
   }
 
   function trySyncThenLoad() {
@@ -3024,7 +3029,7 @@ var App = (function () {
     var fromHash = typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.readHashSelection
       ? ProductExplorerBridge.readHashSelection()
       : null;
-    if (fromHash && fromHash.physicalid) {
+    if (fromHash && isValidPhysicalId(fromHash.physicalid)) {
       ProductExplorerBridge.setSelection(fromHash, { silent: true });
       var lbl = byId('selectionLabel');
       if (lbl) lbl.textContent = fromHash.displayName || fromHash.physicalid;
@@ -3032,11 +3037,11 @@ var App = (function () {
       return;
     }
     var sel = ProductExplorerBridge.getSelection();
-    if (sel && sel.physicalid) {
+    if (sel && isValidPhysicalId(sel.physicalid)) {
       loadBom(sel.physicalid);
       return;
     }
-    loadDefaultExplorerProduct();
+    loadDemoBom('Selecione o assembly no Explorer → ↻ Sincronizar. Demo Drone abaixo.');
     window.setTimeout(function () {
       pullExplorerSelection();
       var later = ProductExplorerBridge.getSelection();
@@ -3084,16 +3089,12 @@ var App = (function () {
       })
       .catch(function (err) {
         console.error(err);
-        var msg = err.message || String(err);
-        if (msg.indexOf('Failed to fetch') >= 0 || msg.indexOf('WAFData') >= 0) {
-          setStatus(
-            'API ENOVIA: instale no 3DSpace (BomAnalytics-3DSpace.zip) — GitHub não acessa 3DSpace. Ver SOLUCAO-FINAL.md',
-            'error'
-          );
-        } else {
-          setStatus('Erro API: ' + msg, 'error');
-        }
-        runFallback();
+        try {
+          initAppCore(getTenantSpaceUrl());
+        } catch (eInit) { /* */ }
+        return loadDemoBom(
+          'Sem API no GitHub. Gráficos = demo Drone. BOM do Explorer = publicar no 3DSpace.'
+        );
       });
   }
 
