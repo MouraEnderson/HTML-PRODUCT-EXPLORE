@@ -201,7 +201,7 @@ var App = (function () {
         initAppCore(null);
         runHealthCheck();
         setStatus(
-          'Modo externo: copie a E-BOM no Explorer (Ctrl+C), cole na caixa e clique Importar. Sincronizar automático não funciona aqui.',
+          'Widget em GitHub: BOM real exige publicação no 3DSpace (OBJETIVO-PROJETO.md). Abaixo: Explorer + Sincronizar ou fallback colar.',
           'warn'
         );
       } catch (err) {

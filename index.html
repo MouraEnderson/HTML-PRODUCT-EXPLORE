@@ -51,16 +51,30 @@
     </div>
   </header>
 
-  <div id="externalBanner" class="external-banner hidden">Modo Web Page Reader: copie a estrutura no Product Explorer (Ctrl+C) e cole na caixa abaixo — sem Excel nem CSV.</div>
+  <div id="externalBanner" class="external-banner hidden">
+    <strong>GitHub não lê o Product Explorer.</strong> Para BOM automática (Drone, KPIs, árvore real), o admin deve publicar este HTML no
+    <strong>3DSpace</strong> — ver <code>OBJETIVO-PROJETO.md</code> e <code>DEPLOY-3DSPACE.md</code>.
+    URL alvo do widget:
+    <code>https://r1132100929518-us1-space.3dexperience.3ds.com/enovia/webapps/BomAnalytics/index.html</code>
+  </div>
 
-  <section id="dropZone" class="drop-zone panel paste-panel" aria-label="Colar estrutura do Explorer">
-    <div class="panel-header">Copiar e colar do Product Explorer (recomendado)</div>
+  <section class="panel goal-panel" aria-label="Objetivo">
+    <div class="panel-header">Objetivo: dashboard da E-BOM do Product Explorer</div>
+    <p class="goal-text">
+      Este HTML foi feito para consumir a <strong>estrutura e atributos</strong> do Product Structure Explorer via APIs ENOVIA
+      (mesma sessão 3DEXPERIENCE). Com o link GitHub no widget, só é possível <strong>visualizar layout</strong> ou dados de exemplo —
+      não a BOM real do tenant.
+    </p>
+  </section>
+
+  <section id="dropZone" class="drop-zone panel paste-panel collapsed-fallback" aria-label="Fallback manual">
+    <div class="panel-header">Fallback manual (não substitui o Explorer)</div>
     <div class="drop-zone-inner">
-      <p id="dropZoneLabel" class="drop-label">Cole aqui as linhas copiadas da grade <strong>E-BOM</strong> do Explorer</p>
+      <p id="dropZoneLabel" class="drop-label">Só use se ainda não houver HTML no 3DSpace — cópia manual da grade E-BOM</p>
+      <details class="paste-details">
+        <summary>Colar do Explorer (temporário)</summary>
       <ol class="paste-steps">
-        <li>Aba <strong>EXPLORE</strong> → abra o produto (ex.: Drone) e expanda a estrutura.</li>
-        <li>Na tabela/árvore E-BOM: clique na primeira linha, <strong>Shift+clique</strong> na última (ou Ctrl+A na grade).</li>
-        <li><strong>Ctrl+C</strong> → clique na caixa abaixo → <strong>Ctrl+V</strong> → <strong>Importar estrutura</strong>.</li>
+        <li>Aba <strong>EXPLORE</strong> → produto aberto → selecione linhas da E-BOM → <strong>Ctrl+C</strong> → <strong>Ctrl+V</strong> abaixo.</li>
       </ol>
       <textarea id="pasteArea" class="paste-area" rows="8" placeholder="Cole aqui (Ctrl+V) o texto copiado do Product Explorer..."></textarea>
       <div class="paste-actions">
@@ -68,8 +82,9 @@
         <button type="button" class="btn" id="btnReadClipboard">Ler área de transferência</button>
         <button type="button" class="btn" id="btnSampleImport">Testar com exemplo</button>
       </div>
+      </details>
       <details class="file-import-optional">
-        <summary>Arquivo (opcional — só se sua empresa permitir export)</summary>
+        <summary>Arquivo (opcional)</summary>
         <div id="fileDropOptional" class="file-drop-mini">
           <label class="btn file-btn">
             Escolher arquivo
