@@ -33,6 +33,21 @@ var WafClient = (function () {
     return /ResponseCode.*0|NetworkError/i.test(msg || '');
   }
 
+  function isRetryableHttp(msg) {
+    return /ResponseCode.*(403|400)|\b403\b|\b400\b/i.test(msg || '');
+  }
+
+  function swapSpaceIfwe(url) {
+    if (!APP_CONFIG.TENANT_DEFAULTS) return null;
+    var sh = APP_CONFIG.TENANT_DEFAULTS.spaceHost;
+    var ih = APP_CONFIG.TENANT_DEFAULTS.platformHost;
+    if (typeof CompassServices !== 'undefined' && CompassServices.swapUrlHost) {
+      if (url.indexOf(sh) >= 0) return CompassServices.swapUrlHost(url, sh, ih);
+      if (url.indexOf(ih) >= 0) return CompassServices.swapUrlHost(url, ih, sh);
+    }
+    return null;
+  }
+
   function request(method, url, options) {
     options = options || {};
     var headers = Object.assign({}, PlatformContext.getHeaders(), options.headers || {});
@@ -63,8 +78,8 @@ var WafClient = (function () {
           },
           onFailure: function (err) {
             var msg = (err && (err.message || err.error)) || 'WAF request failed';
-            if (!retried && isNetworkZero(msg)) {
-              var alt = ifweRetryUrl(targetUrl);
+            if (!retried && (isNetworkZero(msg) || isRetryableHttp(msg))) {
+              var alt = ifweRetryUrl(targetUrl) || swapSpaceIfwe(targetUrl);
               if (alt && alt !== targetUrl) {
                 if (typeof CompassServices !== 'undefined' && CompassServices.applyVerifiedSpaceUrl) {
                   var baseMatch = alt.match(/^(https:\/\/[^/]+\/enovia)/i);

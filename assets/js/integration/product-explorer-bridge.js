@@ -109,13 +109,23 @@ var ProductExplorerBridge = (function () {
     currentSelection = null;
   }
 
+  function sanitizeStructureName(name) {
+    var n = String(name || '').trim();
+    if (!n) return n;
+    n = n.replace(/\s*BOM\s*Analytics.*$/i, '').trim();
+    if (/^Mont10BOM$/i.test(n)) return 'Mont10';
+    if (/BOM$/i.test(n) && n.length > 3) n = n.replace(/BOM$/i, '').trim();
+    if (n.length > 80) n = n.slice(0, 80).trim();
+    return n;
+  }
+
   function extractStructureNameFromText(text) {
     var s = String(text || '');
     var m =
-      s.match(/Product Structure Explorer\s*[-–]\s*([^\s<]+)/i) ||
-      s.match(/Structure Explorer\s*[-–]\s*([^\s<]+)/i) ||
+      s.match(/Product Structure Explorer\s*[-–]\s*(.+?)(?:\s*$|\s*BOM\s*Analytics|\s*ENOVIA)/i) ||
+      s.match(/Structure Explorer\s*[-–]\s*(.+?)(?:\s*$|\s*BOM)/i) ||
       s.match(/Explorer\s*[-–]\s*([^\s<]+)/i);
-    return m ? m[1].trim() : null;
+    return m ? sanitizeStructureName(m[1].trim()) : null;
   }
 
   function notifyStructureChange(name) {
@@ -128,6 +138,9 @@ var ProductExplorerBridge = (function () {
     var n = String(name || '').trim();
     if (!n || n === '-') return;
     if (/^(enderson|moura|login|user)/i.test(n)) return;
+    if (/BOM\s*Analytics|Varredura|Snapshot/i.test(n)) return;
+    n = sanitizeStructureName(n);
+    if (!n) return;
     if (n === structureNameHint) return;
     structureNameHint = n;
     notifyStructureChange(n);

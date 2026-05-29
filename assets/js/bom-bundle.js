@@ -112,7 +112,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260602a',
+    BUILD: 'bom20260602b',
     /** Fallback offline só com ?snapshot= na URL */
     DEFAULT_SNAPSHOT_PATH: 'data/mont10.json',
 
@@ -217,7 +217,7 @@
     /** Relações expand REST */
     EXPAND: {
       BOM_CHILDREN: 'boM,dseng:EngInstance',
-      ATTRIBUTES: 'all',
+      ATTRIBUTES: 'dseng:EngInstance',
       PHYSICAL: 'dspfl:PhysicalProduct'
     },
 
@@ -253,6 +253,7 @@
      */
     STRUCTURE_IDS: {
       Mont10: '89765370FFF30200500C474F00184933',
+      Mont10BOM: '89765370FFF30200500C474F00184933',
       'prd-R1132100929518-00511496': '89765370FFF30200500C474F00184933',
       '01_SKA_Drone Assembly_130520206': '132FB3CE26D70E006A18D1870000316D',
       '01_SKA_Drone Assembly_130520208': '132FB3CE26D70E006A18D1870000316D',
@@ -1081,6 +1082,21 @@ var WafClient = (function () {
     return /ResponseCode.*0|NetworkError/i.test(msg || '');
   }
 
+  function isRetryableHttp(msg) {
+    return /ResponseCode.*(403|400)|\b403\b|\b400\b/i.test(msg || '');
+  }
+
+  function swapSpaceIfwe(url) {
+    if (!APP_CONFIG.TENANT_DEFAULTS) return null;
+    var sh = APP_CONFIG.TENANT_DEFAULTS.spaceHost;
+    var ih = APP_CONFIG.TENANT_DEFAULTS.platformHost;
+    if (typeof CompassServices !== 'undefined' && CompassServices.swapUrlHost) {
+      if (url.indexOf(sh) >= 0) return CompassServices.swapUrlHost(url, sh, ih);
+      if (url.indexOf(ih) >= 0) return CompassServices.swapUrlHost(url, ih, sh);
+    }
+    return null;
+  }
+
   function request(method, url, options) {
     options = options || {};
     var headers = Object.assign({}, PlatformContext.getHeaders(), options.headers || {});
@@ -1111,8 +1127,8 @@ var WafClient = (function () {
           },
           onFailure: function (err) {
             var msg = (err && (err.message || err.error)) || 'WAF request failed';
-            if (!retried && isNetworkZero(msg)) {
-              var alt = ifweRetryUrl(targetUrl);
+            if (!retried && (isNetworkZero(msg) || isRetryableHttp(msg))) {
+              var alt = ifweRetryUrl(targetUrl) || swapSpaceIfwe(targetUrl);
               if (alt && alt !== targetUrl) {
                 if (typeof CompassServices !== 'undefined' && CompassServices.applyVerifiedSpaceUrl) {
                   var baseMatch = alt.match(/^(https:\/\/[^/]+\/enovia)/i);
@@ -1492,17 +1508,36 @@ var EnoviaApi = (function () {
     return WafClient.get(url);
   }
 
-  /** Tenta carregar raiz — prd- = Physical Product / VPM primeiro (cloud). */
+  function extractEngItemIdFromResponse(res) {
+    if (!res) return null;
+    var member = res.member || res;
+    if (Array.isArray(member)) member = member[0];
+    if (!member) return null;
+    var eng = member['dseng:engItem'] || member.reference;
+    if (eng && typeof eng === 'object') {
+      return eng.physicalid || eng.id || null;
+    }
+    return member.physicalid || null;
+  }
+
+  /** Tenta carregar raiz — sem $expand=all (evita 400 no tenant). */
   function getProductRoot(physicalId, expand) {
     var id = apiId(physicalId);
-    if (/^prd-/i.test(id)) {
-      return getPhysicalProduct(id, expand)
-        .catch(function () { return getVpmReference(id, expand); })
-        .catch(function () { return getEngItem(id, expand); });
+    var exp = expand || null;
+    function chainPrd() {
+      return getPhysicalProduct(id, exp)
+        .catch(function () { return getPhysicalProduct(id, null); })
+        .catch(function () { return getVpmReference(id, null); })
+        .catch(function () { return getEngItem(id, null); });
     }
-    return getVpmReference(id, expand)
-      .catch(function () { return getPhysicalProduct(id, expand); })
-      .catch(function () { return getEngItem(id, expand); });
+    function chainHex() {
+      return getPhysicalProduct(id, exp)
+        .catch(function () { return getPhysicalProduct(id, null); })
+        .catch(function () { return getVpmReference(id, null); })
+        .catch(function () { return getEngItem(id, null); });
+    }
+    if (/^prd-/i.test(id)) return chainPrd();
+    return chainHex();
   }
 
   function getEngItemBomExpand(physicalId) {
@@ -1539,6 +1574,7 @@ var EnoviaApi = (function () {
     getVpmReference: getVpmReference,
     getPhysicalProduct: getPhysicalProduct,
     getProductRoot: getProductRoot,
+    extractEngItemIdFromResponse: extractEngItemIdFromResponse,
     getEngItemBomExpand: getEngItemBomExpand,
     getEngInstanceChildren: getEngInstanceChildren,
     getPhysicalProductsForEngItem: getPhysicalProductsForEngItem,
@@ -1874,13 +1910,23 @@ var ProductExplorerBridge = (function () {
     currentSelection = null;
   }
 
+  function sanitizeStructureName(name) {
+    var n = String(name || '').trim();
+    if (!n) return n;
+    n = n.replace(/\s*BOM\s*Analytics.*$/i, '').trim();
+    if (/^Mont10BOM$/i.test(n)) return 'Mont10';
+    if (/BOM$/i.test(n) && n.length > 3) n = n.replace(/BOM$/i, '').trim();
+    if (n.length > 80) n = n.slice(0, 80).trim();
+    return n;
+  }
+
   function extractStructureNameFromText(text) {
     var s = String(text || '');
     var m =
-      s.match(/Product Structure Explorer\s*[-–]\s*([^\s<]+)/i) ||
-      s.match(/Structure Explorer\s*[-–]\s*([^\s<]+)/i) ||
+      s.match(/Product Structure Explorer\s*[-–]\s*(.+?)(?:\s*$|\s*BOM\s*Analytics|\s*ENOVIA)/i) ||
+      s.match(/Structure Explorer\s*[-–]\s*(.+?)(?:\s*$|\s*BOM)/i) ||
       s.match(/Explorer\s*[-–]\s*([^\s<]+)/i);
-    return m ? m[1].trim() : null;
+    return m ? sanitizeStructureName(m[1].trim()) : null;
   }
 
   function notifyStructureChange(name) {
@@ -1893,6 +1939,9 @@ var ProductExplorerBridge = (function () {
     var n = String(name || '').trim();
     if (!n || n === '-') return;
     if (/^(enderson|moura|login|user)/i.test(n)) return;
+    if (/BOM\s*Analytics|Varredura|Snapshot/i.test(n)) return;
+    n = sanitizeStructureName(n);
+    if (!n) return;
     if (n === structureNameHint) return;
     structureNameHint = n;
     notifyStructureChange(n);
@@ -3470,6 +3519,7 @@ var ExplorerScanner = (function () {
 
   return {
     scan: scan,
+    ensureSpaceApi: ensureSpaceApi,
     resolveSelection: resolveSelection,
     getSelection: getSelection,
     scanViaApi: scanViaApi
@@ -3692,7 +3742,7 @@ var BomService = (function () {
       return loadDemoTree(physicalId);
     }
 
-    return EnoviaApi.getProductRoot(physicalId, APP_CONFIG.EXPAND.ATTRIBUTES)
+    return EnoviaApi.getProductRoot(physicalId, null)
       .then(function (res) {
         var member = res.member || res;
         var attrs = AttributeService.extractFromMember(Array.isArray(member) ? member[0] : member);
@@ -3700,9 +3750,13 @@ var BomService = (function () {
         attrs.hasPhysicalProduct = true;
         attrs.displayType = attrs.displayType || 'Physical Product';
         addNode(attrs, null, 0, 1);
-        index[physicalId].loaded = false;
+        index[attrs.physicalid].loaded = false;
+        var bomParentId =
+          (typeof EnoviaApi.extractEngItemIdFromResponse === 'function' &&
+            EnoviaApi.extractEngItemIdFromResponse(res)) ||
+          attrs.physicalid;
         var depth = APP_CONFIG.BOM_FAST_DEPTH || APP_CONFIG.BOM_INITIAL_DEPTH;
-        return loadTreeRecursive(physicalId, depth, 1);
+        return loadTreeRecursive(bomParentId, depth, 1);
       });
   }
 
@@ -4800,10 +4854,12 @@ var App = (function () {
       setStatus('Varredura falhou: módulo scanner não carregou.', 'error');
       return;
     }
-    if (loading) {
-      loading = false;
-      setLoading(false);
+    if (structureSyncTimer) {
+      window.clearTimeout(structureSyncTimer);
+      structureSyncTimer = null;
     }
+    loading = false;
+    setLoading(false);
     root.__3DX_ALLOW_API__ = true;
     var hadSnapshot = BomService.getNodeCount() > 1 && APP_CONFIG.IMPORT_MODE;
     setLoading(true);
@@ -4812,15 +4868,24 @@ var App = (function () {
       btnEl.textContent = 'Varrendo…';
     }
     if (typeof ProductExplorerBridge !== 'undefined') {
+      if (ProductExplorerBridge.pollDashboardExplorerChrome) {
+        ProductExplorerBridge.pollDashboardExplorerChrome();
+      }
       if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
       if (ProductExplorerBridge.pollSelection) ProductExplorerBridge.pollSelection();
     }
-    setStatus('Varredura em andamento…', 'info');
-    apiTimeout(
-      ExplorerScanner.scan(),
-      APP_CONFIG.SCAN_TIMEOUT_MS || 90000,
-      'Varredura cancelada (timeout). Selecione a raiz no Explorer e Varrer de novo.'
-    )
+    setStatus('Conectando API e varrendo Explorer…', 'info');
+    var prep =
+      typeof ExplorerScanner !== 'undefined' && ExplorerScanner.ensureSpaceApi
+        ? ExplorerScanner.ensureSpaceApi()
+        : Promise.resolve();
+    prep.then(function () {
+      return apiTimeout(
+        ExplorerScanner.scan(),
+        APP_CONFIG.SCAN_TIMEOUT_MS || 90000,
+        'Varredura cancelada (timeout). Selecione a raiz no Explorer e Varrer de novo.'
+      );
+    })
       .then(function (res) {
         APP_CONFIG.DEMO_MODE = false;
         APP_CONFIG.IMPORT_MODE = res.mode !== 'api';
@@ -4854,12 +4919,10 @@ var App = (function () {
             }
           });
         }
-        if (typeof BomService !== 'undefined' && BomService.reset) {
-          BomService.reset();
-          lastLoadedId = null;
-          refreshUI();
-        }
-        setStatus(msg, 'error');
+        setStatus(
+          msg + ' — API ENOVIA (403/400): confirme Security Context no 3DDashboard ou peça ao TI.',
+          'error'
+        );
       })
       .finally(function () {
         root.__3DX_ALLOW_API__ = false;

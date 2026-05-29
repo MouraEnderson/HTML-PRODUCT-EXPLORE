@@ -454,6 +454,7 @@ var ExplorerScanner = (function () {
 
   return {
     scan: scan,
+    ensureSpaceApi: ensureSpaceApi,
     resolveSelection: resolveSelection,
     getSelection: getSelection,
     scanViaApi: scanViaApi

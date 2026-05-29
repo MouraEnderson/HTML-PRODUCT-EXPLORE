@@ -168,10 +168,12 @@ var App = (function () {
       setStatus('Varredura falhou: módulo scanner não carregou.', 'error');
       return;
     }
-    if (loading) {
-      loading = false;
-      setLoading(false);
+    if (structureSyncTimer) {
+      window.clearTimeout(structureSyncTimer);
+      structureSyncTimer = null;
     }
+    loading = false;
+    setLoading(false);
     root.__3DX_ALLOW_API__ = true;
     var hadSnapshot = BomService.getNodeCount() > 1 && APP_CONFIG.IMPORT_MODE;
     setLoading(true);
@@ -180,15 +182,24 @@ var App = (function () {
       btnEl.textContent = 'Varrendo…';
     }
     if (typeof ProductExplorerBridge !== 'undefined') {
+      if (ProductExplorerBridge.pollDashboardExplorerChrome) {
+        ProductExplorerBridge.pollDashboardExplorerChrome();
+      }
       if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
       if (ProductExplorerBridge.pollSelection) ProductExplorerBridge.pollSelection();
     }
-    setStatus('Varredura em andamento…', 'info');
-    apiTimeout(
-      ExplorerScanner.scan(),
-      APP_CONFIG.SCAN_TIMEOUT_MS || 90000,
-      'Varredura cancelada (timeout). Selecione a raiz no Explorer e Varrer de novo.'
-    )
+    setStatus('Conectando API e varrendo Explorer…', 'info');
+    var prep =
+      typeof ExplorerScanner !== 'undefined' && ExplorerScanner.ensureSpaceApi
+        ? ExplorerScanner.ensureSpaceApi()
+        : Promise.resolve();
+    prep.then(function () {
+      return apiTimeout(
+        ExplorerScanner.scan(),
+        APP_CONFIG.SCAN_TIMEOUT_MS || 90000,
+        'Varredura cancelada (timeout). Selecione a raiz no Explorer e Varrer de novo.'
+      );
+    })
       .then(function (res) {
         APP_CONFIG.DEMO_MODE = false;
         APP_CONFIG.IMPORT_MODE = res.mode !== 'api';
@@ -222,12 +233,10 @@ var App = (function () {
             }
           });
         }
-        if (typeof BomService !== 'undefined' && BomService.reset) {
-          BomService.reset();
-          lastLoadedId = null;
-          refreshUI();
-        }
-        setStatus(msg, 'error');
+        setStatus(
+          msg + ' — API ENOVIA (403/400): confirme Security Context no 3DDashboard ou peça ao TI.',
+          'error'
+        );
       })
       .finally(function () {
         root.__3DX_ALLOW_API__ = false;

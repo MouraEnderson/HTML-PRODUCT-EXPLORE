@@ -103,17 +103,36 @@ var EnoviaApi = (function () {
     return WafClient.get(url);
   }
 
-  /** Tenta carregar raiz — prd- = Physical Product / VPM primeiro (cloud). */
+  function extractEngItemIdFromResponse(res) {
+    if (!res) return null;
+    var member = res.member || res;
+    if (Array.isArray(member)) member = member[0];
+    if (!member) return null;
+    var eng = member['dseng:engItem'] || member.reference;
+    if (eng && typeof eng === 'object') {
+      return eng.physicalid || eng.id || null;
+    }
+    return member.physicalid || null;
+  }
+
+  /** Tenta carregar raiz — sem $expand=all (evita 400 no tenant). */
   function getProductRoot(physicalId, expand) {
     var id = apiId(physicalId);
-    if (/^prd-/i.test(id)) {
-      return getPhysicalProduct(id, expand)
-        .catch(function () { return getVpmReference(id, expand); })
-        .catch(function () { return getEngItem(id, expand); });
+    var exp = expand || null;
+    function chainPrd() {
+      return getPhysicalProduct(id, exp)
+        .catch(function () { return getPhysicalProduct(id, null); })
+        .catch(function () { return getVpmReference(id, null); })
+        .catch(function () { return getEngItem(id, null); });
     }
-    return getVpmReference(id, expand)
-      .catch(function () { return getPhysicalProduct(id, expand); })
-      .catch(function () { return getEngItem(id, expand); });
+    function chainHex() {
+      return getPhysicalProduct(id, exp)
+        .catch(function () { return getPhysicalProduct(id, null); })
+        .catch(function () { return getVpmReference(id, null); })
+        .catch(function () { return getEngItem(id, null); });
+    }
+    if (/^prd-/i.test(id)) return chainPrd();
+    return chainHex();
   }
 
   function getEngItemBomExpand(physicalId) {
@@ -150,6 +169,7 @@ var EnoviaApi = (function () {
     getVpmReference: getVpmReference,
     getPhysicalProduct: getPhysicalProduct,
     getProductRoot: getProductRoot,
+    extractEngItemIdFromResponse: extractEngItemIdFromResponse,
     getEngItemBomExpand: getEngItemBomExpand,
     getEngInstanceChildren: getEngInstanceChildren,
     getPhysicalProductsForEngItem: getPhysicalProductsForEngItem,

@@ -213,7 +213,7 @@ var BomService = (function () {
       return loadDemoTree(physicalId);
     }
 
-    return EnoviaApi.getProductRoot(physicalId, APP_CONFIG.EXPAND.ATTRIBUTES)
+    return EnoviaApi.getProductRoot(physicalId, null)
       .then(function (res) {
         var member = res.member || res;
         var attrs = AttributeService.extractFromMember(Array.isArray(member) ? member[0] : member);
@@ -221,9 +221,13 @@ var BomService = (function () {
         attrs.hasPhysicalProduct = true;
         attrs.displayType = attrs.displayType || 'Physical Product';
         addNode(attrs, null, 0, 1);
-        index[physicalId].loaded = false;
+        index[attrs.physicalid].loaded = false;
+        var bomParentId =
+          (typeof EnoviaApi.extractEngItemIdFromResponse === 'function' &&
+            EnoviaApi.extractEngItemIdFromResponse(res)) ||
+          attrs.physicalid;
         var depth = APP_CONFIG.BOM_FAST_DEPTH || APP_CONFIG.BOM_INITIAL_DEPTH;
-        return loadTreeRecursive(physicalId, depth, 1);
+        return loadTreeRecursive(bomParentId, depth, 1);
       });
   }
 

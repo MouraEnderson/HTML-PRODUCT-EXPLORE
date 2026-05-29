@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260602a',
+    BUILD: 'bom20260602b',
     /** Fallback offline só com ?snapshot= na URL */
     DEFAULT_SNAPSHOT_PATH: 'data/mont10.json',
 
@@ -113,7 +113,7 @@
     /** Relações expand REST */
     EXPAND: {
       BOM_CHILDREN: 'boM,dseng:EngInstance',
-      ATTRIBUTES: 'all',
+      ATTRIBUTES: 'dseng:EngInstance',
       PHYSICAL: 'dspfl:PhysicalProduct'
     },
 
@@ -149,6 +149,7 @@
      */
     STRUCTURE_IDS: {
       Mont10: '89765370FFF30200500C474F00184933',
+      Mont10BOM: '89765370FFF30200500C474F00184933',
       'prd-R1132100929518-00511496': '89765370FFF30200500C474F00184933',
       '01_SKA_Drone Assembly_130520206': '132FB3CE26D70E006A18D1870000316D',
       '01_SKA_Drone Assembly_130520208': '132FB3CE26D70E006A18D1870000316D',
