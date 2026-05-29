@@ -1,34 +1,36 @@
-# Entrega única — BOM Analytics Mont10
+# Entrega — BOM Analytics Mont10 (dashboard 3DDashboard)
 
 ## URL do Additional App (cole no Platform Manager)
 
 ```
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v2.html?snapshot=data/mont10.json&v=entrega1
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v2.html?snapshot=data/mont10.json&v=entrega2
 ```
 
-**Atenção:** `mouraenderson` (com **e**), não `mouraanderson`.
+**Conta GitHub:** `mouraenderson` (com **e**).
 
-## O que você deve ver
+**Build:** `bom20260601f` — snapshot carrega no frame 3DDashboard (sem depender de `?query` no iframe interno).
 
-- Título: **Mont10**
-- **3** itens no total
-- **3** aprovados
-- Sem erro de rede / sem demo Drone
-- Não precisa clicar **Varrer** (dados já vêm do arquivo)
+## O que você deve ver (sem clicar Varrer)
 
-## Se não aparecer assim
+| Campo | Valor |
+|-------|--------|
+| Estrutura | **Mont10** |
+| Status | **Snapshot: Mont10 — 3 itens** |
+| KPIs | 3 total, 3 aprovados |
+| Tabela | Mont10, M1, M2 — Aprovado |
 
-1. Remova o widget do dashboard e adicione de novo com a URL acima.
-2. Ctrl+Shift+R na aba do dashboard.
-3. Confirme que é **Additional App** (não só Web Page Reader antigo).
+## Se o dashboard ainda mostrar build antigo (`bom20260601e`)
 
-## Atualizar com a grade real do Explorer (quando quiser)
+1. **Ctrl+Shift+R** na aba LISTA 3DX.
+2. Remova o widget BOM e adicione de novo com a URL acima (pode manter só `widget-v2.html` — o snapshot padrão já vem embutido no build **f**).
+3. Confira a faixa azul: **build bom20260601f**.
 
-1. Explorer Mont10 → selecione linhas → **Ctrl+C**
-2. Abra https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/collect.html
-3. Cole → **Gerar JSON** → **Baixar**
-4. Substitua `data/mont10.json` no GitHub (commit) — a mesma URL passa a refletir a estrutura real.
+## Atualizar dados reais do Explorer
 
-## Automático (futuro, não desta entrega)
+1. Explorer Mont10 → grade → **Ctrl+C**
+2. https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/collect.html → colar → **Gerar JSON** → **Baixar**
+3. Substituir `data/mont10.json` no repositório GitHub (commit).
 
-Precisa coletor com API no host que o F12 mostra com status 200 — não é esta URL.
+## Varrer (futuro)
+
+Quando a API ENOVIA responder no tenant, o botão verde continua disponível; a entrega atual usa **snapshot** para não depender de rede `*-space`.

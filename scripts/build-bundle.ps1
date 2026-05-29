@@ -1,6 +1,7 @@
 $root = Resolve-Path (Join-Path $PSScriptRoot '..')
 $out = Join-Path $root 'assets\js\bom-bundle.js'
 $files = @(
+  'assets\js\embed-query.js',
   'assets\js\config.js',
   'assets\js\platform\widget-runtime.js',
   'assets\js\platform\platform-bridge.js',

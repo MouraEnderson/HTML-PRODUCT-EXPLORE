@@ -799,8 +799,57 @@ var App = (function () {
     return false;
   }
 
+  function hasSnapshotConfigured() {
+    if (APP_CONFIG.SNAPSHOT_URL) return true;
+    return typeof BomSnapshot !== 'undefined' && BomSnapshot.getParamUrl && !!BomSnapshot.getParamUrl();
+  }
+
+  function bootstrapApisBackground() {
+    var chain = PlatformContext.init();
+    if (typeof WafBootstrap !== 'undefined') {
+      chain = WafBootstrap.ensure().then(function () {
+        return PlatformContext.init();
+      });
+    }
+    return chain
+      .then(function () {
+        if (CompassServices.ensureWorkingSpaceUrl) {
+          return CompassServices.ensureWorkingSpaceUrl(PlatformContext.getState().platformId);
+        }
+        return CompassServices.get3DSpaceUrl(PlatformContext.getState().platformId);
+      })
+      .then(function (spaceUrl) {
+        var space = spaceUrl || getTenantSpaceUrl();
+        if (space && !BomService.getNodeCount()) initAppCore(space);
+        if (space) return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
+        return null;
+      })
+      .catch(function (err) {
+        console.warn('API background:', err);
+      });
+  }
+
   function bootstrapTrustedFast() {
     APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
+
+    if (hasSnapshotConfigured()) {
+      try {
+        initAppCore(null);
+      } catch (eInit) { /* */ }
+      setStatus('Carregando snapshot… v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION), 'info');
+      return tryLoadSnapshotFirst().then(function () {
+        if (BomService.getNodeCount() > 1) {
+          bootstrapApisBackground();
+          return;
+        }
+        setStatus('Snapshot não carregou — verifique GitHub Pages.', 'error');
+        return bootstrapTrustedFastWithApis();
+      });
+    }
+    return bootstrapTrustedFastWithApis();
+  }
+
+  function bootstrapTrustedFastWithApis() {
     setStatus('Conectando APIs 3DEXPERIENCE… v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION), 'info');
 
     var chain = PlatformContext.init();

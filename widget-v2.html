@@ -29,9 +29,36 @@
   //<![CDATA[
     window.__3DX_TRUSTED_WIDGET__ = true;
     window.__3DX_BOOT_DEFER__ = true;
+    window.__3DX_DEFAULT_SNAPSHOT__ = 'data/mont10.json';
 
-    var BOM_BUILD = 'bom20260601e';
+    var BOM_BUILD = 'bom20260601f';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
+
+    (function parseEmbedEarly() {
+      function pq(s) {
+        var q = {}, x = String(s || '').replace(/^\?/, '');
+        if (!x) return q;
+        x.split('&').forEach(function (p) {
+          var a = p.split('=');
+          if (a[0]) q[decodeURIComponent(a[0])] = decodeURIComponent(a[1] || '');
+        });
+        return q;
+      }
+      function fromUrl(url, out) {
+        if (!url) return out;
+        var u = String(url), i = u.indexOf('?');
+        if (i >= 0) { var q = pq(u.slice(i)); for (var k in q) if (q[k]) out[k] = q[k]; }
+        var m = u.match(/[?&]uwaUrl=([^&]+)/i);
+        if (m && m[1]) try { fromUrl(decodeURIComponent(m[1]), out); } catch (e) {}
+        return out;
+      }
+      var eq = {};
+      fromUrl(location.href, eq);
+      fromUrl(location.search, eq);
+      try { if (frameElement && frameElement.src) fromUrl(frameElement.src, eq); } catch (e) {}
+      if (!eq.snapshot && !eq.snap) eq.snapshot = 'data/mont10.json';
+      window.__3DX_EMBED_QUERY__ = eq;
+    })();
 
     var UI_HTML =
       '<div class="bom-root">' +
@@ -140,7 +167,6 @@
             if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
             if (typeof App !== 'undefined' && App.run) {
               App.run();
-              setBar('Pronto — selecione a raiz no Explorer e clique Varrer.', 'ok');
             } else {
               setBar('App não iniciou. Ver Console (F12).', 'error');
             }

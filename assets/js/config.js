@@ -8,7 +8,9 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260601e',
+    BUILD: 'bom20260601f',
+    /** Entrega Mont10: snapshot padrão no Additional App (frame 3DX perde ?query) */
+    DEFAULT_SNAPSHOT_PATH: 'data/mont10.json',
 
     /** Se *-space falhar (DNS), tenta mesmo tenant via *-ifwe/enovia */
     SPACE_FALLBACK_VIA_IFWE: true,
@@ -35,7 +37,7 @@
     SHOW_PLATFORM_SEARCH: false,
     AUTO_LOAD_DEMO_DRONE: false,
     DEMO_ON_API_FAIL: false,
-    SNAPSHOT_FIRST: false,
+    SNAPSHOT_FIRST: true,
     AUTO_SYNC_EXPLORER_MS: 15000,
     SKIP_PP_ENRICH: true,
     BOM_FAST_DEPTH: 3,
@@ -162,18 +164,20 @@
     }
   };
 
-  function parseQuery() {
-    var q = {};
+  var query = {};
+  if (typeof global.parseEmbedQuery === 'function') {
+    query = global.parseEmbedQuery();
+  } else if (global.__3DX_EMBED_QUERY__) {
+    query = global.__3DX_EMBED_QUERY__;
+  } else {
     var search = global.location.search.replace(/^\?/, '');
-    if (!search) return q;
-    search.split('&').forEach(function (pair) {
-      var p = pair.split('=');
-      q[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
-    });
-    return q;
+    if (search) {
+      search.split('&').forEach(function (pair) {
+        var p = pair.split('=');
+        query[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
+      });
+    }
   }
-
-  var query = parseQuery();
   if (query.demo === 'true') {
     APP_CONFIG.DEMO_MODE = true;
   }
@@ -213,6 +217,10 @@
 
   if (query.snapshot || query.snap || query.data) {
     APP_CONFIG.SNAPSHOT_URL = query.snapshot || query.snap || query.data;
+    APP_CONFIG.WAIT_FOR_USER_SCAN = false;
+  } else if (global.__3DX_TRUSTED_WIDGET__ && APP_CONFIG.DEFAULT_SNAPSHOT_PATH) {
+    APP_CONFIG.SNAPSHOT_URL = APP_CONFIG.DEFAULT_SNAPSHOT_PATH;
+    APP_CONFIG.WAIT_FOR_USER_SCAN = false;
   }
   if (query.physicalid) {
     APP_CONFIG.URL_PHYSICAL_ID = query.physicalid;
