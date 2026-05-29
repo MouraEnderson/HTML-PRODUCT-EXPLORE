@@ -9,13 +9,39 @@
     window.__3DX_BOOT_DEFER__ = true;
   </script>
   <style type="text/css">
-    .boot-splash {
-      padding: 14px;
-      font: 13px "Segoe UI", sans-serif;
-      color: #005686;
-      background: #e3f2fd;
-      min-height: 48px;
+    .ui-explorer-only { min-height: 420px; background: #f0f6fa; font: 13px "Segoe UI", sans-serif; color: #1a2332; }
+    .explorer-header { padding: 10px 14px; background: #fff; border-bottom: 1px solid #dde3ea; }
+    .explorer-header h1 { margin: 0; font-size: 1rem; color: #005686; }
+    .explorer-product { margin: 4px 0 0; font-size: 0.82rem; color: #5c6b7a; }
+    .status-bar { padding: 8px 14px; font-size: 0.85rem; }
+    .status-info { background: #e3f2fd; color: #0d47a1; }
+    .status-ok { background: #e8f5e9; color: #1b5e20; }
+    .status-warn { background: #fff3e0; color: #e65100; }
+    .status-error { background: #ffebee; color: #b71c1c; }
+    .snapshot-panel { margin: 10px 14px; padding: 12px; background: #fff; border: 2px solid #ff9800; border-radius: 8px; }
+    .btn-scan-main {
+      display: block; width: 100%; padding: 12px; margin-bottom: 8px;
+      background: #2e7d32; color: #fff; border: 0; border-radius: 6px;
+      font-size: 0.95rem; font-weight: 600; cursor: pointer;
     }
+    .btn-scan-main:disabled { background: #9e9e9e; cursor: wait; }
+    .snapshot-steps { margin: 0 0 8px; font-size: 0.85rem; color: #0d47a1; }
+    .paste-area { width: 100%; box-sizing: border-box; margin-bottom: 8px; font-size: 12px; }
+    .dashboard-explorer { padding: 8px 14px 16px; }
+    .kpi-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .kpi-card { background: #fff; border: 1px solid #dde3ea; border-radius: 6px; padding: 8px 12px; min-width: 100px; }
+    .kpi-card b { display: block; font-size: 1.2rem; color: #005686; }
+    .charts-main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .chart-card { background: #fff; border: 1px solid #dde3ea; border-radius: 6px; padding: 8px; min-height: 140px; }
+    .table-panel { background: #fff; border: 1px solid #dde3ea; border-radius: 6px; overflow: hidden; }
+    .panel-header { padding: 8px 12px; font-weight: 600; background: #f8f9fa; border-bottom: 1px solid #dde3ea; }
+    .table-scroll { max-height: 220px; overflow: auto; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .data-table th, .data-table td { border: 1px solid #e0e0e0; padding: 4px 6px; text-align: left; }
+    .data-table th { background: #f5f5f5; position: sticky; top: 0; }
+    .ui-hidden { display: none !important; }
+    .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.7); display: flex; align-items: center; justify-content: center; z-index: 99; }
+    .loading-overlay.hidden { display: none; }
   </style>
 </head>
 <body>
@@ -23,22 +49,19 @@
     <header class="app-header explorer-header">
       <h1>BOM Analytics</h1>
       <p class="explorer-product">Estrutura: <strong id="selectionLabel">—</strong></p>
-      <button type="button" class="ui-hidden" id="btnSyncExplorer">sync</button>
-      <button type="button" class="ui-hidden" id="btnRefresh">refresh</button>
     </header>
-    <div id="statusBar" class="status-bar status-warn">Iniciando…</div>
-    <section class="snapshot-panel snapshot-panel-focus">
+    <div id="statusBar" class="status-bar status-info">Iniciando widget…</div>
+    <section class="snapshot-panel">
       <button type="button" id="btnScanExplorer" class="btn-scan-main">Varrer estrutura Explorer</button>
-      <p class="snapshot-steps">① Grade Explorer (Mont10…) → ② <strong>Ctrl+C</strong> → ③ <strong>Varrer</strong></p>
-      <textarea id="pasteArea" class="paste-area" rows="3" placeholder="Ou cole aqui…"></textarea>
-      <div class="snapshot-actions">
-        <button type="button" id="btnImportPaste" class="btn-primary">Importar cola</button>
-        <button type="button" id="btnLoadExample" class="btn-secondary">Teste 3 itens</button>
-        <input type="file" id="snapshotFileInput" accept=".json" class="ui-hidden" />
-        <button type="button" id="btnLoadSnapshotFile" class="btn-secondary">JSON</button>
-      </div>
+      <p class="snapshot-steps">Mont10 no Explorer → clique <strong>Varrer</strong> (API ENOVIA + snapshot)</p>
+      <textarea id="pasteArea" class="paste-area ui-hidden" rows="2" placeholder="Reserva: colar grade…"></textarea>
     </section>
     <div class="ui-hidden" aria-hidden="true">
+      <button type="button" id="btnImportPaste"></button>
+      <button type="button" id="btnLoadExample"></button>
+      <button type="button" id="btnSyncExplorer"></button>
+      <button type="button" id="btnRefresh"></button>
+      <input type="file" id="snapshotFileInput" accept=".json" />
       <input type="text" id="explorerObjectId" />
       <input type="text" id="explorerObjectName" />
       <button type="button" id="btnLoadObjectId"></button>
@@ -46,6 +69,7 @@
       <select id="filterType"><option value="all">all</option></select>
       <select id="filterApproval"><option value="all">all</option></select>
       <select id="filterPP"><option value="all">all</option></select>
+      <input type="search" id="searchInput" />
     </div>
     <main class="dashboard-explorer">
       <section id="kpiGrid" class="kpi-grid kpi-compact"></section>
@@ -57,7 +81,6 @@
       </section>
       <section class="panel table-panel">
         <div class="panel-header">E-BOM — <span id="tableProductLabel">—</span></div>
-        <div class="filter-row"><input type="search" id="searchInput" placeholder="Filtrar…" /></div>
         <div class="table-scroll table-scroll-wide">
           <table id="bomTable" class="data-table"><thead><tr></tr></thead><tbody></tbody></table>
         </div>
@@ -65,71 +88,156 @@
     </main>
     <div id="loadingOverlay" class="loading-overlay hidden">Varrendo…</div>
   </div>
+
   <script type="text/javascript">
   //<![CDATA[
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-    var BOOT_VER = 'uwa20260602e';
-    var bootOnce = false;
+    var VER = 'uwa20260603';
+    var uiMounted = false;
+    var appStarted = false;
 
-    function splash(msg) {
-      if (typeof widget === 'undefined' || !widget || !widget.body) return;
-      widget.body.innerHTML =
-        '<div class="boot-splash">' + (msg || 'BOM Analytics — carregando…') + '</div>';
-      widget.body.style.minHeight = '420px';
-      widget.body.style.background = '#f0f6fa';
+    function setBar(msg, kind) {
+      var el = document.getElementById('statusBar');
+      if (!el && typeof widget !== 'undefined' && widget.body) {
+        el = widget.body.querySelector('#statusBar');
+      }
+      if (!el) return;
+      el.textContent = msg;
+      el.className = 'status-bar status-' + (kind || 'info');
     }
 
-    function bomEntry() {
-      if (bootOnce) return;
-      bootOnce = true;
-      splash('BOM Analytics — carregando módulos…');
+    function mountUi() {
+      if (uiMounted) return true;
+      if (typeof widget === 'undefined' || !widget || !widget.body) return false;
+      var tpl = document.getElementById('bom-app-template');
+      if (!tpl) return false;
+      widget.body.innerHTML = tpl.innerHTML;
+      widget.body.className = 'ui-explorer-only';
+      widget.body.style.minHeight = '420px';
+      uiMounted = true;
+      setBar('Interface OK — carregando APIs 3DEXPERIENCE…', 'info');
+      return true;
+    }
 
-      var s = document.createElement('script');
-      s.type = 'text/javascript';
-      s.src = GH + 'assets/js/boot.js?v=' + BOOT_VER;
-      s.onload = function () {
-        try {
-          if (typeof BomBoot !== 'undefined' && widget && widget.body) {
-            BomBoot.run(widget.body);
-            return;
-          }
-        } catch (err) {
-          splash('Erro ao iniciar: ' + (err.message || err));
+    function getRequire() {
+      try {
+        if (typeof widget !== 'undefined' && widget && widget.requirejs) return widget.requirejs;
+      } catch (e0) { /* */ }
+      if (typeof require !== 'undefined') return require;
+      try {
+        if (window.parent && window.parent !== window && window.parent.require) return window.parent.require;
+      } catch (e1) { /* */ }
+      return null;
+    }
+
+    function loadScript(url, optional) {
+      return new Promise(function (resolve, reject) {
+        var s = document.createElement('script');
+        s.type = 'text/javascript';
+        s.charset = 'UTF-8';
+        s.src = url;
+        s.onload = function () { resolve(url); };
+        s.onerror = function () {
+          if (optional) resolve(null);
+          else reject(new Error('Script bloqueado: ' + url));
+        };
+        (document.head || document.documentElement).appendChild(s);
+      });
+    }
+
+    function loadWafModules() {
+      return new Promise(function (resolve, reject) {
+        if (typeof WAFData !== 'undefined' && WAFData.authenticatedRequest) {
+          resolve();
           return;
         }
-        splash('boot.js carregou mas BomBoot não existe.');
-      };
-      s.onerror = function () {
-        splash('Falha ao carregar boot.js — TI pode bloquear github.io no 3DDashboard.');
-      };
-      document.head.appendChild(s);
+        var req = getRequire();
+        if (!req) {
+          reject(new Error('require AMD não disponível (confirme Additional App Widget)'));
+          return;
+        }
+        setBar('Carregando WAFData / Compass…', 'info');
+        req(
+          ['DS/WAFData/WAFData', 'DS/i3DXCompassServices/i3DXCompassServices', 'DS/PlatformAPI/PlatformAPI'],
+          function (WAF, Compass, PAPI) {
+            window.WAFData = WAF;
+            window.__3DX_COMPASS__ = Compass;
+            window.__3DX_PLATFORM_API__ = PAPI;
+            resolve();
+          },
+          function (err) {
+            reject(err || new Error('Falha require WAFData'));
+          }
+        );
+      });
     }
 
-    function bindWidget() {
-      if (typeof widget === 'undefined' || !widget || !widget.addEvent) return false;
-      widget.addEvent('onLoad', bomEntry);
+    function startApplication() {
+      if (appStarted) return;
+      appStarted = true;
       try {
+        if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
+        if (typeof App !== 'undefined' && App.run) {
+          App.run();
+          setBar('Pronto — abra Mont10 no Explorer e clique Varrer.', 'ok');
+          return;
+        }
+        setBar('Varredura falhou: App não inicializou (bundle incompleto).', 'error');
+      } catch (err) {
+        setBar('Varredura falhou: ' + (err.message || err), 'error');
+      }
+    }
+
+    function bootPipeline() {
+      if (!mountUi()) return;
+      loadWafModules()
+        .then(function () {
+          setBar('WAFData OK — carregando gráficos e módulos BOM…', 'info');
+          return loadScript(GH + 'assets/vendor/chart.umd.min.js?v=' + VER, true);
+        })
+        .then(function () {
+          return loadScript(GH + 'assets/js/bom-bundle.js?v=' + VER, false);
+        })
+        .then(function () {
+          startApplication();
+        })
+        .catch(function (err) {
+          var msg = (err && err.message) ? err.message : String(err);
+          setBar('Varredura falhou: ' + msg, 'error');
+        });
+    }
+
+    function onWidgetReady() {
+      mountUi();
+      bootPipeline();
+    }
+
+    function widgetLoading() {
+      if (typeof widget !== 'undefined' && widget && widget.addEvent) {
+        widget.addEvent('onLoad', onWidgetReady);
         widget.addEvent('onRefresh', function () {
           if (typeof App !== 'undefined' && App.runExplorerScan) {
             var b = widget.body && widget.body.querySelector('#btnScanExplorer');
             App.runExplorerScan(b);
           }
         });
-      } catch (e1) { /* */ }
-      if (widget.body && !String(widget.body.innerHTML || '').replace(/\s/g, '')) {
-        window.setTimeout(bomEntry, 0);
+        if (widget.body) {
+          window.setTimeout(function () {
+            if (!appStarted) onWidgetReady();
+          }, 0);
+        }
+        return;
       }
-      return true;
+      window.setTimeout(widgetLoading, 100);
     }
 
-    (function wait() {
-      if (bindWidget()) return;
-      window.setTimeout(wait, 80);
-    })();
-
+    widgetLoading();
     window.setTimeout(function () {
-      if (!bootOnce) bomEntry();
-    }, 2800);
+      if (!uiMounted) {
+        mountUi();
+        if (!appStarted) bootPipeline();
+      }
+    }, 3000);
   //]]>
   </script>
 </body>

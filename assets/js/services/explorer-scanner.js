@@ -95,7 +95,7 @@ var ExplorerScanner = (function () {
           ok: true,
           mode: 'api',
           meta: meta,
-          message: 'Varredura concluída (API): ' + meta.itemCount + ' itens — ' + meta.productName
+          message: 'Varredura concluída: ' + meta.itemCount + ' itens — ' + meta.productName
         };
       });
     });
@@ -116,7 +116,7 @@ var ExplorerScanner = (function () {
           ok: true,
           mode: sourceLabel || 'text',
           meta: meta,
-          message: 'Varredura concluída (' + (sourceLabel || 'cola') + '): ' + meta.itemCount + ' itens'
+          message: 'Varredura concluída: ' + meta.itemCount + ' itens'
         };
       });
     });

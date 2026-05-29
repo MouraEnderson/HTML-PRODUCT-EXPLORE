@@ -10,7 +10,9 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'trustedapi20260602',
+    BUILD: 'uwa20260603',
+    /** Varredura automática quando Explorer envia seleção (Additional App) */
+    AUTO_SCAN_ON_SELECTION: true,
     CAN_USE_ENOVIA_API: false,
 
     /** Somente Explorer → gráficos + tabela */
@@ -2143,7 +2145,7 @@ var ExplorerScanner = (function () {
           ok: true,
           mode: 'api',
           meta: meta,
-          message: 'Varredura concluída (API): ' + meta.itemCount + ' itens — ' + meta.productName
+          message: 'Varredura concluída: ' + meta.itemCount + ' itens — ' + meta.productName
         };
       });
     });
@@ -2164,7 +2166,7 @@ var ExplorerScanner = (function () {
           ok: true,
           mode: sourceLabel || 'text',
           meta: meta,
-          message: 'Varredura concluída (' + (sourceLabel || 'cola') + '): ' + meta.itemCount + ' itens'
+          message: 'Varredura concluída: ' + meta.itemCount + ' itens'
         };
       });
     });
@@ -3617,11 +3619,25 @@ var App = (function () {
       });
   }
 
+  var autoScanTimer = null;
+
   function onSelection(sel) {
     if (!sel || !sel.physicalid) return;
     var label = byId('selectionLabel');
     if (label) {
       label.textContent = (sel.displayName || sel.name || sel.physicalid);
+    }
+    if (
+      APP_CONFIG.AUTO_SCAN_ON_SELECTION &&
+      APP_CONFIG.CAN_USE_ENOVIA_API &&
+      typeof ExplorerScanner !== 'undefined'
+    ) {
+      if (autoScanTimer) window.clearTimeout(autoScanTimer);
+      autoScanTimer = window.setTimeout(function () {
+        var btn = byId('btnScanExplorer');
+        runExplorerScan(btn);
+      }, 1200);
+      return;
     }
     loadBom(sel.physicalid);
   }

@@ -248,11 +248,25 @@ var App = (function () {
       });
   }
 
+  var autoScanTimer = null;
+
   function onSelection(sel) {
     if (!sel || !sel.physicalid) return;
     var label = byId('selectionLabel');
     if (label) {
       label.textContent = (sel.displayName || sel.name || sel.physicalid);
+    }
+    if (
+      APP_CONFIG.AUTO_SCAN_ON_SELECTION &&
+      APP_CONFIG.CAN_USE_ENOVIA_API &&
+      typeof ExplorerScanner !== 'undefined'
+    ) {
+      if (autoScanTimer) window.clearTimeout(autoScanTimer);
+      autoScanTimer = window.setTimeout(function () {
+        var btn = byId('btnScanExplorer');
+        runExplorerScan(btn);
+      }, 1200);
+      return;
     }
     loadBom(sel.physicalid);
   }
