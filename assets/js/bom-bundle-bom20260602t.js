@@ -5815,7 +5815,7 @@ var PartPreview = (function () {
       space = 'https://' + APP_CONFIG.spaceHost + '/3dspace';
     }
     if (!space) return '';
-    var tenant = (APP_CONFIG && APP_CONFIG.TENANT_ID) || 'R1132100929518';
+    var tenant = (APP_CONFIG && APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.envId) || 'R1132100929518';
     return space.replace(/\/$/, '') +
       '/resources/getpicture?tenant=' + encodeURIComponent(tenant) +
       '&pid=' + encodeURIComponent(pid);
