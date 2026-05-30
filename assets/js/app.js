@@ -205,17 +205,27 @@ var App = (function () {
     }
     if (!ProductExplorerBridge.scrapeExplorerGrid) return Promise.resolve(false);
     var payload = ProductExplorerBridge.scrapeExplorerGrid(structureName);
-    if (!payload) return Promise.resolve(false);
-    return BomSnapshot.applyPayload(payload).then(function (meta) {
-      APP_CONFIG.IMPORT_MODE = true;
-      APP_CONFIG.DEMO_MODE = false;
-      if (meta && meta.rootPhysicalId) lastLoadedId = meta.rootPhysicalId;
-      refreshUI();
-      var n = (meta && meta.itemCount) || BomService.getNodeCount() || 0;
-      setStatus('Piloto: ' + (meta.productName || structureName) + ' — ' + n + ' itens (grade Explorer). API 406 em ajuste.', 'ok');
-      return true;
-    }).catch(function () {
-      return false;
+    function applyGrid(pl) {
+      if (!pl || !pl.items || pl.items.length < 2) return Promise.resolve(false);
+      return BomSnapshot.applyPayload(pl).then(function (meta) {
+        APP_CONFIG.IMPORT_MODE = true;
+        APP_CONFIG.DEMO_MODE = false;
+        if (meta && meta.rootPhysicalId) lastLoadedId = meta.rootPhysicalId;
+        refreshUI();
+        var n = BomService.getNodeCount() || (meta && meta.itemCount) || 0;
+        setStatus('Piloto: ' + (meta.productName || structureName) + ' — ' + n + ' itens (grade Explorer). API 406 em ajuste.', 'ok');
+        return true;
+      }).catch(function () {
+        return false;
+      });
+    }
+    if (payload && payload.items.length >= 2) return applyGrid(payload);
+    var fetchPilot =
+      ProductExplorerBridge.fetchPilotStructurePayload &&
+      ProductExplorerBridge.fetchPilotStructurePayload(structureName);
+    return (fetchPilot || Promise.resolve(null)).then(function (pilot) {
+      if (pilot) return applyGrid(pilot);
+      return Promise.resolve(false);
     });
   }
 

@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260602j',
+    BUILD: 'bom20260602k',
     /** 3DDashboard: não espera probe CSRF (evita travar em "Conectando…") */
     SKIP_SPACE_PROBE: true,
     WAF_REQUEST_TIMEOUT_MS: 15000,
@@ -160,6 +160,12 @@
     /**
      * Fallback nome → prd- (cloud). Prioridade: ler prd- dinâmico do Explorer (Recentes).
      */
+    PILOT_SNAPSHOT_BY_STRUCTURE: {
+      Mont10: 'data/mont10.json',
+      '01_SKA_Drone Assembly_130520206': 'data/drone-assembly-pilot.json',
+      '01_SKA_Drone': 'data/drone-assembly-pilot.json'
+    },
+
     STRUCTURE_IDS: {
       Mont10: 'prd-R1132100929518-00511496',
       Mont10BOM: 'prd-R1132100929518-00511496',

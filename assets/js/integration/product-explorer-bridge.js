@@ -68,24 +68,78 @@ var ProductExplorerBridge = (function () {
     return id;
   }
 
-  function lookupRegistryId(term) {
+  function lookupRegistryIdExact(term) {
     if (!term) return null;
     var reg = APP_CONFIG.STRUCTURE_IDS || {};
     var key = String(term).trim();
     var id = reg[key] || reg[key.toLowerCase()] || reg[key.toUpperCase()];
-    if (!id) {
-      var tLow = key.toLowerCase();
-      var keys = Object.keys(reg);
-      for (var i = 0; i < keys.length; i++) {
-        var k = keys[i];
-        var kLow = k.toLowerCase();
-        if (tLow.indexOf(kLow) >= 0 || kLow.indexOf(tLow) >= 0) {
-          id = reg[k];
-          break;
+    return id ? pickPrdId(id) : null;
+  }
+
+  function lookupRegistryId(term, allowFuzzy) {
+    var exact = lookupRegistryIdExact(term);
+    if (exact) return exact;
+    if (!allowFuzzy) return null;
+    var reg = APP_CONFIG.STRUCTURE_IDS || {};
+    var key = String(term).trim();
+    var tLow = key.toLowerCase();
+    var keys = Object.keys(reg);
+    var i;
+    var best = null;
+    var bestLen = 0;
+    for (i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      if (/^prd-/i.test(k)) continue;
+      var kLow = k.toLowerCase();
+      if (tLow === kLow || tLow.indexOf(kLow) >= 0 || kLow.indexOf(tLow) >= 0) {
+        if (k.length > bestLen) {
+          bestLen = k.length;
+          best = reg[k];
         }
       }
     }
-    return id ? pickPrdId(id) : null;
+    return best ? pickPrdId(best) : null;
+  }
+
+  function makeGridPhysicalId(name, idx, isRoot) {
+    if (isRoot) return lookupRegistryId(name, true) || 'root_' + idx;
+    var slug = String(name || 'item')
+      .replace(/[^A-Za-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 32);
+    return 'grid_' + idx + '_' + (slug || 'x');
+  }
+
+  function appendExplorerTextChunks(chunks, doc) {
+    if (!doc || !doc.body) return;
+    try {
+      chunks.push(doc.body.innerText || doc.body.textContent || '');
+    } catch (e) { /* */ }
+    try {
+      var frames = doc.querySelectorAll('iframe');
+      var f;
+      for (f = 0; f < frames.length; f++) {
+        try {
+          var inner = frames[f].contentDocument;
+          if (inner && inner.body) {
+            chunks.push(inner.body.innerText || inner.body.textContent || '');
+          }
+        } catch (e2) { /* cross-origin */ }
+      }
+    } catch (e3) { /* */ }
+  }
+
+  function harvestAllExplorerText() {
+    var chunks = [];
+    var doc = readExplorerIframeDocument();
+    if (doc) appendExplorerTextChunks(chunks, doc);
+    try {
+      if (window.parent && window.parent.document) appendExplorerTextChunks(chunks, window.parent.document);
+    } catch (eP) { /* */ }
+    try {
+      if (window.top && window.top.document) appendExplorerTextChunks(chunks, window.top.document);
+    } catch (eT) { /* */ }
+    return chunks.join('\n');
   }
 
   function readExplorerIframeDocument() {
@@ -104,15 +158,19 @@ var ProductExplorerBridge = (function () {
       var f;
       for (f = 0; f < frames.length; f++) {
         var frame = frames[f];
-        var src = frame.src || '';
+        var src = (frame.src || '').toLowerCase();
         var title = '';
         try {
           title = frame.contentDocument && frame.contentDocument.title ? frame.contentDocument.title : '';
         } catch (e3) { /* */ }
         if (
           title.indexOf('Product Structure') >= 0 ||
-          src.indexOf('ENXScene') >= 0 ||
-          src.indexOf('ENXSce') >= 0
+          title.indexOf('Structure Explorer') >= 0 ||
+          src.indexOf('enxscene') >= 0 ||
+          src.indexOf('enxsce') >= 0 ||
+          src.indexOf('enopstr') >= 0 ||
+          src.indexOf('productstructure') >= 0 ||
+          src.indexOf('structure') >= 0 && src.indexOf('3dexperience') >= 0
         ) {
           try {
             return frame.contentDocument;
@@ -175,6 +233,91 @@ var ProductExplorerBridge = (function () {
     items.push(row);
   }
 
+  function parsePartNamesFromText(text, rootName) {
+    var found = {};
+    var names = [];
+    var rootLow = rootName ? String(rootName).toLowerCase() : '';
+    var patterns = [
+      /\b(01_SKA_[A-Za-z0-9][A-Za-z0-9_.]{4,80})\b/gi,
+      /\b(Mont\d+[A-Za-z0-9_.]{0,40})\b/gi
+    ];
+    var p;
+    for (p = 0; p < patterns.length; p++) {
+      var re = patterns[p];
+      var m;
+      re.lastIndex = 0;
+      while ((m = re.exec(String(text || ''))) !== null) {
+        var name = String(m[1]).replace(/\.{2,}$/, '').trim();
+        if (name.length < 6) continue;
+        var key = name.toLowerCase();
+        if (found[key]) continue;
+        if (rootLow && key === rootLow) continue;
+        if (rootLow && rootLow.indexOf(key) >= 0 && key.length < rootLow.length - 2) continue;
+        found[key] = true;
+        names.push(name);
+      }
+    }
+    return names;
+  }
+
+  function scrapeDashboardLeafRows(rootName, items, seen) {
+    var doc = null;
+    try {
+      doc = window.top && window.top.document;
+    } catch (e0) { /* */ }
+    if (!doc) return;
+    var rootLow = rootName ? String(rootName).toLowerCase() : '';
+    var nodes = doc.querySelectorAll(
+      'span, div, td, li, a, p, [role="treeitem"], [role="row"], [role="gridcell"], [class*="tree"], [class*="Tree"], [class*="node"]'
+    );
+    var i;
+    for (i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      if (el.children && el.children.length > 6) continue;
+      var text = '';
+      try {
+        text = (el.innerText || el.textContent || '').trim();
+      } catch (e1) { /* */ }
+      if (!text || text.length > 90 || text.indexOf('\n') >= 0) continue;
+      var partM = text.match(EXPLORER_PART_LINE) || text.match(EXPLORER_NAME_LINE);
+      if (!partM && !/^(01_SKA_|Mont\d)/i.test(text)) continue;
+      var name = partM ? partM[1] : text.replace(/\.{2,}$/, '').trim();
+      if (!name || name.length < 6) continue;
+      var key = name.toLowerCase();
+      if (seen[key]) continue;
+      if (rootLow && key === rootLow) continue;
+      var revision = '—';
+      var maturity = '—';
+      var approved = false;
+      try {
+        var row = el.closest('[role="row"], tr, li, div');
+        if (row) {
+          var rowText = (row.innerText || '').toLowerCase();
+          if (/aprovado|released|frozen/.test(rowText)) {
+            maturity = 'Aprovado';
+            approved = true;
+          } else if (/em trabalho|in work/.test(rowText)) {
+            maturity = 'Em Trabalho';
+          }
+          var revM = (row.innerText || '').match(/\b(\d+\.\d+)\b/);
+          if (revM) revision = revM[1];
+        }
+      } catch (e2) { /* */ }
+      pushGridItem(items, seen, {
+        level: 1,
+        name: name,
+        title: name,
+        type: 'Physical Product',
+        displayType: 'Physical Product',
+        revision: revision,
+        state: maturity,
+        maturity: maturity,
+        approval: approved ? 'Approved' : 'Unknown',
+        physicalid: makeGridPhysicalId(name, items.length, false)
+      });
+    }
+  }
+
   function scrapeExplorerTreeLines(lines, rootName, items, seen) {
     var i;
     for (i = 0; i < lines.length; i++) {
@@ -200,7 +343,7 @@ var ProductExplorerBridge = (function () {
       }
       var approved = /aprovado|released|frozen/i.test(maturity);
       pushGridItem(items, seen, {
-        level: items.length ? 1 : 0,
+        level: 1,
         name: name,
         title: name,
         type: 'Physical Product',
@@ -209,36 +352,41 @@ var ProductExplorerBridge = (function () {
         state: maturity,
         maturity: maturity,
         approval: approved ? 'Approved' : 'Unknown',
-        physicalid: lookupRegistryId(name) || 'grid_' + items.length
+        physicalid: makeGridPhysicalId(name, items.length, false)
       });
     }
   }
 
+  function buildRowFromName(name, level, idx, extra) {
+    extra = extra || {};
+    return {
+      level: level,
+      name: name,
+      title: name,
+      type: 'Physical Product',
+      displayType: 'Physical Product',
+      revision: extra.revision || '—',
+      state: extra.maturity || '—',
+      maturity: extra.maturity || '—',
+      approval: extra.approved ? 'Approved' : 'Unknown',
+      physicalid: makeGridPhysicalId(name, idx, level === 0)
+    };
+  }
+
   function scrapeExplorerGrid(rootName) {
-    var doc = readExplorerIframeDocument();
-    if (!doc || !doc.body) return null;
-    var text = doc.body.innerText || '';
-    if (text.indexOf('Physical Product') < 0 && text.indexOf('01_SKA_') < 0) return null;
+    pollDashboardExplorerChrome();
+    var text = harvestAllExplorerText();
+    if (!text || text.length < 20) return null;
     var fromTitle = extractRootNameFromExplorerText(text);
     rootName = String(rootName || fromTitle || structureNameHint || '').trim();
+    if (!rootName) return null;
     var lines = text.split('\n');
     var items = [];
     var seen = {};
     var i;
-    if (rootName) {
-      pushGridItem(items, seen, {
-        level: 0,
-        name: rootName,
-        title: rootName,
-        type: 'Physical Product',
-        displayType: 'Physical Product',
-        revision: '—',
-        state: '—',
-        maturity: '—',
-        approval: '—',
-        physicalid: lookupRegistryId(rootName) || 'root'
-      });
-    }
+
+    pushGridItem(items, seen, buildRowFromName(rootName, 0, 0, {}));
+
     for (i = 0; i < lines.length; i++) {
       var line = String(lines[i] || '').trim();
       if (!line || line.indexOf('|') < 0) continue;
@@ -252,28 +400,53 @@ var ProductExplorerBridge = (function () {
       if (/^prd-R/i.test(name)) continue;
       var maturity = parts[3] || parts[2] || '—';
       var approved = /aprovado|released|frozen/i.test(maturity);
-      pushGridItem(items, seen, {
-        level: 1,
-        name: name,
-        title: name,
-        type: 'Physical Product',
-        displayType: 'Physical Product',
+      pushGridItem(items, seen, buildRowFromName(name, 1, items.length, {
         revision: parts[1] || '—',
-        state: maturity,
         maturity: maturity,
-        approval: approved ? 'Approved' : 'Unknown',
-        physicalid: lookupRegistryId(name) || 'grid_' + items.length
-      });
+        approved: approved
+      }));
     }
-    if (items.length < 2) {
-      scrapeExplorerTreeLines(lines, rootName, items, seen);
-    }
+    if (items.length < 2) scrapeExplorerTreeLines(lines, rootName, items, seen);
+    if (items.length < 2) scrapeDashboardLeafRows(rootName, items, seen);
+
+    var fromRegex = parsePartNamesFromText(text, rootName);
+    fromRegex.forEach(function (name) {
+      pushGridItem(items, seen, buildRowFromName(name, 1, items.length, {}));
+    });
+
     if (items.length < 2) return null;
     return {
       version: 1,
       productName: rootName || items[0].name,
-      items: items
+      rootPhysicalId: makeGridPhysicalId(rootName, 0, true),
+      items: items,
+      scrapeSource: 'explorer-dom'
     };
+  }
+
+  function fetchPilotStructurePayload(rootName) {
+    var map = APP_CONFIG.PILOT_SNAPSHOT_BY_STRUCTURE || {};
+    if (!rootName || typeof BomSnapshot === 'undefined') return Promise.resolve(null);
+    var path = null;
+    var keyName = String(rootName).trim();
+    var keys = Object.keys(map);
+    var i;
+    for (i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      var kLow = k.toLowerCase();
+      var tLow = keyName.toLowerCase();
+      if (tLow === kLow || tLow.indexOf(kLow) >= 0 || kLow.indexOf(tLow) >= 0) {
+        path = map[k];
+        break;
+      }
+    }
+    if (!path) return Promise.resolve(null);
+    var url = BomSnapshot.resolveUrl(path);
+    return BomSnapshot.fetchJson(url).then(function (data) {
+      return BomSnapshot.normalizePayload(data);
+    }).catch(function () {
+      return null;
+    });
   }
 
   function resolveFromExplorerCatalog(term) {
@@ -325,7 +498,7 @@ var ProductExplorerBridge = (function () {
       var catSel = resolveFromExplorerCatalog(nameForLookup);
       if (catSel) return catSel;
       if (!isPrdCloudId(physicalid)) {
-        var hintId = lookupRegistryId(nameForLookup);
+        var hintId = lookupRegistryId(nameForLookup, true);
         if (hintId) physicalid = hintId;
       }
     }
@@ -633,6 +806,8 @@ var ProductExplorerBridge = (function () {
     buildPrdCatalogFromExplorer: buildPrdCatalogFromExplorer,
     resolveFromExplorerCatalog: resolveFromExplorerCatalog,
     readExplorerIframeDocument: readExplorerIframeDocument,
-    scrapeExplorerGrid: scrapeExplorerGrid
+    scrapeExplorerGrid: scrapeExplorerGrid,
+    fetchPilotStructurePayload: fetchPilotStructurePayload,
+    harvestAllExplorerText: harvestAllExplorerText
   };
 })();

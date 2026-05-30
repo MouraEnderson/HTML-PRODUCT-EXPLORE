@@ -544,26 +544,40 @@ var ExplorerScanner = (function () {
     if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
     var term = getExplorerRootSearchTerm();
     var payload = ProductExplorerBridge.scrapeExplorerGrid(term);
-    if (!payload || !payload.items || payload.items.length < 2) {
+    function applyGrid(pl) {
+      if (typeof BomSnapshot === 'undefined' || !BomSnapshot.applyPayload) {
+        return Promise.reject(new Error('Módulo snapshot indisponível'));
+      }
+      return BomSnapshot.applyPayload(pl).then(function (meta) {
+        var count = BomService.getNodeCount() || meta.itemCount || pl.items.length;
+        saveRootName(meta.productName || term);
+        return {
+          ok: true,
+          mode: 'explorer-grid',
+          meta: meta,
+          message:
+            'Varredura (árvore Explorer): ' +
+            count +
+            ' itens — ' +
+            (meta.productName || term || 'E-BOM')
+        };
+      });
+    }
+    if (payload && payload.items && payload.items.length >= 2) {
+      return applyGrid(payload);
+    }
+    var fetchPilot =
+      ProductExplorerBridge.fetchPilotStructurePayload &&
+      ProductExplorerBridge.fetchPilotStructurePayload(term);
+    return (fetchPilot || Promise.resolve(null)).then(function (pilot) {
+      if (pilot && pilot.items && pilot.items.length >= 2) {
+        return applyGrid(pilot);
+      }
       return Promise.reject(
-        new Error('Nenhuma linha na árvore do Explorer. Expanda os filhos da montagem e clique Varrer.')
+        new Error(
+          'Não li filhos na árvore do Explorer (iframe). Expanda todos os níveis e clique Varrer de novo.'
+        )
       );
-    }
-    if (typeof BomSnapshot === 'undefined' || !BomSnapshot.applyPayload) {
-      return Promise.reject(new Error('Módulo snapshot indisponível'));
-    }
-    return BomSnapshot.applyPayload(payload).then(function (meta) {
-      saveRootName(meta.productName || term);
-      return {
-        ok: true,
-        mode: 'explorer-grid',
-        meta: meta,
-        message:
-          'Varredura (árvore Explorer): ' +
-          (meta.itemCount || payload.items.length) +
-          ' itens — ' +
-          (meta.productName || term || 'E-BOM')
-      };
     });
   }
 
