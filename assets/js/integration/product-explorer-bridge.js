@@ -214,6 +214,47 @@ var ProductExplorerBridge = (function () {
     return catalog;
   }
 
+  function mergePrdCatalogFromText(text, catalog) {
+    catalog = catalog || {};
+    var lines = String(text || '').split('\n');
+    var prdRe = /prd-R\d{10,}-[A-Za-z0-9]+/i;
+    var nameRe = /\b(01_SKA_[A-Za-z0-9][A-Za-z0-9_.\-]{2,80}|SKA_ENDERSW-[A-Za-z0-9\-]{2,80})\b/i;
+    var lastName = '';
+    var i;
+    for (i = 0; i < lines.length; i++) {
+      var line = String(lines[i] || '').trim();
+      if (!line) continue;
+      var nm = line.match(nameRe);
+      if (nm) lastName = nm[1] || nm[0];
+      var prdM = line.match(prdRe);
+      if (prdM && lastName) {
+        catalog[lastName] = prdM[0];
+        if (lastName.length > 24) catalog[lastName.slice(0, 24)] = prdM[0];
+      }
+    }
+    return catalog;
+  }
+
+  function lookupPrdByPartName(name) {
+    if (!name) return '';
+    var catalog = buildPrdCatalogFromExplorer();
+    mergePrdCatalogFromText(harvestAllExplorerText(), catalog);
+    var key = String(name).trim();
+    if (catalog[key]) return catalog[key];
+    var tLow = key.toLowerCase();
+    var found = '';
+    Object.keys(catalog).forEach(function (k) {
+      if (found) return;
+      var nLow = k.toLowerCase();
+      if (nLow === tLow || nLow.indexOf(tLow) >= 0 || tLow.indexOf(nLow) >= 0) {
+        found = catalog[k];
+      }
+    });
+    if (found) return found;
+    var reg = APP_CONFIG.STRUCTURE_IDS || {};
+    return reg[key] || reg[tLow] || reg[key.toUpperCase()] || '';
+  }
+
   var EXPLORER_SKIP_LINE =
     /^(physical product|em trabalho|aprovado|released|frozen|in work|approved|owner|organization|revision|type|maturity|enderson|moura|vplm|recents|open |product structure|enovia|access your|n\/d|—|-|login|user)$/i;
   var EXPLORER_PART_LINE = /^(\d{2}_[A-Za-z0-9][A-Za-z0-9_.\-]{2,80})/;
@@ -821,6 +862,7 @@ var ProductExplorerBridge = (function () {
     subscribeStructure: subscribeStructure,
     readHashSelection: readHashSelection,
     buildPrdCatalogFromExplorer: buildPrdCatalogFromExplorer,
+    lookupPrdByPartName: lookupPrdByPartName,
     resolveFromExplorerCatalog: resolveFromExplorerCatalog,
     readExplorerIframeDocument: readExplorerIframeDocument,
     scrapeExplorerGrid: scrapeExplorerGrid,

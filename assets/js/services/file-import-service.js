@@ -76,6 +76,55 @@ var FileImportService = (function () {
   }
 
   /** Explorer copia proprietário como JSON { icon, label }. */
+  function parseOwnerCell(raw) {
+    var s = String(raw == null ? '' : raw);
+    if (!isJsonBlob(s)) {
+      return { label: cleanCell(s), iconUrl: '' };
+    }
+    try {
+      var o = JSON.parse(s);
+      return {
+        label: cleanCell(o.label || o.name || o.displayName || ''),
+        iconUrl: o.icon && /https?|getpicture/i.test(String(o.icon)) ? cleanCell(o.icon) : ''
+      };
+    } catch (e) {
+      var iconM = s.match(/"icon"\s*:\s*"([^"]+)"/i);
+      var labelM = s.match(/"label"\s*:\s*"([^"]+)"/i);
+      return {
+        label: labelM ? cleanCell(labelM[1]) : '',
+        iconUrl: iconM ? cleanCell(iconM[1].replace(/\\\//g, '/')) : ''
+      };
+    }
+  }
+
+  function isSyntheticImportId(pid) {
+    var p = String(pid || '');
+    return !p || p.indexOf('IMP_') === 0 || p.indexOf('grid_') === 0;
+  }
+
+  function enrichItemsWithExplorerIds(items) {
+    if (!items || !items.length) return items;
+    items.forEach(function (it) {
+      var ownerRaw = it._ownerRaw || it.owner || '';
+      if (isJsonBlob(ownerRaw)) {
+        var om = parseOwnerCell(ownerRaw);
+        if (om.label) it.owner = om.label;
+        if (om.iconUrl && !it.iconUrl) it.iconUrl = om.iconUrl;
+      }
+      if (!it.sourcePhysicalId || isSyntheticImportId(it.sourcePhysicalId)) {
+        var prd = '';
+        if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.lookupPrdByPartName) {
+          prd = ProductExplorerBridge.lookupPrdByPartName(it.name || it.title);
+        }
+        if (prd) it.sourcePhysicalId = prd;
+      }
+      if (!it.iconUrl && it.sourcePhysicalId && typeof PartImage !== 'undefined' && PartImage.buildGetPictureUrl) {
+        it.iconUrl = PartImage.buildGetPictureUrl(it.sourcePhysicalId);
+      }
+    });
+    return items;
+  }
+
   function unwrapJsonCell(s) {
     if (!isJsonBlob(s)) return cleanCell(s);
     try {
@@ -446,10 +495,13 @@ var FileImportService = (function () {
       );
     }
     var gridItems = parseTextFromGridLines(text);
-    if (gridItems && gridItems.length) return gridItems;
+    if (gridItems && gridItems.length) {
+      validateImportedItems(gridItems);
+      return enrichItemsWithExplorerIds(inferAssemblyLevels(gridItems));
+    }
 
     var rows = textToRows(text).map(function (row) {
-      return row.map(function (c) { return cleanCell(unwrapJsonCell(c)); });
+      return row.map(function (c) { return cleanCell(c); });
     });
     if (rows.length === 1 && rows[0].length === 1) {
       return buildItemsFromSingleColumn([rows[0][0]]);
@@ -478,7 +530,7 @@ var FileImportService = (function () {
       }
     });
     validateImportedItems(items);
-    return items;
+    return enrichItemsWithExplorerIds(items);
   }
 
   function parseRowsWithoutHeader(rows) {
@@ -546,6 +598,8 @@ var FileImportService = (function () {
       if (usedIds[pid]) pid = pid + '__r' + (r + 1);
       usedIds[pid] = true;
       var st = resolveMaturityFields(row, colMap);
+      var ownerCol = colMap.owner !== undefined ? row[colMap.owner] : cell(row, colMap, 'owner', '');
+      var ownerMeta = parseOwnerCell(ownerCol);
       items.push({
         physicalid: pid,
         sourcePhysicalId: cell(row, colMap, 'physicalid', '') || '',
@@ -556,9 +610,10 @@ var FileImportService = (function () {
         revision: cell(row, colMap, 'revision', ''),
         state: st.state,
         maturity: st.maturity,
-        iconUrl: extractIconFromRow(row),
+        iconUrl: extractIconFromRow(row) || ownerMeta.iconUrl || '',
         quantity: parseFloat(cell(row, colMap, 'quantity', '1')) || 1,
-        owner: unwrapJsonCell(cell(row, colMap, 'owner', '')),
+        owner: ownerMeta.label || unwrapJsonCell(cell(row, colMap, 'owner', '')),
+        _ownerRaw: ownerCol,
         organization: cell(row, colMap, 'organization', ''),
         collabSpace: cell(row, colMap, 'collabSpace', ''),
         approval: st.approval,

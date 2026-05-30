@@ -149,6 +149,17 @@ var BomService = (function () {
       if (node) {
         if (item.iconUrl) node.iconUrl = item.iconUrl;
         if (item.sourcePhysicalId) node.sourcePhysicalId = item.sourcePhysicalId;
+        if (typeof PartImage !== 'undefined' && PartImage.lookupPrdId) {
+          var prd = PartImage.lookupPrdId(node);
+          var pid = String(node.sourcePhysicalId || node.physicalid || '');
+          var synthetic = !pid || pid.indexOf('IMP_') === 0 || pid.indexOf('grid_') === 0;
+          if (prd && synthetic) {
+            node.sourcePhysicalId = prd;
+          }
+          if (!node.iconUrl && PartImage.buildGetPictureUrl) {
+            node.iconUrl = PartImage.buildGetPictureUrl(node.sourcePhysicalId || prd);
+          }
+        }
         node.loaded = true;
         node.expanded = true;
         stack[level] = node.physicalid;

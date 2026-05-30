@@ -75,10 +75,11 @@ var PartPreview = (function () {
 
   function showImage(node, r) {
     if (!r.imageWrap) return;
-    if (typeof PartImage !== 'undefined') {
-      r.imageWrap.innerHTML =
-        '<div class="bom-preview-visual">' + PartImage.thumbHtml(node, 'bom-thumb-lg') + '</div>' +
+    if (typeof PartImage !== 'undefined' && PartImage.mountThumb) {
+      r.imageWrap.innerHTML = '<div class="bom-preview-visual"></div>' +
         '<p class="bom-preview-ph-sub">Preview 2D · 3DPlay em breve</p>';
+      var visual = r.imageWrap.querySelector('.bom-preview-visual');
+      PartImage.mountThumb(visual, node, 'bom-thumb-lg');
       return;
     }
     r.imageWrap.innerHTML = '<span class="bom-preview-placeholder">Preview indisponível</span>';

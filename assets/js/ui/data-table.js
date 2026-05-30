@@ -159,6 +159,9 @@ var DataTable = (function () {
         escapeAttr(n.physicalid) + '">' + tds + '</tr>'
       );
     }).join('');
+    if (typeof PartImage !== 'undefined' && PartImage.hydrateThumbs) {
+      PartImage.hydrateThumbs(tbody);
+    }
     if (selectedIndex >= 0) highlightRow(selectedIndex);
   }
 

@@ -1989,6 +1989,10 @@ body.ui-clean .main-clean {
   background: #fff;
 }
 
+.bom-thumb-hidden {
+  display: none !important;
+}
+
 .bom-thumb-fallback {
   display: flex;
   align-items: center;
