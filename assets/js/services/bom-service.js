@@ -148,6 +148,7 @@ var BomService = (function () {
       var node = addNode(attrs, parentId, level, item.quantity);
       if (node) {
         if (item.iconUrl) node.iconUrl = item.iconUrl;
+        if (item.sourcePhysicalId) node.sourcePhysicalId = item.sourcePhysicalId;
         node.loaded = true;
         node.expanded = true;
         stack[level] = node.physicalid;

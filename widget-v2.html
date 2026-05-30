@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <title>BOM Analytics</title>
   <style type="text/css">
-    html, body { margin: 0; padding: 0; min-height: 100%; font-family: "Segoe UI", sans-serif; }
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: "Segoe UI", sans-serif; }
     .bom-hidden { display: none !important; }
   </style>
   <script type="text/javascript">
@@ -14,7 +14,7 @@
     window.__3DX_TRUSTED_WIDGET__ = true;
     window.__3DX_BOOT_DEFER__ = true;
 
-    var BOM_BUILD = 'bom20260602v';
+    var BOM_BUILD = 'bom20260602x';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
     var BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js';
 
@@ -44,32 +44,28 @@
     })();
 
     var UI_HTML =
-      '<div class="bom-root bom-dashboard bom-theme-gray ui-clean bom-layout-ref">' +
-      '<aside class="bom-sidebar">' +
-      '<div class="bom-sidebar-brand">BOM</div>' +
-      '<button type="button" class="bom-nav bom-nav-active">Visão Geral</button>' +
-      '<button type="button" id="btnImportPaste" class="bom-nav bom-nav-action">Importar Ctrl+C</button>' +
-      '<div class="bom-clock-box">' +
-      '<span class="bom-clock-label">Última atualização</span>' +
-      '<span id="lastUpdateClock" class="bom-clock-time">--:--:--</span>' +
+      '<div class="bom-root bom-dashboard bom-theme-gray ui-clean bom-layout-ref bom-layout-topbar">' +
+      '<header class="bom-topbar">' +
+      '<div class="bom-topbar-left">' +
+      '<span class="bom-topbar-brand">BOM Analytics</span>' +
+      '<span class="bom-topbar-product" id="selectionLabel" title="-">-</span>' +
       '</div>' +
-      '<button type="button" id="btnThemeToggle" class="bom-nav">Fundo: Cinza</button>' +
-      '<details class="bom-sidebar-more">' +
-      '<summary>Regras e avançado</summary>' +
+      '<div class="bom-topbar-actions">' +
+      '<button type="button" id="btnImportPaste" class="bom-btn bom-btn-primary">Atualizar estrutura</button>' +
+      '<span class="bom-topbar-clock" title="Última atualização">' +
+      '<span id="lastUpdateClock" class="bom-clock-time">--:--:--</span></span>' +
+      '<button type="button" id="btnThemeToggle" class="bom-btn bom-btn-secondary bom-btn-compact">Tema</button>' +
+      '<details class="bom-topbar-more">' +
+      '<summary>Avançado</summary>' +
       '<div id="bomRulesPanel"></div>' +
       '<input type="text" id="explorerObjectId" class="bom-input" placeholder="ID físico" />' +
       '<button type="button" id="btnLoadPhysicalId" class="bom-btn bom-btn-secondary">Varrer por ID</button>' +
-      '<textarea id="pasteArea" class="bom-paste" placeholder="Colar grade"></textarea>' +
+      '<textarea id="pasteArea" class="bom-paste" placeholder="Colar grade Explorer (Ctrl+V)"></textarea>' +
       '</details>' +
-      '<span class="bom-build-tag" id="buildTag">' + BOM_BUILD + '</span>' +
-      '</aside>' +
+      '</div></header>' +
+      '<div id="syncBanner" class="bom-sync-banner bom-sync-info">' +
+      'Abra a estrutura no Explorer e clique <strong>Atualizar estrutura</strong>.</div>' +
       '<main class="bom-main">' +
-      '<header class="bom-main-top">' +
-      '<div class="bom-main-title">' +
-      '<h1>Visão Geral E-BOM</h1>' +
-      '<p>Estrutura: <strong id="selectionLabel">-</strong></p>' +
-      '</div>' +
-      '</header>' +
       '<div class="bom-filter-bar">' +
       '<label class="bom-filter-item"><span>Maturidade</span>' +
       '<select id="filterMaturity"><option value="all">Todas</option>' +
@@ -81,10 +77,12 @@
       '<option value="approved">Aprovado</option><option value="pending">Pendente</option></select></label>' +
       '<label class="bom-filter-item bom-filter-grow"><span>Buscar</span>' +
       '<input type="search" id="searchInput" placeholder="Nome, descrição, proprietário…" /></label>' +
-      '<button type="button" id="btnClearFilters" class="bom-btn bom-btn-filter-clear">Limpar Filtros</button>' +
+      '<button type="button" id="btnClearFilters" class="bom-btn bom-btn-filter-clear">Limpar</button>' +
       '</div>' +
       '<div id="statusBar" class="bom-st bom-st-inline">Carregando…</div>' +
-      '<section id="kpiGrid" class="stat-markers-row" aria-label="Estatísticas"></section>' +
+      '<section id="kpiGrid" class="stat-markers-row stat-markers-compact" aria-label="Estatísticas"></section>' +
+      '<details class="bom-charts-collapsible" id="chartsSection">' +
+      '<summary>Gráficos — maturidade e proprietários</summary>' +
       '<section class="bom-charts-row">' +
       '<div class="bom-chart-panel"><canvas id="chartMaturity"></canvas></div>' +
       '<div class="bom-chart-panel bom-chart-owners">' +
@@ -93,11 +91,11 @@
       '<canvas id="chartType" class="bom-hidden"></canvas>' +
       '<canvas id="chartRevision" class="bom-hidden"></canvas>' +
       '<canvas id="chartApproval" class="bom-hidden"></canvas>' +
-      '</section>' +
+      '</section></details>' +
       '<section class="bom-ebom-block">' +
       '<div class="bom-ebom-head">' +
-      '<h2>E-BOM monitorada — <span id="tableProductLabel">-</span></h2>' +
-      '<p id="ebomMeta" class="bom-ebom-meta">Importe com Ctrl+C incluindo a coluna <b>Maturidade</b> do Explorer. Clique numa peça para ver o preview.</p>' +
+      '<h2>E-BOM — <span id="tableProductLabel" title="-">-</span></h2>' +
+      '<p id="ebomMeta" class="bom-ebom-meta">Clique numa peça para ver detalhes à direita.</p>' +
       '</div>' +
       '<div class="bom-ebom-split">' +
       '<div class="bom-ebom-list">' +
@@ -116,6 +114,7 @@
       '</main>' +
       '<button type="button" id="btnScanExplorer" class="bom-hidden">Varrer</button>' +
       '<div id="loadingOverlay" class="bom-loading bom-hidden">Processando…</div>' +
+      '<span class="bom-build-tag bom-hidden" id="buildTag">' + BOM_BUILD + '</span>' +
       '<div class="bom-hidden" id="hiddenFields">' +
       '<input type="text" id="explorerObjectName" />' +
       '<select id="filterPP"><option value="all">all</option></select>' +

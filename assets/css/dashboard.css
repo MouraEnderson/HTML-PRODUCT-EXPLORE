@@ -1174,6 +1174,197 @@ body.ui-clean .main-clean {
   height: 100%;
 }
 
+.bom-layout-topbar {
+  flex-direction: column;
+}
+
+.bom-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--bom-card);
+  border-bottom: 1px solid var(--bom-border);
+  flex-shrink: 0;
+}
+
+.bom-topbar-left {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 180px;
+}
+
+.bom-topbar-brand {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--bom-primary);
+  white-space: nowrap;
+}
+
+.bom-topbar-product {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--bom-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.bom-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.bom-btn-primary {
+  background: var(--bom-primary);
+  color: #fff;
+  border: 1px solid var(--bom-primary);
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.bom-btn-primary:hover {
+  background: #004670;
+}
+
+.bom-btn-compact {
+  padding: 8px 12px !important;
+  font-size: 0.88rem !important;
+}
+
+.bom-topbar-clock {
+  padding: 6px 10px;
+  background: var(--bom-bg);
+  border: 1px solid var(--bom-border);
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bom-topbar-clock .bom-clock-time {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.bom-topbar-more {
+  font-size: 0.85rem;
+  color: var(--bom-muted);
+}
+
+.bom-topbar-more summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 6px 8px;
+}
+
+.bom-topbar-more[open] {
+  position: absolute;
+  right: 12px;
+  top: 48px;
+  z-index: 50;
+  background: var(--bom-card);
+  border: 1px solid var(--bom-border);
+  border-radius: 10px;
+  padding: 12px;
+  min-width: 260px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.bom-topbar {
+  position: relative;
+}
+
+.bom-sync-banner {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  border-bottom: 1px solid var(--bom-border);
+}
+
+.bom-sync-ok {
+  background: #e8f5e9;
+  color: #1b5e20;
+}
+
+.bom-sync-warn {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.bom-sync-info {
+  background: #e3f2fd;
+  color: #0d47a1;
+}
+
+.bom-charts-collapsible {
+  flex-shrink: 0;
+  margin: 0 18px 8px;
+  border: 1px solid var(--bom-border);
+  border-radius: 10px;
+  background: var(--bom-card);
+  overflow: hidden;
+}
+
+.bom-charts-collapsible summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--bom-primary);
+  list-style: none;
+}
+
+.bom-charts-collapsible summary::-webkit-details-marker {
+  display: none;
+}
+
+.bom-charts-collapsible .bom-charts-row {
+  padding-top: 0;
+  padding-bottom: 12px;
+}
+
+.bom-charts-collapsible .bom-chart-panel {
+  min-height: 200px;
+}
+
+.stat-markers-compact {
+  padding: 10px 18px !important;
+  gap: 10px !important;
+}
+
+.stat-markers-compact .stat-marker {
+  padding: 10px 12px;
+}
+
+.stat-markers-compact .stat-marker-value {
+  font-size: 1.85rem;
+}
+
+.stat-markers-compact .stat-marker-label {
+  font-size: 0.92rem;
+  margin-bottom: 6px;
+}
+
+.bom-ebom-head h2 span {
+  display: inline-block;
+  max-width: min(420px, 55vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
 .bom-layout-ref .bom-sidebar {
   width: 168px;
   min-width: 168px;
@@ -1266,7 +1457,15 @@ body.ui-clean .main-clean {
   display: flex;
   flex-direction: column;
   background: var(--bom-bg);
-  overflow: auto;
+  overflow: hidden;
+}
+
+.bom-layout-ref .bom-charts-row,
+.bom-layout-ref .stat-markers-row,
+.bom-layout-ref .bom-filter-bar,
+.bom-layout-ref .bom-main-top,
+.bom-st-inline {
+  flex-shrink: 0;
 }
 
 .bom-main-top {
@@ -1556,14 +1755,14 @@ body.ui-clean .main-clean {
   color: var(--bom-text);
 }
 
-.bom-ebom-block {
-  margin: 0 18px 16px;
+.bom-layout-ref .bom-ebom-block {
+  margin: 0 18px 8px;
   background: var(--bom-card);
   border: 1px solid var(--bom-border);
   border-radius: 10px;
   overflow: hidden;
-  flex: 1;
-  min-height: 280px;
+  flex: 1 1 auto;
+  min-height: 200px;
   display: flex;
   flex-direction: column;
 }
@@ -1740,17 +1939,18 @@ body.ui-clean .main-clean {
   border: none;
   border-radius: 0;
   flex: 1 1 auto;
-  min-height: 140px;
-  max-height: min(52vh, 480px);
-  height: auto;
+  min-height: 120px;
   overflow-y: scroll !important;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-gutter: stable;
 }
 
-.bom-layout-ref .bom-table-wrap table {
+.bom-layout-ref .bom-table {
+  font-size: 1.05rem;
+  min-width: 760px;
   width: 100%;
+  table-layout: auto;
 }
 
 /* Thumbnails lista E-BOM + preview */

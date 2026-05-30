@@ -101,7 +101,7 @@ var FileImportService = (function () {
     if (/aprovado|released|frozen|approved/i.test(s)) {
       return { state: s || 'Aprovado', maturity: s || 'Aprovado', approval: a && a !== 'Unknown' ? a : 'Approved' };
     }
-    if (/em\s*trabalho|in\s*work|in_work|wip|private|desenvolvimento/i.test(s)) {
+    if (/^em\s*trabalh|^in\s*wor|em\s*trabalh|em\s*trabalho|in\s*work|in_work|wip|private|desenvolvimento/i.test(s)) {
       return { state: s || 'Em Trabalho', maturity: s || 'Em Trabalho', approval: a || 'Unknown' };
     }
     if (/obsoleto|obsolete|abandoned/i.test(s)) {
@@ -116,11 +116,13 @@ var FileImportService = (function () {
     for (var i = row.length - 1; i >= 0; i--) {
       var v = cleanCell(unwrapJsonCell(row[i]));
       if (!v || v.length > 40) continue;
-      if (/^(aprovado|em\s*trabalho|released|in work|in_work|frozen|obsoleto|obsolete|wip|private)$/i.test(v)) {
+      if (/^(aprovado|em\s*trabalh|released|in\s*wor|in_work|frozen|obsoleto|obsolete|wip|private)/i.test(v)) {
+        if (/^em\s*trabalh/i.test(v)) return 'Em Trabalho';
+        if (/^in\s*wor/i.test(v)) return 'In Work';
         return v;
       }
       if (/aprovado/i.test(v) && !/desaprovado/i.test(v)) return v;
-      if (/em\s*trabalho/i.test(v)) return v;
+      if (/em\s*trabalh/i.test(v)) return 'Em Trabalho';
     }
     return '';
   }
@@ -175,8 +177,8 @@ var FileImportService = (function () {
     for (var i = 0; i < row.length; i++) {
       var v = cleanCell(unwrapJsonCell(row[i]));
       if (!v) continue;
-      if (/^(aprovado|em\s*trabalho|released|in work|obsoleto|obsolete|frozen|wip)$/i.test(v) ||
-          /aprovado|em\s*trabalho/i.test(v)) {
+      if (/^(aprovado|em\s*trabalh|released|in\s*wor|obsoleto|obsolete|frozen|wip)/i.test(v) ||
+          /aprovado|em\s*trabalh/i.test(v)) {
         map.maturity = i;
         map.state = i;
       }
@@ -505,6 +507,7 @@ var FileImportService = (function () {
 
   function buildItemsFromRows(dataRows, colMap, inferIndent) {
     var items = [];
+    var usedIds = {};
     var stackLevel = 0;
     for (var r = 0; r < dataRows.length; r++) {
       var row = dataRows[r];
@@ -539,9 +542,13 @@ var FileImportService = (function () {
       stackLevel = level;
 
       var pid = cell(row, colMap, 'physicalid', '') || ('IMP_' + (r + 1) + '_' + name.replace(/\W/g, '_').slice(0, 40));
+      pid = String(pid);
+      if (usedIds[pid]) pid = pid + '__r' + (r + 1);
+      usedIds[pid] = true;
       var st = resolveMaturityFields(row, colMap);
       items.push({
-        physicalid: String(pid),
+        physicalid: pid,
+        sourcePhysicalId: cell(row, colMap, 'physicalid', '') || '',
         name: String(name),
         title: stripIconNoise(unwrapJsonCell(cell(row, colMap, 'title', name))) || String(name),
         type: cell(row, colMap, 'type', 'VPMReference'),

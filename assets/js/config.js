@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260602v',
+    BUILD: 'bom20260602x',
     /** 3DDashboard: não espera probe CSRF (evita travar em "Conectando…") */
     SKIP_SPACE_PROBE: true,
     WAF_REQUEST_TIMEOUT_MS: 15000,
@@ -47,7 +47,11 @@
     EXPLORER_ONLY: true,
     UI_CLEAN: true,
     /** Oculta botão Varrer no widget (só Importar Ctrl+C) */
-    HIDE_SCAN_BUTTON: true,
+    /** Oculta tag de build no widget (visível só com ?debug=1) */
+    SHOW_BUILD_TAG: false,
+    /** Gráficos recolhidos por padrão — tabela ocupa o widget */
+    CHARTS_EXPANDED: false,
+    IMPORT_BUTTON_LABEL: 'Atualizar estrutura',
     SHOW_CHARTS: true,
     SHOW_RULES_PANEL: true,
     SHOW_TREE: false,

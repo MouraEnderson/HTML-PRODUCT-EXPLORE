@@ -128,7 +128,15 @@ var App = (function () {
       (byId('tableProductLabel') && byId('tableProductLabel').textContent) ||
       'E-BOM';
     var tableLbl = byId('tableProductLabel');
-    if (tableLbl && pname !== '-') tableLbl.textContent = pname;
+    var selLbl = byId('selectionLabel');
+    if (tableLbl && pname !== '-') {
+      tableLbl.textContent = pname;
+      tableLbl.setAttribute('title', pname);
+    }
+    if (selLbl && pname !== '-') {
+      selLbl.textContent = pname;
+      selLbl.setAttribute('title', pname);
+    }
     var meta = byId('ebomMeta');
     if (meta) {
       var total = metrics.totalItems || flat.length || 0;
@@ -141,6 +149,9 @@ var App = (function () {
     if (pager) {
       pager.textContent =
         'Exibindo ' + filtered.length + ' de ' + flat.length + ' linhas (role para navegar)';
+    }
+    if (typeof SyncBanner !== 'undefined' && SyncBanner.update) {
+      SyncBanner.update(flat.length || metrics.totalItems || 0);
     }
   }
 
@@ -204,6 +215,7 @@ var App = (function () {
       var mode = APP_CONFIG.DEMO_MODE ? ' | DEMO' : '';
       setStatus('Estrutura: ' + BomService.getNodeCount() + ' itens | Exibindo: ' + filtered.length + mode, 'ok');
     }
+    if (typeof LayoutFit !== 'undefined') LayoutFit.apply();
   }
 
   function renderIssues(issues) {
@@ -700,17 +712,17 @@ var App = (function () {
   }
 
   function runImportFromClipboard(btnEl) {
-    if (typeof ExplorerScanner === 'undefined' || !ExplorerScanner.scanViaClipboardOrPaste) {
+    if (typeof ExplorerScanner === 'undefined' || !ExplorerScanner.scanViaImportBestEffort) {
       setStatus('Importação indisponível.', 'error');
       return;
     }
-    setStatus('Lendo Ctrl+C do Explorer…', 'info');
+    setStatus('Lendo Explorer + Ctrl+C…', 'info');
     root.__3DX_BLOCK_API_LOAD__ = true;
     if (btnEl) {
       btnEl.disabled = true;
-      btnEl.textContent = 'Importando…';
+      btnEl.textContent = 'Atualizando…';
     }
-    ExplorerScanner.scanViaClipboardOrPaste()
+    ExplorerScanner.scanViaImportBestEffort()
       .then(function (res) {
         APP_CONFIG.IMPORT_MODE = true;
         APP_CONFIG.DEMO_MODE = false;
@@ -721,12 +733,13 @@ var App = (function () {
         }
         updateLastUpdateClock();
         refreshUI();
+        if (typeof LayoutFit !== 'undefined') LayoutFit.apply();
         setStatus(res.message || 'Importação concluída.', 'ok');
       })
       .catch(function (err) {
         setStatus('Importação: ' + (err.message || err), 'error');
         var area = byId('pasteArea');
-        var details = document.querySelector('.bom-sidebar-more');
+        var details = document.querySelector('.bom-topbar-more') || document.querySelector('.bom-sidebar-more');
         if (details && !details.open) details.open = true;
         if (area) {
           area.focus();
@@ -737,7 +750,7 @@ var App = (function () {
         root.__3DX_BLOCK_API_LOAD__ = false;
         if (btnEl) {
           btnEl.disabled = false;
-          btnEl.textContent = 'Importar Ctrl+C';
+          btnEl.textContent = (APP_CONFIG && APP_CONFIG.IMPORT_BUTTON_LABEL) || 'Atualizar estrutura';
         }
       });
   }
@@ -764,7 +777,7 @@ var App = (function () {
       }
       var area = byId('pasteArea');
       if (area) area.value = text;
-      setStatus('Dados colados — clique Importar Ctrl+C ou aguarde…', 'info');
+      setStatus('Dados colados — clique Atualizar estrutura ou aguarde…', 'info');
       window.clearTimeout(host.__3DX_PASTE_AUTO__);
       host.__3DX_PASTE_AUTO__ = window.setTimeout(function () {
         if (String(text).indexOf('\t') >= 0 || String(text).split(/\r?\n/).length >= 2) {
@@ -806,6 +819,42 @@ var App = (function () {
     rebindScanButton();
     rebindImportButton();
     bindPasteCapture();
+    if (typeof LayoutFit !== 'undefined') LayoutFit.init();
+
+    var importBtn = byId('btnImportPaste');
+    if (importBtn && APP_CONFIG.IMPORT_BUTTON_LABEL) {
+      importBtn.textContent = APP_CONFIG.IMPORT_BUTTON_LABEL;
+    }
+
+    var buildTag = byId('buildTag');
+    if (buildTag) {
+      var q = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
+      var showBuild =
+        APP_CONFIG.SHOW_BUILD_TAG === true || q.debug === '1' || q.debug === 'true';
+      buildTag.classList.toggle('bom-hidden', !showBuild);
+    }
+
+    var chartsSection = byId('chartsSection');
+    if (chartsSection) {
+      if (APP_CONFIG.CHARTS_EXPANDED === true) {
+        chartsSection.setAttribute('open', 'open');
+      } else {
+        chartsSection.removeAttribute('open');
+      }
+      if (!chartsSection.__3DX_CHARTS_TOGGLE__) {
+        chartsSection.__3DX_CHARTS_TOGGLE__ = true;
+        chartsSection.addEventListener('toggle', function () {
+          if (typeof LayoutFit !== 'undefined') LayoutFit.apply();
+          if (typeof ChartsManager !== 'undefined' && ChartsManager.scheduleResize) {
+            ChartsManager.scheduleResize();
+          }
+        });
+      }
+    }
+
+    if (typeof SyncBanner !== 'undefined' && SyncBanner.update) {
+      SyncBanner.update(0);
+    }
 
     var btnClear = byId('btnClearFilters');
     if (btnClear && !btnClear.__3DX_CLEAR_BOUND__) {

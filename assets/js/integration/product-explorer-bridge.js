@@ -796,6 +796,14 @@ var ProductExplorerBridge = (function () {
     };
   }
 
+  function getExplorerSelectionCount() {
+    pollDashboardExplorerChrome();
+    var text = harvestAllExplorerText();
+    var m = String(text).match(/(\d+)\s*(?:de|of)\s*(\d+)\s*(?:selecionado|selected)/i);
+    if (m) return parseInt(m[2], 10) || parseInt(m[1], 10) || 0;
+    return 0;
+  }
+
   return {
     init: init,
     subscribe: subscribe,
@@ -817,6 +825,7 @@ var ProductExplorerBridge = (function () {
     readExplorerIframeDocument: readExplorerIframeDocument,
     scrapeExplorerGrid: scrapeExplorerGrid,
     fetchPilotStructurePayload: fetchPilotStructurePayload,
-    harvestAllExplorerText: harvestAllExplorerText
+    harvestAllExplorerText: harvestAllExplorerText,
+    getExplorerSelectionCount: getExplorerSelectionCount
   };
 })();

@@ -28,6 +28,8 @@ $files = @(
   'assets\js\ui\charts-manager.js',
   'assets\js\ui\part-image.js',
   'assets\js\ui\part-preview.js',
+  'assets\js\ui\layout-fit.js',
+  'assets\js\ui\sync-banner.js',
   'assets\js\ui\filters.js',
   'assets\js\ui\data-table.js',
   'assets\js\ui\explorer-sync-panel.js',

@@ -64,7 +64,8 @@ var PartImage = (function () {
   function resolveUrl(node) {
     if (!node) return '';
     if (node.iconUrl) return String(node.iconUrl);
-    return buildGetPictureUrl(node.physicalid);
+    var srcId = node.sourcePhysicalId || node.physicalid;
+    return buildGetPictureUrl(srcId);
   }
 
   function initialChar(node) {

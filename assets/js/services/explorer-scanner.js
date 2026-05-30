@@ -588,6 +588,87 @@ var ExplorerScanner = (function () {
     });
   }
 
+  /** Usa a fonte com MAIS linhas: Ctrl+C ou grade visível do Explorer (evita 13 de 79). */
+  function scanViaImportBestEffort() {
+    if (!pasteImportEnabled()) {
+      return Promise.reject(new Error('Importação por cola desativada.'));
+    }
+
+    function tryPasteBundle() {
+      return readClipboardText().then(function (clip) {
+        var text = resolveImportText(clip);
+        if (!text) return { count: 0, text: '', items: null };
+        return FileImportService.parseTextAsync(text).then(function (items) {
+          return { count: items ? items.length : 0, text: text, items: items };
+        });
+      }).catch(function () {
+        return { count: 0, text: '', items: null };
+      });
+    }
+
+    function tryGridBundle() {
+      if (typeof ProductExplorerBridge === 'undefined' || !ProductExplorerBridge.scrapeExplorerGrid) {
+        return Promise.resolve({ count: 0, payload: null });
+      }
+      if (ProductExplorerBridge.pollDashboardExplorerChrome) {
+        ProductExplorerBridge.pollDashboardExplorerChrome();
+      }
+      if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
+      var term = getExplorerRootSearchTerm();
+      var payload = ProductExplorerBridge.scrapeExplorerGrid(term);
+      if (!payload || !payload.items || payload.items.length < 1) {
+        return Promise.resolve({ count: 0, payload: null });
+      }
+      return Promise.resolve({ count: payload.items.length, payload: payload, term: term });
+    }
+
+    return Promise.all([tryPasteBundle(), tryGridBundle()]).then(function (parts) {
+      var paste = parts[0];
+      var grid = parts[1];
+
+      if (grid.count > paste.count && grid.count >= 2 && grid.payload) {
+        APP_CONFIG.IMPORT_MODE = true;
+        APP_CONFIG.DEMO_MODE = false;
+        return BomSnapshot.applyPayload(grid.payload).then(function (meta) {
+          var count = BomService.getNodeCount() || meta.itemCount || grid.count;
+          saveRootName(meta.productName || grid.term);
+          var hint = paste.count > 0 && paste.count < grid.count
+            ? ' (Ctrl+C tinha ' + paste.count + ' — usamos grade Explorer com ' + grid.count + ')'
+            : '';
+          return {
+            ok: true,
+            mode: 'explorer-grid-import',
+            meta: meta,
+            message: 'Importação: ' + count + ' itens — ' + (meta.productName || grid.term || 'E-BOM') + hint
+          };
+        });
+      }
+
+      if (paste.count >= 1 && paste.text) {
+        return scanViaText(paste.text, 'Ctrl+C Explorer');
+      }
+
+      if (grid.count >= 2 && grid.payload) {
+        APP_CONFIG.IMPORT_MODE = true;
+        APP_CONFIG.DEMO_MODE = false;
+        return BomSnapshot.applyPayload(grid.payload).then(function (meta) {
+          var count = BomService.getNodeCount() || meta.itemCount || grid.count;
+          saveRootName(meta.productName || grid.term);
+          return {
+            ok: true,
+            mode: 'explorer-grid-import',
+            meta: meta,
+            message: 'Importação (grade Explorer): ' + count + ' itens — ' + (meta.productName || grid.term || 'E-BOM')
+          };
+        });
+      }
+
+      throw new Error(
+        'Nenhum dado. No Explorer: expanda todos os níveis → Ctrl+A na grade → Ctrl+C → Importar (ou Ctrl+V no widget).'
+      );
+    });
+  }
+
   function scanViaExplorerGrid() {
     if (typeof ProductExplorerBridge === 'undefined' || !ProductExplorerBridge.scrapeExplorerGrid) {
       return Promise.reject(new Error('Iframe do Explorer inacessível — abra a árvore ao lado do widget.'));
@@ -727,6 +808,7 @@ var ExplorerScanner = (function () {
     scan: scan,
     scanViaExplorerGrid: scanViaExplorerGrid,
     scanViaClipboardOrPaste: scanViaClipboardOrPaste,
+    scanViaImportBestEffort: scanViaImportBestEffort,
     scanViaPilotGeneric: scanViaPilotGeneric,
     setPasteBuffer: setPasteBuffer,
     getPasteBuffer: getPasteBuffer,
