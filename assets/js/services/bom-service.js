@@ -212,6 +212,21 @@ var BomService = (function () {
   }
 
   function loadRoot(physicalId) {
+    var blockApi =
+      typeof window !== 'undefined' &&
+      window.__3DX_BLOCK_API_LOAD__;
+    if (
+      APP_CONFIG.PILOT_GRID_FIRST &&
+      blockApi &&
+      nodeCount > 1
+    ) {
+      return Promise.resolve(index);
+    }
+    if (APP_CONFIG.PILOT_GRID_FIRST && blockApi) {
+      return Promise.reject(
+        new Error('Varredura em curso — API pausada (' + (APP_CONFIG.BUILD || '') + ')')
+      );
+    }
     physicalId = normalizePid(physicalId);
     reset();
     rootId = physicalId;

@@ -774,6 +774,7 @@ var ProductExplorerBridge = (function () {
   }
 
   function startContentPoll() {
+    if (APP_CONFIG.PILOT_GRID_FIRST) return;
     window.setInterval(pollSelection, 2000);
   }
 
@@ -781,8 +782,12 @@ var ProductExplorerBridge = (function () {
     window.addEventListener('message', onMessage, false);
     initFromQuery();
     initFrom3DXDeepLink();
-    pollSelection();
-    startContentPoll();
+    pollStructureHint();
+    pollDashboardExplorerChrome();
+    if (!APP_CONFIG.PILOT_GRID_FIRST) {
+      pollSelection();
+      startContentPoll();
+    }
     return {
       getSelection: function () { return currentSelection; },
       subscribe: subscribe,

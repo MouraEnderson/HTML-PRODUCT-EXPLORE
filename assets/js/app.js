@@ -117,6 +117,12 @@ var App = (function () {
   }
 
   function refreshUI() {
+    if (typeof KpiCards !== 'undefined' && KpiCards.init && byId('kpiGrid')) {
+      KpiCards.init('#kpiGrid');
+    }
+    if (typeof DataTable !== 'undefined' && DataTable.init && byId('bomTable')) {
+      DataTable.init('#bomTable');
+    }
     var index = BomService.getIndex();
     var rootId = BomService.getRootId();
     var flat = BomNormalizer.toFlatList(index, rootId);
@@ -144,8 +150,9 @@ var App = (function () {
 
     if (APP_CONFIG.IMPORT_MODE) {
       var pname = (byId('selectionLabel') && byId('selectionLabel').textContent) || 'E-BOM';
-      if (pname && pname !== '-') {
-        setStatus('Snapshot: ' + pname + ' — ' + (BomService.getNodeCount() || 0) + ' itens', 'ok');
+      var n = BomService.getNodeCount();
+      if (pname && pname !== '-' && n > 0) {
+        setStatus('Snapshot: ' + pname + ' — ' + n + ' itens', 'ok');
       }
     } else {
       var mode = APP_CONFIG.DEMO_MODE ? ' | DEMO' : '';
@@ -260,6 +267,7 @@ var App = (function () {
     }
     setStatus('Varrendo estrutura…', 'info');
     root.__3DX_BLOCK_AUTO_SYNC__ = true;
+    root.__3DX_BLOCK_API_LOAD__ = true;
     if (structureSyncTimer) {
       window.clearTimeout(structureSyncTimer);
       structureSyncTimer = null;
@@ -354,6 +362,7 @@ var App = (function () {
       .finally(function () {
         root.__3DX_ALLOW_API__ = false;
         root.__3DX_FORCE_API__ = false;
+        root.__3DX_BLOCK_API_LOAD__ = false;
         root.__3DX_BLOCK_AUTO_SYNC__ = false;
         setLoading(false);
         if (btnEl) {
@@ -426,6 +435,10 @@ var App = (function () {
 
   function loadBom(physicalId) {
     if (!physicalId || loading) return Promise.resolve();
+    if (root.__3DX_BLOCK_API_LOAD__) return Promise.resolve();
+    if (pilotGridOnlyMode() && !apiExplicit()) {
+      return Promise.resolve();
+    }
     if (pilotGridOnlyMode() && !allowApiLoad()) {
       return Promise.resolve();
     }
@@ -545,6 +558,9 @@ var App = (function () {
       label.textContent = (sel.displayName || sel.name || sel.physicalid);
     }
     if (APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.CAN_USE_ENOVIA_API) {
+      return;
+    }
+    if (APP_CONFIG.PILOT_GRID_FIRST && APP_CONFIG.CAN_USE_ENOVIA_API) {
       return;
     }
     if (

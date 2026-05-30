@@ -548,6 +548,8 @@ var ExplorerScanner = (function () {
       if (typeof BomSnapshot === 'undefined' || !BomSnapshot.applyPayload) {
         return Promise.reject(new Error('Módulo snapshot indisponível'));
       }
+      APP_CONFIG.IMPORT_MODE = true;
+      APP_CONFIG.DEMO_MODE = false;
       return BomSnapshot.applyPayload(pl).then(function (meta) {
         var count = BomService.getNodeCount();
         if (count < 1) count = meta.itemCount || (pl.items && pl.items.length) || 0;
@@ -607,22 +609,12 @@ var ExplorerScanner = (function () {
         ProductExplorerBridge.pollDashboardExplorerChrome();
       }
       if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
-      if (ProductExplorerBridge.pollSelection) ProductExplorerBridge.pollSelection();
     }
     var timeout = APP_CONFIG.SCAN_TIMEOUT_MS || 90000;
     var apiChain = scanViaApiOrSelection();
 
     if (isTrustedDashboard() && APP_CONFIG.PILOT_GRID_FIRST) {
-      var gridChain = scanViaExplorerGrid();
-      if (!apiScanEnabled()) {
-        return withScanTimeout(gridChain, timeout);
-      }
-      return withScanTimeout(
-        gridChain.catch(function () {
-          return apiChain;
-        }),
-        timeout
-      );
+      return withScanTimeout(scanViaExplorerGrid(), timeout);
     }
 
     if (isTrustedDashboard() && APP_CONFIG.USE_API_SCAN_FIRST !== false) {
