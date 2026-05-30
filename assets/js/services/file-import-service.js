@@ -11,7 +11,8 @@ var FileImportService = (function () {
     title: ['title', 'titulo', 'título', 'description', 'descricao'],
     type: ['type', 'tipo', 'display type', 'policy', 'tipologia', 'physical product'],
     revision: ['revision', 'revisao', 'revisão', 'rev', 'revis', 'majorrevision'],
-    state: ['state', 'estado', 'maturity', 'maturidade', 'estado de maturidade', 'current', 'status'],
+    state: ['state', 'estado', 'current', 'status'],
+    maturity: ['maturity', 'maturidade', 'estado de maturidade', 'estado maturidade', 'maturity state', 'lifecycle'],
     quantity: ['quantity', 'quantidade', 'qty', 'qtd', 'amount'],
     owner: ['owner', 'proprietario', 'proprietário', 'propriet', 'creator'],
     organization: ['organization', 'organizacao', 'organização', 'org'],
@@ -75,18 +76,44 @@ var FileImportService = (function () {
   function normalizeImportedState(state, approval) {
     var s = cleanCell(state);
     var a = cleanCell(approval);
-    if (/^aprovado$/i.test(s)) {
-      return { state: s, maturity: s, approval: a && a !== 'Unknown' ? a : 'Approved' };
+    if (/aprovado|released|frozen|approved/i.test(s)) {
+      return { state: s || 'Aprovado', maturity: s || 'Aprovado', approval: a && a !== 'Unknown' ? a : 'Approved' };
+    }
+    if (/em\s*trabalho|in\s*work|in_work|wip|private|desenvolvimento/i.test(s)) {
+      return { state: s || 'Em Trabalho', maturity: s || 'Em Trabalho', approval: a || 'Unknown' };
+    }
+    if (/obsoleto|obsolete|abandoned/i.test(s)) {
+      return { state: s || 'Obsoleto', maturity: s || 'Obsoleto', approval: a || 'Unknown' };
     }
     return { state: s, maturity: s, approval: a || 'Unknown' };
   }
 
-  function isStatusLabel(name) {
-    var t = cleanCell(name).toLowerCase();
-    if (!t || t.length > 48) return false;
-    if (t.indexOf('|') >= 0 || t.indexOf('3dexperience') >= 0) return false;
-    if (STATUS_LABELS.indexOf(t) >= 0) return true;
-    return /^(cr[ií]tico|aten[cç][aã]o|alerta)$/i.test(t);
+  /** Varre células da linha Explorer à procura de Aprovado / Em Trabalho / etc. */
+  function findMaturityInCells(row) {
+    if (!row || !row.length) return '';
+    for (var i = row.length - 1; i >= 0; i--) {
+      var v = cleanCell(unwrapJsonCell(row[i]));
+      if (!v || v.length > 40) continue;
+      if (/^(aprovado|em\s*trabalho|released|in work|in_work|frozen|obsoleto|obsolete|wip|private)$/i.test(v)) {
+        return v;
+      }
+      if (/aprovado/i.test(v) && !/desaprovado/i.test(v)) return v;
+      if (/em\s*trabalho/i.test(v)) return v;
+    }
+    return '';
+  }
+
+  function resolveMaturityFields(row, colMap) {
+    var stateRaw = cleanCell(cell(row, colMap, 'state', ''));
+    var matRaw = colMap.maturity !== undefined ? cleanCell(cell(row, colMap, 'maturity', '')) : '';
+    var scanned = findMaturityInCells(row);
+    if (!stateRaw && matRaw) stateRaw = matRaw;
+    if (!matRaw && stateRaw) matRaw = stateRaw;
+    if (!stateRaw && scanned) {
+      stateRaw = scanned;
+      matRaw = scanned;
+    }
+    return normalizeImportedState(stateRaw || matRaw, cell(row, colMap, 'approval', 'Unknown'));
   }
 
   function normHeader(h) {
@@ -98,14 +125,56 @@ var FileImportService = (function () {
     headers.forEach(function (h, i) {
       var nh = normHeader(h);
       if (!nh) return;
+      if (nh.indexOf('matur') >= 0 || nh.indexOf('lifecycle') >= 0) {
+        map.maturity = i;
+        return;
+      }
+    });
+    headers.forEach(function (h, i) {
+      var nh = normHeader(h);
+      if (!nh) return;
       Object.keys(COLUMN_ALIASES).forEach(function (key) {
         if (map[key] !== undefined) return;
+        if (key === 'maturity' && map.maturity !== undefined) return;
         if (COLUMN_ALIASES[key].some(function (a) { return nh === a || nh.indexOf(a) >= 0; })) {
           map[key] = i;
         }
       });
     });
     return map;
+  }
+
+  function guessExplorerColumnMap(row) {
+    var map = { name: 0, title: 1 };
+    if (!row || !row.length) return map;
+    if (/^\d+$/.test(String(row[0]).trim())) {
+      map = { level: 0, name: 1, title: 2, type: 3, revision: 4, owner: 5, state: 6, maturity: 6 };
+    }
+    for (var i = 0; i < row.length; i++) {
+      var v = cleanCell(unwrapJsonCell(row[i]));
+      if (!v) continue;
+      if (/^(aprovado|em\s*trabalho|released|in work|obsoleto|obsolete|frozen|wip)$/i.test(v) ||
+          /aprovado|em\s*trabalho/i.test(v)) {
+        map.maturity = i;
+        map.state = i;
+      }
+      if (/^\d+[.,]\d+$/.test(v)) map.revision = i;
+      if (/physical\s*product|^vpm/i.test(v)) map.type = i;
+      if (isJsonBlob(row[i]) || /getpicture|"icon"/i.test(String(row[i]))) map.owner = i;
+    }
+    if (row.length >= 6 && map.maturity === undefined) {
+      map.maturity = row.length - 1;
+      map.state = row.length - 1;
+    }
+    return map;
+  }
+
+  function isStatusLabel(name) {
+    var t = cleanCell(name).toLowerCase();
+    if (!t || t.length > 48) return false;
+    if (t.indexOf('|') >= 0 || t.indexOf('3dexperience') >= 0) return false;
+    if (STATUS_LABELS.indexOf(t) >= 0) return true;
+    return /^(cr[ií]tico|aten[cç][aã]o|alerta)$/i.test(t);
   }
 
   function cell(row, colMap, key, def) {
@@ -369,6 +438,21 @@ var FileImportService = (function () {
     items = inferAssemblyLevels(items.filter(function (it) {
       return it.name && it.name.length > 0;
     }));
+    items.forEach(function (it) {
+      if (!it.maturity && !it.state) {
+        var scan = findMaturityInCells([
+          it.name, it.title, it.type, it.revision, it.owner, it.state, it.maturity
+        ]);
+        if (scan) {
+          it.state = scan;
+          it.maturity = scan;
+        }
+      } else if (it.state && !it.maturity) {
+        it.maturity = it.state;
+      } else if (it.maturity && !it.state) {
+        it.state = it.maturity;
+      }
+    });
     validateImportedItems(items);
     return items;
   }
@@ -377,27 +461,9 @@ var FileImportService = (function () {
     if (rows.length && looksLikeHeader(rows[0])) {
       return parseRows(rows);
     }
-    var colMap = {};
-    var first = rows[0];
-    if (first.length >= 2 && /^\d+$/.test(String(first[0]).trim())) {
-      colMap.level = 0;
-      colMap.name = 1;
-      colMap.title = 2;
-      colMap.type = 3;
-      colMap.revision = 4;
-      colMap.state = 5;
-    } else if (first.length >= 5) {
-      colMap.name = 0;
-      colMap.revision = 1;
-      colMap.type = 2;
-      colMap.owner = 3;
-      colMap.state = 4;
-    } else {
-      colMap.name = 0;
-      colMap.title = 1;
-      colMap.type = 2;
-      colMap.revision = 3;
-      colMap.state = 4;
+    var colMap = guessExplorerColumnMap(rows[0]);
+    if (!colMap.name && rows[0].length >= 5) {
+      colMap = { name: 0, revision: 1, type: 2, owner: 3, state: 4, maturity: 4 };
     }
     return buildItemsFromRows(rows, colMap, true);
   }
@@ -451,10 +517,7 @@ var FileImportService = (function () {
       stackLevel = level;
 
       var pid = cell(row, colMap, 'physicalid', '') || ('IMP_' + (r + 1) + '_' + name.replace(/\W/g, '_').slice(0, 40));
-      var st = normalizeImportedState(
-        cell(row, colMap, 'state', ''),
-        cell(row, colMap, 'approval', 'Unknown')
-      );
+      var st = resolveMaturityFields(row, colMap);
       items.push({
         physicalid: String(pid),
         name: String(name),

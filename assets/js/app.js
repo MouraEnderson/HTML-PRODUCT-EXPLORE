@@ -144,12 +144,15 @@ var App = (function () {
     }
   }
 
+  var tableInitialized = false;
+
   function refreshUI() {
     if (typeof KpiCards !== 'undefined' && KpiCards.init && byId('kpiGrid')) {
       KpiCards.init('#kpiGrid');
     }
-    if (typeof DataTable !== 'undefined' && DataTable.init && byId('bomTable')) {
+    if (!tableInitialized && typeof DataTable !== 'undefined' && DataTable.init && byId('bomTable')) {
       DataTable.init('#bomTable');
+      tableInitialized = true;
     }
     var index = BomService.getIndex();
     var rootId = BomService.getRootId();
@@ -736,6 +739,7 @@ var App = (function () {
     KpiCards.init('#kpiGrid');
     ChartsManager.init();
     DataTable.init('#bomTable');
+    tableInitialized = true;
     var treeEl = byId('bomTree');
     if (treeEl && APP_CONFIG.SHOW_TREE !== false && typeof BomTree !== 'undefined') {
       BomTree.init('#bomTree', function (id) {

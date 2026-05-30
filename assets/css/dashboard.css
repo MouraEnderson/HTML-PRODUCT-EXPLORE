@@ -1475,7 +1475,17 @@ body.ui-clean .main-clean {
   margin: 0;
   border: none;
   border-radius: 0;
-  max-height: 340px;
+  max-height: 380px;
+  overflow-y: auto;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bom-table-empty {
+  text-align: center;
+  padding: 24px !important;
+  color: var(--bom-muted);
+  font-size: 0.95rem;
 }
 
 .bom-table-pager {

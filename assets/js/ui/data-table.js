@@ -1,17 +1,17 @@
 /**
  * @file ui/data-table.js
- * Tabela virtualizada — colunas Product Explorer.
+ * Tabela E-BOM — scroll nativo (sem virtualização que quebra no iframe 3DDashboard).
  */
 var DataTable = (function () {
   'use strict';
 
   var tbody;
   var thead;
-  var rowHeight = 36;
-  var visibleRows = 40;
   var data = [];
   var scrollContainer;
   var columns = [];
+  var initialized = false;
+  var MAX_ROWS = 8000;
 
   function getColumns() {
     if (APP_CONFIG.UI_CLEAN && APP_CONFIG.PILOT_TABLE_COLUMNS && APP_CONFIG.PILOT_TABLE_COLUMNS.length) {
@@ -22,14 +22,16 @@ var DataTable = (function () {
 
   function init(tableSelector) {
     columns = getColumns();
-    var table = (typeof qs3dx === 'function' ? qs3dx(tableSelector) : document.querySelector(tableSelector));
+    var table = document.querySelector(tableSelector);
     if (!table) return;
-    scrollContainer = table.closest('.bom-table-wrap') || table.closest('.table-scroll');
+    scrollContainer = table.closest('.bom-table-wrap') || table.parentElement;
     tbody = table.querySelector('tbody');
     thead = table.querySelector('thead tr');
     renderHeader();
-    if (scrollContainer) {
-      scrollContainer.addEventListener('scroll', onScroll);
+    if (!initialized && scrollContainer) {
+      scrollContainer.style.overflowY = 'auto';
+      scrollContainer.style.webkitOverflowScrolling = 'touch';
+      initialized = true;
     }
   }
 
@@ -38,6 +40,10 @@ var DataTable = (function () {
     thead.innerHTML = columns.map(function (c) {
       return '<th>' + escapeHtml(c.label) + '</th>';
     }).join('');
+  }
+
+  function maturityLabel(n) {
+    return String(n.maturity || n.state || '').trim();
   }
 
   function formatCell(n, col) {
@@ -58,59 +64,44 @@ var DataTable = (function () {
       }
       return escapeHtml(o || '');
     }
-    if (col.key === 'type') return shortType(v);
+    if (col.key === 'type') return escapeHtml(shortType(v));
     if (col.format === 'status' || col.key === 'state' || col.key === 'maturity') {
-      var matCls = AttributeService.classifyMaturity(v || n.state || n.maturity);
-      var status = maturityStatusBadge(matCls, v || n.state || n.maturity);
+      var raw = maturityLabel(n);
+      var matCls = AttributeService.classifyMaturity(raw);
+      var status = maturityStatusBadge(matCls, raw);
       return '<span class="status-pill ' + status.cls + '">' + escapeHtml(status.text) + '</span>';
     }
     return escapeHtml(v == null ? '' : v);
   }
 
   function setData(nodes) {
-    data = nodes;
+    data = nodes || [];
     render();
-  }
-
-  function onScroll() {
-    render();
-  }
-
-  function getScrollTop() {
-    return scrollContainer ? scrollContainer.scrollTop : 0;
   }
 
   function render() {
     if (!tbody) return;
-    var colCount = columns.length || 1;
-    var start = Math.floor(getScrollTop() / rowHeight);
-    var end = Math.min(start + visibleRows + 5, data.length);
-    start = Math.max(0, start - 2);
-
-    var spacerTop = start * rowHeight;
-    var spacerBottom = Math.max(0, (data.length - end) * rowHeight);
-
-    var rows = data.slice(start, end).map(function (n) {
+    var slice = data.slice(0, MAX_ROWS);
+    if (!slice.length) {
+      tbody.innerHTML =
+        '<tr><td colspan="' + (columns.length || 1) + '" class="bom-table-empty">' +
+        'Nenhuma linha. Importe Ctrl+C no Explorer (inclua coluna Maturidade).</td></tr>';
+      return;
+    }
+    tbody.innerHTML = slice.map(function (n) {
       var tds = columns.map(function (col) {
-        var content = formatCell(n, col);
-        var title = col.key === 'name' ? ' title="' + escapeAttr(n.physicalid) + '"' : '';
-        return '<td' + title + '>' + content + '</td>';
+        return '<td>' + formatCell(n, col) + '</td>';
       }).join('');
       return '<tr data-id="' + escapeAttr(n.physicalid) + '">' + tds + '</tr>';
     }).join('');
-
-    tbody.innerHTML =
-      (spacerTop ? '<tr class="spacer" style="height:' + spacerTop + 'px"><td colspan="' + colCount + '"></td></tr>' : '') +
-      rows +
-      (spacerBottom ? '<tr class="spacer" style="height:' + spacerBottom + 'px"><td colspan="' + colCount + '"></td></tr>' : '');
   }
 
   function maturityStatusBadge(matCls, raw) {
-    if (matCls === 'released') return { text: 'Saudável', cls: 'status-ok' };
-    if (matCls === 'in_work') return { text: 'Atenção', cls: 'status-warn' };
-    if (matCls === 'obsolete') return { text: 'Crítico', cls: 'status-bad' };
     var r = String(raw || '').trim();
-    return { text: r || 'Sem status', cls: 'status-neutral' };
+    if (matCls === 'released') return { text: r || 'Aprovado', cls: 'status-ok' };
+    if (matCls === 'in_work') return { text: r || 'Em Trabalho', cls: 'status-warn' };
+    if (matCls === 'obsolete') return { text: r || 'Obsoleto', cls: 'status-bad' };
+    return { text: r || 'Sem maturidade', cls: 'status-neutral' };
   }
 
   function shortType(t) {
