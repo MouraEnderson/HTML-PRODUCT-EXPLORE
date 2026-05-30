@@ -116,6 +116,34 @@ var App = (function () {
     );
   }
 
+  function updateLastUpdateClock() {
+    var el = byId('lastUpdateClock');
+    if (!el) return;
+    el.textContent = new Date().toLocaleTimeString('pt-BR');
+  }
+
+  function updateEbomPanel(filtered, flat, metrics) {
+    var pname =
+      (byId('selectionLabel') && byId('selectionLabel').textContent) ||
+      (byId('tableProductLabel') && byId('tableProductLabel').textContent) ||
+      'E-BOM';
+    var tableLbl = byId('tableProductLabel');
+    if (tableLbl && pname !== '-') tableLbl.textContent = pname;
+    var meta = byId('ebomMeta');
+    if (meta) {
+      var total = metrics.totalItems || flat.length || 0;
+      meta.textContent =
+        total + ' peças no arquivo · ' +
+        (filtered.length) + ' visíveis com filtro · ' +
+        (metrics.totalAssemblies || 0) + ' assemblies';
+    }
+    var pager = byId('tablePager');
+    if (pager) {
+      pager.textContent =
+        'Exibindo ' + filtered.length + ' de ' + flat.length + ' linhas (role para navegar)';
+    }
+  }
+
   function refreshUI() {
     if (typeof KpiCards !== 'undefined' && KpiCards.init && byId('kpiGrid')) {
       KpiCards.init('#kpiGrid');
@@ -141,11 +169,8 @@ var App = (function () {
       BomTree.refresh(index, rootId);
     }
     DataTable.setData(filtered);
-    var tableLbl = byId('tableProductLabel');
-    var sel = ProductExplorerBridge.getSelection();
-    if (tableLbl && sel) {
-      tableLbl.textContent = sel.displayName || sel.name || sel.physicalid;
-    }
+    updateEbomPanel(filtered, flat, currentMetrics);
+    if (BomService.getNodeCount() > 0) updateLastUpdateClock();
     renderIssues(currentAnomalies.issues);
 
     if (APP_CONFIG.IMPORT_MODE) {
@@ -337,6 +362,7 @@ var App = (function () {
             lbl.textContent = pn || 'E-BOM';
           }
         }
+        updateLastUpdateClock();
         refreshUI();
         setStatus(res.message || 'Varredura concluída.', 'ok');
       })
@@ -672,6 +698,7 @@ var App = (function () {
           var lbl = byId('selectionLabel');
           if (lbl) lbl.textContent = res.meta.productName || lbl.textContent;
         }
+        updateLastUpdateClock();
         refreshUI();
         setStatus(res.message || 'Importação concluída.', 'ok');
       })
@@ -725,6 +752,15 @@ var App = (function () {
 
     rebindScanButton();
     rebindImportButton();
+
+    var btnClear = byId('btnClearFilters');
+    if (btnClear && !btnClear.__3DX_CLEAR_BOUND__) {
+      btnClear.__3DX_CLEAR_BOUND__ = true;
+      btnClear.addEventListener('click', function () {
+        if (typeof Filters !== 'undefined' && Filters.clearAll) Filters.clearAll();
+      });
+    }
+
     if (typeof DashboardTheme !== 'undefined') {
       DashboardTheme.init({
         onChange: function () {

@@ -72,6 +72,25 @@ var Filters = (function () {
     });
   }
 
+  function clearAll() {
+    state.search = '';
+    state.maturity = 'all';
+    state.type = 'all';
+    state.approval = 'all';
+    state.hasPP = 'all';
+    var searchEl = document.getElementById('searchInput');
+    var maturityEl = document.getElementById('filterMaturity');
+    var typeEl = document.getElementById('filterType');
+    var approvalEl = document.getElementById('filterApproval');
+    var ppEl = document.getElementById('filterPP');
+    if (searchEl) searchEl.value = '';
+    if (maturityEl) maturityEl.value = 'all';
+    if (typeEl) typeEl.value = 'all';
+    if (approvalEl) approvalEl.value = 'all';
+    if (ppEl) ppEl.value = 'all';
+    if (onChange) onChange(getState());
+  }
+
   function populateTypeOptions(nodes) {
     var sel = document.getElementById('filterType');
     if (!sel) return;
@@ -99,6 +118,7 @@ var Filters = (function () {
     init: init,
     getState: getState,
     apply: apply,
+    clearAll: clearAll,
     populateTypeOptions: populateTypeOptions
   };
 })();

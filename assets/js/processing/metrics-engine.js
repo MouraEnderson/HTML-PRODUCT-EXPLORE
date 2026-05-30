@@ -11,6 +11,7 @@ var MetricsEngine = (function () {
     var byType = {};
     var byRevision = {};
     var byApproval = { approved: 0, pending: 0, other: 0 };
+    var byOwner = {};
     var assemblies = 0;
     var parts = 0;
     var totalQty = 0;
@@ -48,6 +49,9 @@ var MetricsEngine = (function () {
       else withoutPP++;
 
       if (n.level > maxLevel) maxLevel = n.level;
+
+      var ownerKey = ownerLabel(n.owner);
+      byOwner[ownerKey] = (byOwner[ownerKey] || 0) + 1;
     });
 
     return {
@@ -60,6 +64,7 @@ var MetricsEngine = (function () {
       byType: byType,
       byRevision: byRevision,
       byApproval: byApproval,
+      byOwner: byOwner,
       physicalProducts: withPP,
       withoutPhysicalProduct: withoutPP,
       released: byMaturity.released,
@@ -68,8 +73,32 @@ var MetricsEngine = (function () {
     };
   }
 
+  function ownerLabel(raw) {
+    var o = String(raw || '').trim();
+    if (!o) return 'Sem proprietário';
+    if (o.charAt(0) === '{') {
+      try {
+        var j = JSON.parse(o);
+        o = j.label || j.name || j.displayName || o;
+      } catch (e) {
+        var m = o.match(/"label"\s*:\s*"([^"]+)"/i);
+        if (m) o = m[1];
+      }
+    }
+    if (o.length > 36) o = o.slice(0, 36) + '…';
+    return o;
+  }
+
   function chartDatasets(metrics) {
+    var owners = metrics.byOwner || {};
+    var ownerLabels = Object.keys(owners).sort(function (a, b) {
+      return owners[b] - owners[a];
+    });
     return {
+      owners: {
+        labels: ownerLabels.slice(0, 12),
+        values: ownerLabels.slice(0, 12).map(function (k) { return owners[k]; })
+      },
       maturity: {
         labels: ['Bom (Aprovado)', 'Moderado (Em trabalho)', 'Ruim (Obsoleto)', 'Outros'],
         values: [
@@ -100,6 +129,7 @@ var MetricsEngine = (function () {
 
   return {
     compute: compute,
-    chartDatasets: chartDatasets
+    chartDatasets: chartDatasets,
+    ownerLabel: ownerLabel
   };
 })();

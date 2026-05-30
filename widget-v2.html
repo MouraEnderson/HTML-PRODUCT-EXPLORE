@@ -14,7 +14,7 @@
     window.__3DX_TRUSTED_WIDGET__ = true;
     window.__3DX_BOOT_DEFER__ = true;
 
-    var BOM_BUILD = 'bom20260602o';
+    var BOM_BUILD = 'bom20260602p';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
     var BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js';
 
@@ -44,48 +44,73 @@
     })();
 
     var UI_HTML =
-      '<div class="bom-root bom-dashboard bom-theme-gray ui-clean">' +
-      '<header class="bom-dash-header">' +
-      '<div class="bom-dash-title">' +
-      '<h1>BOM Analytics</h1>' +
-      '<p class="bom-dash-sub">Estrutura: <strong id="selectionLabel">-</strong></p>' +
+      '<div class="bom-root bom-dashboard bom-theme-gray ui-clean bom-layout-ref">' +
+      '<aside class="bom-sidebar">' +
+      '<div class="bom-sidebar-brand">BOM</div>' +
+      '<button type="button" class="bom-nav bom-nav-active">Visão Geral</button>' +
+      '<button type="button" id="btnImportPaste" class="bom-nav bom-nav-action">Importar Ctrl+C</button>' +
+      '<div class="bom-clock-box">' +
+      '<span class="bom-clock-label">Última atualização</span>' +
+      '<span id="lastUpdateClock" class="bom-clock-time">--:--:--</span>' +
       '</div>' +
-      '<div class="bom-dash-toolbar">' +
-      '<button type="button" id="btnThemeWhite" class="bom-btn bom-btn-theme" title="Fundo branco">Branco</button>' +
-      '<button type="button" id="btnThemeGray" class="bom-btn bom-btn-theme bom-theme-active" title="Fundo cinza">Cinza</button>' +
+      '<div class="bom-sidebar-theme">' +
+      '<span class="bom-sidebar-theme-label">Fundo</span>' +
+      '<button type="button" id="btnThemeWhite" class="bom-btn bom-btn-theme">Branco</button>' +
+      '<button type="button" id="btnThemeGray" class="bom-btn bom-btn-theme bom-theme-active">Cinza</button>' +
+      '</div>' +
+      '<details class="bom-sidebar-more">' +
+      '<summary>Regras e avançado</summary>' +
+      '<div id="bomRulesPanel"></div>' +
+      '<input type="text" id="explorerObjectId" class="bom-input" placeholder="ID físico" />' +
+      '<button type="button" id="btnLoadPhysicalId" class="bom-btn bom-btn-secondary">Varrer por ID</button>' +
+      '<textarea id="pasteArea" class="bom-paste" placeholder="Colar grade"></textarea>' +
+      '</details>' +
       '<span class="bom-build-tag" id="buildTag">' + BOM_BUILD + '</span>' +
+      '</aside>' +
+      '<main class="bom-main">' +
+      '<header class="bom-main-top">' +
+      '<div class="bom-main-title">' +
+      '<h1>Visão Geral E-BOM</h1>' +
+      '<p>Estrutura: <strong id="selectionLabel">-</strong></p>' +
       '</div>' +
       '</header>' +
-      '<div id="statusBar" class="bom-st">Carregando…</div>' +
-      '<div class="bom-dash-actions">' +
-      '<button type="button" id="btnScanExplorer" class="bom-btn bom-btn-primary bom-hidden">Varrer estrutura</button>' +
-      '<button type="button" id="btnImportPaste" class="bom-btn bom-btn-secondary">Importar Ctrl+C</button>' +
+      '<div class="bom-filter-bar">' +
+      '<label class="bom-filter-item"><span>Maturidade</span>' +
+      '<select id="filterMaturity"><option value="all">Todas</option>' +
+      '<option value="released">Bom (Aprovado)</option><option value="in_work">Moderado</option>' +
+      '<option value="obsolete">Ruim</option><option value="other">Outros</option></select></label>' +
+      '<label class="bom-filter-item"><span>Tipo</span><select id="filterType"><option value="all">Todos</option></select></label>' +
+      '<label class="bom-filter-item"><span>Aprovação</span>' +
+      '<select id="filterApproval"><option value="all">Todas</option>' +
+      '<option value="approved">Aprovado</option><option value="pending">Pendente</option></select></label>' +
+      '<label class="bom-filter-item bom-filter-grow"><span>Buscar</span>' +
+      '<input type="search" id="searchInput" placeholder="Nome, descrição, proprietário…" /></label>' +
+      '<button type="button" id="btnClearFilters" class="bom-btn bom-btn-filter-clear">Limpar Filtros</button>' +
       '</div>' +
-      '<p class="bom-hint">No Explorer: <b>Ctrl+A</b> na grade → <b>Ctrl+C</b> → <b>Importar Ctrl+C</b>. Funciona com qualquer projeto.</p>' +
-      '<div id="kpiGrid" class="bom-kpi-grid"></div>' +
-      '<div id="bomRulesPanel" class="bom-rules-wrap"></div>' +
-      '<div class="bom-charts bom-charts-grid">' +
-      '<div class="bom-chart"><canvas id="chartMaturity"></canvas></div>' +
-      '<div class="bom-chart"><canvas id="chartType"></canvas></div>' +
-      '<div class="bom-chart"><canvas id="chartRevision"></canvas></div>' +
-      '<div class="bom-chart"><canvas id="chartApproval"></canvas></div>' +
+      '<div id="statusBar" class="bom-st bom-st-inline">Carregando…</div>' +
+      '<section id="kpiGrid" class="stat-markers-row" aria-label="Estatísticas"></section>' +
+      '<section class="bom-charts-row">' +
+      '<div class="bom-chart-panel"><canvas id="chartMaturity"></canvas></div>' +
+      '<div class="bom-chart-panel"><canvas id="chartOwners"></canvas></div>' +
+      '<canvas id="chartType" class="bom-hidden"></canvas>' +
+      '<canvas id="chartRevision" class="bom-hidden"></canvas>' +
+      '<canvas id="chartApproval" class="bom-hidden"></canvas>' +
+      '</section>' +
+      '<section class="bom-ebom-block">' +
+      '<div class="bom-ebom-head">' +
+      '<h2>E-BOM monitorada — <span id="tableProductLabel">-</span></h2>' +
+      '<p id="ebomMeta" class="bom-ebom-meta">Importe a estrutura com Ctrl+C no Explorer.</p>' +
       '</div>' +
       '<div class="bom-table-wrap table-scroll">' +
-      '<div class="bom-table-head">E-BOM — <span id="tableProductLabel">-</span></div>' +
-      '<table id="bomTable" class="bom-table"><thead><tr></tr></thead><tbody></tbody></table></div>' +
-      '<details class="bom-advanced">' +
-      '<summary>Avançado (ID físico ou cola manual)</summary>' +
-      '<input type="text" id="explorerObjectId" placeholder="prd-R1132100929518-…" class="bom-input" />' +
-      '<button type="button" id="btnLoadPhysicalId" class="bom-btn bom-btn-secondary">Varrer por ID</button>' +
-      '<textarea id="pasteArea" class="bom-paste" placeholder="Ou cole aqui (Ctrl+V)"></textarea>' +
-      '</details>' +
-      '<div id="loadingOverlay" class="bom-loading bom-hidden">Varrendo…</div>' +
+      '<table id="bomTable" class="bom-table"><thead><tr></tr></thead><tbody></tbody></table>' +
+      '</div>' +
+      '<footer id="tablePager" class="bom-table-pager">0 peças</footer>' +
+      '</section>' +
+      '</main>' +
+      '<button type="button" id="btnScanExplorer" class="bom-hidden">Varrer</button>' +
+      '<div id="loadingOverlay" class="bom-loading bom-hidden">Processando…</div>' +
       '<div class="bom-hidden" id="hiddenFields">' +
       '<input type="text" id="explorerObjectName" />' +
-      '<input type="search" id="searchInput" />' +
-      '<select id="filterMaturity"><option value="all">all</option></select>' +
-      '<select id="filterType"><option value="all">all</option></select>' +
-      '<select id="filterApproval"><option value="all">all</option></select>' +
       '<select id="filterPP"><option value="all">all</option></select>' +
       '</div></div>';
 
@@ -102,9 +127,9 @@
       var el = uiRoot() && uiRoot().querySelector('#statusBar');
       if (!el) return;
       el.textContent = msg;
-      el.className = 'bom-st';
-      if (kind === 'ok') el.className = 'bom-st bom-st-ok';
-      if (kind === 'error') el.className = 'bom-st bom-st-err';
+      el.className = 'bom-st bom-st-inline';
+      if (kind === 'ok') el.className += ' bom-st-ok';
+      if (kind === 'error') el.className += ' bom-st-err';
     }
 
     function paint() {
@@ -112,7 +137,7 @@
       if (!b) return;
       b.innerHTML = UI_HTML;
       b.className = 'bom-widget-body';
-      b.style.minHeight = '480px';
+      b.style.minHeight = '520px';
       window.__3DX_UI_ROOT__ = b;
     }
 
@@ -138,10 +163,7 @@
         return;
       }
       var req = getRequire();
-      if (!req) {
-        next(null);
-        return;
-      }
+      if (!req) { next(null); return; }
       req(
         ['DS/WAFData/WAFData', 'DS/i3DXCompassServices/i3DXCompassServices', 'DS/PlatformAPI/PlatformAPI'],
         function (WAF, Compass, PAPI) {
@@ -158,7 +180,7 @@
       loadScript(GH + 'assets/vendor/chart.umd.min.js?v=' + BOM_BUILD, true, function () {
         loadScript(BUNDLE, false, function (err) {
           if (err) {
-            setBar('Erro ao carregar bundle. Verifique GitHub Pages.', 'error');
+            setBar('Erro ao carregar bundle.', 'error');
             return;
           }
           try {
@@ -167,13 +189,8 @@
               App.run();
               if (App.rebindScanButton) App.rebindScanButton();
               if (App.rebindImportButton) App.rebindImportButton();
-              window.__3DX_SCAN__ = function () {
-                var root = window.__3DX_UI_ROOT__ || document.body;
-                var btn = root.querySelector('#btnScanExplorer');
-                if (typeof App !== 'undefined' && App.runExplorerScan) App.runExplorerScan(btn);
-              };
             } else {
-              setBar('App não iniciou. Ver Console (F12).', 'error');
+              setBar('App não iniciou.', 'error');
             }
           } catch (ex) {
             setBar('Erro: ' + (ex.message || ex), 'error');
@@ -195,9 +212,7 @@
       paint();
       setBar('Carregando dashboard…', 'info');
       loadCss(function () {
-        loadWaf(function () {
-          startBundle();
-        });
+        loadWaf(function () { startBundle(); });
       });
     }
 

@@ -51,10 +51,18 @@ var DataTable = (function () {
         return String(v);
       }
     }
+    if (col.key === 'owner') {
+      var o = v;
+      if (typeof MetricsEngine !== 'undefined' && MetricsEngine.ownerLabel) {
+        o = MetricsEngine.ownerLabel(n.owner);
+      }
+      return escapeHtml(o || '');
+    }
     if (col.key === 'type') return shortType(v);
-    if (col.key === 'state' || col.key === 'maturity') {
-      var cls = AttributeService.classifyMaturity(v || n.state);
-      return '<span class="badge badge-' + cls + '">' + escapeHtml(v || '') + '</span>';
+    if (col.format === 'status' || col.key === 'state' || col.key === 'maturity') {
+      var matCls = AttributeService.classifyMaturity(v || n.state || n.maturity);
+      var status = maturityStatusBadge(matCls, v || n.state || n.maturity);
+      return '<span class="status-pill ' + status.cls + '">' + escapeHtml(status.text) + '</span>';
     }
     return escapeHtml(v == null ? '' : v);
   }
@@ -95,6 +103,14 @@ var DataTable = (function () {
       (spacerTop ? '<tr class="spacer" style="height:' + spacerTop + 'px"><td colspan="' + colCount + '"></td></tr>' : '') +
       rows +
       (spacerBottom ? '<tr class="spacer" style="height:' + spacerBottom + 'px"><td colspan="' + colCount + '"></td></tr>' : '');
+  }
+
+  function maturityStatusBadge(matCls, raw) {
+    if (matCls === 'released') return { text: 'Saudável', cls: 'status-ok' };
+    if (matCls === 'in_work') return { text: 'Atenção', cls: 'status-warn' };
+    if (matCls === 'obsolete') return { text: 'Crítico', cls: 'status-bad' };
+    var r = String(raw || '').trim();
+    return { text: r || 'Sem status', cls: 'status-neutral' };
   }
 
   function shortType(t) {
