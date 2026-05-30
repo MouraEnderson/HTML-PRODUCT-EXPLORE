@@ -1406,6 +1406,69 @@ body.ui-clean .main-clean {
   color: var(--bom-primary);
 }
 
+.cf-pie-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+  min-height: 180px;
+}
+
+.cf-pie {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.cf-pie-hole {
+  position: absolute;
+  inset: 28%;
+  border-radius: 50%;
+  background: var(--bom-card, #fff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--bom-primary);
+}
+
+.cf-pie-legend {
+  flex: 1;
+  min-width: 120px;
+}
+
+.cf-pie-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+}
+
+.cf-pie-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cf-pie-lbl {
+  flex: 1;
+  color: var(--bom-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cf-pie-val {
+  font-weight: 600;
+  color: var(--bom-text);
+}
+
 .cf-row, .cf-owner-row {
   display: grid;
   grid-template-columns: 72px 1fr 56px;

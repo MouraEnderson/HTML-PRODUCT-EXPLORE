@@ -5,8 +5,7 @@
 var MetricsEngine = (function () {
   'use strict';
 
-  function compute(index) {
-    var nodes = Object.keys(index).map(function (k) { return index[k]; });
+  function aggregateNodes(nodes) {
     var byMaturity = { released: 0, in_work: 0, obsolete: 0, other: 0 };
     var byType = {};
     var byRevision = {};
@@ -54,6 +53,10 @@ var MetricsEngine = (function () {
       byOwner[ownerKey] = (byOwner[ownerKey] || 0) + 1;
     });
 
+    return aggregateResult(nodes, byMaturity, byType, byRevision, byApproval, byOwner, assemblies, parts, totalQty, withPP, withoutPP, maxLevel);
+  }
+
+  function aggregateResult(nodes, byMaturity, byType, byRevision, byApproval, byOwner, assemblies, parts, totalQty, withPP, withoutPP, maxLevel) {
     return {
       totalItems: nodes.length,
       totalAssemblies: assemblies,
@@ -71,6 +74,16 @@ var MetricsEngine = (function () {
       inWork: byMaturity.in_work,
       obsolete: byMaturity.obsolete
     };
+  }
+
+  function compute(index) {
+    var nodes = Object.keys(index).map(function (k) { return index[k]; });
+    return aggregateNodes(nodes);
+  }
+
+  /** KPIs/gráficos sobre linhas filtradas (dinâmico com filtros). */
+  function computeFromFlat(flatNodes) {
+    return aggregateNodes(flatNodes || []);
   }
 
   function ownerLabel(raw) {
@@ -129,6 +142,7 @@ var MetricsEngine = (function () {
 
   return {
     compute: compute,
+    computeFromFlat: computeFromFlat,
     chartDatasets: chartDatasets,
     ownerLabel: ownerLabel
   };

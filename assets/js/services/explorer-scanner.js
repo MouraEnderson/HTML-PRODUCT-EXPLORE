@@ -539,7 +539,25 @@ var ExplorerScanner = (function () {
     return APP_CONFIG.ALLOW_PASTE_FALLBACK !== false;
   }
 
+  var lastPasteText = '';
+
+  function setPasteBuffer(text) {
+    lastPasteText = String(text || '').trim();
+  }
+
+  function getPasteBuffer() {
+    return lastPasteText;
+  }
+
+  function readFromPasteArea() {
+    var area = document.getElementById('pasteArea');
+    return area && area.value ? String(area.value).trim() : '';
+  }
+
   function readClipboardText() {
+    if (lastPasteText) return Promise.resolve(lastPasteText);
+    var areaText = readFromPasteArea();
+    if (areaText) return Promise.resolve(areaText);
     if (!navigator.clipboard || !navigator.clipboard.readText) {
       return Promise.resolve('');
     }
@@ -548,19 +566,22 @@ var ExplorerScanner = (function () {
     });
   }
 
+  function resolveImportText(clip) {
+    var text = String(clip || '').trim();
+    if (!text) text = lastPasteText;
+    if (!text) text = readFromPasteArea();
+    return text;
+  }
+
   function scanViaClipboardOrPaste() {
     if (!pasteImportEnabled()) {
       return Promise.reject(new Error('Importação por cola desativada.'));
     }
     return readClipboardText().then(function (clip) {
-      var text = String(clip || '').trim();
-      if (!text) {
-        var area = document.getElementById('pasteArea');
-        text = area && area.value ? String(area.value).trim() : '';
-      }
+      var text = resolveImportText(clip);
       if (!text) {
         throw new Error(
-          'No Explorer: selecione a grade (Ctrl+A) → Ctrl+C → clique Importar Ctrl+C ou cole na caixa abaixo.'
+          'Clipboard bloqueado no iframe. No Explorer: Ctrl+A → Ctrl+C → clique no widget e Ctrl+V → Importar Ctrl+C.'
         );
       }
       return scanViaText(text, 'Ctrl+C Explorer');
@@ -707,6 +728,8 @@ var ExplorerScanner = (function () {
     scanViaExplorerGrid: scanViaExplorerGrid,
     scanViaClipboardOrPaste: scanViaClipboardOrPaste,
     scanViaPilotGeneric: scanViaPilotGeneric,
+    setPasteBuffer: setPasteBuffer,
+    getPasteBuffer: getPasteBuffer,
     ensureSpaceApi: ensureSpaceApi,
     resolveSelection: resolveSelection,
     getSelection: getSelection,

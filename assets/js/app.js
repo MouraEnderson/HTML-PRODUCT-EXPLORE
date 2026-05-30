@@ -160,7 +160,7 @@ var App = (function () {
     Filters.populateTypeOptions(flat);
     var filtered = Filters.apply(flat);
 
-    currentMetrics = MetricsEngine.compute(index);
+    currentMetrics = MetricsEngine.computeFromFlat(filtered);
     currentAnomalies = AnomalyDetector.detect(index);
 
     KpiCards.render(currentMetrics, currentAnomalies);
@@ -713,7 +713,12 @@ var App = (function () {
       .catch(function (err) {
         setStatus('Importação: ' + (err.message || err), 'error');
         var area = byId('pasteArea');
-        if (area) area.focus();
+        var details = document.querySelector('.bom-sidebar-more');
+        if (details && !details.open) details.open = true;
+        if (area) {
+          area.focus();
+          area.placeholder = 'Cole aqui com Ctrl+V (Explorer → Ctrl+A → Ctrl+C) e clique Importar de novo';
+        }
       })
       .finally(function () {
         root.__3DX_BLOCK_API_LOAD__ = false;
@@ -731,6 +736,28 @@ var App = (function () {
     btn.addEventListener('click', function (ev) {
       if (ev && ev.preventDefault) ev.preventDefault();
       runImportFromClipboard(btn);
+    });
+  }
+
+  function bindPasteCapture() {
+    var host = root.__3DX_UI_ROOT__ || document.body;
+    if (!host || host.__3DX_PASTE_BOUND__) return;
+    host.__3DX_PASTE_BOUND__ = true;
+    host.addEventListener('paste', function (e) {
+      var text = e.clipboardData ? e.clipboardData.getData('text/plain') || '' : '';
+      if (!text || !String(text).trim()) return;
+      if (typeof ExplorerScanner !== 'undefined' && ExplorerScanner.setPasteBuffer) {
+        ExplorerScanner.setPasteBuffer(text);
+      }
+      var area = byId('pasteArea');
+      if (area) area.value = text;
+      setStatus('Dados colados — clique Importar Ctrl+C ou aguarde…', 'info');
+      window.clearTimeout(host.__3DX_PASTE_AUTO__);
+      host.__3DX_PASTE_AUTO__ = window.setTimeout(function () {
+        if (String(text).indexOf('\t') >= 0 || String(text).split(/\r?\n/).length >= 2) {
+          runImportFromClipboard(null);
+        }
+      }, 350);
     });
   }
 
@@ -761,6 +788,7 @@ var App = (function () {
 
     rebindScanButton();
     rebindImportButton();
+    bindPasteCapture();
 
     var btnClear = byId('btnClearFilters');
     if (btnClear && !btnClear.__3DX_CLEAR_BOUND__) {

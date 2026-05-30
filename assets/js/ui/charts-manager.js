@@ -1,11 +1,15 @@
 /**
  * @file ui/charts-manager.js
- * Gráficos Chart.js com fallback HTML (sempre visível no 3DDashboard).
+ * Gráficos de pizza (Chart.js ou fallback CSS) — sempre visíveis no 3DDashboard.
  */
 var ChartsManager = (function () {
   'use strict';
 
   var charts = {};
+  var OWNER_COLORS = [
+    '#1565c0', '#2e7d32', '#ef6c00', '#6a1b9a', '#00838f',
+    '#c62828', '#4527a0', '#558b2f', '#ad1457', '#0277bd', '#4e342e', '#37474f'
+  ];
 
   function init() {}
 
@@ -59,44 +63,68 @@ var ChartsManager = (function () {
     if (fb) fb.style.display = 'none';
   }
 
-  function fallbackMaturityHtml(labels, values, colors) {
-    var total = values.reduce(function (a, b) { return a + b; }, 0) || 1;
-    var bars = '';
+  function filterSlices(labels, values, colors) {
+    var outL = [];
+    var outV = [];
+    var outC = [];
     labels.forEach(function (lbl, i) {
       var v = values[i] || 0;
-      var pct = Math.round((v / total) * 1000) / 10;
-      var c = colors[i] || '#90a4ae';
-      bars +=
-        '<div class="cf-row">' +
-        '<span class="cf-lbl">' + lbl + '</span>' +
-        '<div class="cf-track"><div class="cf-fill" style="width:' + pct + '%;background:' + c + '"></div></div>' +
-        '<span class="cf-val">' + v + ' (' + pct + '%)</span></div>';
+      if (v > 0 && lbl) {
+        outL.push(lbl);
+        outV.push(v);
+        outC.push((colors && colors[i]) || OWNER_COLORS[outC.length % OWNER_COLORS.length]);
+      }
     });
-    return '<div class="cf-bars">' + bars + '</div>';
+    return { labels: outL, values: outV, colors: outC };
   }
 
-  function fallbackOwnersHtml(labels, values) {
-    var max = Math.max.apply(null, values.concat([1]));
-    var rows = '';
-    labels.forEach(function (lbl, i) {
-      var v = values[i] || 0;
-      var pct = Math.round((v / max) * 100);
-      rows +=
-        '<div class="cf-owner-row">' +
-        '<span class="cf-owner-name">' + lbl + '</span>' +
-        '<div class="cf-track"><div class="cf-fill cf-fill-blue" style="width:' + pct + '%"></div></div>' +
-        '<span class="cf-val">' + v + '</span></div>';
-    });
-    return '<div class="cf-owners">' + rows + '</div>';
+  function emptySlice() {
+    return { labels: ['Sem dados'], values: [1], colors: ['#cfd8dc'] };
   }
 
-  function doughnut(canvasId, labels, values, title, colors) {
+  function fallbackPieHtml(labels, values, colors) {
+    var slices = filterSlices(labels, values, colors);
+    if (!slices.labels.length) slices = emptySlice();
+
+    var total = slices.values.reduce(function (a, b) { return a + b; }, 0) || 1;
+    var gradientParts = [];
+    var acc = 0;
+    var legend = '';
+
+    slices.labels.forEach(function (lbl, i) {
+      var v = slices.values[i];
+      var pct = (v / total) * 100;
+      var end = acc + pct;
+      gradientParts.push(slices.colors[i] + ' ' + acc.toFixed(2) + '% ' + end.toFixed(2) + '%');
+      acc = end;
+      var pctLabel = Math.round(pct * 10) / 10;
+      legend +=
+        '<div class="cf-pie-item">' +
+        '<span class="cf-pie-dot" style="background:' + slices.colors[i] + '"></span>' +
+        '<span class="cf-pie-lbl">' + lbl + '</span>' +
+        '<span class="cf-pie-val">' + v + ' (' + pctLabel + '%)</span></div>';
+    });
+
+    return (
+      '<div class="cf-pie-wrap">' +
+      '<div class="cf-pie" style="background:conic-gradient(' + gradientParts.join(', ') + ')">' +
+      '<div class="cf-pie-hole">' + total + '</div></div>' +
+      '<div class="cf-pie-legend">' + legend + '</div></div>'
+    );
+  }
+
+  function pieChart(canvasId, labels, values, title, colors) {
     var ctx = document.getElementById(canvasId);
     if (!ctx) return false;
+
+    var slices = filterSlices(labels, values, colors);
+    if (!slices.labels.length) slices = emptySlice();
+
     if (typeof Chart === 'undefined') {
-      showFallback(canvasId, title, fallbackMaturityHtml(labels, values, colors));
+      showFallback(canvasId, title, fallbackPieHtml(slices.labels, slices.values, slices.colors));
       return false;
     }
+
     showCanvas(canvasId);
     if (charts[canvasId]) charts[canvasId].destroy();
     var th = themeColors();
@@ -104,64 +132,40 @@ var ChartsManager = (function () {
       charts[canvasId] = new Chart(ctx, {
         type: 'doughnut',
         data: {
-          labels: labels,
-          datasets: [{ data: values, backgroundColor: colors, borderWidth: 0 }]
+          labels: slices.labels,
+          datasets: [{ data: slices.values, backgroundColor: slices.colors, borderWidth: 0 }]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          cutout: '55%',
-          animation: { duration: 400 },
+          cutout: '52%',
+          animation: { duration: 450, animateRotate: true, animateScale: true },
           plugins: {
             title: { display: true, text: title, color: th.title, font: { size: 15, weight: '600' } },
-            legend: { position: 'bottom', labels: { color: th.legend, font: { size: 11 }, boxWidth: 12 } }
+            legend: { position: 'bottom', labels: { color: th.legend, font: { size: 11 }, boxWidth: 12, padding: 10 } },
+            tooltip: {
+              callbacks: {
+                label: function (ctx) {
+                  var sum = ctx.dataset.data.reduce(function (a, b) { return a + b; }, 0) || 1;
+                  var pct = Math.round((ctx.raw / sum) * 1000) / 10;
+                  return ctx.label + ': ' + ctx.raw + ' (' + pct + '%)';
+                }
+              }
+            }
           }
         }
       });
       return true;
     } catch (e) {
-      showFallback(canvasId, title, fallbackMaturityHtml(labels, values, colors));
+      showFallback(canvasId, title, fallbackPieHtml(slices.labels, slices.values, slices.colors));
       return false;
     }
   }
 
-  function horizontalBar(canvasId, labels, values, title) {
-    var ctx = document.getElementById(canvasId);
-    if (!ctx) return false;
-    if (typeof Chart === 'undefined') {
-      showFallback(canvasId, title, fallbackOwnersHtml(labels, values));
-      return false;
-    }
-    showCanvas(canvasId);
-    if (charts[canvasId]) charts[canvasId].destroy();
-    var th = themeColors();
-    try {
-      charts[canvasId] = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: labels,
-          datasets: [{ data: values, backgroundColor: '#1565c0', borderRadius: 4 }]
-        },
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          animation: { duration: 400 },
-          plugins: {
-            title: { display: true, text: title, color: th.title, font: { size: 15, weight: '600' } },
-            legend: { display: false }
-          },
-          scales: {
-            x: { beginAtZero: true, ticks: { color: th.text, font: { size: 11 } }, grid: { color: th.grid } },
-            y: { ticks: { color: th.text, font: { size: 10 } }, grid: { display: false } }
-          }
-        }
-      });
-      return true;
-    } catch (e) {
-      showFallback(canvasId, title, fallbackOwnersHtml(labels, values));
-      return false;
-    }
+  function ownerColors(count) {
+    var list = [];
+    for (var i = 0; i < count; i++) list.push(OWNER_COLORS[i % OWNER_COLORS.length]);
+    return list;
   }
 
   function scheduleResize() {
@@ -187,20 +191,24 @@ var ChartsManager = (function () {
       metrics.obsolete || 0,
       (metrics.byMaturity && metrics.byMaturity.other) || 0
     ];
-    var total = matValues.reduce(function (a, b) { return a + b; }, 0);
-    if (total < 1) {
-      matValues = [0, 0, 0, 1];
-      matLabels = ['Sem dados', '', '', ''];
-    }
 
     var ds = MetricsEngine.chartDatasets(metrics);
-    var owners = ds.owners || { labels: ['Sem proprietário'], values: [total || 0] };
+    var owners = ds.owners || { labels: [], values: [] };
     if (!owners.labels.length) {
-      owners = { labels: ['Sem proprietário'], values: [total || 0] };
+      owners = { labels: ['Sem proprietário'], values: [metrics.totalItems || 0] };
+    }
+    if (!owners.values.some(function (v) { return v > 0; })) {
+      owners = { labels: ['Sem proprietário'], values: [metrics.totalItems || 1] };
     }
 
-    doughnut('chartMaturity', matLabels, matValues, 'Saúde da Maturidade', healthColors);
-    horizontalBar('chartOwners', owners.labels, owners.values, 'Lista de Proprietários');
+    pieChart('chartMaturity', matLabels, matValues, 'Saúde da Maturidade', healthColors);
+    pieChart(
+      'chartOwners',
+      owners.labels,
+      owners.values,
+      'Proprietários',
+      ownerColors(owners.labels.length)
+    );
     scheduleResize();
   }
 
