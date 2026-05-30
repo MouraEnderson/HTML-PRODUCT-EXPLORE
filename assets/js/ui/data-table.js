@@ -8,7 +8,7 @@ var DataTable = (function () {
   var tbody;
   var thead;
   var rowHeight = 36;
-  var visibleRows = 25;
+  var visibleRows = 40;
   var data = [];
   var scrollContainer;
   var columns = [];
@@ -24,7 +24,7 @@ var DataTable = (function () {
     columns = getColumns();
     var table = (typeof qs3dx === 'function' ? qs3dx(tableSelector) : document.querySelector(tableSelector));
     if (!table) return;
-    scrollContainer = table.closest('.table-scroll');
+    scrollContainer = table.closest('.bom-table-wrap') || table.closest('.table-scroll');
     tbody = table.querySelector('tbody');
     thead = table.querySelector('thead tr');
     renderHeader();

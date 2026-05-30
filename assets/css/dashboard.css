@@ -1381,8 +1381,70 @@ body.ui-clean .main-clean {
   border-radius: 10px;
   height: 260px;
   min-height: 260px;
-  padding: 8px;
+  padding: 8px 12px;
   position: relative;
+  overflow: hidden;
+}
+
+.bom-layout-ref .bom-chart-panel canvas {
+  display: block;
+  width: 100% !important;
+  height: 220px !important;
+  max-height: none !important;
+}
+
+.chart-fallback {
+  height: 100%;
+  overflow: auto;
+  padding: 4px 0;
+}
+
+.chart-fallback-title {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--bom-primary);
+}
+
+.cf-row, .cf-owner-row {
+  display: grid;
+  grid-template-columns: 72px 1fr 56px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+}
+
+.cf-owner-row {
+  grid-template-columns: 100px 1fr 36px;
+}
+
+.cf-lbl, .cf-owner-name {
+  color: var(--bom-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cf-track {
+  height: 14px;
+  background: var(--bom-bg);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.cf-fill {
+  height: 100%;
+  border-radius: 7px;
+  min-width: 2px;
+}
+
+.cf-fill-blue { background: #1565c0; }
+
+.cf-val {
+  text-align: right;
+  font-weight: 600;
+  color: var(--bom-text);
 }
 
 .bom-ebom-block {

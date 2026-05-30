@@ -164,6 +164,11 @@ var App = (function () {
     if (APP_CONFIG.SHOW_CHARTS !== false) {
       ChartsManager.destroyAll();
       ChartsManager.render(currentMetrics);
+      if (ChartsManager.scheduleResize) {
+        window.setTimeout(function () {
+          ChartsManager.render(currentMetrics);
+        }, 300);
+      }
     }
     if (APP_CONFIG.SHOW_TREE !== false && byId('bomTree') && typeof BomTree !== 'undefined') {
       BomTree.refresh(index, rootId);

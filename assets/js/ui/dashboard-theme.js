@@ -1,6 +1,6 @@
 /**
  * @file ui/dashboard-theme.js
- * Tema de fundo do dashboard: branco ou cinza (persistido em localStorage).
+ * Alterna fundo branco / cinza com um único botão (mesmo estilo Visão Geral).
  */
 var DashboardTheme = (function () {
   'use strict';
@@ -15,7 +15,6 @@ var DashboardTheme = (function () {
   function getTheme() {
     var r = rootEl();
     if (r && r.classList.contains('bom-theme-white')) return 'white';
-    if (r && r.classList.contains('bom-theme-gray')) return 'gray';
     try {
       var s = localStorage.getItem(STORAGE_KEY);
       if (s === 'white' || s === 'gray') return s;
@@ -26,19 +25,9 @@ var DashboardTheme = (function () {
   function getChartColors() {
     var t = getTheme();
     if (t === 'white') {
-      return {
-        text: '#37474f',
-        title: '#263238',
-        grid: '#e0e0e0',
-        legend: '#546e7a'
-      };
+      return { text: '#37474f', title: '#263238', grid: '#e0e0e0', legend: '#546e7a' };
     }
-    return {
-      text: '#455a64',
-      title: '#263238',
-      grid: '#cfd8dc',
-      legend: '#607d8b'
-    };
+    return { text: '#455a64', title: '#263238', grid: '#cfd8dc', legend: '#607d8b' };
   }
 
   function apply(theme) {
@@ -51,15 +40,19 @@ var DashboardTheme = (function () {
       localStorage.setItem(STORAGE_KEY, theme);
     } catch (e) { /* */ }
     window.__BOM_CHART_THEME__ = getChartColors();
-    updateToggleButtons(theme);
+    updateToggleButton(theme);
     if (typeof onChange === 'function') onChange(theme);
   }
 
-  function updateToggleButtons(theme) {
-    var w = document.getElementById('btnThemeWhite');
-    var g = document.getElementById('btnThemeGray');
-    if (w) w.classList.toggle('bom-theme-active', theme === 'white');
-    if (g) g.classList.toggle('bom-theme-active', theme === 'gray');
+  function toggle() {
+    apply(getTheme() === 'white' ? 'gray' : 'white');
+  }
+
+  function updateToggleButton(theme) {
+    var btn = document.getElementById('btnThemeToggle');
+    if (!btn) return;
+    btn.textContent = theme === 'white' ? 'Fundo: Branco' : 'Fundo: Cinza';
+    btn.setAttribute('title', 'Clique para alternar branco / cinza');
   }
 
   function init(options) {
@@ -72,21 +65,19 @@ var DashboardTheme = (function () {
     if (saved !== 'white') saved = 'gray';
     apply(saved);
 
-    var btnW = document.getElementById('btnThemeWhite');
-    var btnG = document.getElementById('btnThemeGray');
-    if (btnW && !btnW.__3DX_THEME_BOUND__) {
-      btnW.__3DX_THEME_BOUND__ = true;
-      btnW.addEventListener('click', function () { apply('white'); });
-    }
-    if (btnG && !btnG.__3DX_THEME_BOUND__) {
-      btnG.__3DX_THEME_BOUND__ = true;
-      btnG.addEventListener('click', function () { apply('gray'); });
+    var btn = document.getElementById('btnThemeToggle');
+    if (btn && !btn.__3DX_THEME_BOUND__) {
+      btn.__3DX_THEME_BOUND__ = true;
+      btn.addEventListener('click', function () {
+        toggle();
+      });
     }
   }
 
   return {
     init: init,
     apply: apply,
+    toggle: toggle,
     getTheme: getTheme,
     getChartColors: getChartColors
   };
