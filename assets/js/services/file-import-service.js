@@ -147,6 +147,21 @@ var FileImportService = (function () {
   function parseExplorerGridLine(line) {
     var raw = cleanCell(line);
     if (!raw) return null;
+    if (raw.indexOf('\t') >= 0) {
+      var cells = splitLine(raw);
+      if (cells.length >= 2) {
+        var colMap = { name: 0, title: 1, type: 2, revision: 3, state: 4 };
+        if (/^\d+$/.test(String(cells[0]).trim())) {
+          colMap = { level: 0, name: 1, title: 2, type: 3, revision: 4, state: 5 };
+        } else if (cells.length >= 5) {
+          colMap = { name: 0, revision: 1, type: 2, owner: 3, state: 4 };
+        }
+        try {
+          var built = buildItemsFromRows([cells], colMap, true);
+          if (built && built[0]) return built[0];
+        } catch (e2) { /* legacy */ }
+      }
+    }
     var nameM = raw.match(/^(Mont\d*|M\d+)\b/i);
     if (!nameM) return null;
     var name = nameM[1];
@@ -286,41 +301,47 @@ var FileImportService = (function () {
     var names = items.map(function (it) {
       return cleanCell(it.name || it.title || '').toLowerCase();
     }).filter(Boolean);
-    var hasProduct = names.some(function (n) {
-      return /^mont\d*$/i.test(n) || /^m\d+$/i.test(n) || n.indexOf('assembly') >= 0;
+    var hasStructure = items.some(function (it) {
+      return !!(it.revision || it.type || it.state || it.maturity);
     });
-    var onlyOwner = names.every(function (n) {
+    var hasProduct = names.some(function (n) {
+      if (n.length < 2) return false;
+      if (n.indexOf('enderson') >= 0 && n.indexOf('moura') >= 0) return false;
+      return true;
+    });
+    var onlyOwner = names.length > 0 && names.every(function (n) {
       return n.indexOf('enderson') >= 0 || n.indexOf('moura') >= 0 || n.indexOf('propriet') >= 0;
     });
-    if (!hasProduct && (onlyOwner || names.length <= 2)) {
+    if (!hasStructure && !hasProduct && (onlyOwner || names.length <= 2)) {
       throw new Error(
-        'Parece coluna Proprietário (Enderson Moura), não a estrutura. Ctrl+A na grade inteira → Ctrl+C → cole na caixa azul.'
+        'Parece coluna Proprietário, não a estrutura. No Explorer: Ctrl+A na grade → Ctrl+C → Importar.'
       );
     }
   }
 
   function parseTextFromGridLines(text) {
     var lines = String(text || '').split(/\r?\n/).filter(function (l) { return l.trim(); });
+    if (lines.length < 2) return null;
+    try {
+      var rows = lines.map(splitLine);
+      if (rows.length >= 2) {
+        var parsed = smartParseRows(rows);
+        if (parsed && parsed.length >= 2) {
+          validateImportedItems(parsed);
+          return inferAssemblyLevels(parsed);
+        }
+      }
+    } catch (e) { /* tenta linha a linha */ }
     var items = [];
     var start = 0;
     if (lines.length && looksLikeHeader([splitLine(lines[0])])) start = 1;
     for (var i = start; i < lines.length; i++) {
-      if (lines[i].indexOf('"icon"') >= 0 || lines[i].indexOf('getpicture') >= 0) {
-        if (!/mont|^m\d+/i.test(lines[i])) continue;
-      }
       var row = parseExplorerGridLine(lines[i]);
       if (row) items.push(row);
     }
     if (items.length >= 2) {
-      var hasMont = items.some(function (it) { return /^mont/i.test(it.name); });
-      if (hasMont) {
-        items.forEach(function (it, idx) {
-          if (!/^mont/i.test(it.name)) it.level = 1;
-          else it.level = 0;
-        });
-        validateImportedItems(items);
-        return items;
-      }
+      validateImportedItems(items);
+      return inferAssemblyLevels(items);
     }
     return null;
   }

@@ -6,40 +6,15 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <title>BOM Analytics</title>
   <style type="text/css">
-    html, body { margin: 0; padding: 0; min-height: 100%; background: #f0f6fa; font-family: "Segoe UI", sans-serif; }
-    .bom-ver { margin: 0; padding: 10px 12px; background: #0d47a1; color: #fff; font-size: 13px; font-weight: bold; }
-    .bom-h1 { margin: 0; padding: 10px 14px; background: #fff; font-size: 16px; color: #005686; }
-    .bom-st { padding: 10px 14px; font-size: 13px; background: #e3f2fd; color: #0d47a1; }
-    .bom-st-ok { background: #c8e6c9; color: #1b5e20; }
-    .bom-st-err { background: #ffebee; color: #b71c1c; }
-    .bom-panel { margin: 10px 14px; padding: 12px; background: #fff; border-radius: 8px; }
-    .bom-btn { display: block; width: 100%; padding: 14px; background: #2e7d32; color: #fff; border: 0; font-size: 16px; font-weight: bold; cursor: pointer; }
-    .bom-btn:disabled { background: #757575; }
-    .bom-hint { margin: 0 0 10px; font-size: 13px; color: #1565c0; }
-    .bom-fallback { margin-top: 12px; font-size: 12px; color: #666; }
-    .bom-fallback textarea { width: 100%; height: 48px; margin-top: 6px; font-size: 11px; }
-    #kpiGrid { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 14px !important; }
-    .kpi-card { flex: 1 1 22%; min-width: 72px; background: #fff; border-left: 4px solid #005686; border-radius: 6px; padding: 8px 6px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-    .kpi-value { display: block; font-size: 20px; font-weight: 700; color: #0d47a1; }
-    .kpi-label { display: block; font-size: 10px; color: #546e7a; line-height: 1.2; margin-top: 2px; }
-    .kpi-card.kpi-success { border-left-color: #2e7d32; }
-    .kpi-card.kpi-warning { border-left-color: #ed6c02; }
-    .kpi-card.kpi-danger { border-left-color: #c62828; }
-    .bom-charts { padding: 6px 10px; display: flex; flex-wrap: wrap; }
-    .bom-chart { display: inline-block; width: 48%; height: 130px; min-height: 130px; margin: 1%; background: #fff; border: 1px solid #dde3ea; position: relative; }
-    .bom-chart canvas { width: 100% !important; height: 110px !important; }
-    .bom-table-wrap { margin: 8px 14px; background: #fff; border: 1px solid #dde3ea; max-height: 180px; overflow: auto; display: block; }
-    .bom-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .bom-table th, .bom-table td { border: 1px solid #e0e0e0; padding: 4px 6px; }
-    .bom-hidden { display: none; }
+    html, body { margin: 0; padding: 0; min-height: 100%; font-family: "Segoe UI", sans-serif; }
+    .bom-hidden { display: none !important; }
   </style>
   <script type="text/javascript">
   //<![CDATA[
     window.__3DX_TRUSTED_WIDGET__ = true;
     window.__3DX_BOOT_DEFER__ = true;
-    window.__3DX_DEFAULT_SNAPSHOT__ = 'data/mont10.json';
 
-    var BOM_BUILD = 'bom20260602m';
+    var BOM_BUILD = 'bom20260602n';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
     var BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js';
 
@@ -69,28 +44,37 @@
     })();
 
     var UI_HTML =
-      '<div class="bom-root">' +
-      '<p class="bom-ver">BOM Analytics — Sprint 1 API — build ' + BOM_BUILD + '</p>' +
-      '<div class="bom-h1">Estrutura: <strong id="selectionLabel">-</strong></div>' +
-      '<div id="statusBar" class="bom-st">Carregando…</div>' +
-      '<div class="bom-panel">' +
-      '<p class="bom-hint">Analisa a <b>estrutura aberta</b> no Explorer (2 a 10000 itens). Atualiza ao trocar assembly.</p>' +
-      '<button type="button" id="btnScanExplorer" class="bom-btn">Varrer estrutura Explorer</button>' +
-      '<details class="bom-fallback"><summary>Modo avançado (ID físico ou cola — não usar cola em produção)</summary>' +
-      '<p style="margin:6px 0;font-size:12px;">Explorer → raiz Mont10 → Propriedades → <b>ID físico</b> (32 caracteres):</p>' +
-      '<input type="text" id="explorerObjectId" placeholder="prd-R1132100929518-00511496" style="width:100%;padding:8px;font-size:12px;box-sizing:border-box;" />' +
-      '<button type="button" id="btnLoadPhysicalId" class="bom-btn" style="margin-top:8px;background:#1565c0;">Varrer por ID físico</button>' +
-      '<textarea id="pasteArea" placeholder="Cola da grade (só teste)"></textarea></details>' +
+      '<div class="bom-root bom-dashboard bom-dark ui-clean">' +
+      '<header class="bom-dash-header">' +
+      '<div class="bom-dash-title">' +
+      '<h1>BOM Analytics</h1>' +
+      '<p class="bom-dash-sub">Estrutura: <strong id="selectionLabel">-</strong></p>' +
       '</div>' +
-      '<div id="kpiGrid" style="padding:8px 14px;"></div>' +
-      '<div class="bom-charts">' +
-      '<div class="bom-chart"><canvas id="chartMaturity"></canvas></div>' +
-      '<div class="bom-chart"><canvas id="chartType"></canvas></div>' +
-      '<div class="bom-chart"><canvas id="chartRevision"></canvas></div>' +
-      '<div class="bom-chart"><canvas id="chartApproval"></canvas></div></div>' +
-      '<div class="bom-table-wrap"><div style="padding:8px;font-weight:bold;">E-BOM — <span id="tableProductLabel">-</span></div>' +
+      '<span class="bom-build-tag" id="buildTag">' + BOM_BUILD + '</span>' +
+      '</header>' +
+      '<div id="statusBar" class="bom-st">Carregando…</div>' +
+      '<div class="bom-dash-actions">' +
+      '<button type="button" id="btnScanExplorer" class="bom-btn bom-btn-primary">Varrer estrutura</button>' +
+      '<button type="button" id="btnImportPaste" class="bom-btn bom-btn-secondary">Importar Ctrl+C</button>' +
+      '</div>' +
+      '<p class="bom-hint">Qualquer projeto: no Explorer, <b>Ctrl+A</b> na grade → <b>Ctrl+C</b> → <b>Importar Ctrl+C</b> ou <b>Varrer</b>.</p>' +
+      '<div id="kpiGrid" class="bom-kpi-grid"></div>' +
+      '<div class="bom-charts bom-charts-single">' +
+      '<div class="bom-chart bom-chart-main"><canvas id="chartMaturity"></canvas></div>' +
+      '<div class="bom-chart bom-hidden"><canvas id="chartType"></canvas></div>' +
+      '<div class="bom-chart bom-hidden"><canvas id="chartRevision"></canvas></div>' +
+      '<div class="bom-chart bom-hidden"><canvas id="chartApproval"></canvas></div>' +
+      '</div>' +
+      '<div class="bom-table-wrap table-scroll">' +
+      '<div class="bom-table-head">E-BOM — <span id="tableProductLabel">-</span></div>' +
       '<table id="bomTable" class="bom-table"><thead><tr></tr></thead><tbody></tbody></table></div>' +
-      '<div id="loadingOverlay" class="bom-hidden">Varrendo…</div>' +
+      '<details class="bom-advanced">' +
+      '<summary>Avançado (ID físico ou cola manual)</summary>' +
+      '<input type="text" id="explorerObjectId" placeholder="prd-R1132100929518-…" class="bom-input" />' +
+      '<button type="button" id="btnLoadPhysicalId" class="bom-btn bom-btn-secondary">Varrer por ID</button>' +
+      '<textarea id="pasteArea" class="bom-paste" placeholder="Ou cole aqui (Ctrl+V)"></textarea>' +
+      '</details>' +
+      '<div id="loadingOverlay" class="bom-loading bom-hidden">Varrendo…</div>' +
       '<div class="bom-hidden" id="hiddenFields">' +
       '<input type="text" id="explorerObjectName" />' +
       '<input type="search" id="searchInput" />' +
@@ -122,7 +106,8 @@
       var b = mountTarget();
       if (!b) return;
       b.innerHTML = UI_HTML;
-      b.style.minHeight = '420px';
+      b.className = 'bom-widget-body';
+      b.style.minHeight = '480px';
       window.__3DX_UI_ROOT__ = b;
     }
 
@@ -176,6 +161,7 @@
             if (typeof App !== 'undefined' && App.run) {
               App.run();
               if (App.rebindScanButton) App.rebindScanButton();
+              if (App.rebindImportButton) App.rebindImportButton();
               window.__3DX_SCAN__ = function () {
                 var root = window.__3DX_UI_ROOT__ || document.body;
                 var btn = root.querySelector('#btnScanExplorer');
@@ -202,7 +188,7 @@
 
     function executeInit() {
       paint();
-      setBar('Carregando Mont10…', 'info');
+      setBar('Carregando dashboard…', 'info');
       loadCss(function () {
         loadWaf(function () {
           startBundle();

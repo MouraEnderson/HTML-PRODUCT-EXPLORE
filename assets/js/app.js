@@ -292,7 +292,9 @@ var App = (function () {
     }
     var gridFirst = APP_CONFIG.PILOT_GRID_FIRST && APP_CONFIG.CAN_USE_ENOVIA_API;
     setStatus(
-      gridFirst ? 'Lendo árvore visível no Explorer…' : 'Conectando API (ifwe)…',
+      gridFirst
+        ? 'Lendo Explorer ou Ctrl+C (qualquer projeto)…'
+        : 'Conectando API (ifwe)…',
       'info'
     );
     var scanChain = ExplorerScanner.scan();
@@ -310,7 +312,14 @@ var App = (function () {
       .then(function (res) {
         APP_CONFIG.DEMO_MODE = false;
         APP_CONFIG.IMPORT_MODE = res.mode !== 'api';
-        if (res.mode === 'explorer-grid' || res.mode === 'explorer-grid-pilot') {
+        if (
+          res.mode === 'explorer-grid' ||
+          res.mode === 'explorer-grid-pilot' ||
+          res.mode === 'text' ||
+          res.mode === 'cola' ||
+          res.mode === 'builtin-last' ||
+          res.mode === 'snapshot-file'
+        ) {
           APP_CONFIG.IMPORT_MODE = true;
         }
         if (res.meta) {
@@ -643,6 +652,53 @@ var App = (function () {
     });
   }
 
+  function runImportFromClipboard(btnEl) {
+    if (typeof ExplorerScanner === 'undefined' || !ExplorerScanner.scanViaClipboardOrPaste) {
+      setStatus('Importação indisponível.', 'error');
+      return;
+    }
+    setStatus('Lendo Ctrl+C do Explorer…', 'info');
+    root.__3DX_BLOCK_API_LOAD__ = true;
+    if (btnEl) {
+      btnEl.disabled = true;
+      btnEl.textContent = 'Importando…';
+    }
+    ExplorerScanner.scanViaClipboardOrPaste()
+      .then(function (res) {
+        APP_CONFIG.IMPORT_MODE = true;
+        APP_CONFIG.DEMO_MODE = false;
+        if (res.meta) {
+          lastLoadedId = res.meta.rootPhysicalId;
+          var lbl = byId('selectionLabel');
+          if (lbl) lbl.textContent = res.meta.productName || lbl.textContent;
+        }
+        refreshUI();
+        setStatus(res.message || 'Importação concluída.', 'ok');
+      })
+      .catch(function (err) {
+        setStatus('Importação: ' + (err.message || err), 'error');
+        var area = byId('pasteArea');
+        if (area) area.focus();
+      })
+      .finally(function () {
+        root.__3DX_BLOCK_API_LOAD__ = false;
+        if (btnEl) {
+          btnEl.disabled = false;
+          btnEl.textContent = 'Importar Ctrl+C';
+        }
+      });
+  }
+
+  function rebindImportButton() {
+    var btn = byId('btnImportPaste');
+    if (!btn || btn.__3DX_IMPORT_BOUND__) return;
+    btn.__3DX_IMPORT_BOUND__ = true;
+    btn.addEventListener('click', function (ev) {
+      if (ev && ev.preventDefault) ev.preventDefault();
+      runImportFromClipboard(btn);
+    });
+  }
+
   function initUI() {
     applyUrlParamsToUI();
     KpiCards.init('#kpiGrid');
@@ -668,6 +724,7 @@ var App = (function () {
     );
 
     rebindScanButton();
+    rebindImportButton();
 
     var btnLoadId = byId('btnLoadPhysicalId');
     if (btnLoadId) {
@@ -1292,7 +1349,9 @@ var App = (function () {
     start: start,
     runFallback: runFallback,
     runExplorerScan: runExplorerScan,
+    runImportFromClipboard: runImportFromClipboard,
     rebindScanButton: rebindScanButton,
+    rebindImportButton: rebindImportButton,
     reloadFromExplorer: reloadFromExplorer,
     loadBom: loadBom,
     loadSnapshotFromUrl: loadSnapshotFromUrl,

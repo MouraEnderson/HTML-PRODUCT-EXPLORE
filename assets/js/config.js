@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260602m',
+    BUILD: 'bom20260602n',
     /** 3DDashboard: não espera probe CSRF (evita travar em "Conectando…") */
     SKIP_SPACE_PROBE: true,
     WAF_REQUEST_TIMEOUT_MS: 15000,
@@ -35,7 +35,10 @@
     WAIT_FOR_USER_SCAN: true,
     /** Piloto: grade Explorer primeiro; API só com ?api=1 ou após falha da grade */
     USE_API_SCAN_FIRST: false,
-    ALLOW_PASTE_FALLBACK: false,
+    /** 3DDashboard: Ctrl+C / área de cola como fonte principal (qualquer projeto) */
+    ALLOW_PASTE_FALLBACK: true,
+    /** Snapshot Mont10/Drone só se grade e cola falharem */
+    PILOT_BUILTIN_LAST: true,
     SCAN_TIMEOUT_MS: 90000,
     AUTO_SCAN_ON_SELECTION: false,
     CAN_USE_ENOVIA_API: false,
@@ -93,6 +96,16 @@
      * Colunas alinhadas ao Product Explorer (ajuste conforme tenant).
      * key = campo no modelo interno; label = cabeçalho na tabela.
      */
+    /** Tabela compacta no modo UI_CLEAN */
+    PILOT_TABLE_COLUMNS: [
+      { key: 'level', label: 'Nível', width: 48 },
+      { key: 'name', label: 'Nome' },
+      { key: 'title', label: 'Título' },
+      { key: 'revision', label: 'Revisão' },
+      { key: 'state', label: 'Estado' },
+      { key: 'maturity', label: 'Maturidade' }
+    ],
+
     PRODUCT_EXPLORER_COLUMNS: [
       { key: 'level', label: 'Nível', width: 48 },
       { key: 'name', label: 'Nome' },
@@ -134,8 +147,11 @@
     /** Mapeamento estados de maturidade (customize tenant) */
     MATURITY_STATES: {
       RELEASED: ['RELEASED', 'FROZEN', 'Released', 'Frozen', 'Aprovado', 'APROVADO', 'Approved'],
-      IN_WORK: ['IN_WORK', 'PRIVATE', 'In Work', 'Work'],
-      OBSOLETE: ['OBSOLETE', 'Obsolete', 'ABANDONED']
+      IN_WORK: [
+        'IN_WORK', 'PRIVATE', 'In Work', 'Work', 'Em Trabalho', 'Em trabalho',
+        'Em Desenvolvimento', 'IN WORK', 'WIP', 'Em progresso'
+      ],
+      OBSOLETE: ['OBSOLETE', 'Obsolete', 'ABANDONED', 'Obsoleto', 'OBSOLETO']
     },
 
     /** Tipos considerados assembly */
@@ -188,7 +204,8 @@
       warning: '#ed6c02',
       danger: '#c62828',
       neutral: '#607d8b',
-      palette: ['#005686', '#00838f', '#2e7d32', '#ed6c02', '#6a1b9a', '#c62828', '#455a64']
+      palette: ['#005686', '#00838f', '#2e7d32', '#ed6c02', '#6a1b9a', '#c62828', '#455a64'],
+      maturityHealth: ['#43a047', '#ffb300', '#e53935', '#78909c']
     }
   };
 

@@ -530,8 +530,41 @@ var ExplorerScanner = (function () {
     ]);
   }
 
+  function pasteImportEnabled() {
+    return APP_CONFIG.ALLOW_PASTE_FALLBACK === true;
+  }
+
   function pasteFallbackEnabled() {
-    return APP_CONFIG.ALLOW_PASTE_FALLBACK !== false && !isTrustedDashboard();
+    if (isTrustedDashboard()) return pasteImportEnabled();
+    return APP_CONFIG.ALLOW_PASTE_FALLBACK !== false;
+  }
+
+  function readClipboardText() {
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      return Promise.resolve('');
+    }
+    return navigator.clipboard.readText().catch(function () {
+      return '';
+    });
+  }
+
+  function scanViaClipboardOrPaste() {
+    if (!pasteImportEnabled()) {
+      return Promise.reject(new Error('Importação por cola desativada.'));
+    }
+    return readClipboardText().then(function (clip) {
+      var text = String(clip || '').trim();
+      if (!text) {
+        var area = document.getElementById('pasteArea');
+        text = area && area.value ? String(area.value).trim() : '';
+      }
+      if (!text) {
+        throw new Error(
+          'No Explorer: selecione a grade (Ctrl+A) → Ctrl+C → clique Importar Ctrl+C ou cole na caixa abaixo.'
+        );
+      }
+      return scanViaText(text, 'Ctrl+C Explorer');
+    });
   }
 
   function scanViaExplorerGrid() {
@@ -568,28 +601,63 @@ var ExplorerScanner = (function () {
         };
       });
     }
+    if (payload && payload.items && payload.items.length >= 2) {
+      return applyGrid(payload, 'árvore Explorer');
+    }
+    return Promise.reject(
+      new Error(
+        'Não li a árvore no Explorer (iframe). Expanda os níveis, Ctrl+A na grade → Ctrl+C → Importar Ctrl+C.'
+      )
+    );
+  }
+
+  function scanViaBuiltinLast() {
+    if (APP_CONFIG.PILOT_BUILTIN_LAST === false) {
+      return Promise.reject(new Error('Sem dados embutidos para esta estrutura.'));
+    }
+    var term = getExplorerRootSearchTerm();
     var builtin =
       typeof BomSnapshot !== 'undefined' && BomSnapshot.getPilotPayloadForTerm
         ? BomSnapshot.getPilotPayloadForTerm(term)
         : null;
     if (builtin && builtin.items && builtin.items.length >= 2) {
-      return applyGrid(builtin, 'piloto embutido');
-    }
-    if (payload && payload.items && payload.items.length >= 2) {
-      return applyGrid(payload, 'árvore Explorer');
+      return BomSnapshot.applyPayload(builtin).then(function (meta) {
+        var count = BomService.getNodeCount() || meta.itemCount || builtin.items.length;
+        return {
+          ok: true,
+          mode: 'builtin-last',
+          meta: meta,
+          message: 'Demo embutido: ' + count + ' itens — ' + (meta.productName || term)
+        };
+      });
     }
     var fetchPilot =
+      ProductExplorerBridge &&
       ProductExplorerBridge.fetchPilotStructurePayload &&
       ProductExplorerBridge.fetchPilotStructurePayload(term);
     return (fetchPilot || Promise.resolve(null)).then(function (pilot) {
       if (pilot && pilot.items && pilot.items.length >= 2) {
-        return applyGrid(pilot);
+        return BomSnapshot.applyPayload(pilot).then(function (meta) {
+          return {
+            ok: true,
+            mode: 'snapshot-file',
+            meta: meta,
+            message: 'Snapshot: ' + (meta.itemCount || pilot.items.length) + ' itens'
+          };
+        });
       }
-      return Promise.reject(
-        new Error(
-          'Não li filhos na árvore do Explorer (iframe). Expanda todos os níveis e clique Varrer de novo.'
-        )
-      );
+      return Promise.reject(new Error('Nenhuma fonte de dados para "' + (term || 'estrutura') + '".'));
+    });
+  }
+
+  /**
+   * Qualquer projeto: cola/clipboard → grade visível → demo embutido (último).
+   */
+  function scanViaPilotGeneric() {
+    return scanViaExplorerGrid().catch(function () {
+      return scanViaClipboardOrPaste().catch(function () {
+        return scanViaBuiltinLast();
+      });
     });
   }
 
@@ -614,7 +682,7 @@ var ExplorerScanner = (function () {
     var apiChain = scanViaApiOrSelection();
 
     if (isTrustedDashboard() && APP_CONFIG.PILOT_GRID_FIRST) {
-      return withScanTimeout(scanViaExplorerGrid(), timeout);
+      return withScanTimeout(scanViaPilotGeneric(), timeout);
     }
 
     if (isTrustedDashboard() && APP_CONFIG.USE_API_SCAN_FIRST !== false) {
@@ -637,6 +705,8 @@ var ExplorerScanner = (function () {
   return {
     scan: scan,
     scanViaExplorerGrid: scanViaExplorerGrid,
+    scanViaClipboardOrPaste: scanViaClipboardOrPaste,
+    scanViaPilotGeneric: scanViaPilotGeneric,
     ensureSpaceApi: ensureSpaceApi,
     resolveSelection: resolveSelection,
     getSelection: getSelection,

@@ -14,6 +14,9 @@ var DataTable = (function () {
   var columns = [];
 
   function getColumns() {
+    if (APP_CONFIG.UI_CLEAN && APP_CONFIG.PILOT_TABLE_COLUMNS && APP_CONFIG.PILOT_TABLE_COLUMNS.length) {
+      return APP_CONFIG.PILOT_TABLE_COLUMNS;
+    }
     return APP_CONFIG.PRODUCT_EXPLORER_COLUMNS || [];
   }
 

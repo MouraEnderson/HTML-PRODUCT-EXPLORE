@@ -71,7 +71,7 @@ var MetricsEngine = (function () {
   function chartDatasets(metrics) {
     return {
       maturity: {
-        labels: ['Released', 'In Work', 'Obsolete', 'Other'],
+        labels: ['Bom (Aprovado)', 'Moderado (Em trabalho)', 'Ruim (Obsoleto)', 'Outros'],
         values: [
           metrics.byMaturity.released,
           metrics.byMaturity.in_work,
