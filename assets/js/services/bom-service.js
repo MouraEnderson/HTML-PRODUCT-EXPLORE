@@ -93,7 +93,10 @@ var BomService = (function () {
       });
     }
 
-    return fetchPage();
+    return fetchPage().catch(function (err) {
+      if (index[parentId]) index[parentId].loaded = true;
+      return [];
+    });
   }
 
   function loadTreeRecursive(rootPhysicalId, maxDepth, currentDepth) {
@@ -227,7 +230,10 @@ var BomService = (function () {
         addNode(attrs, null, 0, 1);
         index[attrs.physicalid].loaded = false;
         var bomParentId = attrs.physicalid || physicalId;
-        var depth = APP_CONFIG.BOM_FAST_DEPTH || APP_CONFIG.BOM_INITIAL_DEPTH;
+        var depth =
+          APP_CONFIG.PILOT_API_TREE_DEPTH ||
+          APP_CONFIG.BOM_FAST_DEPTH ||
+          APP_CONFIG.BOM_INITIAL_DEPTH;
         return loadTreeRecursive(bomParentId, depth, 1);
       });
   }

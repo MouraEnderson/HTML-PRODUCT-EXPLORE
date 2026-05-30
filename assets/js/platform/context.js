@@ -159,8 +159,9 @@ var PlatformContext = (function (global) {
 
   function getHeaders() {
     var h = {
-      Accept: 'application/json',
-      'Content-Type': 'application/json'
+      Accept: 'application/json;charset=UTF-8, application/json',
+      'Content-Type': 'application/json;charset=UTF-8',
+      'Accept-Language': 'en-US,en;q=0.9'
     };
     if (state.securityContext) {
       h.SecurityContext = state.securityContext;

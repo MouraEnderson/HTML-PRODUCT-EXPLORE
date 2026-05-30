@@ -156,6 +156,63 @@ var ProductExplorerBridge = (function () {
     return catalog;
   }
 
+  function scrapeExplorerGrid(rootName) {
+    var doc = readExplorerIframeDocument();
+    if (!doc || !doc.body) return null;
+    var text = doc.body.innerText || '';
+    if (text.indexOf('Physical Product') < 0) return null;
+    rootName = String(rootName || structureNameHint || '').trim();
+    var lines = text.split('\n');
+    var items = [];
+    var i;
+    if (rootName) {
+      items.push({
+        level: 0,
+        name: rootName,
+        title: rootName,
+        type: 'Physical Product',
+        displayType: 'Physical Product',
+        revision: '—',
+        state: '—',
+        maturity: '—',
+        approval: '—',
+        physicalid: lookupRegistryId(rootName) || 'root'
+      });
+    }
+    for (i = 0; i < lines.length; i++) {
+      var line = String(lines[i] || '').trim();
+      if (!line || line.indexOf('|') < 0) continue;
+      if (/^physical product\s*\|/i.test(line)) continue;
+      if (/product structure explorer/i.test(line)) continue;
+      if (/^recents$/i.test(line)) continue;
+      var parts = line.split('|').map(function (p) { return p.trim(); });
+      if (parts.length < 3) continue;
+      var name = parts[0];
+      if (!name || name.length < 3 || name === rootName) continue;
+      if (/^prd-R/i.test(name)) continue;
+      var maturity = parts[3] || parts[2] || '—';
+      var approved = /aprovado|released|frozen/i.test(maturity);
+      items.push({
+        level: 1,
+        name: name,
+        title: name,
+        type: 'Physical Product',
+        displayType: 'Physical Product',
+        revision: parts[1] || '—',
+        state: maturity,
+        maturity: maturity,
+        approval: approved ? 'Approved' : 'Unknown',
+        physicalid: 'grid_' + items.length
+      });
+    }
+    if (items.length < 2) return null;
+    return {
+      version: 1,
+      productName: rootName || items[0].name,
+      items: items
+    };
+  }
+
   function resolveFromExplorerCatalog(term) {
     if (!term) return null;
     var catalog = buildPrdCatalogFromExplorer();
@@ -512,6 +569,7 @@ var ProductExplorerBridge = (function () {
     readHashSelection: readHashSelection,
     buildPrdCatalogFromExplorer: buildPrdCatalogFromExplorer,
     resolveFromExplorerCatalog: resolveFromExplorerCatalog,
-    readExplorerIframeDocument: readExplorerIframeDocument
+    readExplorerIframeDocument: readExplorerIframeDocument,
+    scrapeExplorerGrid: scrapeExplorerGrid
   };
 })();

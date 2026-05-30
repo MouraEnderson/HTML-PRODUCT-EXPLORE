@@ -163,6 +163,26 @@ var App = (function () {
     ]);
   }
 
+  function pilotFallbackExplorerGrid(structureName) {
+    if (!APP_CONFIG.PILOT_FALLBACK_SNAPSHOT || typeof ProductExplorerBridge === 'undefined') {
+      return Promise.resolve(false);
+    }
+    if (!ProductExplorerBridge.scrapeExplorerGrid) return Promise.resolve(false);
+    var payload = ProductExplorerBridge.scrapeExplorerGrid(structureName);
+    if (!payload) return Promise.resolve(false);
+    return BomSnapshot.applyPayload(payload).then(function (meta) {
+      APP_CONFIG.IMPORT_MODE = true;
+      APP_CONFIG.DEMO_MODE = false;
+      if (meta && meta.rootPhysicalId) lastLoadedId = meta.rootPhysicalId;
+      refreshUI();
+      var n = (meta && meta.itemCount) || BomService.getNodeCount() || 0;
+      setStatus('Piloto: ' + (meta.productName || structureName) + ' — ' + n + ' itens (grade Explorer). API 406 em ajuste.', 'ok');
+      return true;
+    }).catch(function () {
+      return false;
+    });
+  }
+
   function pilotFallbackSnapshot(structureName) {
     if (!APP_CONFIG.PILOT_FALLBACK_SNAPSHOT || !APP_CONFIG.CAN_USE_ENOVIA_API) {
       return Promise.resolve(false);
@@ -190,6 +210,7 @@ var App = (function () {
       setStatus('Varredura falhou: módulo scanner não carregou.', 'error');
       return;
     }
+    root.__3DX_BLOCK_AUTO_SYNC__ = true;
     if (structureSyncTimer) {
       window.clearTimeout(structureSyncTimer);
       structureSyncTimer = null;
@@ -255,8 +276,10 @@ var App = (function () {
             : null) ||
           (byId('selectionLabel') && byId('selectionLabel').textContent) ||
           '';
-        return pilotFallbackSnapshot(term).then(function (restored) {
+        return pilotFallbackExplorerGrid(term).then(function (restored) {
           if (restored) return;
+          return pilotFallbackSnapshot(term).then(function (restored2) {
+          if (restored2) return;
           if (hadSnapshot || APP_CONFIG.SNAPSHOT_URL) {
             return restoreSnapshotAfterScanFail(msg).then(function (restored2) {
               if (!restored2) {
@@ -268,9 +291,11 @@ var App = (function () {
           if (short.length > 220) short = short.slice(0, 220) + '…';
           setStatus(short, 'error');
         });
+        });
       })
       .finally(function () {
         root.__3DX_ALLOW_API__ = false;
+        root.__3DX_BLOCK_AUTO_SYNC__ = false;
         setLoading(false);
         if (btnEl) {
           btnEl.disabled = false;
@@ -397,7 +422,9 @@ var App = (function () {
   var autoScanTimer = null;
 
   function syncOpenExplorerStructure(force) {
+    if (root.__3DX_BLOCK_AUTO_SYNC__) return;
     if (!APP_CONFIG.CAN_USE_ENOVIA_API || typeof ExplorerScanner === 'undefined') return;
+    if (!force && (APP_CONFIG.AUTO_SYNC_EXPLORER_MS || 0) < 1) return;
     if (typeof ProductExplorerBridge !== 'undefined') {
       if (ProductExplorerBridge.pollDashboardExplorerChrome) {
         ProductExplorerBridge.pollDashboardExplorerChrome();
