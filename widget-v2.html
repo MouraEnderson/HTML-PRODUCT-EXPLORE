@@ -14,7 +14,7 @@
     window.__3DX_TRUSTED_WIDGET__ = true;
     window.__3DX_BOOT_DEFER__ = true;
 
-    var BOM_BUILD = 'bom20260602y';
+    var BOM_BUILD = 'bom20260602z';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
     var BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js';
 
@@ -104,13 +104,15 @@
       '</div>' +
       '<footer id="tablePager" class="bom-table-pager">0 peças</footer>' +
       '</div>' +
-      '<aside id="partPreviewPanel" class="bom-part-preview">' +
-      '<h3 id="partPreviewTitle" class="bom-preview-title">Visualização</h3>' +
+      '<details class="bom-part-preview" id="partPreviewPanel">' +
+      '<summary class="bom-preview-summary">' +
+      '<span id="partPreviewTitle" class="bom-preview-title">Visualização da peça</span></summary>' +
+      '<div class="bom-preview-body">' +
       '<p class="bom-preview-hint">Clique numa linha da estrutura</p>' +
       '<div id="partPreviewImage" class="bom-preview-image">' +
       '<span class="bom-preview-placeholder">Preview 2D da peça selecionada</span></div>' +
       '<div id="partPreviewMeta" class="bom-preview-meta"></div>' +
-      '</aside></div></section>' +
+      '</div></details></div></section>' +
       '</main>' +
       '<button type="button" id="btnScanExplorer" class="bom-hidden">Varrer</button>' +
       '<div id="loadingOverlay" class="bom-loading bom-hidden">Processando…</div>' +

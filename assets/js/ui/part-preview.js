@@ -14,6 +14,7 @@ var PartPreview = (function () {
     if (!panel) return null;
     return {
       panel: panel,
+      bodyEl: panel.querySelector('.bom-preview-body') || panel,
       imageWrap: panel.querySelector('#partPreviewImage') || panel.querySelector('.bom-preview-image'),
       metaEl: panel.querySelector('#partPreviewMeta') || panel.querySelector('.bom-preview-meta'),
       titleEl: panel.querySelector('#partPreviewTitle') || panel.querySelector('.bom-preview-title'),
@@ -34,6 +35,28 @@ var PartPreview = (function () {
         refs.hintEl = refs.panel.querySelector('.bom-preview-hint');
       }
     }
+  }
+
+  function isNarrowLayout() {
+    var host = uiRoot();
+    return !!(host && host.classList && host.classList.contains('bom-widget-narrow'));
+  }
+
+  function reflow() {
+    if (typeof LayoutFit !== 'undefined' && LayoutFit.apply) {
+      window.setTimeout(function () { LayoutFit.apply(); }, 0);
+      window.setTimeout(function () { LayoutFit.apply(); }, 120);
+    }
+  }
+
+  function openPanel(r) {
+    if (!r || !r.panel) return;
+    if (typeof r.panel.open === 'boolean') r.panel.open = true;
+  }
+
+  function closePanel(r) {
+    if (!r || !r.panel) return;
+    if (isNarrowLayout() && typeof r.panel.open === 'boolean') r.panel.open = false;
   }
 
   function ensureRefs() {
@@ -97,19 +120,23 @@ var PartPreview = (function () {
     renderMeta(node, r);
     showImage(node, r);
     r.panel.classList.add('bom-preview-active');
+    openPanel(r);
+    reflow();
   }
 
   function clear() {
     var r = ensureRefs();
     if (!r || !r.panel) return;
     r.panel.classList.remove('bom-preview-active');
-    if (r.titleEl) r.titleEl.textContent = 'Visualização';
+    closePanel(r);
+    if (r.titleEl) r.titleEl.textContent = 'Visualização da peça';
     if (r.metaEl) r.metaEl.innerHTML = '';
     if (r.imageWrap) {
       r.imageWrap.innerHTML =
         '<span class="bom-preview-placeholder">Clique numa peça na lista à esquerda</span>';
     }
     if (r.hintEl) r.hintEl.style.display = 'block';
+    reflow();
   }
 
   return { init: init, show: show, clear: clear, ensureRefs: ensureRefs };
