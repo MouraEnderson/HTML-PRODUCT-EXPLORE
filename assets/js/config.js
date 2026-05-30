@@ -8,13 +8,15 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260602h',
+    BUILD: 'bom20260602i',
     /** 3DDashboard: não espera probe CSRF (evita travar em "Conectando…") */
     SKIP_SPACE_PROBE: true,
     WAF_REQUEST_TIMEOUT_MS: 15000,
     SCAN_CONNECT_TIMEOUT_MS: 35000,
     /** Piloto: se API falhar no 3DDashboard, carrega snapshot validado (Mont10) */
     PILOT_FALLBACK_SNAPSHOT: true,
+    /** Piloto: Varrer lê a árvore visível do Explorer antes da API (evita 406) */
+    PILOT_GRID_FIRST: true,
     /** Tenant cloud: não usar dseng:EngItem nem host *-space no 3DDashboard */
     CLOUD_PHYSICAL_ONLY: true,
     /** Fallback offline só com ?snapshot= na URL */
@@ -29,11 +31,11 @@
     NORMALIZE_PRD_IDS: true,
     /** Não carrega BOM automático no boot — só após Varrer */
     WAIT_FOR_USER_SCAN: true,
-    /** Sprint 1: API primeiro; cola só com ALLOW_PASTE_FALLBACK true */
-    USE_API_SCAN_FIRST: true,
+    /** Piloto: grade Explorer primeiro; API só com ?api=1 ou após falha da grade */
+    USE_API_SCAN_FIRST: false,
     ALLOW_PASTE_FALLBACK: false,
     SCAN_TIMEOUT_MS: 90000,
-    AUTO_SCAN_ON_SELECTION: true,
+    AUTO_SCAN_ON_SELECTION: false,
     CAN_USE_ENOVIA_API: false,
 
     /** Somente Explorer → gráficos + tabela */
@@ -221,7 +223,7 @@
       APP_CONFIG.WIDGET_MODE = trusted ? 'additional_app' : '3dexperience_host';
       APP_CONFIG.SNAPSHOT_DELIVERY_MODE = false;
       APP_CONFIG.WAIT_FOR_USER_SCAN = false;
-      APP_CONFIG.AUTO_SCAN_ON_SELECTION = true;
+      APP_CONFIG.AUTO_SCAN_ON_SELECTION = false;
       return;
     }
 

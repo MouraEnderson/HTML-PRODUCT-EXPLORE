@@ -156,17 +156,76 @@ var ProductExplorerBridge = (function () {
     return catalog;
   }
 
+  var EXPLORER_SKIP_LINE =
+    /^(physical product|em trabalho|aprovado|released|frozen|in work|approved|owner|organization|revision|type|maturity|enderson|moura|vplm|recents|open |product structure|enovia|access your|n\/d|—|-|login|user)$/i;
+  var EXPLORER_PART_LINE = /^(\d{2}_[A-Za-z0-9][A-Za-z0-9_.\-]{2,80})/;
+
+  function extractRootNameFromExplorerText(text) {
+    var m =
+      String(text || '').match(/Product Structure Explorer\s*[-–]\s*(.+?)(?:\n|$)/i) ||
+      String(text || '').match(/Structure Explorer\s*[-–]\s*(.+?)(?:\n|$)/i);
+    return m ? sanitizeStructureName(m[1].trim()) : null;
+  }
+
+  function pushGridItem(items, seen, row) {
+    var key = String(row.name || '').toLowerCase();
+    if (!key || seen[key]) return;
+    seen[key] = true;
+    items.push(row);
+  }
+
+  function scrapeExplorerTreeLines(lines, rootName, items, seen) {
+    var i;
+    for (i = 0; i < lines.length; i++) {
+      var line = String(lines[i] || '').trim();
+      if (!line || line.indexOf('|') >= 0 || EXPLORER_SKIP_LINE.test(line)) continue;
+      var name = null;
+      var partM = line.match(EXPLORER_PART_LINE);
+      if (partM) name = partM[1];
+      else if (/^01_SKA_/i.test(line) && line.length >= 8 && line.length <= 64) {
+        name = line.replace(/\.{2,}$/, '').trim();
+      }
+      if (!name || name.length < 6) continue;
+      if (rootName && name.toLowerCase() === String(rootName).toLowerCase() && items.length > 0) continue;
+      var revision = '—';
+      var maturity = '—';
+      var j;
+      for (j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+        var L = String(lines[j] || '').trim();
+        if (!L || L.indexOf('|') >= 0) break;
+        if (EXPLORER_PART_LINE.test(L) && j > i + 1) break;
+        if (/^\d+\.\d+$/.test(L)) revision = L;
+        if (/em trabalho|aprovado|released|frozen|obsolete|in work/i.test(L)) maturity = L;
+      }
+      var approved = /aprovado|released|frozen/i.test(maturity);
+      pushGridItem(items, seen, {
+        level: items.length ? 1 : 0,
+        name: name,
+        title: name,
+        type: 'Physical Product',
+        displayType: 'Physical Product',
+        revision: revision,
+        state: maturity,
+        maturity: maturity,
+        approval: approved ? 'Approved' : 'Unknown',
+        physicalid: lookupRegistryId(name) || 'grid_' + items.length
+      });
+    }
+  }
+
   function scrapeExplorerGrid(rootName) {
     var doc = readExplorerIframeDocument();
     if (!doc || !doc.body) return null;
     var text = doc.body.innerText || '';
-    if (text.indexOf('Physical Product') < 0) return null;
-    rootName = String(rootName || structureNameHint || '').trim();
+    if (text.indexOf('Physical Product') < 0 && text.indexOf('01_SKA_') < 0) return null;
+    var fromTitle = extractRootNameFromExplorerText(text);
+    rootName = String(rootName || fromTitle || structureNameHint || '').trim();
     var lines = text.split('\n');
     var items = [];
+    var seen = {};
     var i;
     if (rootName) {
-      items.push({
+      pushGridItem(items, seen, {
         level: 0,
         name: rootName,
         title: rootName,
@@ -192,7 +251,7 @@ var ProductExplorerBridge = (function () {
       if (/^prd-R/i.test(name)) continue;
       var maturity = parts[3] || parts[2] || '—';
       var approved = /aprovado|released|frozen/i.test(maturity);
-      items.push({
+      pushGridItem(items, seen, {
         level: 1,
         name: name,
         title: name,
@@ -202,8 +261,11 @@ var ProductExplorerBridge = (function () {
         state: maturity,
         maturity: maturity,
         approval: approved ? 'Approved' : 'Unknown',
-        physicalid: 'grid_' + items.length
+        physicalid: lookupRegistryId(name) || 'grid_' + items.length
       });
+    }
+    if (items.length < 2) {
+      scrapeExplorerTreeLines(lines, rootName, items, seen);
     }
     if (items.length < 2) return null;
     return {

@@ -36,6 +36,28 @@ var ExplorerScanner = (function () {
     return id && String(id).length >= 8;
   }
 
+  function isPrdCloudId(id) {
+    return /^prd-R\d{10,}-/i.test(normalizeId(id));
+  }
+
+  function isHexLegacyId(id) {
+    return /^[0-9A-Fa-f]{16,}$/.test(normalizeId(id));
+  }
+
+  function resolveCloudRoot(term, sel) {
+    if (term) {
+      var regHit = resolveFromStructureRegistry(term);
+      if (regHit) return regHit;
+      if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.resolveFromExplorerCatalog) {
+        var catHit = ProductExplorerBridge.resolveFromExplorerCatalog(term);
+        if (catHit) return catHit;
+      }
+    }
+    if (sel && isPrdCloudId(sel.physicalid)) return sel;
+    if (APP_CONFIG.CLOUD_PHYSICAL_ONLY && sel && isHexLegacyId(sel.physicalid)) return null;
+    return sel && isValidId(sel.physicalid) ? sel : null;
+  }
+
   function clearBadSelection() {
     if (typeof ProductExplorerBridge === 'undefined') return;
     var sel = ProductExplorerBridge.getSelection();
@@ -263,23 +285,12 @@ var ExplorerScanner = (function () {
       ProductExplorerBridge.pollSelection();
     }
     var term = getExplorerRootSearchTerm();
-    if (term && typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.resolveFromExplorerCatalog) {
-      var catHit = ProductExplorerBridge.resolveFromExplorerCatalog(term);
-      if (catHit) {
-        ProductExplorerBridge.setSelection(catHit, { silent: true });
-        return Promise.resolve(catHit);
+    var cloudHit = resolveCloudRoot(term, getSelection());
+    if (cloudHit) {
+      if (typeof ProductExplorerBridge !== 'undefined') {
+        ProductExplorerBridge.setSelection(cloudHit, { silent: true });
       }
-    }
-    if (term) {
-      var regHit = resolveFromStructureRegistry(term);
-      if (regHit) return Promise.resolve(regHit);
-    }
-    var sel = getSelection();
-    if (sel && sel.source === 'explorer-prd-catalog') return Promise.resolve(sel);
-    if (sel && /^prd-/i.test(sel.physicalid)) return Promise.resolve(sel);
-    if (sel && term) {
-      var regOverride = resolveFromStructureRegistry(term);
-      if (regOverride) return Promise.resolve(regOverride);
+      return Promise.resolve(cloudHit);
     }
     return waitForSelection(4, 250);
   }
@@ -523,16 +534,72 @@ var ExplorerScanner = (function () {
     return APP_CONFIG.ALLOW_PASTE_FALLBACK !== false && !isTrustedDashboard();
   }
 
+  function scanViaExplorerGrid() {
+    if (typeof ProductExplorerBridge === 'undefined' || !ProductExplorerBridge.scrapeExplorerGrid) {
+      return Promise.reject(new Error('Iframe do Explorer inacessível — abra a árvore ao lado do widget.'));
+    }
+    if (ProductExplorerBridge.pollDashboardExplorerChrome) {
+      ProductExplorerBridge.pollDashboardExplorerChrome();
+    }
+    if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
+    var term = getExplorerRootSearchTerm();
+    var payload = ProductExplorerBridge.scrapeExplorerGrid(term);
+    if (!payload || !payload.items || payload.items.length < 2) {
+      return Promise.reject(
+        new Error('Nenhuma linha na árvore do Explorer. Expanda os filhos da montagem e clique Varrer.')
+      );
+    }
+    if (typeof BomSnapshot === 'undefined' || !BomSnapshot.applyPayload) {
+      return Promise.reject(new Error('Módulo snapshot indisponível'));
+    }
+    return BomSnapshot.applyPayload(payload).then(function (meta) {
+      saveRootName(meta.productName || term);
+      return {
+        ok: true,
+        mode: 'explorer-grid',
+        meta: meta,
+        message:
+          'Varredura (árvore Explorer): ' +
+          (meta.itemCount || payload.items.length) +
+          ' itens — ' +
+          (meta.productName || term || 'E-BOM')
+      };
+    });
+  }
+
+  function apiScanEnabled() {
+    var q = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
+    if (q.api === '1' || q.api === 'true') return true;
+    return APP_CONFIG.USE_API_SCAN_FIRST !== false;
+  }
+
   /**
-   * 3DDashboard: API primeiro. Cola só se ALLOW_PASTE_FALLBACK e API falhar.
+   * 3DDashboard piloto: grade/árvore Explorer primeiro; API só com ?api=1 ou USE_API_SCAN_FIRST.
    */
   function scan() {
     clearBadSelection();
-    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.pollSelection) {
-      ProductExplorerBridge.pollSelection();
+    if (typeof ProductExplorerBridge !== 'undefined') {
+      if (ProductExplorerBridge.pollDashboardExplorerChrome) {
+        ProductExplorerBridge.pollDashboardExplorerChrome();
+      }
+      if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
+      if (ProductExplorerBridge.pollSelection) ProductExplorerBridge.pollSelection();
     }
     var timeout = APP_CONFIG.SCAN_TIMEOUT_MS || 90000;
     var apiChain = scanViaApiOrSelection();
+
+    if (isTrustedDashboard() && APP_CONFIG.PILOT_GRID_FIRST) {
+      var gridChain = scanViaExplorerGrid();
+      if (!apiScanEnabled()) {
+        return withScanTimeout(gridChain, timeout);
+      }
+      return withScanTimeout(
+        gridChain.catch(function () {
+          return apiChain;
+        }),
+        timeout
+      );
+    }
 
     if (isTrustedDashboard() && APP_CONFIG.USE_API_SCAN_FIRST !== false) {
       return withScanTimeout(apiChain, timeout).catch(function (apiErr) {
@@ -553,6 +620,7 @@ var ExplorerScanner = (function () {
 
   return {
     scan: scan,
+    scanViaExplorerGrid: scanViaExplorerGrid,
     ensureSpaceApi: ensureSpaceApi,
     resolveSelection: resolveSelection,
     getSelection: getSelection,

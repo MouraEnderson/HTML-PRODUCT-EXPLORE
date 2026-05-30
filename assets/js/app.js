@@ -231,14 +231,18 @@ var App = (function () {
       if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
       if (ProductExplorerBridge.pollSelection) ProductExplorerBridge.pollSelection();
     }
-    setStatus('Conectando API (ifwe)…', 'info');
-    var scanChain =
-      typeof ExplorerScanner !== 'undefined' && ExplorerScanner.ensureSpaceApi
-        ? ExplorerScanner.ensureSpaceApi().then(function () {
-            setStatus('Varrendo estrutura Explorer…', 'info');
-            return ExplorerScanner.scan();
-          })
-        : ExplorerScanner.scan();
+    var gridFirst = APP_CONFIG.PILOT_GRID_FIRST && APP_CONFIG.CAN_USE_ENOVIA_API;
+    setStatus(
+      gridFirst ? 'Lendo árvore visível no Explorer…' : 'Conectando API (ifwe)…',
+      'info'
+    );
+    var scanChain = ExplorerScanner.scan();
+    if (!gridFirst && typeof ExplorerScanner.ensureSpaceApi === 'function') {
+      scanChain = ExplorerScanner.ensureSpaceApi().then(function () {
+        setStatus('Varrendo estrutura Explorer…', 'info');
+        return ExplorerScanner.scan();
+      });
+    }
     apiTimeout(
       scanChain,
       APP_CONFIG.SCAN_CONNECT_TIMEOUT_MS || 40000,
@@ -462,9 +466,12 @@ var App = (function () {
         })
         .catch(function (err) {
           var msg = (err && err.message) ? err.message : String(err);
-          var short = msg;
-        if (short.length > 220) short = short.slice(0, 220) + '…';
-        setStatus(short, 'error');
+          return pilotFallbackExplorerGrid(key).then(function (restored) {
+            if (restored) return;
+            var short = msg;
+            if (short.length > 220) short = short.slice(0, 220) + '…';
+            setStatus(short, 'error');
+          });
         })
         .finally(function () {
           root.__3DX_ALLOW_API__ = false;
@@ -482,7 +489,11 @@ var App = (function () {
     if (APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.CAN_USE_ENOVIA_API) {
       return;
     }
-    if (APP_CONFIG.CAN_USE_ENOVIA_API && typeof ExplorerScanner !== 'undefined') {
+    if (
+      APP_CONFIG.CAN_USE_ENOVIA_API &&
+      !APP_CONFIG.PILOT_GRID_FIRST &&
+      typeof ExplorerScanner !== 'undefined'
+    ) {
       syncOpenExplorerStructure(false);
       return;
     }
