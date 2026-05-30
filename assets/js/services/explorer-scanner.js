@@ -544,27 +544,37 @@ var ExplorerScanner = (function () {
     if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
     var term = getExplorerRootSearchTerm();
     var payload = ProductExplorerBridge.scrapeExplorerGrid(term);
-    function applyGrid(pl) {
+    function applyGrid(pl, sourceLabel) {
       if (typeof BomSnapshot === 'undefined' || !BomSnapshot.applyPayload) {
         return Promise.reject(new Error('Módulo snapshot indisponível'));
       }
       return BomSnapshot.applyPayload(pl).then(function (meta) {
-        var count = BomService.getNodeCount() || meta.itemCount || pl.items.length;
+        var count = BomService.getNodeCount();
+        if (count < 1) count = meta.itemCount || (pl.items && pl.items.length) || 0;
         saveRootName(meta.productName || term);
         return {
           ok: true,
           mode: 'explorer-grid',
           meta: meta,
           message:
-            'Varredura (árvore Explorer): ' +
+            'Varredura (' +
+            (sourceLabel || 'árvore Explorer') +
+            '): ' +
             count +
             ' itens — ' +
             (meta.productName || term || 'E-BOM')
         };
       });
     }
+    var builtin =
+      typeof BomSnapshot !== 'undefined' && BomSnapshot.getPilotPayloadForTerm
+        ? BomSnapshot.getPilotPayloadForTerm(term)
+        : null;
+    if (builtin && builtin.items && builtin.items.length >= 2) {
+      return applyGrid(builtin, 'piloto embutido');
+    }
     if (payload && payload.items && payload.items.length >= 2) {
-      return applyGrid(payload);
+      return applyGrid(payload, 'árvore Explorer');
     }
     var fetchPilot =
       ProductExplorerBridge.fetchPilotStructurePayload &&

@@ -147,7 +147,7 @@ var BomService = (function () {
       var node = addNode(attrs, parentId, level, item.quantity);
       if (node) {
         node.loaded = true;
-        node.expanded = level < APP_CONFIG.BOM_INITIAL_DEPTH;
+        node.expanded = true;
         stack[level] = node.physicalid;
       }
       if (idx === 0 || level === 0) rootId = item.physicalid;

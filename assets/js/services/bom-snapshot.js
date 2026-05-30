@@ -9,6 +9,27 @@ var BomSnapshot = (function () {
   var SESSION_KEY = '3dx_bom_snapshot_v1';
   var GITHUB_BASE = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
 
+  /** Drone SKA embutido — não depende de fetch no iframe 3DDashboard */
+  var BUILTIN_DRONE = {
+    version: 1,
+    productName: '01_SKA_Drone Assembly_130520206',
+    exportedAt: '2026-05-28T18:00:00.000Z',
+    rootPhysicalId: 'prd-R1132100929518-01172440',
+    items: [
+      { level: 0, physicalid: 'prd-R1132100929518-01172440', name: '01_SKA_Drone Assembly_130520206', title: '01_SKA_Drone Assembly_130520206', type: 'Physical Product', displayType: 'Physical Product', revision: '1.1', state: 'Em Trabalho', maturity: 'Em Trabalho', approval: 'Unknown' },
+      { level: 1, physicalid: 'grid_drone_arm_l', name: '01_SKA_ArmAssembly_L', title: '01_SKA_ArmAssembly_L', type: 'Physical Product', displayType: 'Physical Product', revision: '1.1', state: 'Em Trabalho', maturity: 'Em Trabalho', approval: 'Unknown' },
+      { level: 1, physicalid: 'grid_drone_arm_r', name: '01_SKA_ArmAssembly_R', title: '01_SKA_ArmAssembly_R', type: 'Physical Product', displayType: 'Physical Product', revision: '1.1', state: 'Em Trabalho', maturity: 'Em Trabalho', approval: 'Unknown' },
+      { level: 1, physicalid: 'grid_drone_bearing', name: '01_SKA_BearingAssembly', title: '01_SKA_BearingAssembly', type: 'Physical Product', displayType: 'Physical Product', revision: '1.1', state: 'Aprovado', maturity: 'Aprovado', approval: 'Approved' },
+      { level: 1, physicalid: 'grid_drone_frame', name: '01_SKA_FrameAssembly', title: '01_SKA_FrameAssembly', type: 'Physical Product', displayType: 'Physical Product', revision: '1.1', state: 'Em Trabalho', maturity: 'Em Trabalho', approval: 'Unknown' },
+      { level: 1, physicalid: 'grid_drone_gear', name: '01_SKA_GearAssembly', title: '01_SKA_GearAssembly', type: 'Physical Product', displayType: 'Physical Product', revision: '1.1', state: 'Em Trabalho', maturity: 'Em Trabalho', approval: 'Unknown' },
+      { level: 1, physicalid: 'grid_drone_leg_1', name: '01_SKA_LegAssembly_1', title: '01_SKA_LegAssembly_1', type: 'Physical Product', displayType: 'Physical Product', revision: '1.1', state: 'Em Trabalho', maturity: 'Em Trabalho', approval: 'Unknown' },
+      { level: 1, physicalid: 'grid_drone_leg_2', name: '01_SKA_LegAssembly_2', title: '01_SKA_LegAssembly_2', type: 'Physical Product', displayType: 'Physical Product', revision: '1.1', state: 'Em Trabalho', maturity: 'Em Trabalho', approval: 'Unknown' },
+      { level: 1, physicalid: 'grid_drone_leg_3', name: '01_SKA_LegAssembly_3', title: '01_SKA_LegAssembly_3', type: 'Physical Product', displayType: 'Physical Product', revision: '1.1', state: 'Em Trabalho', maturity: 'Em Trabalho', approval: 'Unknown' },
+      { level: 1, physicalid: 'grid_drone_leg_4', name: '01_SKA_LegAssembly_4', title: '01_SKA_LegAssembly_4', type: 'Physical Product', displayType: 'Physical Product', revision: '1.1', state: 'Em Trabalho', maturity: 'Em Trabalho', approval: 'Unknown' },
+      { level: 1, physicalid: 'grid_drone_impeller', name: '01_SKA_ImpellerAssembly', title: '01_SKA_ImpellerAssembly', type: 'Physical Product', displayType: 'Physical Product', revision: '1.1', state: 'Em Trabalho', maturity: 'Em Trabalho', approval: 'Unknown' }
+    ]
+  };
+
   /** Mont10 embutido — funciona se fetch ao GitHub falhar no iframe 3DDashboard */
   var BUILTIN_MONT10 = {
     version: 1,
@@ -153,6 +174,18 @@ var BomSnapshot = (function () {
     return applyPayload(getBuiltinPayload());
   }
 
+  function getPilotPayloadForTerm(term) {
+    var t = String(term || '').toLowerCase();
+    if (!t) return null;
+    if (/mont10/i.test(t)) return normalizePayload(BUILTIN_MONT10);
+    if (/01_ska_drone|130520206|130520208/i.test(t)) return normalizePayload(BUILTIN_DRONE);
+    return null;
+  }
+
+  function applyBuiltinDroneAssembly() {
+    return applyPayload(normalizePayload(BUILTIN_DRONE));
+  }
+
   function isMont10SnapshotUrl(url) {
     if (!url) return true;
     return /mont10/i.test(String(url));
@@ -188,7 +221,10 @@ var BomSnapshot = (function () {
     applyPayload: applyPayload,
     fetchAndApply: fetchAndApply,
     applyBuiltinMont10: applyBuiltinMont10,
+    applyBuiltinDroneAssembly: applyBuiltinDroneAssembly,
+    getPilotPayloadForTerm: getPilotPayloadForTerm,
     BUILTIN_MONT10: BUILTIN_MONT10,
+    BUILTIN_DRONE: BUILTIN_DRONE,
     downloadJson: downloadJson
   };
 })();

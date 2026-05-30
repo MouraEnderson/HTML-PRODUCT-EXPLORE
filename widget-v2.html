@@ -39,7 +39,7 @@
     window.__3DX_BOOT_DEFER__ = true;
     window.__3DX_DEFAULT_SNAPSHOT__ = 'data/mont10.json';
 
-    var BOM_BUILD = 'bom20260602k';
+    var BOM_BUILD = 'bom20260602l';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
     var BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js';
 
@@ -175,6 +175,12 @@
             if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
             if (typeof App !== 'undefined' && App.run) {
               App.run();
+              if (App.rebindScanButton) App.rebindScanButton();
+              window.__3DX_SCAN__ = function () {
+                var root = window.__3DX_UI_ROOT__ || document.body;
+                var btn = root.querySelector('#btnScanExplorer');
+                if (typeof App !== 'undefined' && App.runExplorerScan) App.runExplorerScan(btn);
+              };
             } else {
               setBar('App não iniciou. Ver Console (F12).', 'error');
             }

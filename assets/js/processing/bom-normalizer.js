@@ -6,6 +6,9 @@ var BomNormalizer = (function () {
   'use strict';
 
   function toFlatList(index, rootId) {
+    if (APP_CONFIG.IMPORT_MODE || APP_CONFIG.EXPLORER_ONLY) {
+      return Object.keys(index).map(function (id) { return index[id]; });
+    }
     var list = [];
     function walk(id) {
       var n = index[id];

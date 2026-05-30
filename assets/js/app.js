@@ -212,13 +212,15 @@ var App = (function () {
         APP_CONFIG.DEMO_MODE = false;
         if (meta && meta.rootPhysicalId) lastLoadedId = meta.rootPhysicalId;
         refreshUI();
-        var n = BomService.getNodeCount() || (meta && meta.itemCount) || 0;
+        var n = BomService.getNodeCount();
+        if (n < 1) n = (meta && meta.itemCount) || (pl.items && pl.items.length) || 0;
         setStatus('Piloto: ' + (meta.productName || structureName) + ' — ' + n + ' itens (grade Explorer). API 406 em ajuste.', 'ok');
         return true;
       }).catch(function () {
         return false;
       });
     }
+    if (builtin && builtin.items && builtin.items.length >= 2) return applyGrid(builtin);
     if (payload && payload.items.length >= 2) return applyGrid(payload);
     var fetchPilot =
       ProductExplorerBridge.fetchPilotStructurePayload &&
@@ -256,6 +258,7 @@ var App = (function () {
       setStatus('Varredura falhou: módulo scanner não carregou.', 'error');
       return;
     }
+    setStatus('Varrendo estrutura…', 'info');
     root.__3DX_BLOCK_AUTO_SYNC__ = true;
     if (structureSyncTimer) {
       window.clearTimeout(structureSyncTimer);
@@ -299,6 +302,9 @@ var App = (function () {
       .then(function (res) {
         APP_CONFIG.DEMO_MODE = false;
         APP_CONFIG.IMPORT_MODE = res.mode !== 'api';
+        if (res.mode === 'explorer-grid' || res.mode === 'explorer-grid-pilot') {
+          APP_CONFIG.IMPORT_MODE = true;
+        }
         if (res.meta) {
           lastLoadedId = res.meta.rootPhysicalId;
           var lbl = byId('selectionLabel');
@@ -611,6 +617,16 @@ var App = (function () {
     }
   }
 
+  function rebindScanButton() {
+    var btnScan = byId('btnScanExplorer');
+    if (!btnScan || btnScan.__3DX_SCAN_BOUND__) return;
+    btnScan.__3DX_SCAN_BOUND__ = true;
+    btnScan.addEventListener('click', function (ev) {
+      if (ev && ev.preventDefault) ev.preventDefault();
+      runExplorerScan(btnScan);
+    });
+  }
+
   function initUI() {
     applyUrlParamsToUI();
     KpiCards.init('#kpiGrid');
@@ -635,12 +651,7 @@ var App = (function () {
       }
     );
 
-    var btnScan = byId('btnScanExplorer');
-    if (btnScan) {
-      btnScan.addEventListener('click', function () {
-        runExplorerScan(btnScan);
-      });
-    }
+    rebindScanButton();
 
     var btnLoadId = byId('btnLoadPhysicalId');
     if (btnLoadId) {
@@ -1265,6 +1276,7 @@ var App = (function () {
     start: start,
     runFallback: runFallback,
     runExplorerScan: runExplorerScan,
+    rebindScanButton: rebindScanButton,
     reloadFromExplorer: reloadFromExplorer,
     loadBom: loadBom,
     loadSnapshotFromUrl: loadSnapshotFromUrl,

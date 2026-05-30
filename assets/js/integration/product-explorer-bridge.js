@@ -425,6 +425,10 @@ var ProductExplorerBridge = (function () {
   }
 
   function fetchPilotStructurePayload(rootName) {
+    if (typeof BomSnapshot !== 'undefined' && BomSnapshot.getPilotPayloadForTerm) {
+      var built = BomSnapshot.getPilotPayloadForTerm(rootName);
+      if (built && built.items && built.items.length >= 2) return Promise.resolve(built);
+    }
     var map = APP_CONFIG.PILOT_SNAPSHOT_BY_STRUCTURE || {};
     if (!rootName || typeof BomSnapshot === 'undefined') return Promise.resolve(null);
     var path = null;
