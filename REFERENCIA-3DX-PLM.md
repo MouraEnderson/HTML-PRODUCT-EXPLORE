@@ -12,7 +12,7 @@ Documento único para retomar o projeto com base na **documentação Dassault** 
 | GitHub Pages **funciona no Chrome** | `teste-url.html` verde; `widget-uwa.html` com botão Varrer no Chrome |
 | Product Structure Explorer funciona | Mont10 / Drone na aba PRODUCTEXPLORE |
 | Web Page Reader **não serve** para API ENOVIA | Documentação DS + testes anteriores |
-| Deploy `/webapps/BomAnalytics/` | **404** — não publicado no 3DSpace |
+| Deploy `/webapps/BomAnalytics/` | **Fora de escopo** — não há opção de publicar no 3DSpace neste projeto |
 | Cache do dashboard | Mensagem antiga **“widget UWA OK”** ainda aparece → **cache 3DDashboard** ou URL antiga |
 
 **Conclusão:** o problema **não** é “criar o app”. É **como** o HTML/JS deve ser escrito para o motor UWA do 3DDashboard e **como** obter a E-BOM (REST, não DOM).
@@ -166,17 +166,18 @@ Ações (admin / dev):
 
 ---
 
-## 8. Hospedagem: três opções válidas (escolher UMA)
+## 8. Hospedagem (escopo deste projeto)
 
-| Opção | Prós | Contras | Quando usar |
-|-------|------|---------|-------------|
-| **A. GitHub Pages** + Additional App | Grátis; já funciona UWA mínimo | JS externo problemático; cache; servidor DS deve alcançar github | Protótipo se seguir template UWA estrito |
-| **B. 3DSpace `/webapps/BomAnalytics/`** | Mesmo origin; padrão COE; recursos JS normais | Precisa admin servidor (hoje 404) | **Produção recomendada** |
-| **C. Servidor interno SKA** (Azure/IIS) | Controle headers CORS/frame | TI hospeda | Empresas que bloqueiam github.io |
+**Restrição confirmada:** publicar em **3DSpace `/webapps/` não é opção** — não trazer isso como caminho.
 
-**Não usar** `cdn.jsdelivr.net` como URL do Additional App para abrir no Chrome — entrega HTML como texto; no iframe pode falhar MIME.
+| Opção | Situação |
+|-------|----------|
+| **GitHub Pages** + **Additional App** | **Único caminho de deploy** para o widget |
+| Servidor interno SKA (Azure/IIS) | Só se TI oferecer URL pública no futuro (não assumido) |
 
-URL estável para teste (Pages):
+**Não usar** `cdn.jsdelivr.net` como URL do Additional App — no Chrome abre só código-fonte.
+
+URL do widget:
 
 ```
 https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/
@@ -239,16 +240,9 @@ Criar **`widget-bom.html`** (URL nova):
 - `require(WAFData…)` no **mesmo inline**, callbacks (sem `Promise`)  
 - **Um** script externo permitido: `bom-bundle.js` carregado **depois** via `onload` de tag criada no inline, sem tocar `widget` dentro do bundle — bundle usa só `document.querySelector` dentro de `widget.body`
 
-Ou publicar em **3DSpace webapps** (Fase 2) e esquecer GitHub para o iframe.
+Tudo no **GitHub Pages**; shell UWA conforme DS.
 
-### Fase 2 — Produção SKA
-
-1. TI publica `webapps/BomAnalytics/` no 3DSpace.  
-2. Additional App URL =  
-   `https://r1132100929518-us1-space.3dexperience.3ds.com/enovia/webapps/BomAnalytics/widget-bom.html`  
-3. Mesmo código; sem limite github / cache Pages.
-
-### Fase 3 — Varredura + entrega
+### Fase 2 — Varredura + entrega
 
 1. Seleção Mont10 → REST `dseng` → `BomSnapshot` → gráficos.  
 2. Botão Varrer → mensagem **Varredura concluída** / **Varredura falhou**.  
@@ -273,4 +267,6 @@ Ou publicar em **3DSpace webapps** (Fase 2) e esquecer GitHub para o iframe.
 
 **BOM Analytics no 3DDashboard = Additional App + HTML UWA mínimo inline em `widget.body` + WAFData/dseng no 3DSpace; o repositório atual tem lógica certa no `bom-bundle`, mas a entrada UWA foi feita como site web, não como widget Dassault — por isso Chrome ok e dashboard branco/cache.**
 
-Quando quiser retomar, começar pela **Fase 0** e **Fase 1** deste documento — não por novo `widget-uwa` experimental.
+Quando quiser retomar: **Fase 0** (cache + F12) → **Fase 1** (`widget-bom.html` no GitHub, padrão DS). Sem 3DSpace.
+
+**Ao retomar o agente:** não sugerir deploy em `/enovia/webapps/` — fora de escopo neste projeto.

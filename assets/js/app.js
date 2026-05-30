@@ -53,7 +53,43 @@ var App = (function () {
   var structureSyncTimer = null;
 
   function allowApiLoad() {
-    return !!root.__3DX_ALLOW_API__;
+    return !!(root.__3DX_ALLOW_API__ || root.__3DX_FORCE_API__);
+  }
+
+  function apiExplicit() {
+    var q = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
+    return q.api === '1' || q.api === 'true' || !!root.__3DX_FORCE_API__;
+  }
+
+  function pilotGridOnlyMode() {
+    return !!(APP_CONFIG.PILOT_GRID_FIRST && APP_CONFIG.CAN_USE_ENOVIA_API && !apiExplicit());
+  }
+
+  function pollExplorerStructureLabel() {
+    if (typeof ProductExplorerBridge === 'undefined') return;
+    if (ProductExplorerBridge.pollDashboardExplorerChrome) {
+      ProductExplorerBridge.pollDashboardExplorerChrome();
+    }
+    if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
+    var hint =
+      ProductExplorerBridge.getStructureNameHint && ProductExplorerBridge.getStructureNameHint();
+    if (hint) {
+      var label = byId('selectionLabel');
+      if (label) label.textContent = hint;
+    }
+  }
+
+  function pilotAutoLoadFromExplorer() {
+    if (!pilotGridOnlyMode()) return Promise.resolve(false);
+    pollExplorerStructureLabel();
+    var term =
+      (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getStructureNameHint
+        ? ProductExplorerBridge.getStructureNameHint()
+        : null) ||
+      (byId('selectionLabel') && byId('selectionLabel').textContent) ||
+      '';
+    if (!term || term === '-') return Promise.resolve(false);
+    return pilotFallbackExplorerGrid(term);
   }
 
   function allowDemoOnApiFail() {
@@ -217,7 +253,9 @@ var App = (function () {
     }
     loading = false;
     setLoading(false);
-    root.__3DX_ALLOW_API__ = true;
+    var forceApiScan = btnEl && btnEl.id === 'btnLoadPhysicalId';
+    if (forceApiScan) root.__3DX_FORCE_API__ = true;
+    if (!pilotGridOnlyMode() || forceApiScan) root.__3DX_ALLOW_API__ = true;
     var hadSnapshot = BomService.getNodeCount() > 1 && APP_CONFIG.IMPORT_MODE;
     setLoading(true);
     if (btnEl) {
@@ -299,6 +337,7 @@ var App = (function () {
       })
       .finally(function () {
         root.__3DX_ALLOW_API__ = false;
+        root.__3DX_FORCE_API__ = false;
         root.__3DX_BLOCK_AUTO_SYNC__ = false;
         setLoading(false);
         if (btnEl) {
@@ -371,6 +410,9 @@ var App = (function () {
 
   function loadBom(physicalId) {
     if (!physicalId || loading) return Promise.resolve();
+    if (pilotGridOnlyMode() && !allowApiLoad()) {
+      return Promise.resolve();
+    }
     if (isSnapshotDeliveryMode() && !allowApiLoad()) {
       return Promise.resolve();
     }
@@ -821,7 +863,13 @@ var App = (function () {
     setStatus('BOM Analytics v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION) + ' — iniciando…', 'info');
     var watchdog = window.setTimeout(function () {
         if (BomService.getNodeCount() <= 1) {
-        if (APP_CONFIG.CAN_USE_ENOVIA_API) {
+        if (APP_CONFIG.CAN_USE_ENOVIA_API && pilotGridOnlyMode()) {
+          pilotAutoLoadFromExplorer().then(function (ok) {
+            if (!ok) {
+              setStatus('Abra a montagem no Explorer → clique Varrer estrutura.', 'info');
+            }
+          });
+        } else if (APP_CONFIG.CAN_USE_ENOVIA_API) {
           syncOpenExplorerStructure(true);
         } else if (isSnapshotDeliveryMode() && typeof BomSnapshot !== 'undefined' && BomSnapshot.applyBuiltinMont10) {
           BomSnapshot.applyBuiltinMont10().then(function (meta) {
@@ -936,6 +984,11 @@ var App = (function () {
   }
 
   function trySyncThenLoad() {
+    if (APP_CONFIG.CAN_USE_ENOVIA_API && pilotGridOnlyMode()) {
+      pollExplorerStructureLabel();
+      setStatus('Pronto — abra a montagem no Explorer e clique Varrer estrutura.', 'info');
+      return;
+    }
     if (APP_CONFIG.CAN_USE_ENOVIA_API) {
       syncOpenExplorerStructure(true);
       return;
@@ -994,6 +1047,10 @@ var App = (function () {
     );
     if (APP_CONFIG.EXPLORER_FALLBACK_MS === 0) return;
     window.setTimeout(function () {
+      if (APP_CONFIG.CAN_USE_ENOVIA_API && pilotGridOnlyMode()) {
+        pilotAutoLoadFromExplorer();
+        return;
+      }
       if (APP_CONFIG.CAN_USE_ENOVIA_API) {
         syncOpenExplorerStructure(true);
         return;

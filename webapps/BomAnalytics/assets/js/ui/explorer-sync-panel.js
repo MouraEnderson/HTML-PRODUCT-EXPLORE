@@ -5,6 +5,10 @@
 var ExplorerSyncPanel = (function () {
   'use strict';
 
+  function el(id) {
+    return typeof byId3dx === 'function' ? byId3dx(id) : document.getElementById(id);
+  }
+
   var STORAGE_KEY = '3dx_pe_last_selection';
 
   function saveSelection(sel) {
@@ -30,11 +34,11 @@ var ExplorerSyncPanel = (function () {
   }
 
   function applyManualId() {
-    var input = document.getElementById('explorerObjectId');
+    var input = el('explorerObjectId');
     if (!input) return null;
     var id = input.value.trim();
     if (!id || id.length < 10) return null;
-    var nameInput = document.getElementById('explorerObjectName');
+    var nameInput = el('explorerObjectName');
     var sel = {
       physicalid: id,
       type: 'VPMReference',
@@ -49,18 +53,31 @@ var ExplorerSyncPanel = (function () {
 
   function init(options) {
     options = options || {};
-    var btnSync = document.getElementById('btnSyncExplorer');
-    var btnLoadId = document.getElementById('btnLoadObjectId');
-    var btnCopyHelp = document.getElementById('btnCopyHelp');
+    var btnSync = el('btnSyncExplorer');
+    var btnLoadId = el('btnLoadObjectId');
+    var btnCopyHelp = el('btnCopyHelp');
 
     if (btnSync) {
       btnSync.addEventListener('click', function () {
         requestSyncFromDashboard();
+        var current = ProductExplorerBridge.getSelection();
+        if (current && options.onSelect) {
+          options.onSelect(current);
+          if (options.onStatus) {
+            options.onStatus('Explorer: ' + (current.displayName || current.physicalid), 'ok');
+          }
+          return;
+        }
+        var stored = loadStoredSelection();
+        if (stored && options.onSelect) {
+          options.onSelect(stored);
+          if (options.onStatus) {
+            options.onStatus('Explorer: ' + (stored.displayName || stored.physicalid), 'ok');
+          }
+          return;
+        }
         if (options.onStatus) {
-          options.onStatus(
-            'Pedido enviado ao 3DDashboard. Se nada mudar em 5s, use o ID manual (aba EXPLORE).',
-            'warn'
-          );
+          options.onStatus('Abra o produto no Product Structure Explorer (EXPLORE).', 'info');
         }
       });
     }
@@ -81,18 +98,18 @@ var ExplorerSyncPanel = (function () {
 
     if (btnCopyHelp) {
       btnCopyHelp.addEventListener('click', function () {
-        var el = document.getElementById('syncHelpText');
+        var el = el('syncHelpText');
         if (el) el.classList.toggle('open');
       });
     }
 
     ProductExplorerBridge.subscribe(function (sel) {
       saveSelection(sel);
-      if (document.getElementById('explorerObjectId')) {
-        document.getElementById('explorerObjectId').value = sel.physicalid || '';
+      if (el('explorerObjectId')) {
+        el('explorerObjectId').value = sel.physicalid || '';
       }
-      if (document.getElementById('explorerObjectName')) {
-        document.getElementById('explorerObjectName').value = sel.displayName || sel.name || '';
+      if (el('explorerObjectName')) {
+        el('explorerObjectName').value = sel.displayName || sel.name || '';
       }
     });
 

@@ -7,7 +7,25 @@
 
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
-    VERSION: '1.0.0',
+    VERSION: '1.2.0',
+    BUILD: 'snapshot20260601',
+
+    /** Somente Explorer → gráficos + tabela */
+    EXPLORER_ONLY: true,
+    UI_CLEAN: true,
+    SHOW_CHARTS: true,
+    SHOW_TREE: false,
+    SHOW_ISSUES_PANEL: false,
+    SHOW_PLATFORM_SEARCH: false,
+    AUTO_LOAD_DEMO_DRONE: false,
+    DEMO_ON_API_FAIL: false,
+    SNAPSHOT_FIRST: true,
+    AUTO_SYNC_EXPLORER_MS: 15000,
+    SKIP_PP_ENRICH: true,
+    BOM_FAST_DEPTH: 3,
+    USE_FAST_BOOT: true,
+    /** Se Explorer não responder em N ms, carrega produto padrão do tenant */
+    EXPLORER_FALLBACK_MS: 800,
 
     /** Limite de nós na árvore (proteção memória) */
     BOM_MAX_NODES: 50000,
@@ -16,7 +34,7 @@
     BOM_LAZY_BATCH_SIZE: 100,
 
     /** Profundidade inicial automática */
-    BOM_INITIAL_DEPTH: 2,
+    BOM_INITIAL_DEPTH: 3,
 
     /** Debounce busca/filtros (ms) */
     SEARCH_DEBOUNCE_MS: 280,
@@ -24,8 +42,10 @@
     /** Auto-refresh quando seleção muda (ms); 0 = desligado */
     AUTO_REFRESH_MS: 0,
 
-    /** Modo demo via ?demo=true */
+    /** Modo demo via ?demo=true ou ?physicalid= em widget externo */
     DEMO_MODE: false,
+    DEMO_ROOT_ID: null,
+    IMPORT_MODE: false,
 
     /** Busca Physical Product na plataforma */
     SEARCH: {
@@ -97,12 +117,17 @@
       envId: 'R1132100929518',
       securityContext: 'ctx::VPLMProjectLeader.Company Name.CS_IMPLANTACAO',
       platformHost: 'r1132100929518-us1-ifwe.3dexperience.3ds.com',
-      spaceHost: 'r1132100929518-us1-space.3dexperience.3ds.com'
+      spaceHost: 'r1132100929518-us1-space.3dexperience.3ds.com',
+      defaultPhysicalId: '132FB3CE26D70E006A18D1870000316D',
+      defaultDisplayName: '01_SKA_Drone Assembly_130520208'
     },
 
     PLATFORM: {
-      SEARCH_APP_IDS: ['ENX3DSEARCH_AP', '3DSEARCH_AP', 'SEARCH_AP']
+      SEARCH_APP_IDS: ['ENX3DSEARCH_AP', '3DSEARCH_AP', 'SEARCH_AP'],
+      EXPLORER_APP_IDS: ['ENOSCEN_AP', 'ENOPSTR_AP', 'ENX3DSEARCH_AP']
     },
+    /** Se API falhar no GitHub, mostra BOM demo (~20 itens) em vez de 1 linha */
+    DEMO_ON_API_FAIL: true,
 
     CHART_COLORS: {
       primary: '#005686',
@@ -134,11 +159,65 @@
   }
 
   var _host = (global.location && global.location.hostname) ? global.location.hostname.toLowerCase() : '';
-  APP_CONFIG.CROSS_ORIGIN_WIDGET =
-    _host.indexOf('github.io') >= 0 ||
-    _host.indexOf('jsdelivr.net') >= 0 ||
-    _host.indexOf('githubusercontent.com') >= 0;
+  APP_CONFIG.WIDGET_MODE = 'unknown';
 
+  if (_host.indexOf('3dexperience.3ds.com') >= 0) {
+    APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
+    APP_CONFIG.WIDGET_MODE = '3dexperience_host';
+  } else {
+    APP_CONFIG.CROSS_ORIGIN_WIDGET =
+      _host.indexOf('github.io') >= 0 ||
+      _host.indexOf('jsdelivr.net') >= 0 ||
+      _host.indexOf('githubusercontent.com') >= 0;
+    APP_CONFIG.WIDGET_MODE = APP_CONFIG.CROSS_ORIGIN_WIDGET ? 'web_page_reader' : 'external';
+  }
+
+  try {
+    if (global.__3DX_TRUSTED_WIDGET__ || (typeof widget !== 'undefined' && widget)) {
+      APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
+      APP_CONFIG.WIDGET_MODE = 'additional_app';
+    }
+  } catch (e) { /* */ }
+
+  if (query.trusted === '1') {
+    APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
+    APP_CONFIG.WIDGET_MODE = 'forced_trusted';
+  }
+
+  if (query.snapshot || query.snap || query.data) {
+    APP_CONFIG.SNAPSHOT_URL = query.snapshot || query.snap || query.data;
+  }
+  if (query.physicalid) {
+    APP_CONFIG.URL_PHYSICAL_ID = query.physicalid;
+  }
+  if (query.demo === 'true' && query.physicalid) {
+    APP_CONFIG.DEMO_ROOT_ID = query.physicalid;
+  }
+
+  function byId3dx(id) {
+    var el = document.getElementById(id);
+    if (el) return el;
+    try {
+      if (typeof widget !== 'undefined' && widget && widget.body) {
+        return widget.body.querySelector('#' + id);
+      }
+    } catch (e) { /* */ }
+    return null;
+  }
+
+  function qs3dx(sel) {
+    var el = document.querySelector(sel);
+    if (el) return el;
+    try {
+      if (typeof widget !== 'undefined' && widget && widget.body) {
+        return widget.body.querySelector(sel);
+      }
+    } catch (e) { /* */ }
+    return null;
+  }
+
+  global.byId3dx = byId3dx;
+  global.qs3dx = qs3dx;
   global.APP_CONFIG = APP_CONFIG;
   global.APP_QUERY = query;
 })(typeof window !== 'undefined' ? window : this);

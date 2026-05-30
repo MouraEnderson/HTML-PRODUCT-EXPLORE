@@ -5,8 +5,19 @@
 var PlatformBridge = (function () {
   'use strict';
 
+  function isTrustedRuntime() {
+    if (APP_CONFIG && APP_CONFIG.CROSS_ORIGIN_WIDGET === false) return true;
+    if (typeof WidgetRuntime !== 'undefined' && WidgetRuntime.isTrusted()) return true;
+    try {
+      if (typeof widget !== 'undefined' && widget) return true;
+    } catch (e) { /* */ }
+    if (typeof require !== 'undefined' || typeof WAFData !== 'undefined') return true;
+    return false;
+  }
+
   function isExternalWidget() {
     if (APP_CONFIG.DEMO_MODE) return false;
+    if (isTrustedRuntime()) return false;
     var host = (location.hostname || '').toLowerCase();
     if (host.indexOf('3dexperience.3ds.com') >= 0) return false;
     if (host.indexOf('github.io') >= 0) return true;
@@ -99,6 +110,7 @@ var PlatformBridge = (function () {
 
   return {
     isExternalWidget: isExternalWidget,
+    isTrustedRuntime: isTrustedRuntime,
     getPlatformOrigin: getPlatformOrigin,
     getSpaceUrl: getSpaceUrl,
     launchPlatformSearch: launchPlatformSearch,

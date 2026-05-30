@@ -16,6 +16,13 @@ Este arquivo é o **norte** do projeto. Tudo o resto (código, deploy, testes) s
 
 **Não é o objetivo:** substituir o Explorer por upload de Excel, CSV, XLS ou listas de clientes coladas de outra planilha.
 
+### Estrutura qualquer (importante)
+
+- **Mont10 / M1 / M2 (3 itens)** = cenário de **teste** no dashboard, não o produto final.
+- Em produção o usuário abre **qualquer assembly** no Product Structure Explorer — **dezenas, milhares ou dezenas de milhares de linhas** (ex. 1 000 ou 10 000 itens).
+- O Additional App deve **olhar a estrutura ativa** no Explorer (raiz + **pai → filho**), montar a **hierarquia E-BOM**, não uma lista solta de nomes colados.
+- Raiz = o que está aberto/selecionado como contexto no Explorer; filhos = expand REST / lazy load conforme release ENOVIA — com limites de memória e paginação no widget.
+
 ---
 
 ## O que você pediu no prompt original

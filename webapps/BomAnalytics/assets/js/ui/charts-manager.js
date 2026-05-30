@@ -18,7 +18,7 @@ var ChartsManager = (function () {
   }
 
   function doughnut(canvasId, labels, values, title) {
-    var ctx = document.getElementById(canvasId);
+    var ctx = (typeof byId3dx === 'function' ? byId3dx(canvasId) : document.getElementById(canvasId));
     if (!ctx || typeof Chart === 'undefined') return;
     if (charts[canvasId]) charts[canvasId].destroy();
     charts[canvasId] = new Chart(ctx, {
@@ -43,7 +43,7 @@ var ChartsManager = (function () {
   }
 
   function bar(canvasId, labels, values, title) {
-    var ctx = document.getElementById(canvasId);
+    var ctx = (typeof byId3dx === 'function' ? byId3dx(canvasId) : document.getElementById(canvasId));
     if (!ctx || typeof Chart === 'undefined') return;
     if (charts[canvasId]) charts[canvasId].destroy();
     charts[canvasId] = new Chart(ctx, {

@@ -7,7 +7,7 @@ var KpiCards = (function () {
   var container;
 
   function init(selector) {
-    container = document.querySelector(selector);
+    container = (typeof qs3dx === 'function' ? qs3dx(selector) : document.querySelector(selector));
   }
 
   function render(metrics, anomalies) {

@@ -46,21 +46,22 @@ var ProductSearchPanel = (function () {
     }
 
     if (APP_CONFIG.CROSS_ORIGIN_WIDGET || PlatformBridge.isExternalWidget()) {
-      var sent = PlatformBridge.launchPlatformSearch(term);
+      PlatformBridge.launchPlatformSearch(term);
       renderMessage(
-        '<strong>Busca enviada ao 3DDashboard.</strong><br/>' +
-        '1) Veja a barra <em>Pesquisar</em> no topo da plataforma (termo: <b>' + escapeHtml(term) + '</b>).<br/>' +
-        '2) Abra o resultado no <em>Product Explorer</em> (aba EXPLORE).<br/>' +
-        '3) Volte aqui e clique <em>Atualizar</em> para carregar a BOM.<br/>' +
-        '<span class="search-hint">Widget GitHub não acessa APIs ENOVIA diretamente (segurança cross-origin).</span>'
+        'Pesquisa enviada ao topo da plataforma (<b>' + escapeHtml(term) + '</b>). ' +
+        'Abra o resultado no Explorer → <b>Do Explorer</b>.'
       );
       if (typeof App !== 'undefined' && App.setStatus) {
-        App.setStatus('Busca enviada à plataforma: ' + term, 'ok');
+        App.setStatus('Pesquisar: ' + term, 'ok');
       }
       return;
     }
 
-    renderMessage('Buscando na plataforma...');
+    if (typeof PlatformBridge !== 'undefined') {
+      PlatformBridge.launchPlatformSearch(term);
+    }
+
+    renderMessage('Buscando…');
     ProductSearchService.search(term)
       .then(function (items) {
         if (!items.length) {

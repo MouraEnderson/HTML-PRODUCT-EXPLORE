@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260602i',
+    BUILD: 'bom20260602j',
     /** 3DDashboard: não espera probe CSRF (evita travar em "Conectando…") */
     SKIP_SPACE_PROBE: true,
     WAF_REQUEST_TIMEOUT_MS: 15000,
@@ -17,6 +17,8 @@
     PILOT_FALLBACK_SNAPSHOT: true,
     /** Piloto: Varrer lê a árvore visível do Explorer antes da API (evita 406) */
     PILOT_GRID_FIRST: true,
+    /** Bloqueia REST /enovia até Varrer (ou ?api=1 / ID manual) */
+    PILOT_BLOCK_API_UNLESS_ALLOWED: true,
     /** Tenant cloud: não usar dseng:EngItem nem host *-space no 3DDashboard */
     CLOUD_PHYSICAL_ONLY: true,
     /** Fallback offline só com ?snapshot= na URL */

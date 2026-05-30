@@ -159,6 +159,7 @@ var ProductExplorerBridge = (function () {
   var EXPLORER_SKIP_LINE =
     /^(physical product|em trabalho|aprovado|released|frozen|in work|approved|owner|organization|revision|type|maturity|enderson|moura|vplm|recents|open |product structure|enovia|access your|n\/d|—|-|login|user)$/i;
   var EXPLORER_PART_LINE = /^(\d{2}_[A-Za-z0-9][A-Za-z0-9_.\-]{2,80})/;
+  var EXPLORER_NAME_LINE = /^(Mont\d+[A-Za-z0-9_.\-]{0,40}|01_SKA_[A-Za-z0-9_.\-]{2,80})/i;
 
   function extractRootNameFromExplorerText(text) {
     var m =
@@ -180,9 +181,9 @@ var ProductExplorerBridge = (function () {
       var line = String(lines[i] || '').trim();
       if (!line || line.indexOf('|') >= 0 || EXPLORER_SKIP_LINE.test(line)) continue;
       var name = null;
-      var partM = line.match(EXPLORER_PART_LINE);
+      var partM = line.match(EXPLORER_PART_LINE) || line.match(EXPLORER_NAME_LINE);
       if (partM) name = partM[1];
-      else if (/^01_SKA_/i.test(line) && line.length >= 8 && line.length <= 64) {
+      else if (/^(01_SKA_|Mont\d)/i.test(line) && line.length >= 4 && line.length <= 64) {
         name = line.replace(/\.{2,}$/, '').trim();
       }
       if (!name || name.length < 6) continue;

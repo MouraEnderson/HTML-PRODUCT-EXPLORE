@@ -5,6 +5,8 @@
 var WafClient = (function () {
   'use strict';
 
+  var root = typeof window !== 'undefined' ? window : this;
+
   function getWAFData() {
     if (typeof WAFData !== 'undefined' && WAFData.authenticatedRequest) return WAFData;
     try {
@@ -76,6 +78,17 @@ var WafClient = (function () {
     return url;
   }
 
+  function pilotApiBlocked() {
+    if (!APP_CONFIG || APP_CONFIG.PILOT_BLOCK_API_UNLESS_ALLOWED === false) return false;
+    if (!APP_CONFIG.PILOT_GRID_FIRST) return false;
+    try {
+      if (root.__3DX_FORCE_API__ || root.__3DX_ALLOW_API__) return false;
+    } catch (e0) { /* */ }
+    var q = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
+    if (q.api === '1' || q.api === 'true') return false;
+    return true;
+  }
+
   function request(method, url, options) {
     options = options || {};
     url = normalizeRequestUrl(url);
@@ -83,6 +96,12 @@ var WafClient = (function () {
 
     if (APP_CONFIG.DEMO_MODE) {
       return Promise.reject(new Error('DEMO_MODE: use BomService mock'));
+    }
+
+    if (pilotApiBlocked() && is3DSpaceUrl(url)) {
+      return Promise.reject(
+        new Error('API piloto bloqueada — clique Varrer (árvore Explorer). Build ' + (APP_CONFIG.BUILD || ''))
+      );
     }
 
     function runOnce(targetUrl, retried) {

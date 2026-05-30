@@ -19,7 +19,7 @@ var DataTable = (function () {
 
   function init(tableSelector) {
     columns = getColumns();
-    var table = document.querySelector(tableSelector);
+    var table = (typeof qs3dx === 'function' ? qs3dx(tableSelector) : document.querySelector(tableSelector));
     if (!table) return;
     scrollContainer = table.closest('.table-scroll');
     tbody = table.querySelector('tbody');

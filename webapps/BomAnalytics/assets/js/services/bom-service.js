@@ -108,6 +108,72 @@ var BomService = (function () {
   }
 
   /** Modo cross-origin: só raiz com dados da seleção (sem API). */
+  /**
+   * Monta BOM a partir de linhas importadas (Excel/CSV Product Explorer).
+   */
+  function loadFromImportedItems(items) {
+    reset();
+    if (!items || !items.length) return Promise.resolve(index);
+
+    var stack = [];
+    items.forEach(function (item, idx) {
+      var level = item.level || 0;
+      while (stack.length > level) stack.pop();
+      var parentId = stack.length ? stack[stack.length - 1] : null;
+
+      var attrs = {
+        physicalid: item.physicalid,
+        name: item.name,
+        title: item.title || item.name,
+        type: item.type,
+        displayType: item.displayType || 'Physical Product',
+        revision: item.revision,
+        state: item.state,
+        maturity: item.maturity || item.state,
+        owner: item.owner,
+        organization: item.organization,
+        collabSpace: item.collabSpace,
+        approval: item.approval || 'Unknown',
+        hasPhysicalProduct: true
+      };
+
+      var node = addNode(attrs, parentId, level, item.quantity);
+      if (node) {
+        node.loaded = true;
+        node.expanded = level < APP_CONFIG.BOM_INITIAL_DEPTH;
+        stack[level] = node.physicalid;
+      }
+      if (idx === 0 || level === 0) rootId = item.physicalid;
+    });
+
+    if (!rootId && items[0]) rootId = items[0].physicalid;
+    return Promise.resolve(index);
+  }
+
+  /** Produto arrastado/colido (JSON 3DXContent) — raiz real + preview filhos no GitHub. */
+  function loadFrom3DXProduct(sel) {
+    return loadRootFromSelection({
+      physicalid: sel.physicalid,
+      name: sel.displayName || sel.name || sel.physicalid,
+      title: sel.displayName || sel.name || sel.physicalid,
+      displayType: sel.displayType || 'Physical Product',
+      type: sel.type || 'VPMReference'
+    }).then(function () {
+      if (APP_CONFIG.CROSS_ORIGIN_WIDGET || APP_CONFIG.DEMO_MODE) {
+        if (index[rootId]) {
+          index[rootId].name = sel.displayName || index[rootId].name;
+          index[rootId].title = sel.displayName || index[rootId].title;
+          index[rootId].displayType = sel.displayType || index[rootId].displayType;
+          index[rootId].isAssembly = true;
+          index[rootId].expanded = true;
+        }
+        buildDemoSubtree(rootId, 1, 4);
+        return PhysicalProductService.enrichNodes(index);
+      }
+      return loadRoot(sel.physicalid);
+    });
+  }
+
   function loadRootFromSelection(attrs) {
     reset();
     rootId = attrs.physicalid;
@@ -148,7 +214,8 @@ var BomService = (function () {
         attrs.displayType = attrs.displayType || 'Physical Product';
         addNode(attrs, null, 0, 1);
         index[physicalId].loaded = false;
-        return loadTreeRecursive(physicalId, APP_CONFIG.BOM_INITIAL_DEPTH + 2, 1);
+        var depth = APP_CONFIG.BOM_FAST_DEPTH || APP_CONFIG.BOM_INITIAL_DEPTH;
+        return loadTreeRecursive(physicalId, depth, 1);
       });
   }
 
@@ -172,9 +239,10 @@ var BomService = (function () {
 
   /* ---------- Demo data ---------- */
   function loadDemoTree(rootPhysicalId) {
+    var isDrone = rootPhysicalId === '132FB3CE26D70E006A18D1870000316D';
     var root = addNode({
       physicalid: rootPhysicalId,
-      name: 'Root Assembly',
+      name: isDrone ? '01_SKA_Drone Assembly_130520206' : 'Root Assembly',
       title: 'Produto Principal',
       type: 'VPMReference',
       revision: 'A',
@@ -231,6 +299,8 @@ var BomService = (function () {
     reset: reset,
     loadRoot: loadRoot,
     loadRootFromSelection: loadRootFromSelection,
+    loadFrom3DXProduct: loadFrom3DXProduct,
+    loadFromImportedItems: loadFromImportedItems,
     expandNode: expandNode,
     collapseNode: collapseNode,
     getIndex: function () { return index; },

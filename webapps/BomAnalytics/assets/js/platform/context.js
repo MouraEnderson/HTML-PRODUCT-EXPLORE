@@ -2,7 +2,7 @@
  * @file platform/context.js
  * Security context, tenant e CSRF para requisições ENOVIA.
  */
-var PlatformContext = (function () {
+var PlatformContext = (function (global) {
   'use strict';
 
   var state = {
@@ -16,6 +16,9 @@ var PlatformContext = (function () {
   };
 
   function getRequire() {
+    if (typeof PlatformBridge !== 'undefined' && PlatformBridge.isTrustedRuntime && PlatformBridge.isTrustedRuntime()) {
+      if (typeof require !== 'undefined') return require;
+    }
     if (typeof PlatformBridge !== 'undefined' && PlatformBridge.isExternalWidget()) {
       return PlatformBridge.safeGetRequire();
     }
@@ -30,16 +33,30 @@ var PlatformContext = (function () {
 
   function loadFromWidget() {
     return new Promise(function (resolve) {
+      var PlatformAPI = global.__3DX_PLATFORM_API__;
+      if (PlatformAPI && PlatformAPI.getSecurityContext) {
+        PlatformAPI.getSecurityContext().then(function (ctx) {
+          state.securityContext = ctx;
+          return PlatformAPI.getTenant();
+        }).then(function (tenant) {
+          state.tenant = tenant;
+          state.ready = true;
+          resolve(true);
+        }).catch(function () {
+          resolve(false);
+        });
+        return;
+      }
       var req = getRequire();
       if (!req) {
         resolve(false);
         return;
       }
       try {
-        req(['DS/PlatformAPI/PlatformAPI'], function (PlatformAPI) {
-          PlatformAPI.getSecurityContext().then(function (ctx) {
+        req(['DS/PlatformAPI/PlatformAPI'], function (PAPI) {
+          PAPI.getSecurityContext().then(function (ctx) {
             state.securityContext = ctx;
-            return PlatformAPI.getTenant();
+            return PAPI.getTenant();
           }).then(function (tenant) {
             state.tenant = tenant;
             state.ready = true;
@@ -93,10 +110,23 @@ var PlatformContext = (function () {
     if (loadFrom3DXDeepLink()) {
       return Promise.resolve(state);
     }
+    if (!state.securityContext && APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.securityContext) {
+      state.securityContext = APP_CONFIG.TENANT_DEFAULTS.securityContext;
+      state.tenant = APP_CONFIG.TENANT_DEFAULTS.envId || state.tenant;
+      state.platformId = APP_CONFIG.TENANT_DEFAULTS.envId || state.platformId;
+      state.ready = true;
+    }
+
     return loadFromWidget().then(function (ok) {
       if (ok) return state;
       return loadFromWAF().then(function () {
         if (!state.ready) loadFrom3DXDeepLink();
+        if (!state.ready && APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.securityContext) {
+          state.securityContext = APP_CONFIG.TENANT_DEFAULTS.securityContext;
+          state.tenant = APP_CONFIG.TENANT_DEFAULTS.envId;
+          state.platformId = APP_CONFIG.TENANT_DEFAULTS.envId;
+          state.ready = true;
+        }
         return state;
       });
     });
@@ -123,4 +153,4 @@ var PlatformContext = (function () {
     setCsrfToken: function (t) { state.csrfToken = t; },
     isReady: function () { return state.ready; }
   };
-})();
+})(typeof window !== 'undefined' ? window : this);

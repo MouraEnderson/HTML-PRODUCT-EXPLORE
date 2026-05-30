@@ -5,12 +5,26 @@
 var App = (function () {
   'use strict';
 
+  var root = typeof window !== 'undefined' ? window : this;
+
+  function byId(id) {
+    var el = document.getElementById(id);
+    if (el) return el;
+    try {
+      if (typeof widget !== 'undefined' && widget && widget.body) {
+        return widget.body.querySelector('#' + id);
+      }
+    } catch (e) { /* UWA */ }
+    return null;
+  }
+
   var currentMetrics = null;
   var currentAnomalies = null;
   var loading = false;
+  var lastLoadedId = null;
 
   function setStatus(msg, type) {
-    var el = document.getElementById('statusBar');
+    var el = byId('statusBar');
     if (!el) return;
     el.textContent = msg;
     el.className = 'status-bar status-' + (type || 'info');
@@ -18,7 +32,7 @@ var App = (function () {
 
   function setLoading(on) {
     loading = on;
-    var overlay = document.getElementById('loadingOverlay');
+    var overlay = byId('loadingOverlay');
     if (overlay) overlay.classList.toggle('hidden', !on);
   }
 
@@ -33,21 +47,28 @@ var App = (function () {
     currentAnomalies = AnomalyDetector.detect(index);
 
     KpiCards.render(currentMetrics, currentAnomalies);
-    ChartsManager.destroyAll();
-    ChartsManager.render(currentMetrics);
-    BomTree.refresh(index, rootId);
+    if (APP_CONFIG.SHOW_CHARTS !== false) {
+      ChartsManager.destroyAll();
+      ChartsManager.render(currentMetrics);
+    }
+    if (APP_CONFIG.SHOW_TREE !== false && byId('bomTree') && typeof BomTree !== 'undefined') {
+      BomTree.refresh(index, rootId);
+    }
     DataTable.setData(filtered);
+    var tableLbl = byId('tableProductLabel');
+    var sel = ProductExplorerBridge.getSelection();
+    if (tableLbl && sel) {
+      tableLbl.textContent = sel.displayName || sel.name || sel.physicalid;
+    }
     renderIssues(currentAnomalies.issues);
 
-    setStatus(
-      'Estrutura: ' + BomService.getNodeCount() + ' itens | Exibindo: ' + filtered.length +
-      (APP_CONFIG.DEMO_MODE ? ' | MODO DEMO' : ''),
-      'ok'
-    );
+    var mode = APP_CONFIG.IMPORT_MODE ? ' | IMPORTADO' : (APP_CONFIG.DEMO_MODE ? ' | DEMO' : '');
+    setStatus('Estrutura: ' + BomService.getNodeCount() + ' itens | Exibindo: ' + filtered.length + mode, 'ok');
   }
 
   function renderIssues(issues) {
-    var el = document.getElementById('issuesList');
+    if (APP_CONFIG.SHOW_ISSUES_PANEL === false) return;
+    var el = byId('issuesList');
     if (!el) return;
     var top = issues.slice(0, 50);
     if (!top.length) {
@@ -76,32 +97,111 @@ var App = (function () {
       displayName: sel.displayName || sel.name || physicalId
     }).then(function () {
       refreshUI();
-      setStatus(
-        'Objeto do Explorer vinculado. Estrutura filha completa exige HTML no 3DSpace (mesmo domínio).',
-        'warn'
-      );
+      setStatus('Modo limitado: 1 item (use Additional App widget-uwa sem iframe).', 'warn');
     });
+  }
+
+  function apiTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise(function (_, reject) {
+        window.setTimeout(function () {
+          reject(new Error(label || 'Tempo esgotado na API'));
+        }, ms || 18000);
+      })
+    ]);
+  }
+
+  function applySnapshotPayload(payload, sourceLabel) {
+    setLoading(true);
+    return BomSnapshot.applyPayload(payload)
+      .then(function (meta) {
+        APP_CONFIG.IMPORT_MODE = true;
+        APP_CONFIG.DEMO_MODE = false;
+        lastLoadedId = meta.rootPhysicalId;
+        var lbl = byId('selectionLabel');
+        if (lbl) lbl.textContent = meta.productName;
+        var tableLbl = byId('tableProductLabel');
+        if (tableLbl) tableLbl.textContent = meta.productName;
+        refreshUI();
+        setStatus(
+          'Snapshot: ' + meta.productName + ' — ' + meta.itemCount + ' itens (' + (sourceLabel || 'JSON') + ')',
+          'ok'
+        );
+      })
+      .finally(function () {
+        setLoading(false);
+      });
+  }
+
+  function loadSnapshotFromUrl(url) {
+    if (!url) return Promise.resolve();
+    setLoading(true);
+    setStatus('Carregando snapshot…', 'info');
+    return BomSnapshot.fetchAndApply(url)
+      .then(function (meta) {
+        APP_CONFIG.IMPORT_MODE = true;
+        APP_CONFIG.DEMO_MODE = false;
+        lastLoadedId = meta.rootPhysicalId;
+        var lbl = byId('selectionLabel');
+        if (lbl) lbl.textContent = meta.productName;
+        var tableLbl = byId('tableProductLabel');
+        if (tableLbl) tableLbl.textContent = meta.productName;
+        refreshUI();
+        setStatus('Snapshot: ' + meta.productName + ' — ' + meta.itemCount + ' itens', 'ok');
+      })
+      .catch(function (err) {
+        setStatus('Snapshot: ' + (err.message || err), 'error');
+      })
+      .finally(function () {
+        setLoading(false);
+      });
+  }
+
+  function tryLoadSnapshotFirst() {
+    var url = typeof BomSnapshot !== 'undefined' && BomSnapshot.getParamUrl
+      ? BomSnapshot.getParamUrl()
+      : null;
+    if (!url && APP_CONFIG.SNAPSHOT_URL) {
+      url = BomSnapshot.resolveUrl(APP_CONFIG.SNAPSHOT_URL);
+    }
+    if (url) return loadSnapshotFromUrl(url);
+    var cached = typeof BomSnapshot !== 'undefined' ? BomSnapshot.loadSession() : null;
+    if (cached) return applySnapshotPayload(cached, 'sessão');
+    return Promise.resolve();
   }
 
   function loadBom(physicalId) {
     if (!physicalId || loading) return Promise.resolve();
+    if (physicalId === lastLoadedId && BomService.getNodeCount() > 1) {
+      return Promise.resolve();
+    }
     setLoading(true);
-    setStatus('Carregando E-BOM...', 'info');
+    setStatus('Carregando E-BOM…', 'info');
 
-    if (APP_CONFIG.CROSS_ORIGIN_WIDGET) {
-      return loadBomFromSelectionOnly(physicalId);
+    if (APP_CONFIG.CROSS_ORIGIN_WIDGET && !APP_CONFIG.DEMO_MODE && !APP_CONFIG.IMPORT_MODE) {
+      return loadBomFromSelectionOnly(physicalId).finally(function () {
+        setLoading(false);
+      });
     }
 
-    return BomService.loadRoot(physicalId)
-      .then(function (index) {
-        return PhysicalProductService.enrichNodes(index, { batchSize: 25 });
-      })
+    return apiTimeout(BomService.loadRoot(physicalId), 18000, 'API E-BOM lenta ou indisponível')
       .then(function () {
+        lastLoadedId = physicalId;
         refreshUI();
+        setStatus(BomService.getNodeCount() + ' itens carregados.', 'ok');
+        if (APP_CONFIG.SKIP_PP_ENRICH) return;
+        return PhysicalProductService.enrichNodes(BomService.getIndex(), { batchSize: 40 })
+          .then(function () { refreshUI(); });
       })
       .catch(function (err) {
         console.error(err);
-        setStatus('Erro ao carregar BOM: ' + (err.message || err), 'error');
+        if (APP_CONFIG.DEMO_ON_API_FAIL !== false) {
+          return loadDemoBom(
+            'GitHub não acessa API ENOVIA. Demo com ~20 itens. Estrutura real: deploy 3DSpace.'
+          );
+        }
+        setStatus('Erro: ' + (err.message || err), 'error');
       })
       .finally(function () {
         setLoading(false);
@@ -109,18 +209,55 @@ var App = (function () {
   }
 
   function onSelection(sel) {
-    document.getElementById('selectionLabel').textContent =
-      sel.displayName + ' (' + sel.physicalid + ')';
+    if (!sel || !sel.physicalid) return;
+    var label = byId('selectionLabel');
+    if (label) {
+      label.textContent = (sel.displayName || sel.name || sel.physicalid);
+    }
     loadBom(sel.physicalid);
+  }
+
+  function loadPhysicalProduct(sel) {
+    if (!sel || !sel.physicalid) return Promise.resolve();
+    setLoading(true);
+    if (typeof ProductExplorerBridge.setSelection === 'function') {
+      ProductExplorerBridge.setSelection(sel, { silent: true });
+    }
+    byId('selectionLabel').textContent =
+      (sel.displayName || sel.name) + ' (' + sel.physicalid + ')';
+    return BomService.loadFrom3DXProduct(sel)
+      .then(function () {
+        APP_CONFIG.IMPORT_MODE = false;
+        refreshUI();
+        var n = BomService.getNodeCount();
+        if (APP_CONFIG.CROSS_ORIGIN_WIDGET) {
+          setStatus(
+            'Carregado: ' + (sel.displayName || sel.physicalid) + ' — ' + n +
+            ' itens (preview). BOM real: HTML no 3DSpace.',
+            'warn'
+          );
+        } else {
+          setStatus('Carregado: ' + (sel.displayName || sel.physicalid) + ' — ' + n + ' itens.', 'ok');
+        }
+      })
+      .catch(function (err) {
+        setStatus('Erro: ' + (err.message || err), 'error');
+      })
+      .finally(function () {
+        setLoading(false);
+      });
   }
 
   function initUI() {
     KpiCards.init('#kpiGrid');
     ChartsManager.init();
     DataTable.init('#bomTable');
-    BomTree.init('#bomTree', function (id) {
-      return BomService.expandNode(id);
-    });
+    var treeEl = byId('bomTree');
+    if (treeEl && APP_CONFIG.SHOW_TREE !== false && typeof BomTree !== 'undefined') {
+      BomTree.init('#bomTree', function (id) {
+        return BomService.expandNode(id);
+      });
+    }
     Filters.init(
       {
         search: '#searchInput',
@@ -134,35 +271,137 @@ var App = (function () {
       }
     );
 
-    document.getElementById('btnRefresh').addEventListener('click', function () {
-      var sel = ProductExplorerBridge.getSelection();
-      if (sel) loadBom(sel.physicalid);
-      else setStatus('Selecione um objeto no Product Explorer.', 'warn');
-    });
+    var btnSync = byId('btnSyncExplorer');
+    if (btnSync) {
+      btnSync.addEventListener('click', function () {
+        pullExplorerSelection();
+        var fromHash = ProductExplorerBridge.readHashSelection && ProductExplorerBridge.readHashSelection();
+        var sel = fromHash || ProductExplorerBridge.getSelection();
+        if (sel && isValidPhysicalId(sel.physicalid)) {
+          lastLoadedId = null;
+          var lbl = byId('selectionLabel');
+          if (lbl) lbl.textContent = sel.displayName || sel.physicalid;
+          loadBom(sel.physicalid);
+          setStatus('Explorer: ' + (sel.displayName || sel.physicalid), 'ok');
+        } else {
+          setStatus(
+            'Clique na raiz do assembly no Explorer (01_SKA_Drone…), depois ↻ Sincronizar.',
+            'warn'
+          );
+          loadDemoBom();
+        }
+      });
+    }
 
-    document.getElementById('btnExport').addEventListener('click', function () {
-      DataTable.exportExcel();
-    });
+    var btnRef = byId('btnRefresh');
+    if (btnRef) {
+      btnRef.addEventListener('click', function () {
+        reloadFromExplorer();
+      });
+    }
 
-    document.getElementById('btnExpandAll').addEventListener('click', function () {
-      setStatus('Expansão total desabilitada por performance. Expanda por nível na árvore.', 'warn');
+    var btnExport = byId('btnExport');
+    if (btnExport) {
+      btnExport.addEventListener('click', function () {
+        DataTable.exportExcel();
+      });
+    }
+
+    var btnExpand = byId('btnExpandAll');
+    if (btnExpand) {
+      btnExpand.addEventListener('click', function () {
+        setStatus('Expanda níveis na árvore.', 'info');
+      });
+    }
+
+    var btnDrone = byId('btnLoadDrone');
+    if (btnDrone) {
+      btnDrone.addEventListener('click', function () {
+        loadPhysicalProduct({
+          physicalid: '132FB3CE26D70E006A18D1870000316D',
+          displayName: '01_SKA_Drone Assembly_130520206',
+          name: '01_SKA_Drone Assembly_130520206',
+          type: 'VPMReference',
+          displayType: 'Physical Product'
+        });
+      });
+    }
+  }
+
+  function stripLegacyUI() {
+    var selectors = [
+      '.external-banner',
+      '.goal-panel',
+      '.paste-panel',
+      '.drop-zone',
+      '.explorer-sync-panel',
+      '.platform-search.panel',
+      '.split-panel',
+      '.issues-panel',
+      '.header-actions .search-group'
+    ];
+    selectors.forEach(function (sel) {
+      document.querySelectorAll(sel).forEach(function (el) {
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+      });
     });
+    var h1 = document.querySelector('.app-header h1');
+    if (h1 && h1.textContent.indexOf('Dashboard') >= 0) {
+      h1.textContent = 'BOM Analytics';
+    }
+    document.body.classList.add('ui-clean');
   }
 
   function initAppCore(spaceUrl) {
+    stripLegacyUI();
     if (spaceUrl && spaceUrl !== 'demo') {
-      EnoviaApi.init(spaceUrl);
-      SearchApi.init(spaceUrl);
+      try {
+        EnoviaApi.init(spaceUrl);
+        if (typeof SearchApi !== 'undefined') SearchApi.init(spaceUrl);
+      } catch (e) { /* */ }
     }
     ProductExplorerBridge.init();
     ProductExplorerBridge.subscribe(onSelection);
     initUI();
-    ProductSearchPanel.init({ onSelect: onSelection });
-    ExplorerSyncPanel.init({
-      onSelect: onSelection,
-      onStatus: setStatusPublic
-    });
+    if (typeof ExplorerSyncPanel !== 'undefined') {
+      ExplorerSyncPanel.init({
+        onSelect: onSelection,
+        onStatus: setStatusPublic
+      });
+    }
+    if (typeof SnapshotPanel !== 'undefined') {
+      SnapshotPanel.init({
+        onSnapshot: function (payload, label) {
+          applySnapshotPayload(payload, label);
+        },
+        onError: function (msg) {
+          setStatus(msg, 'error');
+        }
+      });
+    }
     toggleCrossOriginUI();
+    scheduleExplorerSync();
+    startExplorerPoll();
+  }
+
+  function pullExplorerSelection() {
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.pollSelection) {
+      ProductExplorerBridge.pollSelection();
+    }
+    if (typeof PlatformBridge !== 'undefined') {
+      PlatformBridge.requestDashboardSelection();
+    }
+  }
+
+  function scheduleExplorerSync() {
+    setTimeout(pullExplorerSelection, 800);
+    setTimeout(pullExplorerSelection, 2500);
+  }
+
+  function startExplorerPoll() {
+    var ms = APP_CONFIG.AUTO_SYNC_EXPLORER_MS || 0;
+    if (ms < 2000) return;
+    setInterval(pullExplorerSelection, ms);
   }
 
   function toggleCrossOriginUI() {
@@ -172,39 +411,244 @@ var App = (function () {
     });
   }
 
+  function runHealthCheck() {
+    var problems = [];
+    if (typeof Chart === 'undefined') problems.push('Chart.js não carregou (gráficos desativados)');
+    if (problems.length) {
+      setStatus('Atenção: ' + problems.join('; ') + '. Colar do Explorer (Ctrl+C) continua funcionando.', 'warn');
+      return true;
+    }
+    return true;
+  }
+
+  /** Additional App injeta UWA/require — aguarda antes de assumir Web Page Reader. */
+  function waitForTrustedWidget(ms) {
+    ms = ms || 2500;
+    return new Promise(function (resolve) {
+      if (!APP_CONFIG.CROSS_ORIGIN_WIDGET) return resolve(true);
+      var t0 = Date.now();
+      function tick() {
+        var hasUwa = false;
+        try {
+          hasUwa = (typeof WidgetRuntime !== 'undefined' && WidgetRuntime.isTrusted()) ||
+            (typeof widget !== 'undefined' && widget);
+        } catch (e) { /* */ }
+        var hasRequire = typeof require !== 'undefined';
+        var hasWaf = typeof WAFData !== 'undefined';
+        if (hasUwa || hasRequire || hasWaf) {
+          APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
+          APP_CONFIG.WIDGET_MODE = hasUwa ? 'additional_app' : 'trusted_runtime';
+          resolve(true);
+          return;
+        }
+        if (Date.now() - t0 >= ms) {
+          resolve(false);
+          return;
+        }
+        setTimeout(tick, 150);
+      }
+      tick();
+    });
+  }
+
   function bootstrap() {
-    setLoading(true);
-    setStatus('Inicializando...', 'info');
+    setStatus('BOM Analytics v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION) + ' — iniciando…', 'info');
+    var watchdog = window.setTimeout(function () {
+      if (BomService.getNodeCount() <= 1) runFallback();
+      forceStopLoading();
+    }, 12000);
+    var wait = isTrustedBoot() ? Promise.resolve(true) : waitForTrustedWidget(2500);
+    return wait
+      .then(function () { return bootstrapCore(); })
+      .finally(function () {
+        window.clearTimeout(watchdog);
+        forceStopLoading();
+      });
+  }
+
+  function runFallback() {
+    if (BomService.getNodeCount() > 1) return;
+    if (APP_CONFIG.AUTO_LOAD_DEMO_DRONE) {
+      loadDefaultExplorerProduct();
+      return;
+    }
+    setStatus(
+      'Cole a estrutura do Explorer abaixo ou use collect.html → ?snapshot=data/arquivo.json',
+      'warn'
+    );
+  }
+
+  function reloadFromExplorer() {
+    pullExplorerSelection();
+    var sel = ProductExplorerBridge.getSelection();
+    if (sel && sel.physicalid) {
+      lastLoadedId = null;
+      loadBom(sel.physicalid);
+      return;
+    }
+    trySyncThenLoad();
+  }
+
+  function getTenantSpaceUrl() {
+    var h = APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.spaceHost;
+    return h ? ('https://' + h + '/enovia') : null;
+  }
+
+  function isValidPhysicalId(id) {
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.isValidPhysicalId) {
+      return ThreeDXContentParser.isValidPhysicalId(id);
+    }
+    return id && String(id).length >= 16;
+  }
+
+  function loadDemoBom(statusMsg) {
+    var d = APP_CONFIG.TENANT_DEFAULTS || {};
+    if (!d.defaultPhysicalId) return Promise.resolve();
+    APP_CONFIG.DEMO_MODE = true;
+    APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
+    var sel = {
+      physicalid: d.defaultPhysicalId,
+      displayName: d.defaultDisplayName || d.defaultPhysicalId,
+      name: d.defaultDisplayName || d.defaultPhysicalId,
+      type: 'VPMReference',
+      displayType: 'Physical Product'
+    };
+    ProductExplorerBridge.setSelection(sel, { silent: true });
+    var lbl = byId('selectionLabel');
+    if (lbl) lbl.textContent = sel.displayName;
+    return BomService.loadRoot(d.defaultPhysicalId).then(function () {
+      lastLoadedId = d.defaultPhysicalId;
+      refreshUI();
+      setStatus(
+        statusMsg || ('Demonstração: ' + BomService.getNodeCount() + ' itens. BOM real = 3DSpace.'),
+        'warn'
+      );
+    });
+  }
+
+  function loadDefaultExplorerProduct() {
+    return loadDemoBom('Carregando demonstração do Drone…');
+  }
+
+  function trySyncThenLoad() {
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.pollSelection) {
+      ProductExplorerBridge.pollSelection();
+    }
+    pullExplorerSelection();
+    var fromHash = typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.readHashSelection
+      ? ProductExplorerBridge.readHashSelection()
+      : null;
+    if (fromHash && isValidPhysicalId(fromHash.physicalid)) {
+      ProductExplorerBridge.setSelection(fromHash, { silent: true });
+      var lbl = byId('selectionLabel');
+      if (lbl) lbl.textContent = fromHash.displayName || fromHash.physicalid;
+      loadBom(fromHash.physicalid);
+      return;
+    }
+    var sel = ProductExplorerBridge.getSelection();
+    if (sel && isValidPhysicalId(sel.physicalid)) {
+      loadBom(sel.physicalid);
+      return;
+    }
+    setStatus(
+      'Cole a grade do Explorer (caixa abaixo) ou abra collect.html para gerar JSON.',
+      'info'
+    );
+    window.setTimeout(function () {
+      pullExplorerSelection();
+      var later = ProductExplorerBridge.getSelection();
+      if (later && later.physicalid && later.physicalid !== lastLoadedId) {
+        loadBom(later.physicalid);
+      }
+    }, APP_CONFIG.EXPLORER_FALLBACK_MS || 800);
+  }
+
+  function isTrustedBoot() {
+    if (root.__3DX_TRUSTED_WIDGET__) return true;
+    try {
+      if (typeof widget !== 'undefined' && widget) return true;
+    } catch (e) { /* */ }
+    if (APP_CONFIG.CROSS_ORIGIN_WIDGET === false) return true;
+    return false;
+  }
+
+  function bootstrapTrustedFast() {
+    APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
+    setStatus('Conectando APIs 3DEXPERIENCE… v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION), 'info');
+
+    var chain = PlatformContext.init();
+    if (typeof WafBootstrap !== 'undefined') {
+      chain = WafBootstrap.ensure().then(function () {
+        return PlatformContext.init();
+      });
+    }
+
+    return chain
+      .then(function () {
+        return CompassServices.get3DSpaceUrl(PlatformContext.getState().platformId);
+      })
+      .then(function (spaceUrl) {
+        var space = spaceUrl || getTenantSpaceUrl();
+        if (!space) {
+          throw new Error('URL 3DSpace não encontrada');
+        }
+        initAppCore(space);
+        return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
+      })
+      .then(function () {
+        return tryLoadSnapshotFirst().then(function () {
+          if (BomService.getNodeCount() > 1) return;
+          setStatus('Carregando E-BOM…', 'info');
+          trySyncThenLoad();
+        });
+      })
+      .catch(function (err) {
+        console.error(err);
+        try {
+          initAppCore(getTenantSpaceUrl());
+        } catch (eInit) { /* */ }
+        return tryLoadSnapshotFirst().then(function () {
+          if (BomService.getNodeCount() <= 1) {
+            setStatus('API indisponível — cole estrutura do Explorer ou use ?snapshot=', 'warn');
+          }
+        });
+      });
+  }
+
+  function bootstrapCore() {
+    if (isTrustedBoot() && APP_CONFIG.USE_FAST_BOOT !== false) {
+      return bootstrapTrustedFast();
+    }
 
     if (APP_CONFIG.CROSS_ORIGIN_WIDGET) {
       try {
         initAppCore(null);
-        setStatus(
-          'Widget Web Page Reader: clique Buscar → selecione no Product Explorer → Atualizar.',
-          'warn'
-        );
+        runHealthCheck();
+        return tryLoadSnapshotFirst().then(function () {
+          if (BomService.getNodeCount() > 1) return;
+          trySyncThenLoad();
+        });
       } catch (err) {
         console.error(err);
         setStatus('Erro: ' + (err.message || err), 'error');
       }
-      setLoading(false);
       return Promise.resolve();
     }
 
     return PlatformContext.init()
       .then(function () {
-        if (APP_CONFIG.DEMO_MODE) {
-          setStatus('Modo demonstração — dados simulados.', 'warn');
-          return 'demo';
-        }
+        if (APP_CONFIG.DEMO_MODE) return 'demo';
         return CompassServices.get3DSpaceUrl(PlatformContext.getState().platformId);
       })
       .then(function (spaceUrl) {
+        return CompassServices.fetchCsrfToken(spaceUrl).then(function () { return spaceUrl; });
+      })
+      .then(function (spaceUrl) {
         initAppCore(spaceUrl);
-        var sel = ProductExplorerBridge.getSelection();
-        if (sel && !APP_CONFIG.CROSS_ORIGIN_WIDGET) return loadBom(sel.physicalid);
-        if (APP_CONFIG.DEMO_MODE) return loadBom('DEMO_ROOT_001');
-        setStatus('Busque um Physical Product ou selecione no Product Explorer.', 'info');
+        return tryLoadSnapshotFirst().then(function () {
+          if (BomService.getNodeCount() > 1) return;
+          trySyncThenLoad();
+        });
       })
       .catch(function (err) {
         console.error(err);
@@ -212,15 +656,11 @@ var App = (function () {
           initAppCore('demo');
           return loadBom('DEMO_ROOT_001');
         }
-        try {
-          initAppCore(null);
-          setStatus('Modo limitado (sem require). Use Buscar + Product Explorer + Atualizar.', 'warn');
-        } catch (e2) {
-          setStatus('Falha na inicialização: ' + err.message, 'error');
-        }
-      })
-      .finally(function () {
-        setLoading(false);
+        initAppCore(getTenantSpaceUrl());
+        return tryLoadSnapshotFirst().then(function () {
+          if (BomService.getNodeCount() <= 1) runFallback();
+          setStatus('API limitada: ' + (err.message || err), 'warn');
+        });
       });
   }
 
@@ -228,26 +668,47 @@ var App = (function () {
     setStatus(msg, type);
   }
 
-  function start() {
+  function run() {
+    if (typeof WidgetRuntime !== 'undefined') WidgetRuntime.markTrusted();
+    APP_CONFIG.CROSS_ORIGIN_WIDGET = false;
+    stripLegacyUI();
     bootstrap().catch(function (err) {
       console.error('[App] bootstrap failed', err);
-      setStatus('Erro no bootstrap: ' + (err.message || err), 'error');
-      setLoading(false);
+      setStatus('Erro: ' + (err.message || err), 'error');
+      runFallback();
+      forceStopLoading();
     });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', start);
-  } else {
-    start();
+  function start() {
+    run();
   }
 
-  /** Fallback: garante carga demo se o bootstrap terminar antes dos scripts CDN */
-  window.addEventListener('load', function () {
-    if (APP_CONFIG.DEMO_MODE && BomService.getNodeCount() === 0) {
-      loadBom('DEMO_ROOT_001');
+  if (!root.__3DX_BOOT_DEFER__) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', run);
+    } else {
+      run();
     }
-  });
+  }
 
-  return { loadBom: loadBom, refreshUI: refreshUI, setStatus: setStatusPublic };
+  function forceStopLoading() {
+    setLoading(false);
+    var ov = byId('loadingOverlay');
+    if (ov) ov.classList.add('hidden');
+  }
+
+  return {
+    run: run,
+    start: start,
+    runFallback: runFallback,
+    reloadFromExplorer: reloadFromExplorer,
+    loadBom: loadBom,
+    loadSnapshotFromUrl: loadSnapshotFromUrl,
+    applySnapshotPayload: applySnapshotPayload,
+    loadPhysicalProduct: loadPhysicalProduct,
+    refreshUI: refreshUI,
+    setStatus: setStatusPublic,
+    forceStopLoading: forceStopLoading
+  };
 })();
