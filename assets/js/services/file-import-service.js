@@ -53,6 +53,24 @@ var FileImportService = (function () {
     return t.length > 2 && t.charAt(0) === '{' && t.indexOf('"') >= 0;
   }
 
+  /** Ícone/thumbnail 2D embutido na célula Explorer (getpicture). */
+  function extractIconFromRow(row) {
+    if (!row || !row.length) return '';
+    for (var i = 0; i < row.length; i++) {
+      var raw = String(row[i] || '');
+      if (!raw || raw.indexOf('getpicture') < 0 && raw.indexOf('"icon"') < 0) continue;
+      var urlMatch = raw.match(/https?:[^"\s]+getpicture[^"\s]*/i);
+      if (urlMatch) return cleanCell(urlMatch[0]);
+      if (isJsonBlob(raw)) {
+        try {
+          var o = JSON.parse(raw);
+          if (o.icon && /getpicture|https/i.test(String(o.icon))) return cleanCell(o.icon);
+        } catch (e) { /* ignore */ }
+      }
+    }
+    return '';
+  }
+
   /** Explorer copia proprietário como JSON { icon, label }. */
   function unwrapJsonCell(s) {
     if (!isJsonBlob(s)) return cleanCell(s);
@@ -527,6 +545,7 @@ var FileImportService = (function () {
         revision: cell(row, colMap, 'revision', ''),
         state: st.state,
         maturity: st.maturity,
+        iconUrl: extractIconFromRow(row),
         quantity: parseFloat(cell(row, colMap, 'quantity', '1')) || 1,
         owner: unwrapJsonCell(cell(row, colMap, 'owner', '')),
         organization: cell(row, colMap, 'organization', ''),

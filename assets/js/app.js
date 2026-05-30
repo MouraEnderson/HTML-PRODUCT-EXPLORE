@@ -765,8 +765,12 @@ var App = (function () {
     applyUrlParamsToUI();
     KpiCards.init('#kpiGrid');
     ChartsManager.init();
+    if (typeof PartPreview !== 'undefined') PartPreview.init('#partPreviewPanel');
     DataTable.init('#bomTable');
     tableInitialized = true;
+    DataTable.onRowSelect(function (node) {
+      if (typeof PartPreview !== 'undefined') PartPreview.show(node);
+    });
     var treeEl = byId('bomTree');
     if (treeEl && APP_CONFIG.SHOW_TREE !== false && typeof BomTree !== 'undefined') {
       BomTree.init('#bomTree', function (id) {

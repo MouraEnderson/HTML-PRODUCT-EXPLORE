@@ -1167,7 +1167,7 @@ body.ui-clean .main-clean {
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  font-size: 16px;
+  font-size: 19px;
   padding-bottom: 0;
 }
 
@@ -1198,7 +1198,7 @@ body.ui-clean .main-clean {
   border-radius: 8px;
   background: #fff;
   color: var(--bom-text);
-  font-size: 0.92rem;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -1225,14 +1225,14 @@ body.ui-clean .main-clean {
 
 .bom-clock-label {
   display: block;
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   color: var(--bom-muted);
   margin-bottom: 6px;
 }
 
 .bom-clock-time {
   display: block;
-  font-size: 1.35rem;
+  font-size: 1.5rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--bom-text);
@@ -1329,7 +1329,7 @@ body.ui-clean .main-clean {
 
 .bom-st-inline {
   margin: 8px 18px 0;
-  font-size: 0.95rem;
+  font-size: 1.05rem;
 }
 
 /* Marcadores estatísticos (referência) */
@@ -1350,7 +1350,7 @@ body.ui-clean .main-clean {
 
 .stat-marker-label {
   display: block;
-  font-size: 0.88rem;
+  font-size: 1.05rem;
   font-weight: 600;
   color: var(--bom-muted);
   margin-bottom: 10px;
@@ -1358,7 +1358,7 @@ body.ui-clean .main-clean {
 
 .stat-marker-value {
   display: block;
-  font-size: 2rem;
+  font-size: 2.4rem;
   font-weight: 700;
   line-height: 1.1;
 }
@@ -1379,11 +1379,52 @@ body.ui-clean .main-clean {
   background: var(--bom-card);
   border: 1px solid var(--bom-border);
   border-radius: 10px;
-  height: 260px;
-  min-height: 260px;
+  height: 300px;
+  min-height: 300px;
   padding: 8px 12px;
   position: relative;
   overflow: hidden;
+}
+
+.bom-chart-owners {
+  display: flex;
+  flex-direction: column;
+}
+
+.bom-chart-owners canvas {
+  flex: 0 0 180px;
+  max-height: 180px !important;
+}
+
+.owners-legend-scroll {
+  flex: 1;
+  overflow-y: auto;
+  margin-top: 6px;
+  padding: 4px 2px;
+  max-height: 96px;
+  border-top: 1px solid var(--bom-border);
+}
+
+.owners-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px;
+  font-size: 0.95rem;
+}
+
+.owners-legend-name {
+  flex: 1;
+  color: var(--bom-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.owners-legend-val {
+  font-weight: 600;
+  color: var(--bom-text);
+  white-space: nowrap;
 }
 
 .bom-layout-ref .bom-chart-panel canvas {
@@ -1525,13 +1566,158 @@ body.ui-clean .main-clean {
 
 .bom-ebom-head h2 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.25rem;
 }
 
 .bom-ebom-meta {
   margin: 8px 0 0;
+  font-size: 1.05rem;
+  color: var(--bom-muted);
+}
+
+.bom-ebom-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(220px, 1fr);
+  gap: 0;
+  min-height: 420px;
+}
+
+.bom-ebom-list {
+  min-width: 0;
+  border-right: 1px solid var(--bom-border);
+  display: flex;
+  flex-direction: column;
+}
+
+.bom-part-preview {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px;
+  background: var(--bom-bg);
+  min-width: 0;
+}
+
+.bom-preview-title {
+  margin: 0 0 6px;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--bom-primary);
+}
+
+.bom-preview-hint {
+  margin: 0 0 10px;
   font-size: 0.95rem;
   color: var(--bom-muted);
+}
+
+.bom-preview-image {
+  flex: 1;
+  min-height: 220px;
+  max-height: 320px;
+  border: 1px dashed var(--bom-border);
+  border-radius: 10px;
+  background: var(--bom-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.bom-preview-placeholder {
+  color: var(--bom-muted);
+  font-size: 1rem;
+  text-align: center;
+  padding: 16px;
+}
+
+.bom-preview-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.bom-preview-ph {
+  text-align: center;
+  color: var(--bom-muted);
+}
+
+.bom-preview-ph-icon {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 10px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #eceff1, #cfd8dc);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--bom-primary);
+}
+
+.bom-preview-ph-sub {
+  font-size: 0.9rem;
+  margin-top: 4px;
+}
+
+.bom-preview-meta {
+  font-size: 1rem;
+}
+
+.bom-preview-dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+}
+
+.bom-preview-dl dt {
+  margin: 0;
+  font-weight: 600;
+  color: var(--bom-muted);
+}
+
+.bom-preview-dl dd {
+  margin: 0;
+  color: var(--bom-text);
+  word-break: break-word;
+}
+
+.bom-preview-id {
+  font-size: 0.85rem;
+  font-family: Consolas, monospace;
+}
+
+.bom-table-row {
+  cursor: pointer;
+}
+
+.bom-table-row:hover {
+  background: rgba(21, 101, 192, 0.06);
+}
+
+.bom-table-row.bom-row-selected {
+  background: rgba(21, 101, 192, 0.12);
+  outline: 2px solid rgba(21, 101, 192, 0.35);
+  outline-offset: -2px;
+}
+
+.bom-preview-active .bom-preview-hint {
+  display: none;
+}
+
+@media (max-width: 960px) {
+  .bom-ebom-split {
+    grid-template-columns: 1fr;
+  }
+  .bom-ebom-list {
+    border-right: none;
+    border-bottom: 1px solid var(--bom-border);
+  }
+  .bom-part-preview {
+    min-height: 280px;
+  }
 }
 
 .bom-layout-ref .bom-table-wrap {
@@ -1553,19 +1739,11 @@ body.ui-clean .main-clean {
 
 .bom-table-pager {
   padding: 10px 16px;
-  font-size: 0.9rem;
+  font-size: 1rem;
   color: var(--bom-muted);
   text-align: right;
   border-top: 1px solid var(--bom-border);
   background: var(--bom-bg);
-}
-
-.status-pill {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 0.88rem;
-  font-weight: 600;
 }
 
 .status-ok { background: #e8f5e9; color: #1b5e20; }
@@ -1573,20 +1751,28 @@ body.ui-clean .main-clean {
 .status-bad { background: #ffebee; color: #b71c1c; }
 .status-neutral { background: #eceff1; color: #546e7a; }
 
+.bom-layout-ref .bom-build-tag {
+  margin-top: auto;
+  font-size: 0.75rem;
+}
+
 .bom-layout-ref .bom-table {
-  font-size: 0.95rem;
+  font-size: 1.05rem;
 }
 
 .bom-layout-ref .bom-table th {
-  font-size: 0.9rem;
-  padding: 10px 12px;
+  font-size: 1rem;
+  padding: 11px 12px;
 }
 
 .bom-layout-ref .bom-table td {
-  padding: 9px 12px;
+  padding: 10px 12px;
 }
 
-.bom-layout-ref .bom-build-tag {
-  margin-top: auto;
-  font-size: 0.7rem;
+.status-pill {
+  display: inline-block;
+  padding: 5px 11px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
 }

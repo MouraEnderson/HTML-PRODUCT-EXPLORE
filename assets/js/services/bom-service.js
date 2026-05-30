@@ -141,11 +141,13 @@ var BomService = (function () {
         organization: item.organization,
         collabSpace: item.collabSpace,
         approval: item.approval || 'Unknown',
-        hasPhysicalProduct: true
+        hasPhysicalProduct: true,
+        iconUrl: item.iconUrl || ''
       };
 
       var node = addNode(attrs, parentId, level, item.quantity);
       if (node) {
+        if (item.iconUrl) node.iconUrl = item.iconUrl;
         node.loaded = true;
         node.expanded = true;
         stack[level] = node.physicalid;

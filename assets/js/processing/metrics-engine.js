@@ -102,16 +102,40 @@ var MetricsEngine = (function () {
     return o;
   }
 
+  function groupOwnersForChart(byOwner, topN) {
+    topN = topN || 8;
+    var keys = Object.keys(byOwner || {}).sort(function (a, b) {
+      return (byOwner[b] || 0) - (byOwner[a] || 0);
+    });
+    var legend = keys.map(function (k) {
+      return { label: k, value: byOwner[k] || 0 };
+    });
+    var chartLabels = [];
+    var chartValues = [];
+    keys.slice(0, topN).forEach(function (k) {
+      chartLabels.push(k);
+      chartValues.push(byOwner[k] || 0);
+    });
+    var rest = keys.slice(topN);
+    if (rest.length) {
+      var otherSum = rest.reduce(function (acc, k) {
+        return acc + (byOwner[k] || 0);
+      }, 0);
+      chartLabels.push('Outros (' + rest.length + ')');
+      chartValues.push(otherSum);
+    }
+    return {
+      chart: { labels: chartLabels, values: chartValues },
+      legend: legend
+    };
+  }
+
   function chartDatasets(metrics) {
     var owners = metrics.byOwner || {};
-    var ownerLabels = Object.keys(owners).sort(function (a, b) {
-      return owners[b] - owners[a];
-    });
+    var grouped = groupOwnersForChart(owners, 8);
     return {
-      owners: {
-        labels: ownerLabels.slice(0, 12),
-        values: ownerLabels.slice(0, 12).map(function (k) { return owners[k]; })
-      },
+      owners: grouped.chart,
+      ownersLegend: grouped.legend,
       maturity: {
         labels: ['Bom (Aprovado)', 'Moderado (Em trabalho)', 'Ruim (Obsoleto)', 'Outros'],
         values: [

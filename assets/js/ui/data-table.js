@@ -1,6 +1,6 @@
 /**
  * @file ui/data-table.js
- * Tabela E-BOM — scroll nativo (sem virtualização que quebra no iframe 3DDashboard).
+ * Tabela E-BOM — scroll nativo + clique para preview 2D.
  */
 var DataTable = (function () {
   'use strict';
@@ -11,6 +11,8 @@ var DataTable = (function () {
   var scrollContainer;
   var columns = [];
   var initialized = false;
+  var rowSelectHandler = null;
+  var selectedId = null;
   var MAX_ROWS = 8000;
 
   function getColumns() {
@@ -28,11 +30,39 @@ var DataTable = (function () {
     tbody = table.querySelector('tbody');
     thead = table.querySelector('thead tr');
     renderHeader();
+    bindRowClicks();
     if (!initialized && scrollContainer) {
       scrollContainer.style.overflowY = 'auto';
       scrollContainer.style.webkitOverflowScrolling = 'touch';
       initialized = true;
     }
+  }
+
+  function onRowSelect(handler) {
+    rowSelectHandler = handler;
+  }
+
+  function bindRowClicks() {
+    if (!tbody || tbody.__3DX_ROW_CLICK__) return;
+    tbody.__3DX_ROW_CLICK__ = true;
+    tbody.addEventListener('click', function (ev) {
+      var tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-id]') : null;
+      if (!tr) return;
+      var id = tr.getAttribute('data-id');
+      var node = null;
+      for (var i = 0; i < data.length; i++) {
+        if (String(data[i].physicalid) === String(id)) {
+          node = data[i];
+          break;
+        }
+      }
+      selectedId = id;
+      tbody.querySelectorAll('tr.bom-row-selected').forEach(function (r) {
+        r.classList.remove('bom-row-selected');
+      });
+      tr.classList.add('bom-row-selected');
+      if (rowSelectHandler) rowSelectHandler(node, tr);
+    });
   }
 
   function renderHeader() {
@@ -83,6 +113,7 @@ var DataTable = (function () {
     if (!tbody) return;
     var slice = data.slice(0, MAX_ROWS);
     if (!slice.length) {
+      selectedId = null;
       tbody.innerHTML =
         '<tr><td colspan="' + (columns.length || 1) + '" class="bom-table-empty">' +
         'Nenhuma linha. Importe Ctrl+C no Explorer (inclua coluna Maturidade).</td></tr>';
@@ -92,7 +123,8 @@ var DataTable = (function () {
       var tds = columns.map(function (col) {
         return '<td>' + formatCell(n, col) + '</td>';
       }).join('');
-      return '<tr data-id="' + escapeAttr(n.physicalid) + '">' + tds + '</tr>';
+      var sel = selectedId && String(selectedId) === String(n.physicalid) ? ' bom-row-selected' : '';
+      return '<tr class="bom-table-row' + sel + '" data-id="' + escapeAttr(n.physicalid) + '">' + tds + '</tr>';
     }).join('');
   }
 
@@ -146,6 +178,7 @@ var DataTable = (function () {
   return {
     init: init,
     setData: setData,
+    onRowSelect: onRowSelect,
     exportExcel: exportExcel,
     getColumns: getColumns
   };

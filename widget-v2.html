@@ -14,7 +14,7 @@
     window.__3DX_TRUSTED_WIDGET__ = true;
     window.__3DX_BOOT_DEFER__ = true;
 
-    var BOM_BUILD = 'bom20260602s';
+    var BOM_BUILD = 'bom20260602t';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
     var BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js';
 
@@ -87,7 +87,9 @@
       '<section id="kpiGrid" class="stat-markers-row" aria-label="Estatísticas"></section>' +
       '<section class="bom-charts-row">' +
       '<div class="bom-chart-panel"><canvas id="chartMaturity"></canvas></div>' +
-      '<div class="bom-chart-panel"><canvas id="chartOwners"></canvas></div>' +
+      '<div class="bom-chart-panel bom-chart-owners">' +
+      '<canvas id="chartOwners"></canvas>' +
+      '<div id="ownersLegendScroll" class="owners-legend-scroll" aria-label="Lista de proprietários"></div></div>' +
       '<canvas id="chartType" class="bom-hidden"></canvas>' +
       '<canvas id="chartRevision" class="bom-hidden"></canvas>' +
       '<canvas id="chartApproval" class="bom-hidden"></canvas>' +
@@ -95,13 +97,22 @@
       '<section class="bom-ebom-block">' +
       '<div class="bom-ebom-head">' +
       '<h2>E-BOM monitorada — <span id="tableProductLabel">-</span></h2>' +
-      '<p id="ebomMeta" class="bom-ebom-meta">Importe com Ctrl+C incluindo a coluna <b>Maturidade</b> do Explorer.</p>' +
+      '<p id="ebomMeta" class="bom-ebom-meta">Importe com Ctrl+C incluindo a coluna <b>Maturidade</b> do Explorer. Clique numa peça para ver o preview.</p>' +
       '</div>' +
+      '<div class="bom-ebom-split">' +
+      '<div class="bom-ebom-list">' +
       '<div class="bom-table-wrap table-scroll">' +
       '<table id="bomTable" class="bom-table"><thead><tr></tr></thead><tbody></tbody></table>' +
       '</div>' +
       '<footer id="tablePager" class="bom-table-pager">0 peças</footer>' +
-      '</section>' +
+      '</div>' +
+      '<aside id="partPreviewPanel" class="bom-part-preview">' +
+      '<h3 id="partPreviewTitle" class="bom-preview-title">Visualização</h3>' +
+      '<p class="bom-preview-hint">Clique numa linha da estrutura</p>' +
+      '<div id="partPreviewImage" class="bom-preview-image">' +
+      '<span class="bom-preview-placeholder">Preview 2D da peça selecionada</span></div>' +
+      '<div id="partPreviewMeta" class="bom-preview-meta"></div>' +
+      '</aside></div></section>' +
       '</main>' +
       '<button type="button" id="btnScanExplorer" class="bom-hidden">Varrer</button>' +
       '<div id="loadingOverlay" class="bom-loading bom-hidden">Processando…</div>' +

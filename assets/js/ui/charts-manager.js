@@ -21,6 +21,8 @@ var ChartsManager = (function () {
     document.querySelectorAll('.chart-fallback').forEach(function (el) {
       el.parentNode.removeChild(el);
     });
+    var leg = document.getElementById('ownersLegendScroll');
+    if (leg) leg.innerHTML = '';
   }
 
   function themeColors() {
@@ -56,7 +58,7 @@ var ChartsManager = (function () {
     var canvas = document.getElementById(canvasId);
     if (canvas) {
       canvas.style.display = 'block';
-      canvas.style.height = '220px';
+      canvas.style.height = '180px';
       canvas.style.width = '100%';
     }
     var fb = panel.querySelector('.chart-fallback');
@@ -109,11 +111,28 @@ var ChartsManager = (function () {
       '<div class="cf-pie-wrap">' +
       '<div class="cf-pie" style="background:conic-gradient(' + gradientParts.join(', ') + ')">' +
       '<div class="cf-pie-hole">' + total + '</div></div>' +
-      '<div class="cf-pie-legend">' + legend + '</div></div>'
+      '<div class="cf-pie-legend cf-pie-legend-scroll">' + legend + '</div></div>'
     );
   }
 
-  function pieChart(canvasId, labels, values, title, colors) {
+  function renderOwnersLegend(items, total) {
+    var el = document.getElementById('ownersLegendScroll');
+    if (!el || !items || !items.length) return;
+    total = total || items.reduce(function (a, it) { return a + (it.value || 0); }, 0) || 1;
+    el.innerHTML = items.map(function (it, i) {
+      var pct = Math.round(((it.value || 0) / total) * 1000) / 10;
+      var c = OWNER_COLORS[i % OWNER_COLORS.length];
+      return (
+        '<div class="owners-legend-item">' +
+        '<span class="cf-pie-dot" style="background:' + c + '"></span>' +
+        '<span class="owners-legend-name">' + it.label + '</span>' +
+        '<span class="owners-legend-val">' + it.value + ' (' + pct + '%)</span></div>'
+      );
+    }).join('');
+  }
+
+  function pieChart(canvasId, labels, values, title, colors, opts) {
+    opts = opts || {};
     var ctx = document.getElementById(canvasId);
     if (!ctx) return false;
 
@@ -141,14 +160,23 @@ var ChartsManager = (function () {
           cutout: '52%',
           animation: { duration: 450, animateRotate: true, animateScale: true },
           plugins: {
-            title: { display: true, text: title, color: th.title, font: { size: 15, weight: '600' } },
-            legend: { position: 'bottom', labels: { color: th.legend, font: { size: 11 }, boxWidth: 12, padding: 10 } },
+            title: {
+              display: true,
+              text: title,
+              color: th.title,
+              font: { size: 18, weight: '600' }
+            },
+            legend: {
+              display: opts.hideLegend !== true,
+              position: 'bottom',
+              labels: { color: th.legend, font: { size: 13 }, boxWidth: 14, padding: 10 }
+            },
             tooltip: {
               callbacks: {
-                label: function (ctx) {
-                  var sum = ctx.dataset.data.reduce(function (a, b) { return a + b; }, 0) || 1;
-                  var pct = Math.round((ctx.raw / sum) * 1000) / 10;
-                  return ctx.label + ': ' + ctx.raw + ' (' + pct + '%)';
+                label: function (c) {
+                  var sum = c.dataset.data.reduce(function (a, b) { return a + b; }, 0) || 1;
+                  var pct = Math.round((c.raw / sum) * 1000) / 10;
+                  return c.label + ': ' + c.raw + ' (' + pct + '%)';
                 }
               }
             }
@@ -194,8 +222,10 @@ var ChartsManager = (function () {
 
     var ds = MetricsEngine.chartDatasets(metrics);
     var owners = ds.owners || { labels: [], values: [] };
+    var ownersLegend = ds.ownersLegend || [];
     if (!owners.labels.length) {
       owners = { labels: ['Sem proprietário'], values: [metrics.totalItems || 0] };
+      ownersLegend = [{ label: 'Sem proprietário', value: metrics.totalItems || 0 }];
     }
     if (!owners.values.some(function (v) { return v > 0; })) {
       owners = { labels: ['Sem proprietário'], values: [metrics.totalItems || 1] };
@@ -207,8 +237,10 @@ var ChartsManager = (function () {
       owners.labels,
       owners.values,
       'Proprietários',
-      ownerColors(owners.labels.length)
+      ownerColors(owners.labels.length),
+      { hideLegend: true }
     );
+    renderOwnersLegend(ownersLegend, metrics.totalItems || 0);
     scheduleResize();
   }
 
