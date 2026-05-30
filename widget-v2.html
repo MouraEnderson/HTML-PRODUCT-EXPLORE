@@ -16,7 +16,7 @@
 
     var BOM_BUILD = 'bom20260602z';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-    var BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js';
+    var BUNDLE;
 
     (function parseEmbedEarly() {
       function pq(s) {
@@ -41,6 +41,13 @@
       fromUrl(location.search, eq);
       try { if (frameElement && frameElement.src) fromUrl(frameElement.src, eq); } catch (e) {}
       window.__3DX_EMBED_QUERY__ = eq;
+    })();
+
+    (function applyBuildFromQuery() {
+      var eq = window.__3DX_EMBED_QUERY__ || {};
+      if (eq.v && /^bom20/.test(eq.v)) BOM_BUILD = eq.v;
+      else if (eq.build && /^bom20/.test(eq.build)) BOM_BUILD = eq.build;
+      BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js';
     })();
 
     var UI_HTML =
