@@ -14,7 +14,7 @@
     window.__3DX_TRUSTED_WIDGET__ = true;
     window.__3DX_BOOT_DEFER__ = true;
 
-    var BOM_BUILD = 'bom20260602t';
+    var BOM_BUILD = 'bom20260602u';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
     var BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js';
 
@@ -144,7 +144,8 @@
       if (!b) return;
       b.innerHTML = UI_HTML;
       b.className = 'bom-widget-body';
-      b.style.minHeight = '520px';
+      b.style.minHeight = '100%';
+      b.style.height = '100%';
       window.__3DX_UI_ROOT__ = b;
     }
 

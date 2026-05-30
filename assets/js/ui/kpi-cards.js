@@ -15,7 +15,7 @@ var KpiCards = (function () {
 
   function pct(part, total) {
     if (!total) return 0;
-    return Math.round((part / total) * 10) / 10;
+    return Math.round((part / total) * 1000) / 10;
   }
 
   function renderRules(metrics, anomalies) {

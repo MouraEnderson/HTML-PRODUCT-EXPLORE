@@ -1169,6 +1169,9 @@ body.ui-clean .main-clean {
   align-items: stretch;
   font-size: 19px;
   padding-bottom: 0;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
 }
 
 .bom-layout-ref .bom-sidebar {
@@ -1259,9 +1262,11 @@ body.ui-clean .main-clean {
 .bom-layout-ref .bom-main {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--bom-bg);
+  overflow: auto;
 }
 
 .bom-main-top {
@@ -1379,11 +1384,11 @@ body.ui-clean .main-clean {
   background: var(--bom-card);
   border: 1px solid var(--bom-border);
   border-radius: 10px;
-  height: 300px;
-  min-height: 300px;
+  min-height: 280px;
+  height: auto;
   padding: 8px 12px;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .bom-chart-owners {
@@ -1557,6 +1562,10 @@ body.ui-clean .main-clean {
   border: 1px solid var(--bom-border);
   border-radius: 10px;
   overflow: hidden;
+  flex: 1;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
 }
 
 .bom-ebom-head {
@@ -1579,7 +1588,8 @@ body.ui-clean .main-clean {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(220px, 1fr);
   gap: 0;
-  min-height: 420px;
+  flex: 1;
+  min-height: 240px;
 }
 
 .bom-ebom-list {
@@ -1724,10 +1734,69 @@ body.ui-clean .main-clean {
   margin: 0;
   border: none;
   border-radius: 0;
-  max-height: 380px;
+  flex: 1;
+  min-height: 120px;
+  max-height: none;
   overflow-y: auto;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Thumbnails lista E-BOM + preview */
+.bom-col-thumb {
+  width: 44px;
+  padding-left: 8px !important;
+  padding-right: 4px !important;
+  vertical-align: middle;
+}
+
+.bom-thumb-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  overflow: hidden;
+  background: linear-gradient(145deg, #eceff1, #cfd8dc);
+  flex-shrink: 0;
+}
+
+.bom-thumb-md {
+  width: 36px;
+  height: 36px;
+}
+
+.bom-thumb-lg {
+  width: 120px;
+  height: 120px;
+}
+
+.bom-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #fff;
+}
+
+.bom-thumb-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--bom-primary, #1565c0);
+}
+
+.bom-thumb-lg .bom-thumb-fallback {
+  font-size: 2.4rem;
+}
+
+.bom-preview-visual {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
 }
 
 .bom-table-empty {

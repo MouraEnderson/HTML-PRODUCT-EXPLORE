@@ -26,6 +26,7 @@ $files = @(
   'assets\js\ui\kpi-cards.js',
   'assets\js\ui\dashboard-theme.js',
   'assets\js\ui\charts-manager.js',
+  'assets\js\ui\part-image.js',
   'assets\js\ui\part-preview.js',
   'assets\js\ui\filters.js',
   'assets\js\ui\data-table.js',

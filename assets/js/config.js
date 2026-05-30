@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260602t',
+    BUILD: 'bom20260602u',
     /** 3DDashboard: não espera probe CSRF (evita travar em "Conectando…") */
     SKIP_SPACE_PROBE: true,
     WAF_REQUEST_TIMEOUT_MS: 15000,
@@ -101,6 +101,7 @@
      */
     /** Tabela compacta no modo UI_CLEAN */
     PILOT_TABLE_COLUMNS: [
+      { key: '_thumb', label: '', format: 'thumb', width: 44 },
       { key: 'name', label: 'Peça / Nome' },
       { key: 'title', label: 'Descrição' },
       { key: 'revision', label: 'Revisão' },

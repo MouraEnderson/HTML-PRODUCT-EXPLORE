@@ -53,19 +53,23 @@ var FileImportService = (function () {
     return t.length > 2 && t.charAt(0) === '{' && t.indexOf('"') >= 0;
   }
 
-  /** Ícone/thumbnail 2D embutido na célula Explorer (getpicture). */
+  /** Ícone/thumbnail 2D — getpicture ou JSON icon em qualquer célula da linha. */
   function extractIconFromRow(row) {
     if (!row || !row.length) return '';
     for (var i = 0; i < row.length; i++) {
       var raw = String(row[i] || '');
-      if (!raw || raw.indexOf('getpicture') < 0 && raw.indexOf('"icon"') < 0) continue;
+      if (!raw) continue;
       var urlMatch = raw.match(/https?:[^"\s]+getpicture[^"\s]*/i);
       if (urlMatch) return cleanCell(urlMatch[0]);
       if (isJsonBlob(raw)) {
         try {
           var o = JSON.parse(raw);
-          if (o.icon && /getpicture|https/i.test(String(o.icon))) return cleanCell(o.icon);
+          if (o.icon && /https?|getpicture/i.test(String(o.icon))) return cleanCell(o.icon);
         } catch (e) { /* ignore */ }
+      }
+      if (/getpicture/i.test(raw)) {
+        var m2 = raw.match(/https?:\/\/[^\s"']+/i);
+        if (m2) return cleanCell(m2[0]);
       }
     }
     return '';

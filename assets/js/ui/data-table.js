@@ -1,19 +1,23 @@
 /**
  * @file ui/data-table.js
- * Tabela E-BOM — scroll nativo + clique para preview 2D.
+ * Tabela E-BOM — thumbnails, scroll nativo, clique → preview.
  */
 var DataTable = (function () {
   'use strict';
 
   var tbody;
   var thead;
+  var tableEl;
   var data = [];
   var scrollContainer;
   var columns = [];
-  var initialized = false;
   var rowSelectHandler = null;
   var selectedId = null;
   var MAX_ROWS = 8000;
+
+  function uiRoot() {
+    return window.__3DX_UI_ROOT__ || document;
+  }
 
   function getColumns() {
     if (APP_CONFIG.UI_CLEAN && APP_CONFIG.PILOT_TABLE_COLUMNS && APP_CONFIG.PILOT_TABLE_COLUMNS.length) {
@@ -24,17 +28,16 @@ var DataTable = (function () {
 
   function init(tableSelector) {
     columns = getColumns();
-    var table = document.querySelector(tableSelector);
-    if (!table) return;
-    scrollContainer = table.closest('.bom-table-wrap') || table.parentElement;
-    tbody = table.querySelector('tbody');
-    thead = table.querySelector('thead tr');
+    tableEl = uiRoot().querySelector(tableSelector);
+    if (!tableEl) return;
+    scrollContainer = tableEl.closest('.bom-table-wrap') || tableEl.parentElement;
+    tbody = tableEl.querySelector('tbody');
+    thead = tableEl.querySelector('thead tr');
     renderHeader();
     bindRowClicks();
-    if (!initialized && scrollContainer) {
+    if (scrollContainer) {
       scrollContainer.style.overflowY = 'auto';
       scrollContainer.style.webkitOverflowScrolling = 'touch';
-      initialized = true;
     }
   }
 
@@ -43,8 +46,8 @@ var DataTable = (function () {
   }
 
   function bindRowClicks() {
-    if (!tbody || tbody.__3DX_ROW_CLICK__) return;
-    tbody.__3DX_ROW_CLICK__ = true;
+    if (!tbody || tbody.__3DX_ROW_BOUND__) return;
+    tbody.__3DX_ROW_BOUND__ = true;
     tbody.addEventListener('click', function (ev) {
       var tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-id]') : null;
       if (!tr) return;
@@ -68,7 +71,8 @@ var DataTable = (function () {
   function renderHeader() {
     if (!thead) return;
     thead.innerHTML = columns.map(function (c) {
-      return '<th>' + escapeHtml(c.label) + '</th>';
+      var cls = c.format === 'thumb' ? ' class="bom-col-thumb"' : '';
+      return '<th' + cls + '>' + escapeHtml(c.label) + '</th>';
     }).join('');
   }
 
@@ -77,6 +81,10 @@ var DataTable = (function () {
   }
 
   function formatCell(n, col) {
+    if (col.format === 'thumb' || col.key === '_thumb') {
+      if (typeof PartImage !== 'undefined') return PartImage.thumbHtml(n, 'bom-thumb-md');
+      return '<span class="bom-thumb-fallback">?</span>';
+    }
     var v = n[col.key];
     if (col.format === 'bool') return v ? 'Sim' : 'Não';
     if (col.format === 'date') {
@@ -106,6 +114,9 @@ var DataTable = (function () {
 
   function setData(nodes) {
     data = nodes || [];
+    if (!tbody || !document.body.contains(tableEl)) {
+      init('#bomTable');
+    }
     render();
   }
 
@@ -121,7 +132,8 @@ var DataTable = (function () {
     }
     tbody.innerHTML = slice.map(function (n) {
       var tds = columns.map(function (col) {
-        return '<td>' + formatCell(n, col) + '</td>';
+        var tdCls = col.format === 'thumb' ? ' class="bom-col-thumb"' : '';
+        return '<td' + tdCls + '>' + formatCell(n, col) + '</td>';
       }).join('');
       var sel = selectedId && String(selectedId) === String(n.physicalid) ? ' bom-row-selected' : '';
       return '<tr class="bom-table-row' + sel + '" data-id="' + escapeAttr(n.physicalid) + '">' + tds + '</tr>';
@@ -160,6 +172,7 @@ var DataTable = (function () {
     var rows = data.map(function (n) {
       var row = {};
       columns.forEach(function (col) {
+        if (col.format === 'thumb') return;
         var v = n[col.key];
         if (col.format === 'date' && v) {
           v = v instanceof Date ? v.toISOString() : v;

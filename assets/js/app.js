@@ -150,10 +150,10 @@ var App = (function () {
     if (typeof KpiCards !== 'undefined' && KpiCards.init && byId('kpiGrid')) {
       KpiCards.init('#kpiGrid');
     }
-    if (!tableInitialized && typeof DataTable !== 'undefined' && DataTable.init && byId('bomTable')) {
+    if (typeof DataTable !== 'undefined' && DataTable.init && byId('bomTable')) {
       DataTable.init('#bomTable');
-      tableInitialized = true;
     }
+    if (typeof PartPreview !== 'undefined') PartPreview.init('#partPreviewPanel');
     var index = BomService.getIndex();
     var rootId = BomService.getRootId();
     var flat = BomNormalizer.toFlatList(index, rootId);
