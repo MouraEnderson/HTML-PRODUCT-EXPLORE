@@ -177,6 +177,19 @@ var App = (function () {
       BomTree.refresh(index, rootId);
     }
     DataTable.setData(filtered);
+    DataTable.onRowSelect(function (node) {
+      if (typeof PartPreview !== 'undefined') PartPreview.show(node);
+    });
+    if (filtered.length) {
+      var si = typeof DataTable.getSelectedIndex === 'function' ? DataTable.getSelectedIndex() : -1;
+      if (si >= 0 && si < filtered.length && typeof DataTable.selectRow === 'function') {
+        DataTable.selectRow(si, false);
+      } else if (typeof DataTable.selectFirst === 'function') {
+        DataTable.selectFirst(false);
+      }
+    } else if (typeof PartPreview !== 'undefined') {
+      PartPreview.clear();
+    }
     updateEbomPanel(filtered, flat, currentMetrics);
     if (BomService.getNodeCount() > 0) updateLastUpdateClock();
     renderIssues(currentAnomalies.issues);

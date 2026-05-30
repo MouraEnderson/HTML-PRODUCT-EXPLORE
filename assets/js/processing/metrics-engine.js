@@ -88,7 +88,7 @@ var MetricsEngine = (function () {
 
   function ownerLabel(raw) {
     var o = String(raw || '').trim();
-    if (!o) return 'Sem proprietário';
+    if (!o || o === '-' || o === '—' || /^sem\s*propriet/i.test(o)) return 'Sem proprietário';
     if (o.charAt(0) === '{') {
       try {
         var j = JSON.parse(o);

@@ -96,7 +96,7 @@ var BomSnapshot = (function () {
         revision: it.revision || '—',
         state: it.state || it.maturity || '—',
         maturity: it.maturity || it.state || '—',
-        owner: it.owner || '—',
+        owner: it.owner && it.owner !== '—' && it.owner !== '-' ? it.owner : '',
         organization: it.organization || '',
         collabSpace: it.collabSpace || '',
         approval: it.approval || 'Unknown',

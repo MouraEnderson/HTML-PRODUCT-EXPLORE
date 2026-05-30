@@ -1,6 +1,6 @@
 /**
  * @file ui/data-table.js
- * Tabela E-BOM — thumbnails, scroll nativo, clique → preview.
+ * Tabela E-BOM — thumbnails, scroll, clique → preview.
  */
 var DataTable = (function () {
   'use strict';
@@ -12,7 +12,7 @@ var DataTable = (function () {
   var scrollContainer;
   var columns = [];
   var rowSelectHandler = null;
-  var selectedId = null;
+  var selectedIndex = -1;
   var MAX_ROWS = 8000;
 
   function uiRoot() {
@@ -36,7 +36,8 @@ var DataTable = (function () {
     renderHeader();
     bindRowClicks();
     if (scrollContainer) {
-      scrollContainer.style.overflowY = 'auto';
+      scrollContainer.style.overflowY = 'scroll';
+      scrollContainer.style.overflowX = 'auto';
       scrollContainer.style.webkitOverflowScrolling = 'touch';
     }
   }
@@ -45,26 +46,42 @@ var DataTable = (function () {
     rowSelectHandler = handler;
   }
 
+  function highlightRow(index) {
+    if (!tbody) return;
+    selectedIndex = index;
+    tbody.querySelectorAll('tr.bom-row-selected').forEach(function (r) {
+      r.classList.remove('bom-row-selected');
+    });
+    var tr = tbody.querySelector('tr[data-row-index="' + index + '"]');
+    if (tr) {
+      tr.classList.add('bom-row-selected');
+      if (tr.scrollIntoView) {
+        tr.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+  }
+
+  function selectRow(index, silent) {
+    if (!data.length || index < 0 || index >= data.length) return null;
+    highlightRow(index);
+    if (!silent && rowSelectHandler) rowSelectHandler(data[index]);
+    return data[index];
+  }
+
+  function selectFirst(silent) {
+    return selectRow(0, silent);
+  }
+
   function bindRowClicks() {
-    if (!tbody || tbody.__3DX_ROW_BOUND__) return;
+    if (!tbody) return;
+    if (tbody.__3DX_ROW_BOUND__) return;
     tbody.__3DX_ROW_BOUND__ = true;
     tbody.addEventListener('click', function (ev) {
-      var tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-id]') : null;
+      var tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-row-index]') : null;
       if (!tr) return;
-      var id = tr.getAttribute('data-id');
-      var node = null;
-      for (var i = 0; i < data.length; i++) {
-        if (String(data[i].physicalid) === String(id)) {
-          node = data[i];
-          break;
-        }
-      }
-      selectedId = id;
-      tbody.querySelectorAll('tr.bom-row-selected').forEach(function (r) {
-        r.classList.remove('bom-row-selected');
-      });
-      tr.classList.add('bom-row-selected');
-      if (rowSelectHandler) rowSelectHandler(node, tr);
+      var idx = parseInt(tr.getAttribute('data-row-index'), 10);
+      if (isNaN(idx)) return;
+      selectRow(idx, false);
     });
   }
 
@@ -83,7 +100,7 @@ var DataTable = (function () {
   function formatCell(n, col) {
     if (col.format === 'thumb' || col.key === '_thumb') {
       if (typeof PartImage !== 'undefined') return PartImage.thumbHtml(n, 'bom-thumb-md');
-      return '<span class="bom-thumb-fallback">?</span>';
+      return '<span class="bom-thumb-wrap bom-thumb-md"><span class="bom-thumb-fallback">?</span></span>';
     }
     var v = n[col.key];
     if (col.format === 'bool') return v ? 'Sim' : 'Não';
@@ -114,9 +131,10 @@ var DataTable = (function () {
 
   function setData(nodes) {
     data = nodes || [];
-    if (!tbody || !document.body.contains(tableEl)) {
+    if (!tbody || !tableEl || !document.body.contains(tableEl)) {
       init('#bomTable');
     }
+    if (selectedIndex >= data.length) selectedIndex = -1;
     render();
   }
 
@@ -124,20 +142,24 @@ var DataTable = (function () {
     if (!tbody) return;
     var slice = data.slice(0, MAX_ROWS);
     if (!slice.length) {
-      selectedId = null;
+      selectedIndex = -1;
       tbody.innerHTML =
         '<tr><td colspan="' + (columns.length || 1) + '" class="bom-table-empty">' +
         'Nenhuma linha. Importe Ctrl+C no Explorer (inclua coluna Maturidade).</td></tr>';
       return;
     }
-    tbody.innerHTML = slice.map(function (n) {
+    tbody.innerHTML = slice.map(function (n, idx) {
       var tds = columns.map(function (col) {
         var tdCls = col.format === 'thumb' ? ' class="bom-col-thumb"' : '';
         return '<td' + tdCls + '>' + formatCell(n, col) + '</td>';
       }).join('');
-      var sel = selectedId && String(selectedId) === String(n.physicalid) ? ' bom-row-selected' : '';
-      return '<tr class="bom-table-row' + sel + '" data-id="' + escapeAttr(n.physicalid) + '">' + tds + '</tr>';
+      var sel = selectedIndex === idx ? ' bom-row-selected' : '';
+      return (
+        '<tr class="bom-table-row' + sel + '" data-row-index="' + idx + '" data-id="' +
+        escapeAttr(n.physicalid) + '">' + tds + '</tr>'
+      );
     }).join('');
+    if (selectedIndex >= 0) highlightRow(selectedIndex);
   }
 
   function maturityStatusBadge(matCls, raw) {
@@ -192,6 +214,9 @@ var DataTable = (function () {
     init: init,
     setData: setData,
     onRowSelect: onRowSelect,
+    selectRow: selectRow,
+    selectFirst: selectFirst,
+    getSelectedIndex: function () { return selectedIndex; },
     exportExcel: exportExcel,
     getColumns: getColumns
   };
