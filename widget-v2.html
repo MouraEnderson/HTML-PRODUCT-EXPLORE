@@ -14,7 +14,7 @@
     window.__3DX_TRUSTED_WIDGET__ = true;
     window.__3DX_BOOT_DEFER__ = true;
 
-    var BOM_BUILD = 'bom20260602n';
+    var BOM_BUILD = 'bom20260602o';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
     var BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js';
 
@@ -44,26 +44,31 @@
     })();
 
     var UI_HTML =
-      '<div class="bom-root bom-dashboard bom-dark ui-clean">' +
+      '<div class="bom-root bom-dashboard bom-theme-gray ui-clean">' +
       '<header class="bom-dash-header">' +
       '<div class="bom-dash-title">' +
       '<h1>BOM Analytics</h1>' +
       '<p class="bom-dash-sub">Estrutura: <strong id="selectionLabel">-</strong></p>' +
       '</div>' +
+      '<div class="bom-dash-toolbar">' +
+      '<button type="button" id="btnThemeWhite" class="bom-btn bom-btn-theme" title="Fundo branco">Branco</button>' +
+      '<button type="button" id="btnThemeGray" class="bom-btn bom-btn-theme bom-theme-active" title="Fundo cinza">Cinza</button>' +
       '<span class="bom-build-tag" id="buildTag">' + BOM_BUILD + '</span>' +
+      '</div>' +
       '</header>' +
       '<div id="statusBar" class="bom-st">Carregando…</div>' +
       '<div class="bom-dash-actions">' +
-      '<button type="button" id="btnScanExplorer" class="bom-btn bom-btn-primary">Varrer estrutura</button>' +
+      '<button type="button" id="btnScanExplorer" class="bom-btn bom-btn-primary bom-hidden">Varrer estrutura</button>' +
       '<button type="button" id="btnImportPaste" class="bom-btn bom-btn-secondary">Importar Ctrl+C</button>' +
       '</div>' +
-      '<p class="bom-hint">Qualquer projeto: no Explorer, <b>Ctrl+A</b> na grade → <b>Ctrl+C</b> → <b>Importar Ctrl+C</b> ou <b>Varrer</b>.</p>' +
+      '<p class="bom-hint">No Explorer: <b>Ctrl+A</b> na grade → <b>Ctrl+C</b> → <b>Importar Ctrl+C</b>. Funciona com qualquer projeto.</p>' +
       '<div id="kpiGrid" class="bom-kpi-grid"></div>' +
-      '<div class="bom-charts bom-charts-single">' +
-      '<div class="bom-chart bom-chart-main"><canvas id="chartMaturity"></canvas></div>' +
-      '<div class="bom-chart bom-hidden"><canvas id="chartType"></canvas></div>' +
-      '<div class="bom-chart bom-hidden"><canvas id="chartRevision"></canvas></div>' +
-      '<div class="bom-chart bom-hidden"><canvas id="chartApproval"></canvas></div>' +
+      '<div id="bomRulesPanel" class="bom-rules-wrap"></div>' +
+      '<div class="bom-charts bom-charts-grid">' +
+      '<div class="bom-chart"><canvas id="chartMaturity"></canvas></div>' +
+      '<div class="bom-chart"><canvas id="chartType"></canvas></div>' +
+      '<div class="bom-chart"><canvas id="chartRevision"></canvas></div>' +
+      '<div class="bom-chart"><canvas id="chartApproval"></canvas></div>' +
       '</div>' +
       '<div class="bom-table-wrap table-scroll">' +
       '<div class="bom-table-head">E-BOM — <span id="tableProductLabel">-</span></div>' +

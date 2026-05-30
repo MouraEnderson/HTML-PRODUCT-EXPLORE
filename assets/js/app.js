@@ -725,6 +725,17 @@ var App = (function () {
 
     rebindScanButton();
     rebindImportButton();
+    if (typeof DashboardTheme !== 'undefined') {
+      DashboardTheme.init({
+        onChange: function () {
+          refreshUI();
+        }
+      });
+    }
+    var btnScanHide = byId('btnScanExplorer');
+    if (btnScanHide && APP_CONFIG.HIDE_SCAN_BUTTON) {
+      btnScanHide.classList.add('bom-hidden');
+    }
 
     var btnLoadId = byId('btnLoadPhysicalId');
     if (btnLoadId) {

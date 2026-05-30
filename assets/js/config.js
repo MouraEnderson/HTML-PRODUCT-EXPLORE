@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260602n',
+    BUILD: 'bom20260602o',
     /** 3DDashboard: não espera probe CSRF (evita travar em "Conectando…") */
     SKIP_SPACE_PROBE: true,
     WAF_REQUEST_TIMEOUT_MS: 15000,
@@ -46,7 +46,10 @@
     /** Somente Explorer → gráficos + tabela */
     EXPLORER_ONLY: true,
     UI_CLEAN: true,
+    /** Oculta botão Varrer no widget (só Importar Ctrl+C) */
+    HIDE_SCAN_BUTTON: true,
     SHOW_CHARTS: true,
+    SHOW_RULES_PANEL: true,
     SHOW_TREE: false,
     SHOW_ISSUES_PANEL: false,
     SHOW_PLATFORM_SEARCH: false,
@@ -153,6 +156,14 @@
       ],
       OBSOLETE: ['OBSOLETE', 'Obsolete', 'ABANDONED', 'Obsoleto', 'OBSOLETO']
     },
+
+    /** Texto exibido no painel de regras (alinhado a MATURITY_STATES) */
+    MATURITY_RULES_STATIC: [
+      { level: 'good', label: 'Bom (verde)', states: 'Aprovado, Released, Frozen, Approved' },
+      { level: 'moderate', label: 'Moderado (amarelo)', states: 'Em Trabalho, In Work, IN_WORK, Em Desenvolvimento, WIP' },
+      { level: 'bad', label: 'Ruim (vermelho)', states: 'Obsoleto, OBSOLETE, Abandoned' },
+      { level: 'other', label: 'Outros (cinza)', states: 'Estado vazio ou não reconhecido no tenant' }
+    ],
 
     /** Tipos considerados assembly */
     ASSEMBLY_TYPES: [

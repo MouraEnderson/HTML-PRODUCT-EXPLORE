@@ -17,17 +17,25 @@ var ChartsManager = (function () {
     charts = {};
   }
 
-  function doughnut(canvasId, labels, values, title) {
+  function themeColors() {
+    if (typeof DashboardTheme !== 'undefined' && DashboardTheme.getChartColors) {
+      return DashboardTheme.getChartColors();
+    }
+    return window.__BOM_CHART_THEME__ || { text: '#455a64', title: '#263238', grid: '#cfd8dc', legend: '#607d8b' };
+  }
+
+  function doughnut(canvasId, labels, values, title, colors) {
     var ctx = (typeof byId3dx === 'function' ? byId3dx(canvasId) : document.getElementById(canvasId));
     if (!ctx || typeof Chart === 'undefined') return;
     if (charts[canvasId]) charts[canvasId].destroy();
+    var th = themeColors();
     charts[canvasId] = new Chart(ctx, {
       type: 'doughnut',
       data: {
         labels: labels,
         datasets: [{
           data: values,
-          backgroundColor: APP_CONFIG.CHART_COLORS.palette,
+          backgroundColor: colors || APP_CONFIG.CHART_COLORS.palette,
           borderWidth: 1
         }]
       },
@@ -35,8 +43,8 @@ var ChartsManager = (function () {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          title: { display: !!title, text: title },
-          legend: { position: 'bottom' }
+          title: { display: !!title, text: title, color: th.title, font: { size: 14, weight: '600' } },
+          legend: { position: 'bottom', labels: { color: th.legend, font: { size: 12 }, boxWidth: 14 } }
         }
       }
     });
@@ -46,6 +54,7 @@ var ChartsManager = (function () {
     var ctx = (typeof byId3dx === 'function' ? byId3dx(canvasId) : document.getElementById(canvasId));
     if (!ctx || typeof Chart === 'undefined') return;
     if (charts[canvasId]) charts[canvasId].destroy();
+    var th = themeColors();
     charts[canvasId] = new Chart(ctx, {
       type: 'bar',
       data: {
@@ -60,44 +69,35 @@ var ChartsManager = (function () {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
+        plugins: {
+          title: { display: !!title, text: title, color: th.title, font: { size: 14, weight: '600' } },
+          legend: { display: false }
+        },
+        scales: {
+          x: { ticks: { color: th.text, font: { size: 11 } }, grid: { color: th.grid } },
+          y: { beginAtZero: true, ticks: { color: th.text, font: { size: 11 } }, grid: { color: th.grid } }
+        }
       }
     });
   }
 
   function render(metrics) {
     var ds = MetricsEngine.chartDatasets(metrics);
+    var healthColors = (APP_CONFIG.CHART_COLORS && APP_CONFIG.CHART_COLORS.maturityHealth) ||
+      ['#43a047', '#ffb300', '#e53935', '#78909c'];
+
     if (APP_CONFIG && APP_CONFIG.UI_CLEAN) {
-      var labels = ['Bom (Aprovado)', 'Moderado (Em trabalho)', 'Ruim (Obsoleto)', 'Outros'];
-      var values = [
+      var matLabels = ['Bom (Aprovado)', 'Moderado (Em trabalho)', 'Ruim (Obsoleto)', 'Outros'];
+      var matValues = [
         metrics.released || 0,
         metrics.inWork || 0,
         metrics.obsolete || 0,
         (metrics.byMaturity && metrics.byMaturity.other) || 0
       ];
-      var colors = (APP_CONFIG.CHART_COLORS && APP_CONFIG.CHART_COLORS.maturityHealth) ||
-        ['#43a047', '#ffb300', '#e53935', '#78909c'];
-      var ctx = (typeof byId3dx === 'function' ? byId3dx('chartMaturity') : document.getElementById('chartMaturity'));
-      if (ctx && typeof Chart !== 'undefined') {
-        if (charts.chartMaturity) charts.chartMaturity.destroy();
-        charts.chartMaturity = new Chart(ctx, {
-          type: 'doughnut',
-          data: {
-            labels: labels,
-            datasets: [{ data: values, backgroundColor: colors, borderWidth: 0 }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            cutout: '62%',
-            plugins: {
-              title: { display: true, text: 'Saúde da maturidade', color: '#e8eef4', font: { size: 13 } },
-              legend: { position: 'bottom', labels: { color: '#b0bec5', boxWidth: 12 } }
-            }
-          }
-        });
-      }
+      doughnut('chartMaturity', matLabels, matValues, 'Maturidade (Bom / Moderado / Ruim)', healthColors);
+      bar('chartType', ds.type.labels.slice(0, 10), ds.type.values.slice(0, 10), 'Quantidade por tipo');
+      bar('chartRevision', ds.revision.labels.slice(0, 10), ds.revision.values.slice(0, 10), 'Quantidade por revisão');
+      doughnut('chartApproval', ds.approval.labels, ds.approval.values, 'Status de aprovação', healthColors);
       return;
     }
     doughnut('chartMaturity', ds.maturity.labels, ds.maturity.values, 'Por Maturidade');

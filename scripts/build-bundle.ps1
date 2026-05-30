@@ -24,6 +24,7 @@ $files = @(
   'assets\js\processing\metrics-engine.js',
   'assets\js\processing\anomaly-detector.js',
   'assets\js\ui\kpi-cards.js',
+  'assets\js\ui\dashboard-theme.js',
   'assets\js\ui\charts-manager.js',
   'assets\js\ui\filters.js',
   'assets\js\ui\data-table.js',
