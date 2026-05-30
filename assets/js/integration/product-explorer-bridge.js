@@ -58,6 +58,16 @@ var ProductExplorerBridge = (function () {
     return s;
   }
 
+  function isPrdCloudId(id) {
+    return /^prd-R\d{10,}-/i.test(String(id || ''));
+  }
+
+  function pickPrdId(id) {
+    id = normalizeId(id);
+    if (isPrdCloudId(id)) return id;
+    return id;
+  }
+
   function lookupRegistryId(term) {
     if (!term) return null;
     var reg = APP_CONFIG.STRUCTURE_IDS || {};
@@ -75,7 +85,101 @@ var ProductExplorerBridge = (function () {
         }
       }
     }
-    return id ? normalizeId(id) : null;
+    return id ? pickPrdId(id) : null;
+  }
+
+  function readExplorerIframeDocument() {
+    var docs = [];
+    try {
+      if (window.parent && window.parent.document) docs.push(window.parent.document);
+    } catch (e) { /* */ }
+    try {
+      if (window.top && window.top.document && window.top.document !== docs[0]) {
+        docs.push(window.top.document);
+      }
+    } catch (e2) { /* */ }
+    var i;
+    for (i = 0; i < docs.length; i++) {
+      var frames = docs[i].querySelectorAll('iframe');
+      var f;
+      for (f = 0; f < frames.length; f++) {
+        var frame = frames[f];
+        var src = frame.src || '';
+        var title = '';
+        try {
+          title = frame.contentDocument && frame.contentDocument.title ? frame.contentDocument.title : '';
+        } catch (e3) { /* */ }
+        if (
+          title.indexOf('Product Structure') >= 0 ||
+          src.indexOf('ENXScene') >= 0 ||
+          src.indexOf('ENXSce') >= 0
+        ) {
+          try {
+            return frame.contentDocument;
+          } catch (e4) { /* */ }
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Catálogo dinâmico nome → prd- lido do Explorer (Recentes / lista). */
+  function buildPrdCatalogFromExplorer() {
+    var catalog = {};
+    var doc = readExplorerIframeDocument();
+    if (!doc || !doc.body) return catalog;
+    var text = doc.body.innerText || '';
+    var lines = text.split('\n');
+    var prdRe = /prd-R\d{10,}-[A-Za-z0-9]+/gi;
+    var i;
+    for (i = 0; i < lines.length; i++) {
+      var prdMatch = lines[i].match(prdRe);
+      if (!prdMatch || !prdMatch[0]) continue;
+      var prdId = prdMatch[0];
+      var j;
+      for (j = i - 1; j >= Math.max(0, i - 5); j--) {
+        var nameLine = String(lines[j] || '').trim();
+        if (!nameLine || nameLine.length < 2 || nameLine.length > 120) continue;
+        if (prdRe.test(nameLine)) continue;
+        if (/^(recents|open |physical product|access your)/i.test(nameLine)) continue;
+        if (nameLine.indexOf('|') >= 0) {
+          nameLine = nameLine.split('|')[0].trim();
+        }
+        if (nameLine.length > 2) {
+          catalog[nameLine] = prdId;
+          var short = nameLine.length > 24 ? nameLine.slice(0, 24) : nameLine;
+          catalog[short] = prdId;
+        }
+        break;
+      }
+    }
+    return catalog;
+  }
+
+  function resolveFromExplorerCatalog(term) {
+    if (!term) return null;
+    var catalog = buildPrdCatalogFromExplorer();
+    var key = String(term).trim();
+    var prd = catalog[key];
+    if (!prd) {
+      var tLow = key.toLowerCase();
+      Object.keys(catalog).forEach(function (name) {
+        if (prd) return;
+        var nLow = name.toLowerCase();
+        if (nLow === tLow || nLow.indexOf(tLow) >= 0 || tLow.indexOf(nLow) >= 0) {
+          prd = catalog[name];
+        }
+      });
+    }
+    if (!prd || !isValidId(prd)) return null;
+    return {
+      physicalid: pickPrdId(prd),
+      type: 'VPMReference',
+      name: key,
+      displayName: key,
+      displayType: 'Physical Product',
+      source: 'explorer-prd-catalog'
+    };
   }
 
   function normalizeSelection(payload) {
@@ -96,11 +200,16 @@ var ProductExplorerBridge = (function () {
       var rid = reg[displayName] || reg[displayName.toLowerCase()] || reg[displayName.toUpperCase()];
       if (rid) physicalid = normalizeId(rid);
     }
-    if (!isValidId(physicalid)) return null;
-    var hintId = lookupRegistryId(structureNameHint || displayName);
-    if (hintId && hintId !== physicalid) {
-      physicalid = hintId;
+    var nameForLookup = structureNameHint || displayName;
+    if (nameForLookup) {
+      var catSel = resolveFromExplorerCatalog(nameForLookup);
+      if (catSel) return catSel;
+      if (!isPrdCloudId(physicalid)) {
+        var hintId = lookupRegistryId(nameForLookup);
+        if (hintId) physicalid = hintId;
+      }
     }
+    if (!isValidId(physicalid)) return null;
     if (!displayName) {
       displayName = labelText(obj.title) || labelText(obj.name) || physicalid;
     }
@@ -400,6 +509,9 @@ var ProductExplorerBridge = (function () {
     pollStructureHint: pollStructureHint,
     pollDashboardExplorerChrome: pollDashboardExplorerChrome,
     subscribeStructure: subscribeStructure,
-    readHashSelection: readHashSelection
+    readHashSelection: readHashSelection,
+    buildPrdCatalogFromExplorer: buildPrdCatalogFromExplorer,
+    resolveFromExplorerCatalog: resolveFromExplorerCatalog,
+    readExplorerIframeDocument: readExplorerIframeDocument
   };
 })();

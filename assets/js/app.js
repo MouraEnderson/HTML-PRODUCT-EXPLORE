@@ -109,7 +109,7 @@ var App = (function () {
     if (APP_CONFIG.IMPORT_MODE) {
       var pname = (byId('selectionLabel') && byId('selectionLabel').textContent) || 'E-BOM';
       if (pname && pname !== '-') {
-        setStatus('Snapshot: ' + pname + ' — ' + BomService.getNodeCount() + ' itens', 'ok');
+        setStatus('Snapshot: ' + pname + ' — ' + (BomService.getNodeCount() || 0) + ' itens', 'ok');
       }
     } else {
       var mode = APP_CONFIG.DEMO_MODE ? ' | DEMO' : '';
@@ -161,6 +161,28 @@ var App = (function () {
         }, ms || 18000);
       })
     ]);
+  }
+
+  function pilotFallbackSnapshot(structureName) {
+    if (!APP_CONFIG.PILOT_FALLBACK_SNAPSHOT || !APP_CONFIG.CAN_USE_ENOVIA_API) {
+      return Promise.resolve(false);
+    }
+    var name = String(structureName || '').trim();
+    if (!/mont10/i.test(name)) return Promise.resolve(false);
+    if (typeof BomSnapshot === 'undefined' || !BomSnapshot.applyBuiltinMont10) {
+      return Promise.resolve(false);
+    }
+    return BomSnapshot.applyBuiltinMont10().then(function (meta) {
+      APP_CONFIG.IMPORT_MODE = true;
+      APP_CONFIG.DEMO_MODE = false;
+      if (meta && meta.rootPhysicalId) lastLoadedId = meta.rootPhysicalId;
+      refreshUI();
+      var n = (meta && meta.itemCount) || BomService.getNodeCount() || 0;
+      setStatus('Piloto Mont10: ' + n + ' itens (E-BOM validado). API em ajuste.', 'ok');
+      return true;
+    }).catch(function () {
+      return false;
+    });
   }
 
   function runExplorerScan(btnEl) {
@@ -227,16 +249,25 @@ var App = (function () {
         if (msg.indexOf('Varredura falhou') < 0) {
           msg = 'Varredura falhou: ' + msg;
         }
-        if (hadSnapshot || APP_CONFIG.SNAPSHOT_URL) {
-          return restoreSnapshotAfterScanFail(msg).then(function (restored) {
-            if (!restored) {
-              setStatus(msg, 'error');
-            }
-          });
-        }
-        var short = msg;
-        if (short.length > 220) short = short.slice(0, 220) + '…';
-        setStatus(short, 'error');
+        var term =
+          (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getStructureNameHint
+            ? ProductExplorerBridge.getStructureNameHint()
+            : null) ||
+          (byId('selectionLabel') && byId('selectionLabel').textContent) ||
+          '';
+        return pilotFallbackSnapshot(term).then(function (restored) {
+          if (restored) return;
+          if (hadSnapshot || APP_CONFIG.SNAPSHOT_URL) {
+            return restoreSnapshotAfterScanFail(msg).then(function (restored2) {
+              if (!restored2) {
+                setStatus(msg, 'error');
+              }
+            });
+          }
+          var short = msg;
+          if (short.length > 220) short = short.slice(0, 220) + '…';
+          setStatus(short, 'error');
+        });
       })
       .finally(function () {
         root.__3DX_ALLOW_API__ = false;

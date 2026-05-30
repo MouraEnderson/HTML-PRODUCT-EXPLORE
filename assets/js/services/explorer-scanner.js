@@ -178,6 +178,7 @@ var ExplorerScanner = (function () {
       }
     }
     if (!id || !isValidId(id)) return null;
+    if (/^prd-/i.test(matchedKey)) id = matchedKey;
     return {
       physicalid: id,
       type: 'VPMReference',
@@ -262,13 +263,25 @@ var ExplorerScanner = (function () {
       ProductExplorerBridge.pollSelection();
     }
     var term = getExplorerRootSearchTerm();
+    if (term && typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.resolveFromExplorerCatalog) {
+      var catHit = ProductExplorerBridge.resolveFromExplorerCatalog(term);
+      if (catHit) {
+        ProductExplorerBridge.setSelection(catHit, { silent: true });
+        return Promise.resolve(catHit);
+      }
+    }
     if (term) {
       var regHit = resolveFromStructureRegistry(term);
       if (regHit) return Promise.resolve(regHit);
     }
     var sel = getSelection();
-    if (sel) return Promise.resolve(sel);
-    return waitForSelection(5, 300);
+    if (sel && sel.source === 'explorer-prd-catalog') return Promise.resolve(sel);
+    if (sel && /^prd-/i.test(sel.physicalid)) return Promise.resolve(sel);
+    if (sel && term) {
+      var regOverride = resolveFromStructureRegistry(term);
+      if (regOverride) return Promise.resolve(regOverride);
+    }
+    return waitForSelection(4, 250);
   }
 
   function resolveSelection() {
@@ -420,7 +433,8 @@ var ExplorerScanner = (function () {
       }
       return ensureSpaceApi();
     }).then(function () {
-      return BomService.loadRoot(sel.physicalid);
+      var load = BomService.loadRoot(sel.physicalid);
+      return promiseTimeout(load, 28000, 'Timeout ao carregar BOM via API');
     }).then(function () {
       var rootId = BomService.getRootId();
       var rootNode = BomService.getIndex()[rootId];

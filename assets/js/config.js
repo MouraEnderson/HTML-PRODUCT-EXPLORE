@@ -8,11 +8,13 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260602f',
+    BUILD: 'bom20260602g',
     /** 3DDashboard: não espera probe CSRF (evita travar em "Conectando…") */
     SKIP_SPACE_PROBE: true,
     WAF_REQUEST_TIMEOUT_MS: 15000,
-    SCAN_CONNECT_TIMEOUT_MS: 40000,
+    SCAN_CONNECT_TIMEOUT_MS: 35000,
+    /** Piloto: se API falhar no 3DDashboard, carrega snapshot validado (Mont10) */
+    PILOT_FALLBACK_SNAPSHOT: true,
     /** Tenant cloud: não usar dseng:EngItem nem host *-space no 3DDashboard */
     CLOUD_PHYSICAL_ONLY: true,
     /** Fallback offline só com ?snapshot= na URL */
@@ -150,18 +152,18 @@
     },
 
     /**
-     * Nome da estrutura (Explorer) → physicalId (32 hex).
-     * Preencha Mont10: Explorer → raiz → Propriedades → ID físico.
+     * Fallback nome → prd- (cloud). Prioridade: ler prd- dinâmico do Explorer (Recentes).
      */
     STRUCTURE_IDS: {
-      Mont10: '89765370FFF30200500C474F00184933',
-      Mont10BOM: '89765370FFF30200500C474F00184933',
-      'prd-R1132100929518-00511496': '89765370FFF30200500C474F00184933',
-      '01_SKA_Drone Assembly_130520206': '132FB3CE26D70E006A18D1870000316D',
-      '01_SKA_Drone Assembly_130520208': '132FB3CE26D70E006A18D1870000316D',
-      '01_SKA_Drone': '132FB3CE26D70E006A18D1870000316D',
-      'prd-R1132100929518-01172440': '132FB3CE26D70E006A18D1870000316D'
+      Mont10: 'prd-R1132100929518-00511496',
+      Mont10BOM: 'prd-R1132100929518-00511496',
+      'prd-R1132100929518-00511496': 'prd-R1132100929518-00511496',
+      '01_SKA_Drone Assembly_130520206': 'prd-R1132100929518-01172440',
+      '01_SKA_Drone Assembly_130520208': 'prd-R1132100929518-01172440',
+      '01_SKA_Drone': 'prd-R1132100929518-01172440',
+      'prd-R1132100929518-01172440': 'prd-R1132100929518-01172440'
     },
+    PRD_ID_PATTERN: 'prd-R1132100929518-',
 
     PLATFORM: {
       SEARCH_APP_IDS: ['ENX3DSEARCH_AP', '3DSEARCH_AP', 'SEARCH_AP'],
