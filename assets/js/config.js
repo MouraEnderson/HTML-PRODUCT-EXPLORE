@@ -157,7 +157,8 @@
       RELEASED: ['RELEASED', 'FROZEN', 'Released', 'Frozen', 'Aprovado', 'APROVADO', 'Approved'],
       IN_WORK: [
         'IN_WORK', 'PRIVATE', 'In Work', 'Work', 'Em Trabalho', 'Em trabalho',
-        'Em Desenvolvimento', 'IN WORK', 'WIP', 'Em progresso'
+        'Em Desenvolvimento', 'IN WORK', 'WIP', 'Em progresso',
+        'Em Espera', 'Em espera', 'ON HOLD', 'On Hold', 'HOLD', 'Waiting'
       ],
       OBSOLETE: ['OBSOLETE', 'Obsolete', 'ABANDONED', 'Obsoleto', 'OBSOLETO']
     },
@@ -165,7 +166,7 @@
     /** Texto exibido no painel de regras (alinhado a MATURITY_STATES) */
     MATURITY_RULES_STATIC: [
       { level: 'good', label: 'Bom (verde)', states: 'Aprovado, Released, Frozen, Approved' },
-      { level: 'moderate', label: 'Moderado (amarelo)', states: 'Em Trabalho, In Work, IN_WORK, Em Desenvolvimento, WIP' },
+      { level: 'moderate', label: 'Moderado (amarelo)', states: 'Em Trabalho, Em Espera, In Work, IN_WORK, WIP' },
       { level: 'bad', label: 'Ruim (vermelho)', states: 'Obsoleto, OBSOLETE, Abandoned' },
       { level: 'other', label: 'Outros (cinza)', states: 'Estado vazio ou não reconhecido no tenant' }
     ],

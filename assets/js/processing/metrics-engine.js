@@ -137,7 +137,7 @@ var MetricsEngine = (function () {
       owners: grouped.chart,
       ownersLegend: grouped.legend,
       maturity: {
-        labels: ['Bom (Aprovado)', 'Moderado (Em trabalho)', 'Ruim (Obsoleto)', 'Outros'],
+        labels: ['Bom (Aprovado)', 'Moderado (Trabalho/Espera)', 'Ruim (Obsoleto)', 'Outros'],
         values: [
           metrics.byMaturity.released,
           metrics.byMaturity.in_work,

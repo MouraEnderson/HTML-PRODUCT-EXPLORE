@@ -48,8 +48,7 @@ var KpiCards = (function () {
     var total = metrics.totalItems || 0;
     var goodPct = pct(metrics.released, total);
     var pending = (metrics.byApproval && metrics.byApproval.pending) || 0;
-    var atRisk = (metrics.inWork || 0) + (metrics.obsolete || 0) +
-      ((metrics.byMaturity && metrics.byMaturity.other) || 0);
+    var atRisk = (metrics.inWork || 0) + (metrics.obsolete || 0);
 
     var markers = [
       { tone: 'blue', label: 'Total de Peças', value: metrics.totalItems },

@@ -67,6 +67,7 @@ var AttributeService = (function () {
     var raw = String(state || '').trim();
     if (!raw || raw === '—' || raw === '-') return 'other';
     if (/^aprovado$/i.test(raw)) return 'released';
+    if (/^em\s*esper|on\s*hold|aguardando|waiting|hold\b/i.test(raw)) return 'in_work';
     if (/^em\s*trabalh|^in\s*wor/i.test(raw)) return 'in_work';
     if (/em\s*trabalh|em\s*trabalho|em\s*desenvolvimento|in\s*work|in_work|wip|private/i.test(raw)) {
       return 'in_work';
