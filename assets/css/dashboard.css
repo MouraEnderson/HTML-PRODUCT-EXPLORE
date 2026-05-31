@@ -1167,7 +1167,7 @@ body.ui-clean .main-clean {
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  font-size: 19px;
+  font-size: 16px;
   padding-bottom: 0;
   flex: 1;
   min-height: 0;
@@ -1182,9 +1182,9 @@ body.ui-clean .main-clean {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  padding: 10px 14px;
+  padding: 8px 12px;
   background: var(--bom-card);
   border-bottom: 1px solid var(--bom-border);
   flex-shrink: 0;
@@ -1287,9 +1287,9 @@ body.ui-clean .main-clean {
 .bom-sync-banner {
   flex-shrink: 0;
   margin: 0;
-  padding: 10px 14px;
-  font-size: 0.95rem;
-  line-height: 1.4;
+  padding: 7px 12px;
+  font-size: 0.85rem;
+  line-height: 1.35;
   border-bottom: 1px solid var(--bom-border);
 }
 
@@ -1309,19 +1309,24 @@ body.ui-clean .main-clean {
 }
 
 .bom-charts-collapsible {
-  flex-shrink: 0;
-  margin: 0 18px 8px;
+  flex-shrink: 1;
+  margin: 0 18px 4px;
   border: 1px solid var(--bom-border);
   border-radius: 10px;
   background: var(--bom-card);
   overflow: hidden;
 }
 
+.bom-charts-collapsible[open] {
+  overflow-y: auto;
+  max-height: min(168px, 28vh);
+}
+
 .bom-charts-collapsible summary {
   cursor: pointer;
-  padding: 10px 14px;
+  padding: 8px 12px;
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   color: var(--bom-primary);
   list-style: none;
 }
@@ -1332,29 +1337,35 @@ body.ui-clean .main-clean {
 
 .bom-charts-collapsible .bom-charts-row {
   padding-top: 0;
-  padding-bottom: 12px;
+  padding-bottom: 8px;
 }
 
 .bom-charts-collapsible .bom-chart-panel {
-  min-height: 200px;
+  min-height: 100px;
+  max-height: 130px;
+  height: 120px;
+}
+
+.bom-charts-collapsible[open] .bom-chart-panel canvas {
+  max-height: 100px !important;
 }
 
 .stat-markers-compact {
-  padding: 10px 18px !important;
-  gap: 10px !important;
+  padding: 8px 12px !important;
+  gap: 8px !important;
 }
 
 .stat-markers-compact .stat-marker {
-  padding: 10px 12px;
+  padding: 8px 10px;
 }
 
 .stat-markers-compact .stat-marker-value {
-  font-size: 1.85rem;
+  font-size: 1.45rem;
 }
 
 .stat-markers-compact .stat-marker-label {
-  font-size: 0.92rem;
-  margin-bottom: 6px;
+  font-size: 0.78rem;
+  margin-bottom: 4px;
 }
 
 .bom-ebom-head h2 span {
@@ -1488,8 +1499,8 @@ body.ui-clean .main-clean {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 10px;
-  padding: 10px 18px;
+  gap: 8px;
+  padding: 8px 12px;
   background: var(--bom-card);
   border-top: 1px solid var(--bom-border);
   border-bottom: 1px solid var(--bom-border);
@@ -1756,30 +1767,31 @@ body.ui-clean .main-clean {
 }
 
 .bom-layout-ref .bom-ebom-block {
-  margin: 0 18px 8px;
+  margin: 0 12px 6px;
   background: var(--bom-card);
   border: 1px solid var(--bom-border);
   border-radius: 10px;
   overflow: hidden;
   flex: 1 1 auto;
-  min-height: 200px;
+  min-height: 130px;
   display: flex;
   flex-direction: column;
 }
 
 .bom-ebom-head {
-  padding: 14px 16px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--bom-border);
+  flex-shrink: 0;
 }
 
 .bom-ebom-head h2 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.05rem;
 }
 
 .bom-ebom-meta {
-  margin: 8px 0 0;
-  font-size: 1.05rem;
+  margin: 4px 0 0;
+  font-size: 0.88rem;
   color: var(--bom-muted);
 }
 
@@ -1851,8 +1863,8 @@ body.ui-clean .main-clean {
 
 .bom-preview-image {
   flex: 0 0 auto;
-  min-height: 200px;
-  max-height: 280px;
+  min-height: 100px;
+  max-height: 160px;
   border: 1px dashed var(--bom-border);
   border-radius: 10px;
   background: var(--bom-card);
@@ -1860,9 +1872,19 @@ body.ui-clean .main-clean {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  overflow: visible;
-  margin-bottom: 12px;
-  padding: 12px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  padding: 8px;
+}
+
+.bom-widget-wide .bom-preview-image {
+  min-height: 120px;
+  max-height: 200px;
+}
+
+.bom-widget-wide .bom-thumb-lg {
+  width: 100px;
+  height: 100px;
 }
 
 .bom-preview-placeholder {
@@ -2019,6 +2041,62 @@ body.ui-clean .main-clean {
 .bom-widget-narrow .bom-btn-primary {
   padding: 8px 12px;
   font-size: 0.88rem;
+}
+
+/* Modo compacto — widget 3DDashboard (P0/P2 layout) */
+.bom-widget-compact .bom-st-inline {
+  display: none;
+}
+
+.bom-widget-compact .bom-topbar {
+  padding: 6px 10px;
+}
+
+.bom-widget-compact .bom-btn-primary {
+  padding: 7px 11px;
+  font-size: 0.85rem;
+}
+
+.bom-widget-compact .bom-sync-banner {
+  padding: 5px 10px;
+  font-size: 0.8rem;
+}
+
+.bom-widget-compact .bom-filter-item select,
+.bom-widget-compact .bom-filter-item input {
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  min-width: 90px;
+}
+
+.bom-widget-compact .stat-markers-compact {
+  padding: 5px 8px !important;
+  gap: 5px !important;
+}
+
+.bom-widget-compact .stat-markers-compact .stat-marker {
+  padding: 5px 7px;
+}
+
+.bom-widget-compact .stat-markers-compact .stat-marker-value {
+  font-size: 1.15rem !important;
+}
+
+.bom-widget-compact .stat-markers-compact .stat-marker-label {
+  font-size: 0.68rem !important;
+  margin-bottom: 2px;
+}
+
+.bom-widget-compact .bom-charts-collapsible {
+  margin: 0 10px 3px;
+}
+
+.bom-widget-compact .bom-ebom-block {
+  margin: 0 8px 4px;
+}
+
+.bom-widget-wide .bom-ebom-split {
+  grid-template-columns: minmax(0, 1.45fr) minmax(140px, 0.85fr);
 }
 
 @media (max-width: 960px) {
