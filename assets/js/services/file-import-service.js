@@ -42,6 +42,21 @@ var FileImportService = (function () {
     return lastImportReport;
   }
 
+  function getImportReport() {
+    return {
+      parsed: lastImportReport.parsed,
+      skippedCount: lastImportReport.skipped.length,
+      skipped: lastImportReport.skipped.slice(0, 12),
+      lineCount: lastImportReport.lineCount,
+      explorerExpected: lastImportReport.explorerExpected
+    };
+  }
+
+  function finalizeImportReport(items) {
+    lastImportReport.parsed = items ? items.length : 0;
+    return items;
+  }
+
   function skipRow(reason, name, rowNum) {
     lastImportReport.skipped.push({ reason: reason, name: name || '', row: rowNum });
   }
@@ -542,6 +557,7 @@ var FileImportService = (function () {
     for (var i = start; i < lines.length; i++) {
       var row = parseExplorerGridLine(lines[i]);
       if (row) items.push(row);
+      else skipRow('linha_nao_parseada', lines[i].slice(0, 48), i + 1);
     }
     if (items.length >= 2) {
       validateImportedItems(items);
@@ -551,6 +567,8 @@ var FileImportService = (function () {
   }
 
   function parseText(text) {
+    var pasteLines = String(text || '').split(/\r?\n/).filter(function (l) { return l.trim(); });
+    resetImportReport(pasteLines.length);
     if (!looksLikeExplorerPaste(text)) {
       throw new Error(
         'Clipboard não tem a grade do Explorer. No Explorer: clique na tabela → Ctrl+A → Ctrl+C → cole na caixa azul → Varrer.'
@@ -559,14 +577,14 @@ var FileImportService = (function () {
     var gridItems = parseTextFromGridLines(text);
     if (gridItems && gridItems.length) {
       validateImportedItems(gridItems);
-      return enrichItemsWithExplorerIds(inferAssemblyLevels(gridItems));
+      return finalizeImportReport(enrichItemsWithExplorerIds(inferAssemblyLevels(gridItems)));
     }
 
     var rows = textToRows(text).map(function (row) {
       return row.map(function (c) { return cleanCell(c); });
     });
     if (rows.length === 1 && rows[0].length === 1) {
-      return buildItemsFromSingleColumn([rows[0][0]]);
+      return finalizeImportReport(buildItemsFromSingleColumn([rows[0][0]]));
     }
     var items = smartParseRows(rows);
     items.forEach(function (it) {
@@ -574,7 +592,11 @@ var FileImportService = (function () {
       it.title = stripIconNoise(it.title) || it.title;
     });
     items = inferAssemblyLevels(items.filter(function (it) {
-      return it.name && it.name.length > 0;
+      if (!it.name || !it.name.length) {
+        skipRow('nome_vazio', it.title || '', it.rowIndex || 0);
+        return false;
+      }
+      return true;
     }));
     items.forEach(function (it) {
       if (!it.maturity && !it.state) {
@@ -592,7 +614,7 @@ var FileImportService = (function () {
       }
     });
     validateImportedItems(items);
-    return enrichItemsWithExplorerIds(items);
+    return finalizeImportReport(enrichItemsWithExplorerIds(items));
   }
 
   function parseRowsWithoutHeader(rows) {
@@ -646,8 +668,14 @@ var FileImportService = (function () {
         name = cleanCell(cell(row, colMap, 'name', '')) || cleanCell(cell(row, colMap, 'title', ''));
       }
       name = stripIconNoise(unwrapJsonCell(name));
-      if (!isProductName(name)) continue;
-      if (/^physical\s*product$/i.test(name)) continue;
+      if (!isProductName(name)) {
+        skipRow('nome_invalido', String(name).slice(0, 40), r + 1);
+        continue;
+      }
+      if (/^physical\s*product$/i.test(name)) {
+        skipRow('tipo_header', name, r + 1);
+        continue;
+      }
       if (isStatusLabel(name) && items.length) {
         items[items.length - 1].state = name;
         items[items.length - 1].maturity = name;
@@ -747,6 +775,8 @@ var FileImportService = (function () {
     looksLikeExplorerPaste: looksLikeExplorerPaste,
     parseText: parseText,
     parseTextAsync: parseTextAsync,
-    parseRows: parseRows
+    parseRows: parseRows,
+    getImportReport: getImportReport,
+    getLastImportReport: getLastImportReport
   };
 })();
