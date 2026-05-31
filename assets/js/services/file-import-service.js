@@ -27,6 +27,25 @@ var FileImportService = (function () {
     'released', 'in work', 'aprovado', 'pendente', 'bloqueado', 'normal'
   ];
 
+  var lastImportReport = {
+    parsed: 0,
+    skipped: [],
+    lineCount: 0,
+    explorerExpected: null
+  };
+
+  function resetImportReport(lineCount) {
+    lastImportReport = { parsed: 0, skipped: [], lineCount: lineCount || 0, explorerExpected: null };
+  }
+
+  function getLastImportReport() {
+    return lastImportReport;
+  }
+
+  function skipRow(reason, name, rowNum) {
+    lastImportReport.skipped.push({ reason: reason, name: name || '', row: rowNum });
+  }
+
   /** Corrige MÃ¡quinas → Máquinas (UTF-8 lido como Latin-1). */
   function fixMojibake(s) {
     var str = String(s == null ? '' : s);
@@ -97,6 +116,34 @@ var FileImportService = (function () {
     }
   }
 
+  /** JSON de proprietário tem label; JSON só de ícone da peça não. */
+  function ownerJsonHasLabel(raw) {
+    var s = String(raw == null ? '' : raw);
+    if (!isJsonBlob(s)) return !!cleanCell(s);
+    try {
+      var o = JSON.parse(s);
+      return !!(o.label || o.name || o.displayName);
+    } catch (e) {
+      return /"label"\s*:\s*"[^"]+"/i.test(s);
+    }
+  }
+
+  function pickOwnerColumnIndex(row, headerMap) {
+    if (headerMap && headerMap.owner !== undefined) return headerMap.owner;
+    if (!row || !row.length) return undefined;
+    var i;
+    for (i = row.length - 1; i >= 0; i--) {
+      if (ownerJsonHasLabel(row[i])) return i;
+    }
+    for (i = 0; i < row.length; i++) {
+      var v = cleanCell(String(row[i] || ''));
+      if (!v || v.length > 48 || isJsonBlob(row[i])) continue;
+      if (/^(aprovado|em\s*trabalh|em\s*esper|released|obsoleto|physical\s*product)/i.test(v)) continue;
+      if (/^\S+\s+\S+/.test(v)) return i;
+    }
+    return undefined;
+  }
+
   function isSyntheticImportId(pid) {
     var p = String(pid || '');
     return !p || p.indexOf('IMP_') === 0 || p.indexOf('grid_') === 0;
@@ -105,11 +152,15 @@ var FileImportService = (function () {
   function enrichItemsWithExplorerIds(items) {
     if (!items || !items.length) return items;
     items.forEach(function (it) {
-      var ownerRaw = it._ownerRaw || it.owner || '';
-      if (isJsonBlob(ownerRaw)) {
+      var ownerRaw = it._ownerRaw != null ? it._ownerRaw : it.owner || '';
+      if (ownerRaw) {
         var om = parseOwnerCell(ownerRaw);
         if (om.label) it.owner = om.label;
         if (om.iconUrl && !it.iconUrl) it.iconUrl = om.iconUrl;
+      }
+      if ((!it.owner || /^sem\s*propriet|^-$|^—$/i.test(String(it.owner).trim())) && it._ownerRaw) {
+        var om2 = parseOwnerCell(it._ownerRaw);
+        if (om2.label) it.owner = om2.label;
       }
       if (!it.sourcePhysicalId || isSyntheticImportId(it.sourcePhysicalId)) {
         var prd = '';
@@ -153,6 +204,9 @@ var FileImportService = (function () {
     if (/^em\s*trabalh|^in\s*wor|em\s*trabalh|em\s*trabalho|in\s*work|in_work|wip|private|desenvolvimento/i.test(s)) {
       return { state: s || 'Em Trabalho', maturity: s || 'Em Trabalho', approval: a || 'Unknown' };
     }
+    if (/^em\s*esper|on\s*hold|hold|waiting|aguardando/i.test(s)) {
+      return { state: s || 'Em Espera', maturity: s || 'Em Espera', approval: a || 'Unknown' };
+    }
     if (/obsoleto|obsolete|abandoned/i.test(s)) {
       return { state: s || 'Obsoleto', maturity: s || 'Obsoleto', approval: a || 'Unknown' };
     }
@@ -165,13 +219,15 @@ var FileImportService = (function () {
     for (var i = row.length - 1; i >= 0; i--) {
       var v = cleanCell(unwrapJsonCell(row[i]));
       if (!v || v.length > 40) continue;
-      if (/^(aprovado|em\s*trabalh|released|in\s*wor|in_work|frozen|obsoleto|obsolete|wip|private)/i.test(v)) {
+      if (/^(aprovado|em\s*trabalh|em\s*esper|released|in\s*wor|in_work|frozen|obsoleto|obsolete|wip|private|on\s*hold)/i.test(v)) {
         if (/^em\s*trabalh/i.test(v)) return 'Em Trabalho';
+        if (/^em\s*esper/i.test(v)) return 'Em Espera';
         if (/^in\s*wor/i.test(v)) return 'In Work';
         return v;
       }
       if (/aprovado/i.test(v) && !/desaprovado/i.test(v)) return v;
       if (/em\s*trabalh/i.test(v)) return 'Em Trabalho';
+      if (/em\s*esper/i.test(v)) return 'Em Espera';
     }
     return '';
   }
@@ -233,8 +289,9 @@ var FileImportService = (function () {
       }
       if (/^\d+[.,]\d+$/.test(v)) map.revision = i;
       if (/physical\s*product|^vpm/i.test(v)) map.type = i;
-      if (isJsonBlob(row[i]) || /getpicture|"icon"/i.test(String(row[i]))) map.owner = i;
     }
+    var ownerIdx = pickOwnerColumnIndex(row, map);
+    if (ownerIdx !== undefined) map.owner = ownerIdx;
     if (row.length >= 6 && map.maturity === undefined) {
       map.maturity = row.length - 1;
       map.state = row.length - 1;
@@ -262,7 +319,11 @@ var FileImportService = (function () {
     return COLUMN_ALIASES.name.some(function (a) { return joined.indexOf(a) >= 0; }) ||
       COLUMN_ALIASES.level.some(function (a) { return joined.indexOf(a) >= 0; }) ||
       joined.indexOf('nome') >= 0 ||
-      joined.indexOf('title') >= 0;
+      joined.indexOf('title') >= 0 ||
+      joined.indexOf('título') >= 0 ||
+      joined.indexOf('titulo') >= 0 ||
+      joined.indexOf('propriet') >= 0 ||
+      joined.indexOf('matur') >= 0;
   }
 
   function leadingDepth(str) {
@@ -273,16 +334,17 @@ var FileImportService = (function () {
     return { depth: Math.floor(spaces / 2), text: s.trim() };
   }
 
+  function splitLineRaw(line) {
+    function trimCell(c) {
+      return String(c == null ? '' : c).replace(/^"|"$/g, '').trim();
+    }
+    if (line.indexOf('\t') >= 0) return line.split('\t').map(trimCell);
+    if (line.indexOf(';') >= 0) return line.split(';').map(trimCell);
+    return line.split(',').map(trimCell);
+  }
+
   function splitLine(line) {
-    if (line.indexOf('\t') >= 0) {
-      return line.split('\t').map(function (c) {
-        return unwrapJsonCell(c.replace(/^"|"$/g, '').trim());
-      });
-    }
-    if (line.indexOf(';') >= 0) {
-      return line.split(';').map(function (c) { return unwrapJsonCell(c.replace(/^"|"$/g, '').trim()); });
-    }
-    return line.split(',').map(function (c) { return unwrapJsonCell(c.replace(/^"|"$/g, '').trim()); });
+    return splitLineRaw(line).map(function (c) { return unwrapJsonCell(c); });
   }
 
   /** Linha Explorer com JSON embutido (ícone do proprietário). */
@@ -330,7 +392,7 @@ var FileImportService = (function () {
   function textToRows(text) {
     var lines = String(text || '').split(/\r?\n/).filter(function (l) { return l.trim(); });
     if (!lines.length) throw new Error('Nada colado. Copie linhas no Product Explorer (Ctrl+C) e cole de novo.');
-    return lines.map(splitLine);
+    return lines.map(splitLineRaw);
   }
 
   function normalizeSheetRows(rows) {
@@ -465,7 +527,7 @@ var FileImportService = (function () {
     var lines = String(text || '').split(/\r?\n/).filter(function (l) { return l.trim(); });
     if (lines.length < 2) return null;
     try {
-      var rows = lines.map(splitLine);
+      var rows = lines.map(splitLineRaw);
       if (rows.length >= 2) {
         var parsed = smartParseRows(rows);
         if (parsed && parsed.length >= 2) {
@@ -598,7 +660,11 @@ var FileImportService = (function () {
       if (usedIds[pid]) pid = pid + '__r' + (r + 1);
       usedIds[pid] = true;
       var st = resolveMaturityFields(row, colMap);
-      var ownerCol = colMap.owner !== undefined ? row[colMap.owner] : cell(row, colMap, 'owner', '');
+      var ownerCol = colMap.owner !== undefined ? row[colMap.owner] : '';
+      if (!ownerCol && colMap.owner === undefined) {
+        var oIdx = pickOwnerColumnIndex(row, colMap);
+        if (oIdx !== undefined) ownerCol = row[oIdx];
+      }
       var ownerMeta = parseOwnerCell(ownerCol);
       items.push({
         physicalid: pid,
@@ -612,7 +678,7 @@ var FileImportService = (function () {
         maturity: st.maturity,
         iconUrl: extractIconFromRow(row) || ownerMeta.iconUrl || '',
         quantity: parseFloat(cell(row, colMap, 'quantity', '1')) || 1,
-        owner: ownerMeta.label || unwrapJsonCell(cell(row, colMap, 'owner', '')),
+        owner: ownerMeta.label || cleanCell(unwrapJsonCell(cell(row, colMap, 'owner', ''))),
         _ownerRaw: ownerCol,
         organization: cell(row, colMap, 'organization', ''),
         collabSpace: cell(row, colMap, 'collabSpace', ''),
