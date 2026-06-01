@@ -52,7 +52,58 @@ var FileImportService = (function () {
     };
   }
 
+  function captureExplorerExpected(pasteLineCount, hasHeader) {
+    var expected = null;
+    if (typeof ProductExplorerBridge !== 'undefined') {
+      if (ProductExplorerBridge.getExplorerSelectionCount) {
+        var sel = ProductExplorerBridge.getExplorerSelectionCount();
+        if (sel > 0) expected = sel;
+      }
+      if (ProductExplorerBridge.scrapeExplorerGrid) {
+        var hint =
+          ProductExplorerBridge.getStructureNameHint &&
+          ProductExplorerBridge.getStructureNameHint();
+        var grid = ProductExplorerBridge.scrapeExplorerGrid(hint);
+        if (grid && grid.items && grid.items.length) {
+          if (!expected || grid.items.length > expected) expected = grid.items.length;
+        }
+      }
+    }
+    if (!expected && pasteLineCount > 0) {
+      expected = hasHeader ? Math.max(0, pasteLineCount - 1) : pasteLineCount;
+    }
+    lastImportReport.explorerExpected = expected;
+    return expected;
+  }
+
+  function mergeMissingGridItems(items) {
+    if (!items || !items.length) return items;
+    if (typeof ProductExplorerBridge === 'undefined' || !ProductExplorerBridge.scrapeExplorerGrid) {
+      return items;
+    }
+    var expected = lastImportReport.explorerExpected;
+    if (expected && items.length >= expected) return items;
+    var hint =
+      ProductExplorerBridge.getStructureNameHint &&
+      ProductExplorerBridge.getStructureNameHint();
+    var grid = ProductExplorerBridge.scrapeExplorerGrid(hint);
+    if (!grid || !grid.items || grid.items.length <= items.length) return items;
+    var have = {};
+    items.forEach(function (it) {
+      var k = String(it.name || it.title || '').toLowerCase();
+      if (k) have[k] = true;
+    });
+    grid.items.forEach(function (git) {
+      var k = String(git.name || git.title || '').toLowerCase();
+      if (!k || have[k]) return;
+      have[k] = true;
+      items.push(git);
+    });
+    return items;
+  }
+
   function finalizeImportReport(items) {
+    items = mergeMissingGridItems(items);
     lastImportReport.parsed = items ? items.length : 0;
     return items;
   }
@@ -381,7 +432,7 @@ var FileImportService = (function () {
         } catch (e2) { /* legacy */ }
       }
     }
-    var nameM = raw.match(/^(Mont\d*|M\d+)\b/i);
+    var nameM = raw.match(/^(Mont\d*|M\d+|01_SKA_[A-Za-z0-9_.\-]+)\b/i);
     if (!nameM) return null;
     var name = nameM[1];
     var revM = raw.match(/([\d]+[.,][\d]+)/);
@@ -569,6 +620,9 @@ var FileImportService = (function () {
   function parseText(text) {
     var pasteLines = String(text || '').split(/\r?\n/).filter(function (l) { return l.trim(); });
     resetImportReport(pasteLines.length);
+    var rowsPreview = pasteLines.length ? pasteLines.map(splitLineRaw) : [];
+    var hasHeader = rowsPreview.length && looksLikeHeader(rowsPreview[0]);
+    captureExplorerExpected(pasteLines.length, hasHeader);
     if (!looksLikeExplorerPaste(text)) {
       throw new Error(
         'Clipboard não tem a grade do Explorer. No Explorer: clique na tabela → Ctrl+A → Ctrl+C → cole na caixa azul → Varrer.'

@@ -151,7 +151,7 @@ var App = (function () {
         'Exibindo ' + filtered.length + ' de ' + flat.length + ' linhas (role para navegar)';
     }
     if (typeof SyncBanner !== 'undefined' && SyncBanner.update) {
-      SyncBanner.update(flat.length || metrics.totalItems || 0);
+      SyncBanner.update(BomService.getNodeCount() || flat.length || metrics.totalItems || 0);
     }
   }
 

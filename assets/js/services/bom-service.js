@@ -123,13 +123,18 @@ var BomService = (function () {
     if (!items || !items.length) return Promise.resolve(index);
 
     var stack = [];
+    var usedImportIds = {};
     items.forEach(function (item, idx) {
       var level = item.level || 0;
       while (stack.length > level) stack.pop();
       var parentId = stack.length ? stack[stack.length - 1] : null;
 
+      var pid = String(item.physicalid || ('IMP_' + idx));
+      if (usedImportIds[pid]) pid = pid + '__r' + idx;
+      usedImportIds[pid] = true;
+
       var attrs = {
-        physicalid: item.physicalid,
+        physicalid: pid,
         name: item.name,
         title: item.title || item.name,
         type: item.type,

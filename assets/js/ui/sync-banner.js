@@ -45,6 +45,13 @@ var SyncBanner = (function () {
     if (!el) return;
     var explorer = parseExplorerCount();
     var dash = dashboardCount || 0;
+    if (typeof BomService !== 'undefined' && BomService.getNodeCount && BomService.getNodeCount() > 0) {
+      dash = BomService.getNodeCount();
+    }
+    if (!explorer && typeof FileImportService !== 'undefined' && FileImportService.getImportReport) {
+      var rep = FileImportService.getImportReport();
+      if (rep && rep.explorerExpected > 0) explorer = rep.explorerExpected;
+    }
 
     if (!explorer && dash < 1) {
       el.className = 'bom-sync-banner bom-sync-info';

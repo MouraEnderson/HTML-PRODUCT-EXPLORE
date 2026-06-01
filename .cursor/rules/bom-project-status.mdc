@@ -16,10 +16,10 @@ alwaysApply: true
 
 ## Build atual (atualizar após cada deploy)
 
-- **BUILD:** `bom20260603c`
+- **BUILD:** `bom20260603s`
 - Widget carrega **`bom-bundle-<BUILD>.js`**, não os `.js` soltos
-- `BUILD` deve bater em `assets/js/config.js` e `widget-v2.html` (`BOM_BUILD`)
-- Rebuild: `powershell -ExecutionPolicy Bypass -File scripts/build-bundle.ps1`
+- **Deploy one-click:** `powershell -ExecutionPolicy Bypass -File deploy.ps1`
+- Rebuild só bundle: `powershell -ExecutionPolicy Bypass -File scripts/build-bundle.ps1`
 
 ## Sprint 2 — status
 
@@ -28,8 +28,8 @@ alwaysApply: true
 | 2.1 Owner parser | ✅ no bundle `03b` |
 | 2.2 Em Espera + KPI risco | ✅ no bundle `03b` |
 | 2.3 Sync banner + import report | ✅ no bundle `03b` |
-| 2.4 Contagem Explorer = Dashboard (79=79) | ❌ pendente |
-| 2.5 Deploy build no ar | ✅ `ce77afd` |
+| 2.4 Contagem Explorer = Dashboard (79=79) | ✅ `03s` merge grid + ids únicos |
+| 2.5 Deploy build no ar | ✅ `deploy.ps1` + `bom20260603s` |
 
 ## Arquivos-chave
 
