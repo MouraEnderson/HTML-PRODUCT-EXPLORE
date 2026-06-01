@@ -1183,11 +1183,26 @@ body.ui-clean .main-clean {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  flex-wrap: wrap;
-  padding: 8px 12px;
+  flex-wrap: nowrap;
+  padding: 4px 10px;
+  min-height: 0;
   background: var(--bom-card);
   border-bottom: 1px solid var(--bom-border);
   flex-shrink: 0;
+}
+
+.bom-zone-header {
+  flex-shrink: 0;
+}
+
+.bom-zone-header.bom-topbar {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.bom-zone-header .bom-btn-primary {
+  padding: 8px 14px;
+  font-size: 0.88rem;
 }
 
 .bom-topbar-left {
@@ -2232,17 +2247,43 @@ body.ui-clean .main-clean {
   font-weight: 600;
 }
 
-/* —— Layout grid 2×2 (referência do usuário) —— */
-.bom-grid-quad {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: minmax(120px, 36%) 1fr;
+/* —— Layout 5 zonas (spec usuário) —— */
+.bom-layout-five {
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
   gap: 6px;
-  padding: 6px 8px 8px;
+  padding: 0 8px 8px;
   overflow: hidden;
   background: var(--bom-bg);
+}
+
+.bom-zone-row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 6px;
+  min-height: 0;
+  min-width: 0;
+}
+
+.bom-zone-mid .bom-zone-2,
+.bom-zone-mid .bom-zone-3 {
+  flex: 1 1 50%;
+  width: 50%;
+  max-width: 50%;
+}
+
+.bom-zone-bot .bom-zone-4 {
+  flex: 1.62 1 0;
+  min-width: 0;
+}
+
+.bom-zone-bot .bom-zone-5 {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 42%;
 }
 
 .bom-quad {
@@ -2256,78 +2297,65 @@ body.ui-clean .main-clean {
   background: var(--bom-card);
 }
 
-.bom-quad-label {
-  flex-shrink: 0;
-  padding: 5px 10px;
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--bom-primary);
+.bom-sync-inline {
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  line-height: 1.25;
   border-bottom: 1px solid var(--bom-border);
-  background: rgba(21, 101, 192, 0.04);
-}
-
-.bom-quad-filters {
-  grid-column: 1;
-  grid-row: 1;
-}
-
-.bom-quad-charts {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.bom-quad-ebom {
-  grid-column: 1;
-  grid-row: 2;
-}
-
-.bom-quad-view3d {
-  grid-column: 2;
-  grid-row: 2;
+  flex-shrink: 0;
 }
 
 .bom-filter-bar-quad {
   border: none;
   border-bottom: 1px solid var(--bom-border);
-  padding: 6px 8px;
-  gap: 6px;
+  padding: 4px 6px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
 .stat-markers-quad {
   grid-template-columns: repeat(4, 1fr) !important;
-  padding: 6px 8px !important;
-  gap: 6px !important;
+  padding: 4px 6px !important;
+  gap: 4px !important;
   flex: 1 1 auto;
   align-content: center;
+  min-height: 0;
 }
 
 .stat-markers-quad .stat-marker {
-  padding: 6px 8px;
+  padding: 4px 6px;
 }
 
 .stat-markers-quad .stat-marker-value {
-  font-size: 1.25rem !important;
+  font-size: 1.15rem !important;
 }
 
 .stat-markers-quad .stat-marker-label {
-  font-size: 0.72rem !important;
-  margin-bottom: 2px;
+  font-size: 0.68rem !important;
+  margin-bottom: 0;
 }
 
 .bom-st-quad {
   margin: 0 !important;
-  padding: 2px 8px 4px;
-  font-size: 0.75rem;
+  padding: 2px 6px 3px;
+  font-size: 0.7rem;
   flex-shrink: 0;
+  border-top: 1px solid var(--bom-border);
+}
+
+.bom-quad-charts,
+.bom-zone-3 {
+  padding: 0;
 }
 
 .bom-charts-row-quad {
   flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
   display: grid !important;
   grid-template-columns: 1fr 1fr !important;
-  gap: 6px !important;
+  gap: 4px !important;
   padding: 4px 6px 6px !important;
   overflow: hidden;
 }
@@ -2336,11 +2364,7 @@ body.ui-clean .main-clean {
   min-height: 0;
   height: 100%;
   max-height: none;
-  padding: 4px 6px;
-}
-
-.bom-charts-row-quad .bom-chart-panel canvas {
-  max-height: 100% !important;
+  padding: 2px 4px;
 }
 
 .bom-ebom-block-quad {
@@ -2353,91 +2377,82 @@ body.ui-clean .main-clean {
   flex-direction: column;
 }
 
-.bom-quad-ebom .bom-ebom-head {
-  padding: 6px 10px;
+.bom-zone-4 .bom-ebom-head {
+  padding: 5px 8px;
 }
 
-.bom-quad-ebom .bom-ebom-head h2 {
-  font-size: 0.92rem;
+.bom-zone-4 .bom-ebom-head h2 {
+  font-size: 0.88rem;
 }
 
-.bom-quad-ebom .bom-ebom-meta {
-  font-size: 0.78rem;
+.bom-zone-4 .bom-ebom-meta {
+  font-size: 0.72rem;
   margin-top: 2px;
 }
 
 .bom-preview-quad {
   flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-.bom-quad-view3d .bom-preview-body {
+.bom-zone-5 .bom-preview-body {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 8px 10px;
+  height: 100%;
+  padding: 6px 8px;
   display: flex;
   flex-direction: column;
   overflow: auto;
 }
 
-.bom-quad-view3d .bom-preview-image {
+.bom-zone-5 .bom-preview-image {
   flex: 1 1 auto;
-  min-height: 80px;
+  min-height: 64px;
   max-height: none;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .bom-widget-compact .stat-markers-quad {
   grid-template-columns: repeat(2, 1fr) !important;
 }
 
-.bom-widget-compact .stat-markers-quad .stat-marker-value {
-  font-size: 1.05rem !important;
-}
-
 .bom-widget-compact .bom-filter-bar-quad {
-  padding: 4px 6px;
+  padding: 3px 4px;
 }
 
-.bom-widget-compact .bom-filter-item select,
-.bom-widget-compact .bom-filter-item input {
-  font-size: 0.78rem;
-  padding: 4px 6px;
+.bom-widget-compact .bom-zone-header .bom-btn-primary {
+  padding: 6px 10px;
+  font-size: 0.82rem;
 }
 
-.bom-widget-narrow .bom-grid-quad {
-  grid-template-columns: 1fr;
-  grid-template-rows: auto auto minmax(140px, 1fr) minmax(100px, 28%);
+.bom-widget-narrow .bom-layout-five {
+  gap: 4px;
+  padding: 0 4px 4px;
 }
 
-.bom-widget-narrow .bom-quad-filters {
-  grid-column: 1;
-  grid-row: 1;
+.bom-widget-narrow .bom-zone-mid,
+.bom-widget-narrow .bom-zone-bot {
+  flex-direction: column;
 }
 
-.bom-widget-narrow .bom-quad-charts {
-  grid-column: 1;
-  grid-row: 2;
-  max-height: 140px;
+.bom-widget-narrow .bom-zone-mid .bom-zone-2,
+.bom-widget-narrow .bom-zone-mid .bom-zone-3,
+.bom-widget-narrow .bom-zone-bot .bom-zone-4,
+.bom-widget-narrow .bom-zone-bot .bom-zone-5 {
+  width: 100%;
+  max-width: 100%;
+  flex: 0 0 auto;
 }
 
-.bom-widget-narrow .bom-quad-ebom {
-  grid-column: 1;
-  grid-row: 3;
+.bom-widget-narrow .bom-zone-mid {
+  max-height: 38vh;
 }
 
-.bom-widget-narrow .bom-quad-view3d {
-  grid-column: 1;
-  grid-row: 4;
-}
-
-.bom-widget-narrow .bom-charts-row-quad {
-  grid-template-columns: 1fr 1fr !important;
-}
-
-.bom-widget-narrow .stat-markers-quad {
-  grid-template-columns: repeat(2, 1fr) !important;
+.bom-widget-narrow .bom-zone-bot .bom-zone-5 {
+  min-height: 100px;
+  max-height: 28vh;
 }

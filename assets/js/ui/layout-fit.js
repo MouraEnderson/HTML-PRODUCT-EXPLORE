@@ -1,6 +1,6 @@
 /**
  * @file ui/layout-fit.js
- * Layout 3DDashboard — grid 2×2: filtros/KPIs | gráficos / E-BOM | 3D view.
+ * Layout 5 zonas: ① header · ②③ meio 50/50 · ④⑤ baixo 62/38.
  */
 var LayoutFit = (function () {
   'use strict';
@@ -8,7 +8,7 @@ var LayoutFit = (function () {
   var bound = false;
   var NARROW_W = 620;
   var COMPACT_H = 780;
-  var TOP_ROW_RATIO = 0.36;
+  var MID_ROW_RATIO = 0.34;
 
   function hostEl() {
     return window.__3DX_UI_ROOT__ || document.body;
@@ -30,58 +30,67 @@ var LayoutFit = (function () {
     host.classList.toggle('bom-widget-short', vp.h < 520);
   }
 
-  function applyGrid(host, vp) {
-    var grid = host.querySelector('.bom-grid-quad');
-    if (!grid) return;
+  function applyFiveZone(host, vp) {
+    var main = host.querySelector('.bom-layout-five');
+    var mid = host.querySelector('.bom-zone-mid');
+    var bot = host.querySelector('.bom-zone-bot');
+    if (!main || !mid || !bot) return;
 
     var hostBox = host.getBoundingClientRect();
     var viewportBottom = hostBox.top + vp.h;
-    var top = grid.getBoundingClientRect().top;
-    var avail = Math.max(200, Math.floor(viewportBottom - top - 4));
+    var top = main.getBoundingClientRect().top;
+    var avail = Math.max(180, Math.floor(viewportBottom - top - 4));
 
-    grid.style.flex = '1 1 auto';
-    grid.style.minHeight = '0';
-    grid.style.height = avail + 'px';
-    grid.style.maxHeight = avail + 'px';
-    grid.style.overflow = 'hidden';
+    main.style.flex = '1 1 auto';
+    main.style.minHeight = '0';
+    main.style.height = avail + 'px';
+    main.style.maxHeight = avail + 'px';
+    main.style.overflow = 'hidden';
 
-    var topRow = Math.max(120, Math.min(Math.floor(avail * TOP_ROW_RATIO), 220));
-    var bottomRow = Math.max(140, avail - topRow - 8);
-    grid.style.gridTemplateRows = topRow + 'px ' + bottomRow + 'px';
+    var midH = Math.max(110, Math.min(Math.floor(avail * MID_ROW_RATIO), 200));
+    var botH = Math.max(120, avail - midH - 6);
 
-    applyEbom(host, bottomRow);
-    applyView3d(host, bottomRow);
+    mid.style.flex = '0 0 ' + midH + 'px';
+    mid.style.height = midH + 'px';
+    mid.style.maxHeight = midH + 'px';
+
+    bot.style.flex = '1 1 auto';
+    bot.style.height = botH + 'px';
+    bot.style.maxHeight = botH + 'px';
+    bot.style.minHeight = botH + 'px';
+
+    applyEbom(host, botH);
+    applyView3d(host, botH);
   }
 
-  function applyEbom(host, quadH) {
-    var block = host.querySelector('.bom-quad-ebom .bom-ebom-block');
-    var list = host.querySelector('.bom-quad-ebom .bom-ebom-list');
-    var tableWrap = host.querySelector('.bom-quad-ebom .bom-table-wrap');
-    var pager = host.querySelector('.bom-quad-ebom .bom-table-pager');
+  function applyEbom(host, rowH) {
+    var block = host.querySelector('.bom-zone-4 .bom-ebom-block');
+    var list = host.querySelector('.bom-zone-4 .bom-ebom-list');
+    var tableWrap = host.querySelector('.bom-zone-4 .bom-table-wrap');
+    var pager = host.querySelector('.bom-zone-4 .bom-table-pager');
     if (!block || !list || !tableWrap) return;
 
     var head = block.querySelector('.bom-ebom-head');
     var headH = head ? head.offsetHeight : 0;
-    var listH = Math.max(80, quadH - headH - 12);
+    var listH = Math.max(72, rowH - headH - 10);
     list.style.height = listH + 'px';
     list.style.maxHeight = listH + 'px';
 
     var pagerH = pager ? pager.offsetHeight : 26;
-    var tableH = Math.max(64, listH - pagerH);
+    var tableH = Math.max(56, listH - pagerH);
     tableWrap.style.height = tableH + 'px';
     tableWrap.style.maxHeight = tableH + 'px';
   }
 
-  function applyView3d(host, quadH) {
-    var preview = host.querySelector('.bom-quad-view3d .bom-preview-body');
-    var image = host.querySelector('.bom-quad-view3d .bom-preview-image');
-    if (!preview) return;
-    var labelH = 28;
-    var bodyH = Math.max(100, quadH - labelH - 8);
-    preview.style.height = bodyH + 'px';
-    preview.style.maxHeight = bodyH + 'px';
+  function applyView3d(host, rowH) {
+    var body = host.querySelector('.bom-zone-5 .bom-preview-body');
+    var image = host.querySelector('.bom-zone-5 .bom-preview-image');
+    if (!body) return;
+    var bodyH = Math.max(80, rowH - 8);
+    body.style.height = bodyH + 'px';
+    body.style.maxHeight = bodyH + 'px';
     if (image) {
-      var imgH = Math.max(80, bodyH - 60);
+      var imgH = Math.max(64, bodyH - 72);
       image.style.minHeight = imgH + 'px';
       image.style.maxHeight = imgH + 'px';
     }
@@ -92,7 +101,7 @@ var LayoutFit = (function () {
     if (!host) return;
     var vp = viewport();
 
-    if (host.classList && host.classList.contains('bom-widget-body')) {
+    if (host.classList.contains('bom-widget-body')) {
       host.style.height = vp.h + 'px';
       host.style.maxHeight = vp.h + 'px';
       host.style.overflow = 'hidden';
@@ -108,15 +117,8 @@ var LayoutFit = (function () {
       root.style.overflow = 'hidden';
     }
 
-    var main = host.querySelector('.bom-main');
-    if (main) {
-      main.style.flex = '1 1 auto';
-      main.style.minHeight = '0';
-      main.style.overflow = 'hidden';
-    }
-
     applyMode(host, vp);
-    applyGrid(host, vp);
+    applyFiveZone(host, vp);
 
     if (typeof ChartsManager !== 'undefined' && ChartsManager.scheduleResize) {
       ChartsManager.scheduleResize();
