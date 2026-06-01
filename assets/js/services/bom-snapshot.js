@@ -156,6 +156,9 @@ var BomSnapshot = (function () {
     }
     var meta = metaFromPayload(payload, items);
     return BomService.loadFromImportedItems(items).then(function () {
+      if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.applyOwnersToIndex) {
+        ProductExplorerBridge.applyOwnersToIndex(BomService.getIndex());
+      }
       saveSession(normalizePayload(payload));
       return meta;
     });

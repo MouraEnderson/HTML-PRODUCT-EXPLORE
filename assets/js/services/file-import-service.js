@@ -105,6 +105,9 @@ var FileImportService = (function () {
   function finalizeImportReport(items) {
     items = ensureRootItem(items);
     items = mergeMissingGridItems(items);
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.applyOwnersToItems) {
+      items = ProductExplorerBridge.applyOwnersToItems(items);
+    }
     lastImportReport.parsed = items ? items.length : 0;
     return items;
   }
@@ -258,6 +261,8 @@ var FileImportService = (function () {
     if (isRevisionText(t)) return '';
     if (isMaturityText(t)) return '';
     if (/^physical\s*product$/i.test(t)) return '';
+    if (/^(01_SKA_|SKA_|Mont\d|prd-R)/i.test(t)) return '';
+    if (/[<][0-9]+[>]/.test(t) || /\(Peça/i.test(t)) return '';
     if (t.length > 64) return t.slice(0, 64);
     return t;
   }

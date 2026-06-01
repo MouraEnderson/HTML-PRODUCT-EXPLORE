@@ -166,6 +166,9 @@ var App = (function () {
     }
     if (typeof PartPreview !== 'undefined') PartPreview.init('#partPreviewPanel');
     var index = BomService.getIndex();
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.applyOwnersToIndex) {
+      ProductExplorerBridge.applyOwnersToIndex(index);
+    }
     var rootId = BomService.getRootId();
     var flat = BomNormalizer.toFlatList(index, rootId);
     Filters.populateTypeOptions(flat);

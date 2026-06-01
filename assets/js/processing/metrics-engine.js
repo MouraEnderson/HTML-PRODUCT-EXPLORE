@@ -94,6 +94,9 @@ var MetricsEngine = (function () {
     if (/^\d+$/.test(o) || /^\d+[.,]\d+$/.test(o)) {
       return 'Sem proprietário';
     }
+    if (/^(01_SKA_|SKA_|Mont\d|prd-R)/i.test(o) || /[<][0-9]+[>]/.test(o)) {
+      return 'Sem proprietário';
+    }
     if (o.charAt(0) === '{') {
       try {
         var j = JSON.parse(o);

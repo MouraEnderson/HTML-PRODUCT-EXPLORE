@@ -257,8 +257,8 @@ var ProductExplorerBridge = (function () {
 
   var EXPLORER_SKIP_LINE =
     /^(physical product|em trabalho|aprovado|released|frozen|in work|approved|owner|organization|revision|type|maturity|enderson|moura|vplm|recents|open |product structure|enovia|access your|n\/d|—|-|login|user)$/i;
-  var EXPLORER_PART_LINE = /^(\d{2}_[A-Za-z0-9][A-Za-z0-9_.\-]{2,80})/;
-  var EXPLORER_NAME_LINE = /^(Mont\d+[A-Za-z0-9_.\-]{0,40}|01_SKA_[A-Za-z0-9_.\-]{2,80})/i;
+  var EXPLORER_PART_LINE = /^(\d{2}_[A-Za-z0-9][A-Za-z0-9_.\-]{2,80}|SKA_[A-Za-z0-9][A-Za-z0-9_.\-]{2,80})/;
+  var EXPLORER_NAME_LINE = /^(Mont\d+[A-Za-z0-9_.\-]{0,40}|01_SKA_[A-Za-z0-9_.\-]{2,80}|SKA_[A-Za-z0-9][A-Za-z0-9_.\-]{2,80})/i;
 
   function extractRootNameFromExplorerText(text) {
     var m =
@@ -428,7 +428,211 @@ var ProductExplorerBridge = (function () {
       }
     }
     if (/^\d+$/.test(s) || /^(aprovado|em\s*trabalh|released|physical\s*product)/i.test(s)) return '';
+    if (/^(01_SKA_|SKA_|Mont\d|prd-R)/i.test(s)) return '';
+    if (/[<>\(]/.test(s)) return '';
     return s;
+  }
+
+  function normalizePartKey(name) {
+    return String(name || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/<[^>]+>/g, '')
+      .replace(/\s*\([^)]*\)\s*$/, '');
+  }
+
+  function isPartIdentifier(s) {
+    s = String(s || '').trim();
+    if (!s) return true;
+    if (/^(01_SKA_|SKA_|Mont\d|prd-R)/i.test(s)) return true;
+    if (/[<][0-9]+[>]/.test(s)) return true;
+    if (/\(Peça|\(Parte|\(Part\b/i.test(s)) return true;
+    if (/^physical\s*product$/i.test(s)) return true;
+    return false;
+  }
+
+  function isPersonName(s) {
+    s = String(s || '').trim();
+    if (!s || s.length < 3 || s.length > 64) return false;
+    if (isPartIdentifier(s)) return false;
+    if (/^(aprovado|em\s*trabalh|em\s*esper|released|in\s*wor|frozen|obsoleto|physical\s*product)/i.test(s)) {
+      return false;
+    }
+    if (/^\d+[.,]\d+$/.test(s)) return false;
+    if (/^[A-Za-zÀ-ú][A-Za-zÀ-ú'.\-]*(\s+[A-Za-zÀ-ú][A-Za-zÀ-ú'.\-]*)+$/.test(s)) return true;
+    return /^[A-Za-zÀ-ú][A-Za-zÀ-ú'.\-]{2,}$/.test(s);
+  }
+
+  function extractOwnerFromDomCell(cell) {
+    if (!cell) return '';
+    var attrs = ['data-value', 'title', 'aria-label'];
+    var ai;
+    for (ai = 0; ai < attrs.length; ai++) {
+      var av = labelText(cell.getAttribute(attrs[ai]));
+      if (isPersonName(av)) return av;
+    }
+    try {
+      var html = cell.innerHTML || '';
+      var jsonM = html.match(/\{"icon"[\s\S]{0,400}?\}/);
+      if (jsonM) {
+        var fromJson = ownerFromExplorerCell(jsonM[0]);
+        if (isPersonName(fromJson)) return fromJson;
+      }
+    } catch (e0) { /* */ }
+    var text = (cell.innerText || cell.textContent || '').trim();
+    if (isPersonName(text)) return text;
+    var fromCell = ownerFromExplorerCell(text);
+    if (isPersonName(fromCell)) return fromCell;
+    return '';
+  }
+
+  function findOwnerColumnIndex(doc) {
+    if (!doc) return -1;
+    var headers = doc.querySelectorAll(
+      '[role="columnheader"], th, .wux-controls-header-cell, [class*="HeaderCell"], [class*="header-cell"]'
+    );
+    var i;
+    for (i = 0; i < headers.length; i++) {
+      var t = (headers[i].innerText || headers[i].textContent || '').trim().toLowerCase();
+      if (t.indexOf('propriet') >= 0 || t === 'owner' || /^owner\b/.test(t)) return i;
+    }
+    return -1;
+  }
+
+  function partNameFromText(text) {
+    var s = String(text || '').trim().split('\n')[0];
+    if (!s) return '';
+    if (s.indexOf('|') >= 0) s = s.split('|')[0].trim();
+    var m = s.match(EXPLORER_PART_LINE) || s.match(EXPLORER_NAME_LINE);
+    if (m) return m[1] || m[0];
+    if (/^(01_SKA_|SKA_|Mont\d)/i.test(s) && s.length >= 6 && s.length <= 96) {
+      return s.replace(/<[^>]+>.*$/, '').trim();
+    }
+    return '';
+  }
+
+  function scrapeOwnerMapFromText(text) {
+    var map = {};
+    String(text || '').split('\n').forEach(function (line) {
+      line = String(line || '').trim();
+      if (!line) return;
+      if (line.indexOf('|') >= 0) {
+        var parts = line.split('|').map(function (p) { return p.trim(); });
+        if (parts.length < 3) return;
+        var partName = partNameFromText(parts[0]);
+        if (!partName) return;
+        var ownerName = '';
+        var pi;
+        for (pi = 1; pi < parts.length; pi++) {
+          var fromJson = ownerFromExplorerCell(parts[pi]);
+          if (isPersonName(fromJson)) {
+            ownerName = fromJson;
+            break;
+          }
+          if (isPersonName(parts[pi])) {
+            ownerName = parts[pi];
+            break;
+          }
+        }
+        if (partName && ownerName) map[normalizePartKey(partName)] = ownerName;
+        return;
+      }
+      var inline = line.match(/^((?:01_SKA_|SKA_|Mont\d)[^\|]{4,80})\s+([A-Za-zÀ-ú][A-Za-zÀ-ú'.\-]*(?:\s+[A-Za-zÀ-ú][A-Za-zÀ-ú'.\-]*)+)/i);
+      if (inline && isPersonName(inline[2])) {
+        map[normalizePartKey(inline[1])] = inline[2].trim();
+      }
+    });
+    return map;
+  }
+
+  function scrapeOwnerMapFromDom(doc) {
+    var map = {};
+    if (!doc || !doc.body) return map;
+    var ownerCol = findOwnerColumnIndex(doc);
+    var rows = doc.querySelectorAll(
+      '[role="row"], tr.wux-controls-datagrid-row, .wux-layouts-datagrid-row, [class*="DataGridRow"]'
+    );
+    var ri;
+    for (ri = 0; ri < rows.length; ri++) {
+      var row = rows[ri];
+      if (row.querySelector('[role="columnheader"]')) continue;
+      var cells = row.querySelectorAll('[role="gridcell"], td, .wux-controls-datagrid-cell, [class*="DataGridCell"]');
+      if (cells.length < 2) continue;
+      var partName = partNameFromText(cells[0].innerText || cells[0].textContent || '');
+      if (!partName && cells.length > 1) {
+        partName = partNameFromText(cells[1].innerText || cells[1].textContent || '');
+      }
+      if (!partName) continue;
+      var ownerName = '';
+      if (ownerCol >= 0 && ownerCol < cells.length) {
+        ownerName = extractOwnerFromDomCell(cells[ownerCol]);
+      }
+      if (!ownerName) {
+        var ci;
+        for (ci = 1; ci < cells.length; ci++) {
+          if (ci === ownerCol) continue;
+          var candidate = extractOwnerFromDomCell(cells[ci]);
+          if (isPersonName(candidate)) {
+            ownerName = candidate;
+            break;
+          }
+        }
+      }
+      if (partName && ownerName) map[normalizePartKey(partName)] = ownerName;
+    }
+    return map;
+  }
+
+  function scrapeExplorerOwnerMap() {
+    pollDashboardExplorerChrome();
+    var map = {};
+    var doc = readExplorerIframeDocument();
+    if (doc) {
+      var domMap = scrapeOwnerMapFromDom(doc);
+      Object.keys(domMap).forEach(function (k) {
+        map[k] = domMap[k];
+      });
+    }
+    var textMap = scrapeOwnerMapFromText(harvestAllExplorerText());
+    Object.keys(textMap).forEach(function (k) {
+      if (!map[k]) map[k] = textMap[k];
+    });
+    return map;
+  }
+
+  function lookupOwnerForPart(ownerMap, partName) {
+    if (!ownerMap || !partName) return '';
+    var key = normalizePartKey(partName);
+    if (ownerMap[key]) return ownerMap[key];
+    var found = '';
+    Object.keys(ownerMap).forEach(function (k) {
+      if (found) return;
+      if (k === key || k.indexOf(key) >= 0 || key.indexOf(k) >= 0) found = ownerMap[k];
+    });
+    return found;
+  }
+
+  function applyOwnersToItems(items) {
+    if (!items || !items.length) return items;
+    var ownerMap = scrapeExplorerOwnerMap();
+    if (!Object.keys(ownerMap).length) return items;
+    items.forEach(function (it) {
+      var owner = lookupOwnerForPart(ownerMap, it.name || it.title);
+      if (owner) {
+        it.owner = owner;
+      } else if (isPartIdentifier(it.owner) || !isPersonName(it.owner)) {
+        it.owner = '';
+      }
+    });
+    return items;
+  }
+
+  function applyOwnersToIndex(index) {
+    if (!index) return index;
+    var items = Object.keys(index).map(function (k) { return index[k]; });
+    applyOwnersToItems(items);
+    return index;
   }
 
   function scrapeExplorerGrid(rootName) {
@@ -481,6 +685,7 @@ var ProductExplorerBridge = (function () {
     });
 
     if (items.length < 2) return null;
+    applyOwnersToItems(items);
     return {
       version: 1,
       productName: rootName || items[0].name,
@@ -891,6 +1096,9 @@ var ProductExplorerBridge = (function () {
     resolveFromExplorerCatalog: resolveFromExplorerCatalog,
     readExplorerIframeDocument: readExplorerIframeDocument,
     scrapeExplorerGrid: scrapeExplorerGrid,
+    scrapeExplorerOwnerMap: scrapeExplorerOwnerMap,
+    applyOwnersToItems: applyOwnersToItems,
+    applyOwnersToIndex: applyOwnersToIndex,
     fetchPilotStructurePayload: fetchPilotStructurePayload,
     harvestAllExplorerText: harvestAllExplorerText,
     getExplorerSelectionCount: getExplorerSelectionCount
