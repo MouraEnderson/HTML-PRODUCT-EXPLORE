@@ -2483,24 +2483,48 @@ body.ui-clean .main-clean {
 .bom-quad-charts,
 .bom-zone-3 {
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.bom-charts-unified-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 2px 4px 4px;
 }
 
 .bom-charts-row-quad {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
-  height: 100%;
+  height: auto;
   display: grid !important;
   grid-template-columns: 1fr 1fr !important;
   gap: 4px !important;
-  padding: 4px 6px 6px !important;
-  overflow: hidden;
+  padding: 0 !important;
+  overflow: visible !important;
+  align-items: start;
 }
 
 .bom-charts-row-quad .bom-chart-panel {
-  min-height: 0;
-  height: 100%;
-  max-height: none;
-  padding: 2px 4px;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  padding: 0 2px !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.bom-zone-3 .owners-legend-scroll {
+  max-height: none !important;
+  overflow: visible !important;
+  border: none !important;
+  margin-top: 2px;
+  padding: 0 2px;
 }
 
 .bom-ebom-block-quad {
