@@ -101,6 +101,8 @@ var PartImage = (function () {
 
   function initialChar(node) {
     var n = String((node && (node.title || node.name)) || '?').trim();
+    var m = n.match(/[A-Za-zÀ-ú]/);
+    if (m) return m[0].toUpperCase();
     return n.charAt(0).toUpperCase() || '?';
   }
 

@@ -214,6 +214,7 @@ var App = (function () {
       setStatus('Estrutura: ' + BomService.getNodeCount() + ' itens | Exibindo: ' + filtered.length + mode, 'ok');
     }
     if (typeof LayoutFit !== 'undefined') LayoutFit.apply();
+    repairUiMojibake();
     window.setTimeout(function () {
       if (typeof LayoutFit !== 'undefined') LayoutFit.apply();
     }, 350);
@@ -999,6 +1000,24 @@ var App = (function () {
     }
   }
 
+  function repairUiMojibake() {
+    if (typeof FileImportService === 'undefined' || !FileImportService.fixMojibake) return;
+    var fix = FileImportService.fixMojibake;
+    var root = window.__3DX_UI_ROOT__ || document.body;
+    if (!root || !root.querySelectorAll) return;
+    root.querySelectorAll(
+      '.bom-chart-heading, .bom-filter-item > span, .bom-ebom-head h2, .bom-st, ' +
+      '.bom-table-pager, .bom-preview-hint, .bom-loading, summary, label span, h2, h3'
+    ).forEach(function (el) {
+      var t = el.textContent;
+      if (t && t.indexOf('Ã') >= 0) el.textContent = fix(t);
+    });
+    var hMat = root.querySelector('.bom-chart-panel .bom-chart-heading');
+    var hOwn = root.querySelector('.bom-chart-owners .bom-chart-heading');
+    if (hMat) hMat.textContent = 'Sa\u00fade da Maturidade';
+    if (hOwn) hOwn.textContent = 'Propriet\u00e1rios';
+  }
+
   function stripLegacyUI() {
     var selectors = [
       '.external-banner',
@@ -1027,6 +1046,7 @@ var App = (function () {
 
   function initAppCore(spaceUrl) {
     stripLegacyUI();
+    repairUiMojibake();
     var base = spaceUrl && spaceUrl !== 'demo' ? spaceUrl : getTenantSpaceUrl();
     if (base) {
       try {

@@ -352,12 +352,19 @@ var ChartsManager = (function () {
     var quadCharts = !!document.querySelector('.bom-charts-row-quad');
     var chartOpts = quadCharts ? { hideLegend: true, hideTitle: true } : {};
 
-    pieChart('chartMaturity', matLabels, matValues, 'Saúde da Maturidade', healthColors, chartOpts);
+    if (quadCharts) {
+      var hMat = document.querySelector('.bom-chart-panel .bom-chart-heading');
+      var hOwn = document.querySelector('.bom-chart-owners .bom-chart-heading');
+      if (hMat) hMat.textContent = 'Sa\u00fade da Maturidade';
+      if (hOwn) hOwn.textContent = 'Propriet\u00e1rios';
+    }
+
+    pieChart('chartMaturity', matLabels, matValues, 'Sa\u00fade da Maturidade', healthColors, chartOpts);
     pieChart(
       'chartOwners',
       owners.labels,
       owners.values,
-      'Proprietários',
+      'Propriet\u00e1rios',
       ownerColors(owners.labels.length),
       chartOpts
     );

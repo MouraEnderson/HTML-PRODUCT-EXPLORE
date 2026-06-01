@@ -403,11 +403,64 @@ var ProductExplorerBridge = (function () {
     }
   }
 
+  function scrapeExplorerTreeItems(doc, rootName, items, seen, rootMeta) {
+    if (!doc || !doc.querySelectorAll) return 0;
+    function inExplorerPanel(el) {
+      var p = el;
+      var depth = 0;
+      while (p && depth < 14) {
+        var t = String(p.innerText || p.textContent || '').slice(0, 800);
+        if (t.indexOf('BOM Analytics') >= 0) return false;
+        if (/Product Structure Explorer|Structure Explorer/i.test(t)) return true;
+        p = p.parentElement;
+        depth++;
+      }
+      return false;
+    }
+    var nodes = doc.querySelectorAll('[role="treeitem"], [role="row"]');
+    var added = 0;
+    var i;
+    for (i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      if (!inExplorerPanel(el)) continue;
+      var raw = String(el.getAttribute && el.getAttribute('aria-label') || '').trim();
+      if (!raw) raw = String(el.innerText || el.textContent || '').trim();
+      if (!raw || raw.length > 140) continue;
+      raw = raw.split('\n')[0].replace(/\.{2,}$/, '').trim();
+      if (!raw || isMirrorUiNoise(raw)) continue;
+      var name = partNameFromText(raw) || raw;
+      if (!isValidMirrorPartName(name)) continue;
+      if (rootName && name.toLowerCase() === String(rootName).toLowerCase() && items.length > 0) continue;
+      var rowText = String(el.innerText || el.textContent || '');
+      var revM = rowText.match(/\b(\d+\.\d+)\b/);
+      var maturity = '—';
+      if (/aprovado|released|frozen/i.test(rowText)) maturity = 'Aprovado';
+      else if (/em\s*trabalh|in\s*work/i.test(rowText)) maturity = 'Em Trabalho';
+      var before = items.length;
+      pushGridItem(items, seen, buildMirrorRow(name, 1, items.length, {
+        title: name,
+        revision: revM ? revM[1] : ((rootMeta && rootMeta.revision) || '1.1'),
+        owner: (rootMeta && rootMeta.owner) || '',
+        type: (rootMeta && rootMeta.type) || 'Physical Product',
+        maturity: maturity
+      }));
+      if (items.length > before) added++;
+    }
+    return added;
+  }
+
   function scrapeMirrorSupplementFromDashboard(rootName, items, seen, rootMeta, expected) {
     if (expected > 0 && items.length >= expected) return;
     var iframeText = harvestExplorerTextOnly() || '';
     var dashText = harvestExplorerWidgetTextFromDashboard() || '';
     var allText = iframeText + '\n' + dashText;
+    var doc = readExplorerIframeDocument();
+    var topDoc = null;
+    try {
+      topDoc = window.top && window.top.document;
+    } catch (eTop) { /* */ }
+    if (doc) scrapeExplorerTreeItems(doc, rootName, items, seen, rootMeta);
+    if (topDoc) scrapeExplorerTreeItems(topDoc, rootName, items, seen, rootMeta);
     if (dashText) {
       scrapeExplorerTreeLines(dashText.split('\n'), rootName, items, seen);
     }
@@ -572,7 +625,7 @@ var ProductExplorerBridge = (function () {
       var initialScroll = scroller.scrollTop;
       var stepPx = Math.max(80, Math.floor(scroller.clientHeight * 0.55));
       var step = 0;
-      var maxSteps = 64;
+      var maxSteps = 96;
       var stale = 0;
       var lastLen = items.length;
 

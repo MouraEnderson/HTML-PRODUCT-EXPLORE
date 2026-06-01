@@ -162,17 +162,28 @@ var FileImportService = (function () {
   function fixMojibake(s) {
     var str = String(s == null ? '' : s);
     if (!str || str.indexOf('Ã') < 0) return str;
-    try {
-      var bytes = new Uint8Array(str.length);
-      for (var i = 0; i < str.length; i++) bytes[i] = str.charCodeAt(i) & 0xff;
-      var fixed = new TextDecoder('utf-8').decode(bytes);
-      if (fixed.indexOf('Ã') < 0 && fixed.indexOf('\uFFFD') < 0) return fixed;
-    } catch (e) { /* ignore */ }
+    var pass;
+    for (pass = 0; pass < 3; pass++) {
+      if (str.indexOf('Ã') < 0) break;
+      try {
+        var bytes = new Uint8Array(str.length);
+        var i;
+        for (i = 0; i < str.length; i++) bytes[i] = str.charCodeAt(i) & 0xff;
+        var fixed = new TextDecoder('utf-8').decode(bytes);
+        if (fixed && fixed !== str && fixed.indexOf('\uFFFD') < 0) {
+          str = fixed;
+          continue;
+        }
+      } catch (e) { /* ignore */ }
+      break;
+    }
+    if (str.indexOf('Ã') < 0) return str;
     return str
       .replace(/Ã¡/g, 'á').replace(/Ã©/g, 'é').replace(/Ã­/g, 'í')
       .replace(/Ã³/g, 'ó').replace(/Ãº/g, 'ú').replace(/Ã§/g, 'ç')
       .replace(/Ã£/g, 'ã').replace(/Ãµ/g, 'õ').replace(/Ã‰/g, 'É')
-      .replace(/Ã‡/g, 'Ç').replace(/Ãƒ/g, 'ã').replace(/Ã"/g, 'Ó');
+      .replace(/Ã‡/g, 'Ç').replace(/Ãƒ/g, 'ã').replace(/Ã"/g, 'Ó')
+      .replace(/Ã¢â‚¬â€œ/g, '—').replace(/Ã¢â‚¬Â¦/g, '…');
   }
 
   function cleanCell(v) {
@@ -1008,6 +1019,7 @@ var FileImportService = (function () {
     parseTextAsync: parseTextAsync,
     parseRows: parseRows,
     getImportReport: getImportReport,
-    getLastImportReport: getLastImportReport
+    getLastImportReport: getLastImportReport,
+    fixMojibake: fixMojibake
   };
 })();
