@@ -11,10 +11,61 @@ var ApiBomLoader = (function () {
     return false;
   }
 
-  function resolvePhysicalId(ctx, sel) {
-    if (sel && sel.physicalid) return sel.physicalid;
-    if (ctx && ctx.physicalId) return ctx.physicalId;
+  function normalizeId(id) {
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.normalizePhysicalId) {
+      return ThreeDXContentParser.normalizePhysicalId(id);
+    }
+    return String(id || '').trim();
+  }
+
+  function isValidId(id) {
+    id = String(id || '').trim();
+    if (!id) return false;
+    if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.isValidPhysicalId) {
+      return ThreeDXContentParser.isValidPhysicalId(id);
+    }
+    return id.length >= 8;
+  }
+
+  function resolvePhysicalIdSync(ctx, sel) {
+    if (sel && sel.physicalid) return normalizeId(sel.physicalid);
+    if (ctx && ctx.physicalId) return normalizeId(ctx.physicalId);
+    var name = (ctx && (ctx.rootName || ctx.productName)) || (sel && (sel.displayName || sel.name)) || '';
+    if (!name || typeof ProductExplorerBridge === 'undefined') return null;
+    if (ProductExplorerBridge.pollDashboardExplorerChrome) {
+      ProductExplorerBridge.pollDashboardExplorerChrome();
+    }
+    var cat =
+      ProductExplorerBridge.resolveFromExplorerCatalog &&
+      ProductExplorerBridge.resolveFromExplorerCatalog(name);
+    if (cat && isValidId(cat.physicalid)) return normalizeId(cat.physicalid);
+    var prd =
+      ProductExplorerBridge.lookupPrdByPartName &&
+      ProductExplorerBridge.lookupPrdByPartName(name);
+    if (isValidId(prd)) return normalizeId(prd);
     return null;
+  }
+
+  function resolvePhysicalId(ctx, sel) {
+    var id = resolvePhysicalIdSync(ctx, sel);
+    if (id) return Promise.resolve(id);
+    var term = (ctx && (ctx.rootName || ctx.productName)) || (sel && (sel.displayName || sel.name)) || '';
+    term = String(term || '').trim();
+    if (!term || typeof ProductSearchService === 'undefined' || !ProductSearchService.search) {
+      return Promise.resolve(null);
+    }
+    return ProductSearchService.search(term, { top: 8 }).then(function (hits) {
+      if (!hits || !hits.length) return null;
+      var exact = hits.filter(function (h) {
+        var n = String(h.name || h.displayName || '').toLowerCase();
+        var t = term.toLowerCase();
+        return n === t || n.indexOf(t) >= 0 || t.indexOf(n) >= 0;
+      });
+      var pick = (exact.length ? exact : hits)[0];
+      return pick && isValidId(pick.physicalid) ? normalizeId(pick.physicalid) : null;
+    }).catch(function () {
+      return null;
+    });
   }
 
   function ensureReady() {
@@ -78,10 +129,6 @@ var ApiBomLoader = (function () {
         new Error('WAFData indisponível — abra no 3DDashboard (Additional App).')
       );
     }
-    var physicalId = resolvePhysicalId(ctx, sel);
-    if (!physicalId) {
-      return Promise.reject(new Error('Nenhuma raiz com physicalId válido para API.'));
-    }
     if (typeof BomService === 'undefined' || !BomService.loadLazyFull) {
       return Promise.reject(new Error('BomService.loadLazyFull indisponível.'));
     }
@@ -92,12 +139,28 @@ var ApiBomLoader = (function () {
     return ensureReady()
       .then(function () {
         onProgress({ phase: 'connect', loaded: 0, expected: expected });
+        return resolvePhysicalId(ctx, sel);
+      })
+      .then(function (physicalId) {
+        if (!physicalId) {
+          return Promise.reject(
+            new Error(
+              'Raiz sem physicalId para API — selecione a raiz no Explorer ou use Ctrl+A+Ctrl+C.'
+            )
+          );
+        }
         return BomService.loadLazyFull(physicalId, {
           expectedCount: expected,
           onProgress: onProgress
         });
       })
       .then(function (meta) {
+        var count = meta.itemCount || 0;
+        if (expected > 0 && count < expected - 1) {
+          return Promise.reject(
+            new Error('API parcial ' + count + '/' + expected + ' — verifique REST ou expanda a BOM.')
+          );
+        }
         return {
           ok: true,
           mode: 'api',

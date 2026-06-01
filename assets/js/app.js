@@ -617,7 +617,7 @@ var App = (function () {
         .then(function (res) {
           lastSyncedStructure = syncKey;
           applyOrchestratorResult(res);
-          setStatus(res.message || ('Atualizado: ' + BomService.getNodeCount() + ' itens'), 'ok');
+          setStatus(res.message || ('Atualizado: ' + BomService.getNodeCount() + ' itens'), res.partial || res.domFallback ? 'warn' : 'ok');
         })
         .catch(function (err) {
           var msg = (err && err.message) ? err.message : String(err);
@@ -741,7 +741,7 @@ var App = (function () {
     BomOrchestrator.refreshStructure({ source: 'manual', allowAutoCopy: true })
       .then(function (res) {
         applyOrchestratorResult(res, { updateClock: true, layoutFit: true });
-        setStatus(res.message || 'Importação concluída.', 'ok');
+        setStatus(res.message || 'Importação concluída.', res.partial || res.domFallback ? 'warn' : 'ok');
       })
       .catch(function (err) {
         setStatus('Importação: ' + (err.message || err), 'error');

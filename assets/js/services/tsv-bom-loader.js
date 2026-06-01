@@ -79,6 +79,14 @@ var TsvBomLoader = (function () {
     return BomSnapshot.applyPayload(pl).then(function (meta) {
       var count = BomService.getNodeCount();
       if (count < 1) count = meta.itemCount || (pl.items && pl.items.length) || 0;
+      if (expected > 0 && count < expected - 1) {
+        return Promise.reject(
+          new Error(
+            'TSV parcial ' + count + '/' + expected +
+            ' — expanda todos os níveis no Explorer, Ctrl+A+Ctrl+C, ou aguarde API lazy.'
+          )
+        );
+      }
       saveRootName(meta.productName || term);
       return {
         ok: true,
@@ -173,15 +181,12 @@ var TsvBomLoader = (function () {
         if (autoPayload && !needsMore(autoPayload, expected)) {
           return autoPayload;
         }
-        if (autoPayload && autoPayload.items && autoPayload.items.length >= 2) {
-          return autoPayload;
-        }
         return tryClipboardTsv(term).then(function (clipPayload) {
           if (clipPayload && !needsMore(clipPayload, expected)) return clipPayload;
-          if (clipPayload && clipPayload.items && clipPayload.items.length >= (autoPayload ? autoPayload.items.length : 0)) {
-            return clipPayload;
+          if (clipPayload && autoPayload) {
+            return clipPayload.items.length >= autoPayload.items.length ? clipPayload : autoPayload;
           }
-          return autoPayload || clipPayload;
+          return clipPayload || autoPayload;
         });
       })
       .then(function (payload) {

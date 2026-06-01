@@ -271,11 +271,15 @@ var ExplorerContext = (function () {
   function suggestLoaderMode() {
     var ctx = get();
     var maxTsv = (APP_CONFIG && APP_CONFIG.FAST_TSV_MAX) || 500;
+    var apiAbove = (APP_CONFIG && APP_CONFIG.API_PREFER_ABOVE) || 20;
     var primary = (APP_CONFIG && APP_CONFIG.PRIMARY_LOADER) || 'auto';
-    if (primary === 'api' && ctx.canUseApi && ctx.hasValidPhysicalId) return 'api';
+    if (primary === 'api' && ctx.canUseApi) return 'api';
     if (primary === 'tsv') return 'tsv';
     if (primary === 'paste') return 'paste';
-    if (ctx.canUseApi && ctx.hasValidPhysicalId) return 'api';
+    if (ctx.canUseApi) {
+      if (ctx.hasValidPhysicalId) return 'api';
+      if (ctx.expectedCount >= apiAbove) return 'api';
+    }
     if (ctx.expectedCount > 0 && ctx.expectedCount <= maxTsv) return 'tsv';
     if (ctx.expectedCount > maxTsv) return 'paste';
     return 'tsv';

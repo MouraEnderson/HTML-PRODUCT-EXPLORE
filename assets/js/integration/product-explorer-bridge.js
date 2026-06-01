@@ -301,7 +301,7 @@ var ProductExplorerBridge = (function () {
   var EXPLORER_SKIP_LINE =
     /^(physical product|em trabalho|aprovado|released|frozen|in work|approved|owner|organization|revision|type|maturity|enderson|moura|vplm|recents|open |product structure|enovia|access your|n\/d|—|-|login|user)$/i;
   var EXPLORER_PART_LINE = /^(\d{2}_[A-Za-z0-9][A-Za-z0-9_.\-]{2,80}|SKA_[A-Za-z0-9][A-Za-z0-9_.\-]{2,80})/;
-  var EXPLORER_NAME_LINE = /^(Mont\d+[A-Za-z0-9_.\-]{0,40}|01_SKA_[A-Za-z0-9_.\-]{2,80}|SKA_[A-Za-z0-9][A-Za-z0-9_.\-]{2,80})/i;
+  var EXPLORER_NAME_LINE = /^(Mont\d+[A-Za-z0-9_.\-]{0,40}|01_SKA_[A-Za-z0-9_.\-]{2,80}|SKA_ENDERSW-[A-Za-z0-9][A-Za-z0-9_.\-]{2,80}|SKA_[A-Za-z0-9][A-Za-z0-9_.\-]{2,80})/i;
 
   function extractRootNameFromExplorerText(text) {
     var m =
@@ -2073,7 +2073,11 @@ var ProductExplorerBridge = (function () {
                 resolve(payload);
                 return;
               }
-              if (payload.items.length >= 3) {
+              if (exp > 0 && payload.items.length < exp - 1) {
+                resolve(null);
+                return;
+              }
+              if (payload.items.length >= 3 && (!exp || exp < 4)) {
                 resolve(payload);
                 return;
               }

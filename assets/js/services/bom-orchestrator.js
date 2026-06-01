@@ -28,7 +28,7 @@ var BomOrchestrator = (function () {
   function pickLoaderMode(ctx, options) {
     options = options || {};
     if (options.forceLoader) return options.forceLoader;
-    if (options.preferApi && ctx.canUseApi && ctx.hasValidPhysicalId) return 'api';
+    if (options.preferApi && ctx.canUseApi) return 'api';
     if (typeof ExplorerContext !== 'undefined' && ExplorerContext.suggestLoaderMode) {
       return ExplorerContext.suggestLoaderMode();
     }
@@ -51,8 +51,16 @@ var BomOrchestrator = (function () {
 
   function runApiLoader(ctx, options) {
     options = options || {};
+    var sel = selectionFromContext(ctx);
+    if (!sel && ctx && ctx.hasValidPhysicalId) {
+      sel = {
+        physicalid: ctx.physicalId,
+        name: ctx.rootName || ctx.productName,
+        displayName: ctx.displayName || ctx.productName
+      };
+    }
     if (typeof ApiBomLoader !== 'undefined' && ApiBomLoader.load) {
-      return ApiBomLoader.load(ctx, selectionFromContext(ctx), {
+      return ApiBomLoader.load(ctx, sel, {
         expectedCount: ctx.expectedCount,
         onProgress: options.onProgress
       });
@@ -60,7 +68,6 @@ var BomOrchestrator = (function () {
     if (typeof ExplorerScanner === 'undefined') {
       return Promise.reject(new Error('Scanner indisponível.'));
     }
-    var sel = selectionFromContext(ctx);
     if (sel && ExplorerScanner.scanViaApi) {
       return ExplorerScanner.scanViaApi(sel);
     }
@@ -110,6 +117,51 @@ var BomOrchestrator = (function () {
     return ExplorerScanner.scanViaDomMirrorFallback(ctx.rootName, ctx.expectedCount);
   }
 
+  function runLoaderMode(mode, ctx, options) {
+    if (mode === 'api') return runApiLoader(ctx, options);
+    if (mode === 'paste') return runPasteLoader(ctx, options);
+    if (mode === 'dom-fallback') return runDomFallbackLoader(ctx);
+    return runTsvLoader(ctx, options);
+  }
+
+  function runManualFallbackChain(ctx, options, failedMode, firstErr) {
+    var maxTsv = (APP_CONFIG && APP_CONFIG.FAST_TSV_MAX) || 500;
+    var order = [];
+    if (ctx.canUseApi && failedMode !== 'api') order.push('api');
+    if (failedMode !== 'tsv' && ctx.expectedCount <= maxTsv) order.push('tsv');
+    if (failedMode !== 'paste') order.push('paste');
+    if (APP_CONFIG.DOM_MIRROR_FALLBACK !== false && failedMode !== 'dom-fallback') {
+      order.push('dom-fallback');
+    }
+
+    function attempt(i, lastErr) {
+      if (i >= order.length) {
+        return Promise.reject(lastErr || firstErr || new Error('Nenhuma fonte obteve a E-BOM completa.'));
+      }
+      var mode = order[i];
+      var runOpts = options;
+      if (mode === 'tsv') {
+        runOpts = {
+          source: 'manual',
+          allowAutoCopy: options.allowAutoCopy !== false,
+          onProgress: options.onProgress
+        };
+      }
+      var run = runLoaderMode(mode, ctx, runOpts);
+      if (mode === 'api') {
+        root.__3DX_ALLOW_API__ = true;
+        run = run.finally(function () {
+          root.__3DX_ALLOW_API__ = false;
+        });
+      }
+      return run.catch(function (err) {
+        return attempt(i + 1, err);
+      });
+    }
+
+    return attempt(0, firstErr);
+  }
+
   function enrichResult(res, ctx, loaderMode) {
     if (!res) return res;
     if (!res.loaderMode) res.loaderMode = loaderMode;
@@ -154,14 +206,7 @@ var BomOrchestrator = (function () {
     var apiFlag = mode === 'api';
 
     if (apiFlag) root.__3DX_ALLOW_API__ = true;
-
-    if (mode === 'api') {
-      chain = runApiLoader(ctx, options);
-    } else if (mode === 'paste') {
-      chain = runPasteLoader(ctx, options);
-    } else {
-      chain = runTsvLoader(ctx, options);
-    }
+    chain = runLoaderMode(mode, ctx, options);
 
     if (options.source === 'manual') {
       chain = chain.catch(function (firstErr) {
@@ -169,29 +214,14 @@ var BomOrchestrator = (function () {
           apiFlag = false;
           root.__3DX_ALLOW_API__ = false;
         }
-        if (mode === 'api') {
-          return runTsvLoader(ctx, { source: 'manual', allowAutoCopy: true })
-            .catch(function () {
-              return runPasteLoader(ctx, options).catch(function () {
-                return runDomFallbackLoader(ctx);
-              });
-            });
-        }
-        if (mode === 'tsv') {
-          return runPasteLoader(ctx, options).catch(function () {
-            return runDomFallbackLoader(ctx);
-          });
-        }
-        if (mode === 'paste') {
-          return runDomFallbackLoader(ctx);
-        }
-        throw firstErr;
+        return runManualFallbackChain(ctx, options, mode, firstErr);
       });
     }
 
     return withTimeout(chain, options.timeoutMs)
       .then(function (res) {
-        return enrichResult(res, ctx, mode);
+        var usedMode = (res && res.loaderMode) || mode;
+        return enrichResult(res, ctx, usedMode);
       })
       .finally(function () {
         if (apiFlag) root.__3DX_ALLOW_API__ = false;

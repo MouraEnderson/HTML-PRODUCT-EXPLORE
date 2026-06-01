@@ -703,7 +703,19 @@ var ExplorerScanner = (function () {
       if (!finalPayload || !finalPayload.items || finalPayload.items.length < 1) {
         return Promise.reject(new Error('Espelho DOM não obteve dados.'));
       }
-      return applyGrid(finalPayload);
+      return applyGrid(finalPayload).then(function (res) {
+        var count = BomService.getNodeCount();
+        if (count < 1 && res.meta) count = res.meta.itemCount || finalPayload.items.length;
+        if (expected > 0 && count < expected - 1) {
+          return Promise.reject(
+            new Error(
+              'DOM espelho incompleto ' + count + '/' + expected +
+              ' — use API lazy (Additional App) ou Ctrl+A+Ctrl+C na grade do Explorer.'
+            )
+          );
+        }
+        return res;
+      });
     });
   }
 
