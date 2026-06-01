@@ -2374,8 +2374,10 @@ body.ui-clean .main-clean {
 .bom-zone-2-scroll {
   flex: 1 1 auto;
   min-height: 0;
+  max-height: 100%;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: scroll;
+  -webkit-overflow-scrolling: touch;
 }
 
 .bom-zone-3 {
@@ -2508,28 +2510,17 @@ body.ui-clean .main-clean {
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 4px 6px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: stretch;
-}
-
-.bom-charts-unified-scroll > .bom-charts-row-quad {
-  flex: 0 0 auto;
-  width: 100%;
+  padding: 2px 6px 4px;
 }
 
 .bom-charts-row-quad {
-  flex: 0 0 auto;
-  min-height: 0;
-  height: auto;
   display: grid !important;
   grid-template-columns: 1fr 1fr !important;
   gap: 6px !important;
   padding: 0 !important;
   overflow: visible !important;
   align-items: start !important;
+  height: auto !important;
 }
 
 .bom-charts-row-quad .bom-chart-panel {
@@ -2540,53 +2531,52 @@ body.ui-clean .main-clean {
   border: none !important;
   background: transparent !important;
   box-shadow: none !important;
-  overflow: visible !important;
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: stretch !important;
-  justify-content: flex-start !important;
+  overflow: hidden !important;
+  display: grid !important;
+  grid-template-rows: auto 112px auto !important;
+  gap: 3px !important;
+  align-content: start !important;
 }
 
 .bom-chart-heading {
-  margin: 0 0 4px;
+  margin: 0;
   padding: 0 2px;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--bom-text, #263238);
-  line-height: 1.25;
-  min-height: 1.25em;
+  line-height: 1.2;
   text-align: center;
-  flex: 0 0 auto;
 }
 
 .bom-chart-canvas-box {
-  flex: 0 0 118px;
-  height: 118px;
-  min-height: 118px;
-  max-height: 118px;
+  width: 100%;
+  height: 112px;
+  min-height: 112px;
+  max-height: 112px;
   position: relative;
+  overflow: hidden;
 }
 
-.bom-zone-3 .bom-chart-canvas-box canvas {
+.bom-zone-3 .bom-chart-canvas-box canvas,
+.bom-zone-3 .bom-chart-canvas-box > div {
   display: block !important;
   width: 100% !important;
-  height: 100% !important;
-  max-height: 100% !important;
+  height: 112px !important;
+  max-height: 112px !important;
 }
 
-.bom-zone-3 .bom-chart-legend-list,
-.bom-zone-3 .owners-legend-scroll {
-  flex: 0 0 auto !important;
-  max-height: none !important;
-  overflow: visible !important;
-  border: none !important;
-  margin-top: 4px;
+.bom-zone-3 .bom-chart-legend-list {
+  margin: 0;
   padding: 0 2px;
+  overflow: visible !important;
+  max-height: none !important;
+  border: none !important;
 }
 
-.bom-zone-3 .bom-chart-owners canvas {
-  flex: none !important;
-  max-height: 100% !important;
+.bom-zone-3 .bom-chart-legend-list .owners-legend-item {
+  font-size: 0.66rem;
+  padding: 1px 0;
+  gap: 4px;
 }
 
 .bom-ebom-block-quad {
