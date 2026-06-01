@@ -64,12 +64,15 @@ try {
 
   git add assets/js/config.js assets/js/build-id.js assets/js/bom-bundle.js `
     assets/js/bom-bundle-$build.js widget-v2.html `
-    assets/js/integration/product-explorer-bridge.js `
+    assets/js/integration/enovia-api.js `
     assets/js/integration/explorer-context.js `
-    assets/js/services/explorer-scanner.js `
+    assets/js/services/bom-service.js `
     assets/js/services/bom-orchestrator.js `
-    assets/js/services/file-import-service.js assets/js/services/bom-service.js `
-    assets/js/ui/sync-banner.js assets/js/app.js scripts/build-bundle.ps1 2>$null
+    assets/js/services/api-bom-loader.js `
+    assets/js/services/tsv-bom-loader.js `
+    assets/js/services/explorer-scanner.js `
+    assets/js/ui/sync-banner.js assets/js/app.js `
+    scripts/build-bundle.ps1 scripts/deploy.ps1 2>$null
 
   git add -u assets/js/config.js assets/js/build-id.js assets/js/bom-bundle.js widget-v2.html
   git add assets/js/bom-bundle-$build.js

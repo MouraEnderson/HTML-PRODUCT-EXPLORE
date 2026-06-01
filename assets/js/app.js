@@ -586,19 +586,20 @@ var App = (function () {
         if (lbl && res.meta.productName) lbl.textContent = res.meta.productName;
       }
     }
+    if (typeof SyncBanner !== 'undefined' && SyncBanner.setLoadResult) {
+      SyncBanner.setLoadResult(res);
+    }
     if (opts.updateClock) updateLastUpdateClock();
     refreshUI();
     if (opts.layoutFit && typeof LayoutFit !== 'undefined') LayoutFit.apply();
   }
 
-  function syncOpenExplorerStructure(force) {
+  function syncOpenExplorerStructure(force, reason) {
     if (root.__3DX_BLOCK_AUTO_SYNC__) return;
-    if (!force && (APP_CONFIG.AUTO_SYNC_EXPLORER_MS || 0) < 1) return;
+    if (!force && reason === 'poll' && (APP_CONFIG.AUTO_SYNC_EXPLORER_MS || 0) < 1) return;
     if (typeof BomOrchestrator === 'undefined' || !BomOrchestrator.refreshStructure) return;
 
-    var useMirrorSync = APP_CONFIG.EXPLORER_MIRROR_AUTO_SYNC !== false && !APP_CONFIG.CAN_USE_ENOVIA_API;
     var useApiSync = APP_CONFIG.CAN_USE_ENOVIA_API;
-    if (!useMirrorSync && !useApiSync) return;
 
     if (typeof ProductExplorerBridge !== 'undefined') {
       if (ProductExplorerBridge.pollDashboardExplorerChrome) {
@@ -630,17 +631,17 @@ var App = (function () {
     if (loading && !force) return;
     if (structureSyncTimer) window.clearTimeout(structureSyncTimer);
     structureSyncTimer = window.setTimeout(function () {
-      lastSyncedStructure = syncKey;
       if (force) setLoading(true);
-      if (force) setStatus('Espelhando Explorer' + (key ? ': ' + key : '') + '…', 'info');
+      if (force) setStatus('Atualizando estrutura' + (key ? ': ' + key : '') + '…', 'info');
       BomOrchestrator.refreshStructure({
         source: force ? 'manual' : 'auto',
         allowAutoCopy: !!force,
         preferApi: useApiSync
       })
         .then(function (res) {
+          lastSyncedStructure = syncKey;
           applyOrchestratorResult(res);
-          setStatus(res.message || ('Espelho: ' + (key || 'Explorer') + ' — ' + BomService.getNodeCount() + ' itens'), 'ok');
+          setStatus(res.message || ('Atualizado: ' + BomService.getNodeCount() + ' itens'), 'ok');
         })
         .catch(function (err) {
           var msg = (err && err.message) ? err.message : String(err);
@@ -674,7 +675,7 @@ var App = (function () {
       !APP_CONFIG.PILOT_GRID_FIRST &&
       typeof ExplorerScanner !== 'undefined'
     ) {
-      syncOpenExplorerStructure(false);
+      syncOpenExplorerStructure(false, 'context');
       return;
     }
     if (isSnapshotDeliveryMode() && !allowApiLoad()) return;
@@ -1061,7 +1062,7 @@ var App = (function () {
     ProductExplorerBridge.subscribe(onSelection);
     if (ProductExplorerBridge.subscribeStructure) {
       ProductExplorerBridge.subscribeStructure(function (name) {
-        syncOpenExplorerStructure(false);
+        syncOpenExplorerStructure(false, 'context');
       });
     }
     initUI();
@@ -1105,7 +1106,7 @@ var App = (function () {
     if (ms < 2000) return;
     setInterval(function () {
       pullExplorerSelection();
-      syncOpenExplorerStructure(false);
+      syncOpenExplorerStructure(false, 'poll');
     }, ms);
   }
 

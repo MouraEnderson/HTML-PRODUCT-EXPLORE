@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260605b',
+    BUILD: 'bom20260605e',
     /** 3DDashboard: nÃƒÂ£o espera probe CSRF (evita travar em "ConectandoÃ¢â‚¬Â¦") */
     SKIP_SPACE_PROBE: true,
     WAF_REQUEST_TIMEOUT_MS: 15000,
@@ -66,7 +66,8 @@
     /** Espelho Explorer: cola só se iframe inacessível */
     EXPLORER_MIRROR_AUTO_SYNC: true,
     EXPLORER_MIRROR_BLOCK_PASTE: true,
-    AUTO_SYNC_EXPLORER_MS: 3500,
+    /** Sprint 2.5: sync só em mudança de contexto; poll agressivo desligado */
+    AUTO_SYNC_EXPLORER_MS: 0,
     /** Sprint 2.5 — TSV fast-path até N peças; acima disso API lazy */
     FAST_TSV_MAX: 500,
     PRIMARY_LOADER: 'auto',
@@ -83,6 +84,8 @@
 
     /** Filhos carregados por requisiÃƒÂ§ÃƒÂ£o lazy */
     BOM_LAZY_BATCH_SIZE: 100,
+    /** Throttle mensagens de progresso API lazy (ms) */
+    API_PROGRESS_THROTTLE_MS: 350,
 
     /** Profundidade inicial automÃƒÂ¡tica */
     BOM_INITIAL_DEPTH: 3,
@@ -181,6 +184,8 @@
     ASSEMBLY_TYPES: [
       'VPMReference',
       'Provide',
+      'Physical Product',
+      'dspfl:PhysicalProduct',
       'dseng:EngItem',
       'Product',
       'Assembly'

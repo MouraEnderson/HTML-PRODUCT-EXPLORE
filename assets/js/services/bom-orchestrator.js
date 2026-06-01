@@ -49,7 +49,14 @@ var BomOrchestrator = (function () {
     ]);
   }
 
-  function runApiLoader(ctx) {
+  function runApiLoader(ctx, options) {
+    options = options || {};
+    if (typeof ApiBomLoader !== 'undefined' && ApiBomLoader.load) {
+      return ApiBomLoader.load(ctx, selectionFromContext(ctx), {
+        expectedCount: ctx.expectedCount,
+        onProgress: options.onProgress
+      });
+    }
     if (typeof ExplorerScanner === 'undefined') {
       return Promise.reject(new Error('Scanner indisponível.'));
     }
@@ -65,13 +72,19 @@ var BomOrchestrator = (function () {
 
   function runTsvLoader(ctx, options) {
     options = options || {};
+    if (typeof TsvBomLoader !== 'undefined' && TsvBomLoader.load) {
+      var allowAutoCopy =
+        options.allowAutoCopy === true ||
+        (options.source === 'manual' && options.allowAutoCopy !== false);
+      return TsvBomLoader.load(ctx, {
+        allowAutoCopy: allowAutoCopy,
+        expectedCount: ctx.expectedCount
+      });
+    }
     if (typeof ExplorerScanner === 'undefined' || !ExplorerScanner.scanViaExplorerGrid) {
       return Promise.reject(new Error('Leitura da grade Explorer indisponível.'));
     }
-    var allowAutoCopy =
-      options.allowAutoCopy === true ||
-      (options.source === 'manual' && options.allowAutoCopy !== false);
-    return ExplorerScanner.scanViaExplorerGrid({ allowAutoCopy: allowAutoCopy });
+    return ExplorerScanner.scanViaExplorerGrid({ allowAutoCopy: options.allowAutoCopy === true });
   }
 
   function runPasteLoader() {
@@ -133,7 +146,7 @@ var BomOrchestrator = (function () {
     if (apiFlag) root.__3DX_ALLOW_API__ = true;
 
     if (mode === 'api') {
-      chain = runApiLoader(ctx);
+      chain = runApiLoader(ctx, options);
     } else if (mode === 'paste') {
       chain = runPasteLoader(ctx, options);
     } else {

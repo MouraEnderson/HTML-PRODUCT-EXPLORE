@@ -1,9 +1,16 @@
 /**
  * @file ui/sync-banner.js
- * Comparador Explorer vs Dashboard (contagem e alerta de divergência).
+ * Sprint 2.5 — banner honesto: modo (API/TSV/Cola) + contagem Explorer vs Dashboard.
  */
 var SyncBanner = (function () {
   'use strict';
+
+  var lastLoad = {
+    loaderMode: '',
+    partial: false,
+    truncated: false,
+    expected: 0
+  };
 
   function byId(id) {
     if (typeof byId3dx === 'function') return byId3dx(id);
@@ -13,6 +20,16 @@ var SyncBanner = (function () {
       if (el) return el;
     }
     return document.getElementById(id);
+  }
+
+  function setLoadResult(res) {
+    if (!res) return;
+    lastLoad.loaderMode = res.loaderMode || res.mode || lastLoad.loaderMode;
+    lastLoad.partial = !!res.partial;
+    lastLoad.truncated = !!(res.meta && res.meta.truncated);
+    if (res.context && res.context.expectedCount > 0) {
+      lastLoad.expected = res.context.expectedCount;
+    }
   }
 
   function parseExplorerCount() {
@@ -35,6 +52,17 @@ var SyncBanner = (function () {
     return null;
   }
 
+  function modeLabel(mode) {
+    mode = String(mode || '').toLowerCase();
+    if (mode === 'api') return 'API';
+    if (mode === 'tsv' || mode.indexOf('explorer') >= 0 || mode === 'text') return 'TSV';
+    if (mode === 'paste' || mode === 'cola' || mode.indexOf('clipboard') >= 0 || mode.indexOf('ctrl') >= 0) {
+      return 'Cola';
+    }
+    if (mode === 'builtin-last' || mode === 'snapshot-file') return 'Snapshot';
+    return mode ? mode.toUpperCase() : '';
+  }
+
   function dashboardQuality() {
     if (typeof ProductExplorerBridge === 'undefined' || !ProductExplorerBridge.assessMirrorQuality) {
       return { ok: true, badRows: 0 };
@@ -45,79 +73,97 @@ var SyncBanner = (function () {
     return ProductExplorerBridge.assessMirrorQuality(BomService.getFlatItems());
   }
 
+  function countLine(mode, dash, explorer) {
+    var line = mode || 'Import';
+    line += ' ' + dash;
+    if (explorer > 0) line += '/' + explorer;
+    return line;
+  }
+
   function update(dashboardCount) {
     var el = byId('syncBanner');
     if (!el) return;
+
     var explorer = parseExplorerCount();
-    var dash = dashboardCount || 0;
-    if (typeof BomService !== 'undefined' && BomService.getNodeCount && BomService.getNodeCount() > 0) {
-      dash = BomService.getNodeCount();
-    }
+    if (!explorer && lastLoad.expected > 0) explorer = lastLoad.expected;
     if (!explorer && typeof FileImportService !== 'undefined' && FileImportService.getImportReport) {
       var rep = FileImportService.getImportReport();
       if (rep && rep.explorerExpected > 0) explorer = rep.explorerExpected;
     }
 
+    var dash = dashboardCount || 0;
+    if (typeof BomService !== 'undefined' && BomService.getNodeCount && BomService.getNodeCount() > 0) {
+      dash = BomService.getNodeCount();
+    }
+
+    var mode = modeLabel(lastLoad.loaderMode);
+
     if (!explorer && dash < 1) {
       el.className = 'bom-sync-banner bom-sync-info';
       el.innerHTML =
-        'Nenhuma estrutura importada. Abra o Product Structure Explorer ao lado e clique ' +
+        'Nenhuma estrutura carregada. Abra o Product Structure Explorer ao lado e clique ' +
         '<strong>Atualizar estrutura</strong>.';
       return;
     }
 
     if (!explorer && dash > 0) {
       el.className = 'bom-sync-banner bom-sync-ok';
-      el.innerHTML = 'Dashboard: <strong>' + dash + '</strong> peças carregadas.';
+      el.innerHTML =
+        (mode ? '<strong>' + mode + '</strong> ' : '') +
+        'Dashboard: <strong>' + dash + '</strong> peças.';
       return;
     }
 
     var quality = dashboardQuality();
-    var diff = Math.abs(explorer - dash);
-    var qualityHint = '';
+    var diff = explorer > 0 ? Math.abs(explorer - dash) : 0;
+    var partial = lastLoad.partial || (explorer > 0 && dash < explorer - 1);
 
-    if (!quality.ok && quality.badRows > 0) {
+    if (lastLoad.truncated) {
       el.className = 'bom-sync-banner bom-sync-warn';
       el.innerHTML =
-        'Explorer: <strong>' + explorer + '</strong> · Dashboard: <strong>' + dash +
-        '</strong> — contagem ' + (diff === 0 ? 'OK' : 'difere') +
-        ', mas <strong>' + quality.badRows + '</strong> linha(s) com colunas erradas. ' +
+        '<strong>' + countLine(mode || 'API', dash, explorer) + '</strong>' +
+        ' — estrutura truncada (limite BOM_MAX_NODES). Filtre ou aumente o limite.';
+      return;
+    }
+
+    if (partial) {
+      el.className = 'bom-sync-banner bom-sync-warn';
+      el.innerHTML =
+        '<strong>Parcial ' + dash + '/' + explorer + '</strong>' +
+        (mode ? ' (' + mode + ')' : '') +
+        ' — expanda todos os níveis no Explorer ou use <strong>API</strong>. ' +
         'Clique <strong>Atualizar estrutura</strong>.';
       return;
     }
 
-    if (diff === 0) {
-      el.className = 'bom-sync-banner bom-sync-ok';
+    if (!quality.ok && quality.badRows > 0) {
+      el.className = 'bom-sync-banner bom-sync-warn';
       el.innerHTML =
-        'Explorer: <strong>' + explorer + '</strong> · Dashboard: <strong>' + dash +
-        '</strong> — sincronizado (espelho OK)';
+        '<strong>' + countLine(mode, dash, explorer) + '</strong>' +
+        ' — contagem ' + (diff === 0 ? 'OK' : 'difere') +
+        ', mas <strong>' + quality.badRows + '</strong> linha(s) com colunas erradas.';
       return;
     }
 
-    var skipHint = '';
-    if (typeof FileImportService !== 'undefined' && FileImportService.getImportReport) {
-      var rep2 = FileImportService.getImportReport();
-      if (rep2 && rep2.skippedCount > 0) {
-        skipHint = ' · ' + rep2.skippedCount + ' linha(s) ignorada(s) no import';
-      }
-    }
-
-    if (diff === 1) {
-      el.className = 'bom-sync-banner bom-sync-warn';
+    if (explorer > 0 && diff <= 1) {
+      el.className = 'bom-sync-banner bom-sync-ok';
       el.innerHTML =
-        'Explorer: <strong>' + explorer + '</strong> · Dashboard: <strong>' + dash +
-        '</strong> — falta <strong>1</strong> peça. Expanda tudo no Explorer → ' +
-        '<strong>Atualizar estrutura</strong>.' + skipHint;
+        '<strong>' + countLine(mode || 'TSV', dash, explorer) + '</strong> — sincronizado';
       return;
     }
 
     el.className = 'bom-sync-banner bom-sync-warn';
     el.innerHTML =
       'Explorer: <strong>' + explorer + '</strong> · Dashboard: <strong>' + dash +
-      '</strong> — diferença de <strong>' + diff +
-      '</strong>. Expanda todos os níveis no Explorer e clique <strong>Atualizar estrutura</strong>.' +
-      skipHint;
+      '</strong>' +
+      (mode ? ' · modo <strong>' + mode + '</strong>' : '') +
+      ' — diferença de <strong>' + diff +
+      '</strong>. Clique <strong>Atualizar estrutura</strong>.';
   }
 
-  return { update: update, parseExplorerCount: parseExplorerCount };
+  return {
+    update: update,
+    setLoadResult: setLoadResult,
+    parseExplorerCount: parseExplorerCount
+  };
 })();

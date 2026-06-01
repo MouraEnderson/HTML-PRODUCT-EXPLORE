@@ -427,6 +427,13 @@ var ExplorerScanner = (function () {
   }
 
   function scanViaApi(sel) {
+    if (typeof ApiBomLoader !== 'undefined' && ApiBomLoader.load) {
+      var ctx =
+        typeof ExplorerContext !== 'undefined' && ExplorerContext.get
+          ? ExplorerContext.get()
+          : null;
+      return ApiBomLoader.load(ctx, sel, { expectedCount: ctx ? ctx.expectedCount : 0 });
+    }
     var term = getExplorerRootSearchTerm();
     if (term) {
       var regSel = resolveFromStructureRegistry(term);
@@ -706,6 +713,16 @@ var ExplorerScanner = (function () {
 
   function scanViaExplorerGrid(options) {
     options = options || {};
+    var ctx =
+      typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh
+        ? ExplorerContext.refresh(true)
+        : null;
+    if (typeof TsvBomLoader !== 'undefined' && TsvBomLoader.load) {
+      return TsvBomLoader.load(ctx, {
+        allowAutoCopy: options.allowAutoCopy === true,
+        expectedCount: ctx ? ctx.expectedCount : 0
+      });
+    }
     var allowAutoCopy = options.allowAutoCopy === true;
     if (typeof ProductExplorerBridge === 'undefined') {
       return Promise.reject(new Error('Iframe do Explorer inacessível — abra a árvore ao lado do widget.'));

@@ -51,7 +51,12 @@ var BomService = (function () {
   }
 
   function parseInstance(member, parentId, level) {
-    var ref = member.reference || member['dseng:EngItem'] || member;
+    var ref =
+      member.reference ||
+      member['dseng:EngItem'] ||
+      member['dspfl:Part'] ||
+      member['dspfl:Instance'] ||
+      member;
     var attrs = AttributeService.extractFromMember(ref);
     var qty = member.quantity || member['dseng:quantity'] || member.qty || 1;
     attrs.quantity = qty;
@@ -230,6 +235,105 @@ var BomService = (function () {
     return id;
   }
 
+  function buildMetaFromIndex() {
+    var rootNode = index[rootId];
+    var productName = (rootNode && (rootNode.title || rootNode.name)) || 'E-BOM';
+    var max = APP_CONFIG.BOM_MAX_NODES || 50000;
+    return {
+      productName: productName,
+      rootPhysicalId: rootId,
+      itemCount: nodeCount,
+      truncated: nodeCount >= max * 0.95
+    };
+  }
+
+  function expandBfs(startId, reportFn) {
+    var queue = [startId];
+    var seen = {};
+
+    function step() {
+      if (!queue.length || !canAddNode()) return Promise.resolve(index);
+      var parentId = queue.shift();
+      if (seen[parentId]) return step();
+      seen[parentId] = true;
+      var node = index[parentId];
+      if (!node) return step();
+
+      return loadChildren(parentId, node.level + 1)
+        .then(function (children) {
+          if (index[parentId]) {
+            index[parentId].loaded = true;
+            index[parentId].expanded = true;
+          }
+          if (typeof reportFn === 'function') reportFn('loading');
+          children.forEach(function (child) {
+            if (child && child.isAssembly && child.physicalid && !seen[child.physicalid]) {
+              queue.push(child.physicalid);
+            }
+          });
+          return step();
+        })
+        .catch(function () {
+          if (index[parentId]) index[parentId].loaded = true;
+          return step();
+        });
+    }
+
+    return step();
+  }
+
+  /**
+   * Sprint 2.5 — carga API lazy BFS até BOM_MAX_NODES com progresso.
+   */
+  function loadLazyFull(physicalId, options) {
+    options = options || {};
+    var onProgress = options.onProgress || function () {};
+    var expected = options.expectedCount || 0;
+    var throttle = (APP_CONFIG && APP_CONFIG.API_PROGRESS_THROTTLE_MS) || 350;
+    var lastReport = 0;
+
+    function report(phase) {
+      var now = Date.now();
+      if (phase !== 'done' && phase !== 'root' && now - lastReport < throttle) return;
+      lastReport = now;
+      onProgress({
+        phase: phase || 'loading',
+        loaded: nodeCount,
+        expected: expected || nodeCount
+      });
+    }
+
+    physicalId = normalizePid(physicalId);
+    reset();
+    rootId = physicalId;
+
+    if (APP_CONFIG.DEMO_MODE) {
+      return loadDemoTree(physicalId).then(function () {
+        report('done');
+        return buildMetaFromIndex();
+      });
+    }
+
+    return EnoviaApi.getProductRoot(physicalId, null)
+      .then(function (res) {
+        var member = res.member || res;
+        var attrs = AttributeService.extractFromMember(Array.isArray(member) ? member[0] : member);
+        if (!attrs.physicalid) attrs.physicalid = physicalId;
+        attrs.hasPhysicalProduct = true;
+        attrs.displayType = attrs.displayType || 'Physical Product';
+        addNode(attrs, null, 0, 1);
+        var bomParentId = attrs.physicalid || physicalId;
+        rootId = bomParentId;
+        index[bomParentId].loaded = false;
+        report('root');
+        return expandBfs(bomParentId, report);
+      })
+      .then(function () {
+        report('done');
+        return buildMetaFromIndex();
+      });
+  }
+
   function loadRoot(physicalId) {
     var blockApi =
       typeof window !== 'undefined' &&
@@ -351,6 +455,7 @@ var BomService = (function () {
   return {
     reset: reset,
     loadRoot: loadRoot,
+    loadLazyFull: loadLazyFull,
     loadRootFromSelection: loadRootFromSelection,
     loadFrom3DXProduct: loadFrom3DXProduct,
     loadFromImportedItems: loadFromImportedItems,

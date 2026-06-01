@@ -175,10 +175,21 @@ var EnoviaApi = (function () {
     var m = APP_CONFIG.MODELERS;
     var id = encodeURIComponent(apiId(parentPhysicalId));
     var base = restBase + '/' + m.PHYSICAL_PRODUCT + '/' + m.PHYS_PRODUCT_TYPE + '/' + id;
-    var url = base + '/dspfl:Part?$skip=' + skip + '&$top=' + top;
-    return WafClient.get(url).catch(function (err) {
-      return Promise.reject(err || new Error('Filhos indisponíveis (406) para ' + parentPhysicalId));
-    });
+    var urls = [
+      base + '/dspfl:Part?$skip=' + skip + '&$top=' + top,
+      base + '/dspfl:Instance?$skip=' + skip + '&$top=' + top,
+      base + '?$expand=dspfl:Part&$skip=' + skip + '&$top=' + top,
+      base + '?$expand=dspfl:Instance&$skip=' + skip + '&$top=' + top
+    ];
+    function tryUrl(i) {
+      if (i >= urls.length) {
+        return Promise.reject(new Error('Filhos indisponíveis (406) para ' + parentPhysicalId));
+      }
+      return WafClient.get(urls[i]).catch(function () {
+        return tryUrl(i + 1);
+      });
+    }
+    return tryUrl(0);
   }
 
   function getEngItemBomExpand(physicalId) {
