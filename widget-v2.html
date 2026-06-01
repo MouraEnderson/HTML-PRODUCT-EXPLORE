@@ -25,13 +25,34 @@
     .bom-zone-3 { grid-column: 6 / 11; grid-row: 2; min-height: 0; overflow: hidden; }
     .bom-zone-4 { grid-column: 1 / 7; grid-row: 3; min-height: 0; overflow: hidden; }
     .bom-zone-5 { grid-column: 7 / 11; grid-row: 3; min-height: 0; overflow: hidden; }
+    .bom-zone-3 { display: flex; flex-direction: column; }
+    .bom-charts-unified-scroll { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 2px 4px; }
+    .bom-charts-row-quad { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; align-items: start; }
+    .bom-zone-3 .bom-chart-panel { border: none; background: transparent; min-height: 0; height: auto; padding: 0; box-shadow: none; }
+    .bom-zone-3 .owners-legend-scroll { max-height: none; overflow: visible; border: none; margin-top: 2px; }
+    .bom-filter-bar-quad {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-areas: "mat tipo appr" "search search clear";
+      gap: 4px 5px;
+      padding: 5px 6px 6px;
+      border-bottom: 1px solid #dde3ea;
+    }
+    .bom-f-mat { grid-area: mat; }
+    .bom-f-type { grid-area: tipo; }
+    .bom-f-appr { grid-area: appr; }
+    .bom-f-search { grid-area: search; }
+    .bom-f-clear { grid-area: clear; align-self: end; width: 100%; padding: 6px 8px; font-size: 0.78rem; font-weight: 600; }
+    .bom-filter-bar-quad .bom-filter-item { min-width: 0; }
+    .bom-filter-bar-quad .bom-filter-item span { font-size: 0.65rem; font-weight: 600; color: #5c6b7a; }
+    .bom-filter-bar-quad select, .bom-filter-bar-quad input { width: 100%; min-width: 0; padding: 5px 6px; font-size: 0.76rem; border: 1px solid #dde3ea; border-radius: 5px; box-sizing: border-box; }
   </style>
   <script type="text/javascript">
   //<![CDATA[
     window.__3DX_TRUSTED_WIDGET__ = true;
     window.__3DX_BOOT_DEFER__ = true;
 
-    var BOM_BUILD = 'bom20260603j';
+    var BOM_BUILD = 'bom20260603k';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
     var BUNDLE;
 
@@ -92,22 +113,23 @@
       '<div id="syncBanner" class="bom-sync-banner bom-sync-inline bom-sync-info bom-hidden">' +
       'Abra a estrutura no Explorer e clique <strong>Atualizar estrutura</strong>.</div>' +
       '<div class="bom-filter-bar bom-filter-bar-quad">' +
-      '<label class="bom-filter-item"><span>Maturidade</span>' +
+      '<label class="bom-filter-item bom-f-mat"><span>Maturidade</span>' +
       '<select id="filterMaturity"><option value="all">Todas</option>' +
       '<option value="released">Bom (Aprovado)</option><option value="in_work">Moderado</option>' +
       '<option value="obsolete">Ruim</option><option value="other">Outros</option></select></label>' +
-      '<label class="bom-filter-item"><span>Tipo</span><select id="filterType"><option value="all">Todos</option></select></label>' +
-      '<label class="bom-filter-item"><span>Aprovação</span>' +
+      '<label class="bom-filter-item bom-f-type"><span>Tipo</span><select id="filterType"><option value="all">Todos</option></select></label>' +
+      '<label class="bom-filter-item bom-f-appr"><span>Aprovação</span>' +
       '<select id="filterApproval"><option value="all">Todas</option>' +
       '<option value="approved">Aprovado</option><option value="pending">Pendente</option></select></label>' +
-      '<label class="bom-filter-item bom-filter-grow"><span>Buscar</span>' +
+      '<label class="bom-filter-item bom-filter-grow bom-f-search"><span>Buscar</span>' +
       '<input type="search" id="searchInput" placeholder="Nome, descrição, proprietário…" /></label>' +
-      '<button type="button" id="btnClearFilters" class="bom-btn bom-btn-filter-clear">Limpar</button>' +
+      '<button type="button" id="btnClearFilters" class="bom-btn bom-btn-filter-clear bom-f-clear">Limpar</button>' +
       '</div>' +
       '<section id="kpiGrid" class="stat-markers-row stat-markers-compact stat-markers-quad" aria-label="Estatísticas"></section>' +
       '<div id="statusBar" class="bom-st bom-st-inline bom-st-quad">Carregando…</div>' +
       '</section>' +
       '<section class="bom-quad bom-zone-3" id="chartsSection" aria-label="Gráficos">' +
+      '<div class="bom-charts-unified-scroll">' +
       '<section class="bom-charts-row bom-charts-row-quad">' +
       '<div class="bom-chart-panel"><canvas id="chartMaturity"></canvas></div>' +
       '<div class="bom-chart-panel bom-chart-owners">' +
@@ -116,7 +138,7 @@
       '<canvas id="chartType" class="bom-hidden"></canvas>' +
       '<canvas id="chartRevision" class="bom-hidden"></canvas>' +
       '<canvas id="chartApproval" class="bom-hidden"></canvas>' +
-      '</section></section>' +
+      '</section></div></section>' +
       '<section class="bom-quad bom-zone-4" aria-label="E-BOM">' +
       '<section class="bom-ebom-block bom-ebom-block-quad">' +
       '<div class="bom-ebom-head">' +

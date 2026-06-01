@@ -2403,11 +2403,50 @@ body.ui-clean .main-clean {
 }
 
 .bom-filter-bar-quad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas:
+    "mat tipo appr"
+    "search search clear";
   border: none;
   border-bottom: 1px solid var(--bom-border);
-  padding: 4px 6px;
-  gap: 4px;
+  padding: 5px 6px 6px;
+  gap: 4px 5px;
   flex-shrink: 0;
+  align-items: end;
+}
+
+.bom-filter-bar-quad .bom-f-mat { grid-area: mat; }
+.bom-filter-bar-quad .bom-f-type { grid-area: tipo; }
+.bom-filter-bar-quad .bom-f-appr { grid-area: appr; }
+.bom-filter-bar-quad .bom-f-search { grid-area: search; }
+.bom-filter-bar-quad .bom-f-clear {
+  grid-area: clear;
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.bom-filter-bar-quad .bom-filter-item {
+  min-width: 0;
+}
+
+.bom-filter-bar-quad .bom-filter-item span {
+  font-size: 0.65rem;
+  font-weight: 600;
+  margin-bottom: 1px;
+}
+
+.bom-filter-bar-quad .bom-filter-item select,
+.bom-filter-bar-quad .bom-filter-item input {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 6px;
+  font-size: 0.76rem;
+  border-radius: 5px;
 }
 
 .stat-markers-quad {
