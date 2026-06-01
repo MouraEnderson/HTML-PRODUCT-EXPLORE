@@ -13,7 +13,7 @@ Documento para validar com você, com admin 3DX ou suporte Dassault **antes** de
 | Dashboard | LISTA 3DX — aba PRODUCTEXPLORE |
 | Widget oficial | ENOVIA — Product Structure Explorer (ex.: Mont10) |
 | Widget custom | BOM Analytics — **Additional App** |
-| URL do app | `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v2.html` (ou sucessor) |
+| URL do app | `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v2.html?v=bom20260605g` |
 | Tenant | `R1132100929518` — space `r1132100929518-us1-space.3dexperience.3ds.com` |
 | Collab / contexto | `CS_IMPLANTACAO` (security context no config) |
 | Deploy 3DSpace | **Não** disponível (`/webapps/BomAnalytics/` = 404) |
@@ -26,9 +26,9 @@ Documento para validar com você, com admin 3DX ou suporte Dassault **antes** de
 
 ### 1. Integração no dashboard (infra)
 
-- [ ] Additional App registrado com URL **mouraenderson** (não moura**and**erson).
-- [ ] Widget BOM Analytics abre no 3DDashboard com build identificável (ex.: faixa `BOM v2 SOLO — bom…`).
-- [ ] Widget roda **ao lado** do Explorer na mesma aba, sem abrir Chrome externo para o usuário final.
+- [x] Additional App registrado com URL **mouraenderson** (não moura**and**erson). *(confirmado piloto LISTA 3DX)*
+- [x] Widget BOM Analytics abre no 3DDashboard com build identificável — pill **`bom20260605g`** (Sprint 2.5).
+- [x] Widget roda **ao lado** do Explorer na mesma aba, sem abrir Chrome externo para o usuário final.
 
 **Falha típica:** página branca, build antigo em cache, URL errada.
 
@@ -36,9 +36,9 @@ Documento para validar com você, com admin 3DX ou suporte Dassault **antes** de
 
 ### 2. Fonte de dados = Explorer (sem clipboard obrigatório)
 
-- [ ] Usuário **não precisa** de Ctrl+C / Ctrl+V na caixa azul para ver a BOM do Mont10 (ou raiz aberta).
-- [ ] Botão **Varrer** (ou sync automático) lê a estrutura **atual** do Explorer / ENOVIA — não texto colado ontem.
-- [ ] Se a caixa de cola existir, ela é só **fallback** (suporte), não documentada como fluxo principal.
+- [x] Fluxo principal documentado: **Atualizar estrutura** → API / TSV / cola / DOM fallback (`BomOrchestrator`).
+- [x] Cola manual é **fallback** explícito (banner Cola/DOM); não é passo 1 na UI Sprint 2.5.
+- [ ] **Validação live Mont10** sem colar — confirmar banner `3/3` no piloto *(T1 piloto pendente)*.
 
 **Falha típica:** KPIs mudam só após colar; “Enderson Moura” ou JSON de avatar no título; 3 itens fixos com seleção diferente na grade.
 
@@ -46,17 +46,18 @@ Documento para validar com você, com admin 3DX ou suporte Dassault **antes** de
 
 ### 3. Raiz dinâmica + hierarquia pai/filho (não só Mont10)
 
-- [ ] **Mont10** serve só para **teste**; o app funciona com **qualquer** estrutura aberta no Explorer.
-- [ ] Analytics mostra **Estrutura: &lt;nome da raiz atual&gt;** (o assembly aberto no Explorer).
-- [ ] `physicalId` da **raiz** vem de seleção/contexto/API — **sem** hardcode de Mont10 em produção.
-- [ ] Filhos carregados em **árvore** (pai → filho), níveis corretos — não lista plana de células coladas.
+- [x] **`ExplorerContext`** — `physicalId`, `productName`, `expectedCount` dinâmicos (sem hardcode Mont10 em código de produção).
+- [x] Mont10 permanece só **fixture de teste** (`data/mont10.json`, fallback piloto).
+- [ ] Analytics mostra nome da raiz atual após sync live *(validar no piloto)*.
+- [ ] Filhos em árvore com níveis corretos em sync live *(T1/T2 piloto)*.
 
 **Falha típica:** título = proprietário; só 3 itens fixos; ignorar filhos quando a BOM tem 1 000+ linhas.
 
 ### 3b. Escala (BOM grande)
 
-- [ ] Estrutura com **muitos itens** (ex. 1 000+) carrega sem travar o browser (lazy load / limite configurável + mensagem clara).
-- [ ] KPIs e tabela refletem **contagem real** da hierarquia varrida (ou amostra documentada se houver limite).
+- [x] **`ApiBomLoader`** lazy + `BOM_MAX_NODES` + banner truncado/Parcial.
+- [x] `FAST_TSV_MAX: 500` — acima disso orchestrator evita TSV primary.
+- [ ] Estrutura 79+ peças validada no piloto *(T3)*.
 
 **Falha típica:** expandir tudo de uma vez; widget congela; usuário pensa que faltou item na seleção.
 
@@ -64,9 +65,10 @@ Documento para validar com você, com admin 3DX ou suporte Dassault **antes** de
 
 ### 4. Contagem e hierarquia corretas
 
-- [ ] Para Mont10 + M1 + M2 na grade Explorer: status **≥ 3 itens** (raiz + filhos, conforme regra do tenant).
-- [ ] Tabela lista **Mont10, M1, M2** com revisão **1.1** (ou valores reais do tenant).
-- [ ] Alterar seleção no Explorer (ex.: só M2) e varrer de novo → contagem/nomes **mudam** (não ficam fixos).
+- [x] Snapshot Mont10 validado: **3/3** — Mont10, M1, M2, rev 1.1 (`node scripts/test-acceptance-sprint25.js`).
+- [ ] Sync live Mont10 **3/3** no dashboard *(T1 piloto)*.
+- [ ] Drone **20/20** no dashboard *(T2 piloto)*.
+- [ ] Seleção M2 isolada altera contagem após novo sync *(piloto)*.
 
 **Falha típica:** sempre “3 itens” ou “1 item”; dados de sessão anterior.
 
@@ -74,8 +76,8 @@ Documento para validar com você, com admin 3DX ou suporte Dassault **antes** de
 
 ### 5. Maturidade e aprovação alinhadas ao Explorer
 
-- [ ] Itens **Aprovado** no Explorer aparecem como aprovados/released nos KPIs (não “0 aprovados / 1 sem aprovação” com tudo verde no Explorer).
-- [ ] Gráficos de maturidade/tipo/refletem os 3 itens (não vazios ou incoerentes).
+- [x] Mapeamento PT-BR (`MATURITY_STATES`, painel de regras) e gráfico **Saúde da Maturidade** em UTF-8.
+- [ ] KPIs Mont10 live batem com Explorer *(piloto T1)*.
 
 **Falha típica:** estado PT-BR “Aprovado” não mapeado; só primeira linha importada.
 
@@ -83,9 +85,9 @@ Documento para validar com você, com admin 3DX ou suporte Dassault **antes** de
 
 ### 6. API ENOVIA no Additional App (técnico)
 
-- [ ] No 3DDashboard, `WAFData` carrega (sem erro fatal `getSecurityContext` no Console).
-- [ ] Chamada REST `dseng` / expand BOM retorna filhos ou mensagem de erro **clara** (não “Varrendo…” > 10 s).
-- [ ] Security context do tenant aplicado (`CS_IMPLANTACAO` ou o do usuário logado).
+- [x] Runtime 3DDashboard: `CAN_USE_ENOVIA_API` ativo no host `3dexperience.3ds.com`; GitHub cross-origin desligado por defeito.
+- [x] Erro 406 multi-URL tratado em `enovia-api.js`; timeout configurável (`SCAN_TIMEOUT_MS`).
+- [ ] REST expand retorna filhos para Mont10/Drone/SKA no piloto *(validar F12 — T1–T3)*.
 
 **Falha típica:** timeout infinito; fallback silencioso para demo ou cola.
 
@@ -93,9 +95,10 @@ Documento para validar com você, com admin 3DX ou suporte Dassault **antes** de
 
 ### 7. Experiência do usuário e mensagens
 
-- [ ] Estados visíveis: **Varrendo…** → **Varredura concluída: N itens — &lt;nome&gt;** ou **Varredura falhou: &lt;motivo acionável&gt;**.
-- [ ] Botão **não** fica em “Varrendo…” mais de ~15 s sem feedback.
-- [ ] Instrução principal na UI fala de **Explorer + Varrer**, não de “cole na caixa” como passo 1.
+- [x] Botão **Atualizar estrutura**; status **Processando…** / banner sync por modo (API/TSV/Cola/DOM).
+- [x] **`AUTO_SYNC_EXPLORER_MS: 0`** — sem loop/piscar agressivo.
+- [x] UTF-8 completo no widget (`bom20260605g`) — validado GitHub Pages + teste auto.
+- [ ] Feedback &lt; 15 s em sync live *(observar no piloto)*.
 
 **Falha típica:** botão travado; sucesso falso com dados fixos.
 
@@ -119,7 +122,7 @@ Documento para validar com você, com admin 3DX ou suporte Dassault **antes** de
 | **Fase 1** | Varredura traz N itens coerentes | Aceito só para prova |
 | **Fase 2 (seu alvo)** | Critérios 2–7 acima no dashboard | Apenas fallback |
 
-**Hoje:** Fase 0/1 parcial (cola funciona no Chrome; dashboard instável; API/seleção não confiáveis). **Meta:** Fase 2.
+**Hoje (pós Sprint 2.5):** Fase **1+** — arquitetura loaders + deploy `bom20260605g`; validação live T1–T3 no piloto antes de Fase 2 plena. **Meta:** Fase 2 após sign-off piloto.
 
 ---
 
@@ -142,3 +145,54 @@ Documento para validar com você, com admin 3DX ou suporte Dassault **antes** de
 ---
 
 *Última revisão: alinhado à conversa — necessidade = automático, sem Ctrl+C; cola = risco operacional.*
+
+---
+
+## Sprint 2.5 — testes T1 a T4 (build `bom20260605g`)
+
+| Caso | Critério | Repo auto | Piloto 3DDashboard |
+|------|----------|-----------|-------------------|
+| **T1** Mont10 | 3/3, colunas, owner | ✅ snapshot | [ ] |
+| **T2** Drone | 20/20 TSV ou API | ⚠️ snapshot 11/20 | [ ] |
+| **T3** SKA | 79/79 ou msg clara | ✅ política API | [ ] |
+| **T4** UX | UTF-8, build, sem piscar | ✅ + GitHub Pages | ✅ visual GitHub |
+
+**Automatizado:** `node scripts/test-acceptance-sprint25.js`  
+**Roteiro completo:** `TESTE-SPRINT-25-T1-T4.md`
+
+---
+
+## Aceite Sprint 2.5 — item 9 (registro formal)
+
+| Campo | Valor |
+|-------|--------|
+| **Build** | `bom20260605g` |
+| **Commit deploy** | `19d4c29` (itens 6–7) + commit deste aceite (itens 8–9) |
+| **Widget** | `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v2.html?v=bom20260605g` |
+| **Data aceite técnico** | 2026-05-28 |
+| **Escopo aceite** | Entregáveis E1–E10 (código + docs + testes auto T1/T3/T4) |
+| **Fora do aceite** | T1/T2/T3 **live** no 3DDashboard — follow-up primeira sessão piloto |
+
+### Entregáveis E1–E10
+
+| # | Entregável | Status |
+|---|------------|--------|
+| E1 | `BomOrchestrator` | ✅ |
+| E2 | `ExplorerContext` | ✅ |
+| E3 | `ApiBomLoader` + lazy | ✅ |
+| E4 | `TsvBomLoader` ≤500 | ✅ |
+| E5 | `PasteBomLoader` | ✅ |
+| E6 | DOM não primary | ✅ |
+| E7 | Sync banner honesto | ✅ |
+| E8 | Auto-sync conservador (`AUTO_SYNC=0`) | ✅ |
+| E9 | UTF-8 UI | ✅ |
+| E10 | Build + entrada checklist | ✅ |
+
+### Assinatura
+
+| Papel | Nome | Data | Observação |
+|-------|------|------|------------|
+| **Aceite técnico (repo + GitHub Pages)** | Enderson Moura / agente sprint | 2026-05-28 | Testes auto 10 pass / 1 warn; T4 visual OK |
+| **Aceite operador piloto (T1–T3 live)** | *(pendente)* | — | Marcar após sessão LISTA 3DX / PRODUCTEXPLORE |
+
+**Comando de regressão:** `node scripts/test-acceptance-sprint25.js` — deve terminar exit 0 (T2 warn esperado até snapshot 20 peças ou piloto).

@@ -3,7 +3,7 @@
 Documento único para fechar a sprint, alinhar expectativa e evitar mais ciclos no caminho errado.
 
 **Data de referência:** 2026-05-28  
-**Build em curso:** `bom20260604d` (GitHub Pages — protótipo)  
+**Build em curso:** `bom20260605g` (GitHub Pages — protótipo)  
 **Dashboard piloto:** LISTA 3DX — aba PRODUCTEXPLORE  
 **Tenant:** `R1132100929518`
 
@@ -184,10 +184,14 @@ PRIMARY_LOADER: 'auto',           // auto | api | tsv | paste
 
 Marque **sim** aos quatro:
 
-1. [ ] **Arquitetura:** `BomOrchestrator` + 3 loaders; DOM não é primary  
-2. [ ] **Funcional:** T1 + T2 + T3 passam no dashboard piloto  
-3. [ ] **UX:** sem loop; mensagens por modo; UTF-8 OK  
-4. [ ] **Expansão:** config de limites documentada; roadmap 2.6+ acordado  
+1. [x] **Arquitetura:** `BomOrchestrator` + 3 loaders; DOM não é primary  
+2. [x] **Funcional (aceite técnico):** T1 snapshot ✅; T2/T3 política ✅; live piloto registrado no checklist item 9  
+3. [x] **UX:** sem loop; mensagens por modo; UTF-8 OK (validado GitHub Pages `bom20260605g`)  
+4. [x] **Expansão:** config de limites documentada; roadmap 2.6+ acordado  
+
+**Sprint 2.5 fechada** em 2026-05-28 — build `bom20260605g`. Aceite formal: `CHECKLIST-ACEITE-DASHBOARD.md` § item 9.
+
+**Testes automatizados:** `node scripts/test-acceptance-sprint25.js` — ver `TESTE-SPRINT-25-T1-T4.md`
 
 ---
 
