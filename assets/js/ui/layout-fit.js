@@ -1,6 +1,6 @@
 /**
  * @file ui/layout-fit.js
- * Layout 3DDashboard: E-BOM principal (esquerda) + painel lateral (KPIs, filtros, gráficos, preview).
+ * Layout 3DDashboard — grid 2×2: filtros/KPIs | gráficos / E-BOM | 3D view.
  */
 var LayoutFit = (function () {
   'use strict';
@@ -8,8 +8,7 @@ var LayoutFit = (function () {
   var bound = false;
   var NARROW_W = 620;
   var COMPACT_H = 780;
-  var MIN_EBOM_RATIO = 0.48;
-  var CHARTS_MAX_OPEN = 200;
+  var TOP_ROW_RATIO = 0.36;
 
   function hostEl() {
     return window.__3DX_UI_ROOT__ || document.body;
@@ -29,129 +28,63 @@ var LayoutFit = (function () {
     host.classList.toggle('bom-widget-wide', !narrow);
     host.classList.toggle('bom-widget-compact', compact);
     host.classList.toggle('bom-widget-short', vp.h < 520);
-
-    var panel = host.querySelector('#partPreviewPanel');
-    if (panel && typeof panel.open === 'boolean') {
-      if (!narrow) {
-        panel.open = true;
-      } else if (!panel.classList.contains('bom-preview-active')) {
-        panel.open = false;
-      }
-    }
-
-    var filters = host.querySelector('#filtersPanel');
-    if (filters && typeof filters.open === 'boolean') {
-      filters.open = !narrow && !compact;
-    }
   }
 
-  function applyChartsCap(host, vp) {
-    var charts = host.querySelector('#chartsSection');
-    if (!charts) return;
-    if (!charts.open) {
-      charts.style.maxHeight = '';
-      charts.style.overflowY = '';
-      var rowOff = charts.querySelector('.bom-charts-row');
-      if (rowOff) {
-        rowOff.style.maxHeight = '';
-        rowOff.style.overflowY = '';
-      }
-      return;
-    }
-    var cap = Math.min(CHARTS_MAX_OPEN, Math.floor(vp.h * 0.28));
-    charts.style.maxHeight = cap + 'px';
-    charts.style.overflowY = 'auto';
-    var row = charts.querySelector('.bom-charts-row');
-    if (row) {
-      row.style.maxHeight = Math.max(88, cap - 40) + 'px';
-      row.style.overflowY = 'auto';
-    }
-  }
-
-  function applyWorkspace(host, vp) {
-    var workspace = host.querySelector('.bom-workspace');
-    var workMain = host.querySelector('.bom-work-main');
-    var workSide = host.querySelector('.bom-work-side');
-    if (!workspace || !workMain) return;
+  function applyGrid(host, vp) {
+    var grid = host.querySelector('.bom-grid-quad');
+    if (!grid) return;
 
     var hostBox = host.getBoundingClientRect();
     var viewportBottom = hostBox.top + vp.h;
-    var top = workspace.getBoundingClientRect().top;
-    var avail = Math.max(180, Math.floor(viewportBottom - top - 4));
+    var top = grid.getBoundingClientRect().top;
+    var avail = Math.max(200, Math.floor(viewportBottom - top - 4));
 
-    workspace.style.flex = '1 1 auto';
-    workspace.style.minHeight = '0';
-    workspace.style.height = avail + 'px';
-    workspace.style.maxHeight = avail + 'px';
-    workspace.style.overflow = 'hidden';
+    grid.style.flex = '1 1 auto';
+    grid.style.minHeight = '0';
+    grid.style.height = avail + 'px';
+    grid.style.maxHeight = avail + 'px';
+    grid.style.overflow = 'hidden';
 
-    workMain.style.flex = '1 1 auto';
-    workMain.style.minHeight = '0';
-    workMain.style.height = '100%';
-    workMain.style.maxHeight = avail + 'px';
-    workMain.style.overflow = 'hidden';
+    var topRow = Math.max(120, Math.min(Math.floor(avail * TOP_ROW_RATIO), 220));
+    var bottomRow = Math.max(140, avail - topRow - 8);
+    grid.style.gridTemplateRows = topRow + 'px ' + bottomRow + 'px';
 
-    if (workSide) {
-      workSide.style.height = '100%';
-      workSide.style.maxHeight = avail + 'px';
-      workSide.style.overflowY = 'auto';
-      workSide.style.overflowX = 'hidden';
-    }
-
-    applyEbom(host, vp, avail);
+    applyEbom(host, bottomRow);
+    applyView3d(host, bottomRow);
   }
 
-  function applyEbom(host, vp, workspaceAvail) {
-    var ebom = host.querySelector('.bom-ebom-block');
-    var list = host.querySelector('.bom-ebom-list');
-    var tableWrap = host.querySelector('.bom-table-wrap');
-    var pager = host.querySelector('.bom-table-pager');
-    if (!ebom || !list || !tableWrap) return;
+  function applyEbom(host, quadH) {
+    var block = host.querySelector('.bom-quad-ebom .bom-ebom-block');
+    var list = host.querySelector('.bom-quad-ebom .bom-ebom-list');
+    var tableWrap = host.querySelector('.bom-quad-ebom .bom-table-wrap');
+    var pager = host.querySelector('.bom-quad-ebom .bom-table-pager');
+    if (!block || !list || !tableWrap) return;
 
-    var narrow = host.classList.contains('bom-widget-narrow');
-    var head = ebom.querySelector('.bom-ebom-head');
+    var head = block.querySelector('.bom-ebom-head');
     var headH = head ? head.offsetHeight : 0;
-    var minEbom = Math.max(140, Math.floor(vp.h * MIN_EBOM_RATIO));
-
-    var ebomAvail = workspaceAvail;
-    if (narrow) {
-      ebomAvail = Math.max(minEbom, Math.floor(workspaceAvail * 0.58));
-    }
-
-    ebom.style.flex = '1 1 auto';
-    ebom.style.minHeight = minEbom + 'px';
-    ebom.style.height = ebomAvail + 'px';
-    ebom.style.maxHeight = ebomAvail + 'px';
-
-    var listH = Math.max(100, ebomAvail - headH);
+    var listH = Math.max(80, quadH - headH - 12);
     list.style.height = listH + 'px';
     list.style.maxHeight = listH + 'px';
-    list.style.minHeight = listH + 'px';
 
-    var pagerH = pager ? pager.offsetHeight : 28;
-    var tableH = Math.max(72, listH - pagerH);
+    var pagerH = pager ? pager.offsetHeight : 26;
+    var tableH = Math.max(64, listH - pagerH);
     tableWrap.style.height = tableH + 'px';
     tableWrap.style.maxHeight = tableH + 'px';
-    tableWrap.style.minHeight = '72px';
   }
 
-  function bindCharts(host) {
-    var charts = host.querySelector('#chartsSection');
-    if (!charts || charts.__3DX_LAYOUT_BOUND__) return;
-    charts.__3DX_LAYOUT_BOUND__ = true;
-    charts.addEventListener('toggle', function () {
-      window.setTimeout(apply, 0);
-      window.setTimeout(apply, 120);
-    });
-  }
-
-  function bindFilters(host) {
-    var filters = host.querySelector('#filtersPanel');
-    if (!filters || filters.__3DX_LAYOUT_BOUND__) return;
-    filters.__3DX_LAYOUT_BOUND__ = true;
-    filters.addEventListener('toggle', function () {
-      window.setTimeout(apply, 0);
-    });
+  function applyView3d(host, quadH) {
+    var preview = host.querySelector('.bom-quad-view3d .bom-preview-body');
+    var image = host.querySelector('.bom-quad-view3d .bom-preview-image');
+    if (!preview) return;
+    var labelH = 28;
+    var bodyH = Math.max(100, quadH - labelH - 8);
+    preview.style.height = bodyH + 'px';
+    preview.style.maxHeight = bodyH + 'px';
+    if (image) {
+      var imgH = Math.max(80, bodyH - 60);
+      image.style.minHeight = imgH + 'px';
+      image.style.maxHeight = imgH + 'px';
+    }
   }
 
   function apply() {
@@ -166,11 +99,10 @@ var LayoutFit = (function () {
       host.style.boxSizing = 'border-box';
     }
 
-    var root = host.querySelector ? host.querySelector('.bom-root') : null;
+    var root = host.querySelector('.bom-root');
     if (root) {
       root.style.height = '100%';
       root.style.minHeight = '0';
-      root.style.boxSizing = 'border-box';
       root.style.display = 'flex';
       root.style.flexDirection = 'column';
       root.style.overflow = 'hidden';
@@ -183,11 +115,8 @@ var LayoutFit = (function () {
       main.style.overflow = 'hidden';
     }
 
-    bindCharts(host);
-    bindFilters(host);
     applyMode(host, vp);
-    applyChartsCap(host, vp);
-    applyWorkspace(host, vp);
+    applyGrid(host, vp);
 
     if (typeof ChartsManager !== 'undefined' && ChartsManager.scheduleResize) {
       ChartsManager.scheduleResize();
