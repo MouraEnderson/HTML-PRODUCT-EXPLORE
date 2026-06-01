@@ -34,11 +34,16 @@ var DataTable = (function () {
 
   function init(tableSelector) {
     columns = getColumns();
-    tableEl = uiRoot().querySelector(tableSelector);
+    syncTableRefs();
+    if (!tableEl && tableSelector) {
+      tableEl = uiRoot().querySelector(tableSelector);
+      if (tableEl) {
+        tbody = tableEl.querySelector('tbody');
+        thead = tableEl.querySelector('thead tr');
+        scrollContainer = tableEl.closest('.bom-table-wrap') || tableEl.parentElement;
+      }
+    }
     if (!tableEl) return;
-    scrollContainer = tableEl.closest('.bom-table-wrap') || tableEl.parentElement;
-    tbody = tableEl.querySelector('tbody');
-    thead = tableEl.querySelector('thead tr');
     renderHeader();
     bindRowClicks();
     if (scrollContainer) {
@@ -53,7 +58,7 @@ var DataTable = (function () {
   }
 
   function highlightRow(index) {
-    if (!tbody) return;
+    if (!syncTableRefs() || !tbody) return;
     selectedIndex = index;
     tbody.querySelectorAll('tr.bom-row-selected').forEach(function (r) {
       r.classList.remove('bom-row-selected');
@@ -78,17 +83,40 @@ var DataTable = (function () {
     return selectRow(0, silent);
   }
 
+  function syncTableRefs() {
+    var el = uiRoot().querySelector('#bomTable');
+    if (!el) return false;
+    if (el !== tableEl) {
+      tableEl = el;
+      tbody = tableEl.querySelector('tbody');
+      thead = tableEl.querySelector('thead tr');
+      scrollContainer = tableEl.closest('.bom-table-wrap') || tableEl.parentElement;
+    }
+    return !!(tableEl && tbody);
+  }
+
+  function handleRowPointer(ev) {
+    if (!ev || !ev.target || !ev.target.closest) return;
+    var tr = ev.target.closest('#bomTable tbody tr.bom-table-row[data-row-index]');
+    if (!tr) return;
+    if (!syncTableRefs()) return;
+    var idx = parseInt(tr.getAttribute('data-row-index'), 10);
+    if (isNaN(idx)) return;
+    selectRow(idx, false);
+  }
+
   function bindRowClicks() {
-    if (!tableEl) return;
-    if (tableEl.__3DX_ROW_BOUND__) return;
-    tableEl.__3DX_ROW_BOUND__ = true;
-    tableEl.addEventListener('click', function (ev) {
-      var tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-row-index]') : null;
-      if (!tr || !tbody || !tbody.contains(tr)) return;
-      var idx = parseInt(tr.getAttribute('data-row-index'), 10);
-      if (isNaN(idx)) return;
-      selectRow(idx, false);
-    });
+    var root = uiRoot();
+    if (!root || root.__3DX_TABLE_CLICK_BOUND__) return;
+    root.__3DX_TABLE_CLICK_BOUND__ = true;
+    root.addEventListener('click', handleRowPointer, true);
+    root.addEventListener('keydown', function (ev) {
+      if (!ev || (ev.key !== 'Enter' && ev.key !== ' ')) return;
+      var tr = ev.target && ev.target.closest ? ev.target.closest('#bomTable tbody tr.bom-table-row[data-row-index]') : null;
+      if (!tr) return;
+      ev.preventDefault();
+      handleRowPointer(ev);
+    }, true);
   }
 
   function renderHeader() {

@@ -216,6 +216,9 @@ var App = (function () {
       setStatus('Estrutura: ' + BomService.getNodeCount() + ' itens | Exibindo: ' + filtered.length + mode, 'ok');
     }
     if (typeof LayoutFit !== 'undefined') LayoutFit.apply();
+    window.setTimeout(function () {
+      if (typeof LayoutFit !== 'undefined') LayoutFit.apply();
+    }, 350);
   }
 
   function renderIssues(issues) {

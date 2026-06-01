@@ -32,9 +32,22 @@ var LayoutFit = (function () {
     var hostBox = host.getBoundingClientRect();
     var avail = Math.max(160, Math.floor(hostBox.top + vp.h - hostBox.top - 2));
     var header = page.querySelector('.bom-zone-1');
-    var headerH = header ? header.offsetHeight : 40;
+    var headerBtn = header && header.querySelector('#btnImportPaste');
+    var headerH = headerBtn ? headerBtn.offsetHeight + 6 : (header ? header.offsetHeight : 32);
+    headerH = Math.max(28, Math.min(headerH, 40));
+    if (header) {
+      header.style.minHeight = '0';
+      page.style.gridTemplateRows = headerH + 'px auto 1fr';
+    }
+
     var bodyH = Math.max(120, avail - headerH - 4);
-    var midH = Math.max(72, Math.floor(bodyH * MID_ROW_RATIO));
+    var zone2 = page.querySelector('.bom-zone-2-scroll');
+    var zone3scroll = page.querySelector('.bom-charts-unified-scroll');
+    var needMid = 72;
+    if (zone2) needMid = Math.max(needMid, zone2.scrollHeight + 6);
+    if (zone3scroll) needMid = Math.max(needMid, zone3scroll.scrollHeight + 6);
+    var midCap = Math.max(88, Math.floor(bodyH * 0.38));
+    var midH = Math.max(68, Math.min(midCap, needMid));
     var botH = Math.max(80, bodyH - midH - 4);
 
     page.style.display = 'grid';
