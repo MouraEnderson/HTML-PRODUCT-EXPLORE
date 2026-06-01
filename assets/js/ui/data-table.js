@@ -220,6 +220,7 @@ var DataTable = (function () {
 
   function maturityStatusBadge(matCls, raw) {
     var r = String(raw || '').trim();
+    if (!r) return { text: 'Sem maturidade', cls: 'status-neutral' };
     if (matCls === 'released') return { text: r || 'Aprovado', cls: 'status-ok' };
     if (matCls === 'in_work') return { text: r || 'Em Trabalho', cls: 'status-warn' };
     if (matCls === 'obsolete') return { text: r || 'Obsoleto', cls: 'status-bad' };

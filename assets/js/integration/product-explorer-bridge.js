@@ -409,9 +409,26 @@ var ProductExplorerBridge = (function () {
       revision: extra.revision || '—',
       state: extra.maturity || '—',
       maturity: extra.maturity || '—',
+      owner: extra.owner || '',
       approval: extra.approved ? 'Approved' : 'Unknown',
       physicalid: makeGridPhysicalId(name, idx, level === 0)
     };
+  }
+
+  function ownerFromExplorerCell(raw) {
+    var s = String(raw == null ? '' : raw).trim();
+    if (!s) return '';
+    if (s.charAt(0) === '{') {
+      try {
+        var o = JSON.parse(s);
+        return String(o.label || o.name || o.displayName || '').trim();
+      } catch (e) {
+        var m = s.match(/"label"\s*:\s*"([^"]+)"/i);
+        return m ? m[1].trim() : '';
+      }
+    }
+    if (/^\d+$/.test(s) || /^(aprovado|em\s*trabalh|released|physical\s*product)/i.test(s)) return '';
+    return s;
   }
 
   function scrapeExplorerGrid(rootName) {
@@ -439,12 +456,20 @@ var ProductExplorerBridge = (function () {
       var name = parts[0];
       if (!name || name.length < 3 || name === rootName) continue;
       if (/^prd-R/i.test(name)) continue;
-      var maturity = parts[3] || parts[2] || '—';
+      var ownerText = '';
+      var pi;
+      for (pi = 1; pi < parts.length; pi++) {
+        ownerText = ownerFromExplorerCell(parts[pi]);
+        if (ownerText) break;
+      }
+      var maturity = parts[parts.length - 1] || parts[3] || parts[2] || '—';
+      if (/^\d+[.,]\d+$/.test(String(maturity))) maturity = parts[parts.length - 1] || '—';
       var approved = /aprovado|released|frozen/i.test(maturity);
       pushGridItem(items, seen, buildRowFromName(name, 1, items.length, {
         revision: parts[1] || '—',
         maturity: maturity,
-        approved: approved
+        approved: approved,
+        owner: ownerText
       }));
     }
     if (items.length < 2) scrapeExplorerTreeLines(lines, rootName, items, seen);

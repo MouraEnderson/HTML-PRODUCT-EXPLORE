@@ -625,8 +625,16 @@ var ExplorerScanner = (function () {
     return Promise.all([tryPasteBundle(), tryGridBundle()]).then(function (parts) {
       var paste = parts[0];
       var grid = parts[1];
+      var explorerSel = 0;
+      if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getExplorerSelectionCount) {
+        explorerSel = ProductExplorerBridge.getExplorerSelectionCount() || 0;
+      }
+      var preferGrid = grid.count >= 2 && grid.payload && (
+        grid.count > paste.count ||
+        (explorerSel > paste.count && grid.count >= paste.count)
+      );
 
-      if (grid.count > paste.count && grid.count >= 2 && grid.payload) {
+      if (preferGrid) {
         APP_CONFIG.IMPORT_MODE = true;
         APP_CONFIG.DEMO_MODE = false;
         return BomSnapshot.applyPayload(grid.payload).then(function (meta) {

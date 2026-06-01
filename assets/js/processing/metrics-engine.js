@@ -91,6 +91,9 @@ var MetricsEngine = (function () {
     if (!o || o === '-' || o === '—' || o === '[]' || /^\[\s*\]$/.test(o) || /^sem\s*propriet/i.test(o)) {
       return 'Sem proprietário';
     }
+    if (/^\d+$/.test(o) || /^\d+[.,]\d+$/.test(o)) {
+      return 'Sem proprietário';
+    }
     if (o.charAt(0) === '{') {
       try {
         var j = JSON.parse(o);

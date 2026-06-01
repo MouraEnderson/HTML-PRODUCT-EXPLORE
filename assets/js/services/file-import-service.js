@@ -6,7 +6,7 @@ var FileImportService = (function () {
   'use strict';
 
   var COLUMN_ALIASES = {
-    level: ['nivel', 'nível', 'level', 'n', 'depth', 'profundidade'],
+    level: ['nivel', 'nível', 'level', 'depth', 'profundidade'],
     name: ['name', 'nome', 'title', 'titulo', 'título', 'display name', 'displayname'],
     title: ['title', 'titulo', 'título', 'description', 'descricao'],
     type: ['type', 'tipo', 'display type', 'policy', 'tipologia', 'physical product'],
@@ -103,8 +103,41 @@ var FileImportService = (function () {
   }
 
   function finalizeImportReport(items) {
+    items = ensureRootItem(items);
     items = mergeMissingGridItems(items);
     lastImportReport.parsed = items ? items.length : 0;
+    return items;
+  }
+
+  function ensureRootItem(items) {
+    if (!items || !items.length) return items || [];
+    var rootName = '';
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getStructureNameHint) {
+      rootName = ProductExplorerBridge.getStructureNameHint() || '';
+    }
+    if (!rootName) rootName = items[0].name || items[0].title || '';
+    rootName = cleanCell(rootName);
+    if (!rootName) return items;
+    var rootLow = rootName.toLowerCase();
+    var hasRoot = items.some(function (it) {
+      var n = cleanCell(it.name || it.title || '').toLowerCase();
+      return n === rootLow;
+    });
+    if (hasRoot) return items;
+    items.unshift({
+      level: 0,
+      physicalid: 'IMP_root_' + rootName.replace(/\W/g, '_').slice(0, 40),
+      name: rootName,
+      title: rootName,
+      type: 'Physical Product',
+      displayType: 'Physical Product',
+      revision: '',
+      state: '',
+      maturity: '',
+      owner: '',
+      approval: 'Unknown',
+      quantity: 1
+    });
     return items;
   }
 
@@ -185,13 +218,151 @@ var FileImportService = (function () {
   /** JSON de proprietário tem label; JSON só de ícone da peça não. */
   function ownerJsonHasLabel(raw) {
     var s = String(raw == null ? '' : raw);
-    if (!isJsonBlob(s)) return !!cleanCell(s);
+    if (!isJsonBlob(s)) return false;
     try {
       var o = JSON.parse(s);
       return !!(o.label || o.name || o.displayName);
     } catch (e) {
       return /"label"\s*:\s*"[^"]+"/i.test(s);
     }
+  }
+
+  function headerMatchesAlias(nh, alias) {
+    if (!nh || !alias) return false;
+    if (nh === alias) return true;
+    if (alias.length < 3) return false;
+    return nh.indexOf(alias) >= 0;
+  }
+
+  function isMaturityText(v) {
+    v = cleanCell(unwrapJsonCell(v));
+    if (!v || v.length > 48) return false;
+    return /^(aprovado|em\s*trabalh|em\s*esper|released|in\s*wor|in_work|frozen|obsoleto|obsolete|wip|private|on\s*hold)/i.test(v) ||
+      (/aprovado/i.test(v) && !/desaprovado/i.test(v));
+  }
+
+  function isRevisionText(v) {
+    v = cleanCell(v);
+    return /^\d+[.,]\d+$/.test(v);
+  }
+
+  function isTypeText(v) {
+    v = cleanCell(v);
+    return /^physical\s*product|^vpm/i.test(v);
+  }
+
+  function sanitizeOwnerValue(raw) {
+    var t = cleanCell(unwrapJsonCell(raw));
+    if (!t || t === '[]' || /^\[\s*\]$/.test(t)) return '';
+    if (/^\d+$/.test(t)) return '';
+    if (isRevisionText(t)) return '';
+    if (isMaturityText(t)) return '';
+    if (/^physical\s*product$/i.test(t)) return '';
+    if (t.length > 64) return t.slice(0, 64);
+    return t;
+  }
+
+  function extractOwnerFromRow(row, colMap) {
+    if (!row || !row.length) return { text: '', raw: '' };
+    var tryCell = function (idx) {
+      if (idx === undefined || idx < 0 || idx >= row.length) return null;
+      if (colMap.level !== undefined && idx === colMap.level) return null;
+      if (colMap.maturity !== undefined && idx === colMap.maturity) return null;
+      if (colMap.state !== undefined && idx === colMap.state) return null;
+      if (colMap.name !== undefined && idx === colMap.name) return null;
+      if (colMap.revision !== undefined && idx === colMap.revision) return null;
+      if (colMap.type !== undefined && idx === colMap.type) return null;
+      var meta = parseOwnerCell(row[idx]);
+      var text = sanitizeOwnerValue(meta.label || row[idx]);
+      if (!text) return null;
+      return { text: text, raw: row[idx] };
+    };
+    var primary = tryCell(colMap.owner);
+    if (primary) return primary;
+    var i;
+    for (i = 0; i < row.length; i++) {
+      if (!isJsonBlob(row[i]) && !ownerJsonHasLabel(row[i])) continue;
+      var hit = tryCell(i);
+      if (hit) return hit;
+    }
+    for (i = 0; i < row.length; i++) {
+      var v = cleanCell(String(row[i] || ''));
+      if (!v || v.length > 48 || isJsonBlob(row[i])) continue;
+      if (isMaturityText(v) || isRevisionText(v) || isTypeText(v) || /^\d+$/.test(v)) continue;
+      if (/^\S+\s+\S+/.test(v)) {
+        return { text: sanitizeOwnerValue(v), raw: row[i] };
+      }
+    }
+    return { text: '', raw: '' };
+  }
+
+  function inferColumnMapFromRows(rows) {
+    var sample = (rows || []).slice(0, Math.min(12, rows.length));
+    if (!sample.length) return { name: 0 };
+    var colCount = 0;
+    sample.forEach(function (r) {
+      if (r && r.length > colCount) colCount = r.length;
+    });
+    var map = {};
+    var allLevelFirst = sample.every(function (r) {
+      return r && r.length && /^\d+$/.test(cleanCell(r[0]));
+    });
+    if (allLevelFirst) {
+      map.level = 0;
+      map.name = colCount > 1 ? 1 : 0;
+    } else {
+      map.name = 0;
+    }
+    var scores = [];
+    var c;
+    for (c = 0; c < colCount; c++) {
+      scores[c] = { rev: 0, type: 0, mat: 0, owner: 0, jsonOwner: 0 };
+      sample.forEach(function (r) {
+        if (!r || c >= r.length) return;
+        var v = r[c];
+        var t = cleanCell(unwrapJsonCell(v));
+        if (!t) return;
+        if (isRevisionText(t)) scores[c].rev++;
+        if (isTypeText(t)) scores[c].type++;
+        if (isMaturityText(t)) scores[c].mat++;
+        if (isJsonBlob(v) && ownerJsonHasLabel(v)) scores[c].jsonOwner++;
+        if (/^\S+\s+\S+/.test(t) && !isMaturityText(t) && !isRevisionText(t) && !isTypeText(t) && !/^\d+$/.test(t)) {
+          scores[c].owner++;
+        }
+      });
+    }
+    function bestScore(key, minScore, skipIdx) {
+      var best = -1;
+      var idx = undefined;
+      for (c = 0; c < colCount; c++) {
+        if (skipIdx && skipIdx.indexOf(c) >= 0) continue;
+        if (scores[c][key] > best && scores[c][key] >= minScore) {
+          best = scores[c][key];
+          idx = c;
+        }
+      }
+      return idx;
+    }
+    var used = [];
+    if (map.level !== undefined) used.push(map.level);
+    if (map.name !== undefined) used.push(map.name);
+    var revIdx = bestScore('rev', 2, used);
+    if (revIdx !== undefined) { map.revision = revIdx; used.push(revIdx); }
+    var typeIdx = bestScore('type', 2, used);
+    if (typeIdx !== undefined) { map.type = typeIdx; used.push(typeIdx); }
+    var ownerIdx = bestScore('jsonOwner', 1, used);
+    if (ownerIdx === undefined) ownerIdx = bestScore('owner', 2, used);
+    if (ownerIdx !== undefined) { map.owner = ownerIdx; used.push(ownerIdx); }
+    var matIdx = bestScore('mat', 2, used);
+    if (matIdx === undefined && colCount > 0) matIdx = colCount - 1;
+    if (matIdx !== undefined && used.indexOf(matIdx) < 0) {
+      map.maturity = matIdx;
+      map.state = matIdx;
+    }
+    if (map.title === undefined && map.name !== undefined && map.name + 1 < colCount && used.indexOf(map.name + 1) < 0) {
+      map.title = map.name + 1;
+    }
+    return map;
   }
 
   function pickOwnerColumnIndex(row, headerMap) {
@@ -221,12 +392,12 @@ var FileImportService = (function () {
       var ownerRaw = it._ownerRaw != null ? it._ownerRaw : it.owner || '';
       if (ownerRaw) {
         var om = parseOwnerCell(ownerRaw);
-        if (om.label) it.owner = om.label;
+        if (om.label) it.owner = sanitizeOwnerValue(om.label) || om.label;
         if (om.iconUrl && !it.iconUrl) it.iconUrl = om.iconUrl;
       }
       if ((!it.owner || /^sem\s*propriet|^-$|^—$/i.test(String(it.owner).trim())) && it._ownerRaw) {
         var om2 = parseOwnerCell(it._ownerRaw);
-        if (om2.label) it.owner = om2.label;
+        if (om2.label) it.owner = sanitizeOwnerValue(om2.label) || om2.label;
       }
       if (!it.sourcePhysicalId || isSyntheticImportId(it.sourcePhysicalId)) {
         var prd = '';
@@ -320,9 +491,9 @@ var FileImportService = (function () {
     headers.forEach(function (h, i) {
       var nh = normHeader(h);
       if (!nh) return;
-      if (nh.indexOf('matur') >= 0 || nh.indexOf('lifecycle') >= 0) {
+      if (nh.indexOf('matur') >= 0 || nh.indexOf('lifecycle') >= 0 || nh === 'status' || nh.indexOf('status') === 0) {
         map.maturity = i;
-        return;
+        map.state = i;
       }
     });
     headers.forEach(function (h, i) {
@@ -331,7 +502,8 @@ var FileImportService = (function () {
       Object.keys(COLUMN_ALIASES).forEach(function (key) {
         if (map[key] !== undefined) return;
         if (key === 'maturity' && map.maturity !== undefined) return;
-        if (COLUMN_ALIASES[key].some(function (a) { return nh === a || nh.indexOf(a) >= 0; })) {
+        if (key === 'state' && map.state !== undefined) return;
+        if (COLUMN_ALIASES[key].some(function (a) { return headerMatchesAlias(nh, a); })) {
           map[key] = i;
         }
       });
@@ -340,29 +512,7 @@ var FileImportService = (function () {
   }
 
   function guessExplorerColumnMap(row) {
-    var map = { name: 0, title: 1 };
-    if (!row || !row.length) return map;
-    if (/^\d+$/.test(String(row[0]).trim())) {
-      map = { level: 0, name: 1, title: 2, type: 3, revision: 4, owner: 5, state: 6, maturity: 6 };
-    }
-    for (var i = 0; i < row.length; i++) {
-      var v = cleanCell(unwrapJsonCell(row[i]));
-      if (!v) continue;
-      if (/^(aprovado|em\s*trabalh|released|in\s*wor|obsoleto|obsolete|frozen|wip)/i.test(v) ||
-          /aprovado|em\s*trabalh/i.test(v)) {
-        map.maturity = i;
-        map.state = i;
-      }
-      if (/^\d+[.,]\d+$/.test(v)) map.revision = i;
-      if (/physical\s*product|^vpm/i.test(v)) map.type = i;
-    }
-    var ownerIdx = pickOwnerColumnIndex(row, map);
-    if (ownerIdx !== undefined) map.owner = ownerIdx;
-    if (row.length >= 6 && map.maturity === undefined) {
-      map.maturity = row.length - 1;
-      map.state = row.length - 1;
-    }
-    return map;
+    return inferColumnMapFromRows([row]);
   }
 
   function isStatusLabel(name) {
@@ -675,11 +825,12 @@ var FileImportService = (function () {
     if (rows.length && looksLikeHeader(rows[0])) {
       return parseRows(rows);
     }
-    var colMap = guessExplorerColumnMap(rows[0]);
-    if (!colMap.name && rows[0].length >= 5) {
+    var colMap = inferColumnMapFromRows(rows);
+    if (!colMap.name && colMap.name !== 0) colMap.name = 0;
+    if (rows[0] && rows[0].length >= 5 && colMap.owner === undefined) {
       colMap = { name: 0, revision: 1, type: 2, owner: 3, state: 4, maturity: 4 };
     }
-    return buildItemsFromRows(rows, colMap, true);
+    return buildItemsFromRows(rows, colMap, colMap.level === undefined);
   }
 
   function parseRows(rows) {
@@ -742,18 +893,13 @@ var FileImportService = (function () {
       if (usedIds[pid]) pid = pid + '__r' + (r + 1);
       usedIds[pid] = true;
       var st = resolveMaturityFields(row, colMap);
-      var ownerCol = colMap.owner !== undefined ? row[colMap.owner] : '';
-      if (!ownerCol && colMap.owner === undefined) {
-        var oIdx = pickOwnerColumnIndex(row, colMap);
-        if (oIdx !== undefined) ownerCol = row[oIdx];
-      }
-      var ownerMeta = parseOwnerCell(ownerCol);
-      var ownerText = ownerMeta.label || cleanCell(unwrapJsonCell(cell(row, colMap, 'owner', '')));
-      if (!ownerText || ownerText === '[]' || /^\[\s*\]$/.test(ownerText)) {
-        var fbIdx = pickOwnerColumnIndex(row, colMap);
-        if (fbIdx !== undefined && fbIdx !== colMap.owner) {
-          ownerMeta = parseOwnerCell(row[fbIdx]);
-          ownerText = ownerMeta.label || '';
+      var ownerHit = extractOwnerFromRow(row, colMap);
+      var ownerText = ownerHit.text;
+      var ownerCol = ownerHit.raw;
+      if (!st.state && !st.maturity) {
+        var scanned = findMaturityInCells(row);
+        if (scanned) {
+          st = normalizeImportedState(scanned, st.approval);
         }
       }
       items.push({
@@ -766,7 +912,7 @@ var FileImportService = (function () {
         revision: cell(row, colMap, 'revision', ''),
         state: st.state,
         maturity: st.maturity,
-        iconUrl: extractIconFromRow(row) || ownerMeta.iconUrl || '',
+        iconUrl: extractIconFromRow(row) || (ownerCol && parseOwnerCell(ownerCol).iconUrl) || '',
         quantity: parseFloat(cell(row, colMap, 'quantity', '1')) || 1,
         owner: ownerText,
         _ownerRaw: ownerCol,
