@@ -51,8 +51,8 @@ var KpiCards = (function () {
     var atRisk = (metrics.inWork || 0) + (metrics.obsolete || 0);
 
     var markers = [
-      { tone: 'blue', label: 'Total de Peças', value: metrics.totalItems },
-      { tone: 'green', label: 'Média Saúde (Bom %)', value: goodPct, suffix: '%' },
+      { tone: 'blue', label: 'Total Peças', value: metrics.totalItems },
+      { tone: 'green', label: 'Média Saúde', value: goodPct, suffix: '%' },
       { tone: 'red', label: 'Peças em Risco', value: atRisk },
       { tone: 'purple', label: 'Aprovação Pendente', value: pending }
     ];
