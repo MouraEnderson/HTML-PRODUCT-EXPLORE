@@ -700,7 +700,9 @@ var ExplorerScanner = (function () {
     });
   }
 
-  function scanViaExplorerGrid() {
+  function scanViaExplorerGrid(options) {
+    options = options || {};
+    var allowAutoCopy = options.allowAutoCopy === true;
     if (typeof ProductExplorerBridge === 'undefined') {
       return Promise.reject(new Error('Iframe do Explorer inacessível — abra a árvore ao lado do widget.'));
     }
@@ -763,7 +765,7 @@ var ExplorerScanner = (function () {
     }
 
     var chain = Promise.resolve(payload);
-    if (ProductExplorerBridge.tryExplorerAutoCopyParse && needsMore(payload)) {
+    if (allowAutoCopy && ProductExplorerBridge.tryExplorerAutoCopyParse && needsMore(payload)) {
       chain = chain.then(function (pl) {
         return ProductExplorerBridge.tryExplorerAutoCopyParse(term).then(function (copyPl) {
           return pickBest(pl, copyPl);

@@ -601,16 +601,16 @@ var App = (function () {
     var syncKey = (key || 'explorer') + '|' + explorerCount;
     var label = byId('selectionLabel');
     if (label && key) label.textContent = key;
-    if (!force && syncKey === lastSyncedStructure && BomService.getNodeCount() > 1) return;
+    if (!force && syncKey === lastSyncedStructure) return;
     if (loading && !force) return;
     if (structureSyncTimer) window.clearTimeout(structureSyncTimer);
     structureSyncTimer = window.setTimeout(function () {
       lastSyncedStructure = syncKey;
-      setLoading(true);
-      setStatus('Espelhando Explorer' + (key ? ': ' + key : '') + '…', 'info');
+      if (force) setLoading(true);
+      if (force) setStatus('Espelhando Explorer' + (key ? ': ' + key : '') + '…', 'info');
       var scanPromise;
       if (useMirrorSync && ExplorerScanner.scanViaExplorerGrid) {
-        scanPromise = ExplorerScanner.scanViaExplorerGrid();
+        scanPromise = ExplorerScanner.scanViaExplorerGrid({ allowAutoCopy: !!force });
       } else {
         root.__3DX_ALLOW_API__ = true;
         scanPromise = apiTimeout(
@@ -638,7 +638,7 @@ var App = (function () {
         })
         .finally(function () {
           root.__3DX_ALLOW_API__ = false;
-          setLoading(false);
+          if (force) setLoading(false);
         });
     }, APP_CONFIG.STRUCTURE_SYNC_DEBOUNCE_MS || 1800);
   }
@@ -736,17 +736,22 @@ var App = (function () {
   }
 
   function runImportFromClipboard(btnEl) {
-    if (typeof ExplorerScanner === 'undefined' || !ExplorerScanner.scanViaImportBestEffort) {
+    if (typeof ExplorerScanner === 'undefined') {
       setStatus('Importação indisponível.', 'error');
       return;
     }
-    setStatus('Lendo Explorer + Ctrl+C…', 'info');
+    setStatus('Lendo Explorer…', 'info');
     root.__3DX_BLOCK_API_LOAD__ = true;
+    root.__3DX_BLOCK_AUTO_SYNC__ = true;
     if (btnEl) {
       btnEl.disabled = true;
       btnEl.textContent = 'Atualizando…';
     }
-    ExplorerScanner.scanViaImportBestEffort()
+    var scanChain =
+      ExplorerScanner.scanViaExplorerGrid
+        ? ExplorerScanner.scanViaExplorerGrid({ allowAutoCopy: true })
+        : ExplorerScanner.scanViaImportBestEffort();
+    scanChain
       .then(function (res) {
         APP_CONFIG.IMPORT_MODE = true;
         APP_CONFIG.DEMO_MODE = false;
@@ -772,6 +777,7 @@ var App = (function () {
       })
       .finally(function () {
         root.__3DX_BLOCK_API_LOAD__ = false;
+        root.__3DX_BLOCK_AUTO_SYNC__ = false;
         if (btnEl) {
           btnEl.disabled = false;
           btnEl.textContent = (APP_CONFIG && APP_CONFIG.IMPORT_BUTTON_LABEL) || 'Atualizar estrutura';

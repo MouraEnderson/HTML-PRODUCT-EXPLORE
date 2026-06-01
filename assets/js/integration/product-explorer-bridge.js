@@ -742,6 +742,8 @@ var ProductExplorerBridge = (function () {
     if (/^(Mont\d+[A-Za-z0-9_.\-]*|01_SKA_|SKA_)/i.test(name)) return true;
     if (/^[A-Za-z0-9][A-Za-z0-9_.\-\/]{2,}$/.test(name) && /[A-Za-z]/.test(name) && /\d/.test(name)) return true;
     if (/^Mont\d+$/i.test(name)) return true;
+    if (/^[A-Z]\d+$/i.test(name)) return true;
+    if (/^[A-Za-z]{1,4}\d{1,6}$/i.test(name)) return true;
     if (/^[A-Za-zÀ-ú0-9][A-Za-zÀ-ú0-9\s.\-\/\"\'\(\)]{2,118}$/.test(name)) return true;
     return false;
   }
@@ -1281,10 +1283,10 @@ var ProductExplorerBridge = (function () {
     if (doc) {
       scrapeMirrorRowsFromExplorerDomScroll(doc, rootName, seen, items, rootMeta);
     }
-    if (items.length < 2 && text) {
+    if (text && (items.length < 2 || (expected > 0 && items.length < expected))) {
       scrapeMirrorRowsFromNameRevisionPairs(text, rootName, seen, items, rootMeta);
     }
-    if (doc && items.length < 2) {
+    if (doc && (items.length < 2 || (expected > 0 && items.length < expected))) {
       var headerTexts = getExplorerHeaderTexts(doc);
       colMap = mapExplorerColumnsFromHeaders(headerTexts);
       if (colMap.name === undefined) colMap = defaultExplorerColumnMap();
