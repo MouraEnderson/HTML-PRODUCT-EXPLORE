@@ -503,6 +503,7 @@ var ProductExplorerBridge = (function () {
       return false;
     }
     if (/^\d+[.,]\d+$/.test(s)) return false;
+    if (/^[A-ZÀ-Ú0-9][A-ZÀ-Ú0-9\s.\-\/\"\'\(\)]{4,}$/.test(s) && s === s.toUpperCase()) return false;
     if (/^[A-Za-zÀ-ú][A-Za-zÀ-ú'.\-]*(\s+[A-Za-zÀ-ú][A-Za-zÀ-ú'.\-]*)+$/.test(s)) return true;
     return /^[A-Za-zÀ-ú][A-Za-zÀ-ú'.\-]{2,}$/.test(s);
   }
@@ -741,6 +742,7 @@ var ProductExplorerBridge = (function () {
     if (/^(Mont\d+[A-Za-z0-9_.\-]*|01_SKA_|SKA_)/i.test(name)) return true;
     if (/^[A-Za-z0-9][A-Za-z0-9_.\-\/]{2,}$/.test(name) && /[A-Za-z]/.test(name) && /\d/.test(name)) return true;
     if (/^Mont\d+$/i.test(name)) return true;
+    if (/^[A-Za-zÀ-ú0-9][A-Za-zÀ-ú0-9\s.\-\/\"\'\(\)]{2,118}$/.test(name)) return true;
     return false;
   }
 
@@ -801,17 +803,147 @@ var ProductExplorerBridge = (function () {
       valid.sort(function (a, b) { return mirrorItemScore(b) - mirrorItemScore(a); });
       valid = valid.slice(0, expected);
     }
-    if (rootName) {
-      var rootLow = String(rootName).toLowerCase();
-      var hasRoot = valid.some(function (it) {
-        return String(it.name || '').toLowerCase() === rootLow;
+    return valid;
+  }
+
+  function isExplorerColumnHeaderLine(line) {
+    return /^(title|description|revision|menu|t[ií]tulo|descri|revis|propriet|tipo|estado|maturidade|owner|type|state)$/i.test(
+      String(line || '').trim()
+    );
+  }
+
+  function isExplorerInternalIdLine(line) {
+    line = String(line || '').trim();
+    if (!line) return true;
+    if (/^prd-R\d/i.test(line)) return true;
+    if (/^SKA_ENDERxcadmodel/i.test(line)) return true;
+    if (/^SKA_[A-Z0-9_\-]{10,}$/i.test(line) && line.indexOf(' ') < 0 && line.indexOf('(') < 0) return true;
+    if (/^3D Shape\d/i.test(line)) return true;
+    return false;
+  }
+
+  function parseExplorerRootPipeLine(line) {
+    line = String(line || '').trim();
+    if (line.indexOf('|') < 0) return null;
+    var parts = line.split('|').map(function (p) { return p.trim(); });
+    if (parts.length < 4) return null;
+    if (!/product|reference|assembly|shape|part/i.test(parts[0])) return null;
+    var owner = ownerFromExplorerCell(parts[3]);
+    if (!isPersonName(owner)) owner = isPersonName(parts[3]) ? parts[3] : '';
+    return {
+      type: parts[0],
+      revision: normalizeRevisionLabel(parts[1]),
+      maturity: normalizeMaturityLabel(parts[2]),
+      owner: owner,
+      approved: /aprovado|released|frozen/i.test(parts[2])
+    };
+  }
+
+  function parseExplorerRootMetaFromText(text) {
+    var lines = String(text || '').split('\n');
+    var i;
+    for (i = 0; i < lines.length; i++) {
+      var meta = parseExplorerRootPipeLine(lines[i]);
+      if (meta) return meta;
+    }
+    return {};
+  }
+
+  function applyDefaultOwnerFromRoot(items, rootMeta) {
+    if (!items || !items.length || !rootMeta) return items;
+    var owner = rootMeta.owner || '';
+    if (!isPersonName(owner)) return items;
+    items.forEach(function (it) {
+      if (!it.owner || /^sem\s*propriet|^—$|^-$/i.test(String(it.owner).trim())) {
+        it.owner = owner;
+      }
+    });
+    return items;
+  }
+
+  function buildMirrorRow(name, level, idx, extra) {
+    extra = extra || {};
+    var maturity = extra.maturity || '—';
+    var approved = extra.approved || /aprovado|released|frozen/i.test(maturity);
+    return {
+      level: level,
+      name: name,
+      title: extra.title || name,
+      type: extra.type || 'Physical Product',
+      displayType: extra.type || 'Physical Product',
+      revision: extra.revision || '—',
+      state: maturity,
+      maturity: maturity,
+      owner: extra.owner || '',
+      approval: approved ? 'Approved' : 'Unknown',
+      physicalid: makeGridPhysicalId(name, idx, level === 0)
+    };
+  }
+
+  /**
+   * Formato US/EN do Explorer: NOME\\n1.1\\nNOME\\n1.1 (após bloco de IDs internos).
+   */
+  function scrapeMirrorRowsFromNameRevisionPairs(text, rootName, seen, items, rootMeta) {
+    rootMeta = rootMeta || {};
+    var lines = String(text || '').split('\n').map(function (l) { return String(l || '').trim(); });
+    var added = 0;
+    var i;
+
+    if (rootName && isValidMirrorPartName(rootName)) {
+      var rootItem = buildMirrorRow(rootName, 0, 0, {
+        title: rootName,
+        revision: rootMeta.revision || '—',
+        maturity: rootMeta.maturity || '—',
+        owner: rootMeta.owner || '',
+        type: rootMeta.type || 'Physical Product',
+        approved: rootMeta.approved
       });
-      if (!hasRoot && isValidMirrorPartName(rootName)) {
-        valid.unshift(buildRowFromName(rootName, 0, 0, { title: rootName }));
-        if (expected > 0 && valid.length > expected) valid = valid.slice(0, expected);
+      var beforeRoot = items.length;
+      pushGridItem(items, seen, rootItem);
+      if (items.length > beforeRoot) added++;
+    }
+
+    for (i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (!line || isExplorerColumnHeaderLine(line) || isMirrorUiNoise(line)) continue;
+      if (/^\d+\s*(?:of|de)\s*\d+\s*(?:selected|selecionado)/i.test(line)) continue;
+      if (isExplorerInternalIdLine(line)) continue;
+      if (line.indexOf('|') >= 0) continue;
+      var next = i + 1 < lines.length ? String(lines[i + 1] || '').trim() : '';
+      if (!/^\d+[.,]\d+[A-Za-z]?$/.test(next)) continue;
+      if (!isValidMirrorPartName(line)) continue;
+      if (rootName && line.toLowerCase() === String(rootName).toLowerCase()) {
+        i++;
+        continue;
+      }
+      var item = buildMirrorRow(line, 1, items.length, {
+        title: line,
+        revision: normalizeRevisionLabel(next),
+        owner: rootMeta.owner || '',
+        type: rootMeta.type || 'Physical Product',
+        maturity: '—'
+      });
+      var before = items.length;
+      pushGridItem(items, seen, item);
+      if (items.length > before) {
+        added++;
+        i++;
       }
     }
-    return valid;
+    return added;
+  }
+
+  function assessMirrorQuality(items) {
+    var list = items || [];
+    var bad = 0;
+    var i;
+    for (i = 0; i < list.length; i++) {
+      var it = list[i];
+      if (isPersonName(it.name) && !/^SKA_/i.test(it.name)) bad++;
+      if (it.owner && !isPersonName(it.owner) && !/^sem\s*propriet/i.test(String(it.owner))) bad++;
+      if (it.revision && isPersonName(it.revision)) bad++;
+    }
+    return { ok: bad === 0, badRows: bad, total: list.length };
   }
 
   function normalizeMaturityLabel(raw) {
@@ -1041,8 +1173,12 @@ var ProductExplorerBridge = (function () {
     var seen = {};
     var colMap = null;
     var expected = getExplorerObjectCount();
+    var rootMeta = parseExplorerRootMetaFromText(text);
 
-    if (doc) {
+    if (text) {
+      scrapeMirrorRowsFromNameRevisionPairs(text, rootName, seen, items, rootMeta);
+    }
+    if (doc && items.length < 2) {
       var headerTexts = getExplorerHeaderTexts(doc);
       colMap = mapExplorerColumnsFromHeaders(headerTexts);
       if (colMap.name === undefined) colMap = defaultExplorerColumnMap();
@@ -1054,23 +1190,17 @@ var ProductExplorerBridge = (function () {
     if (items.length < 2 && text) {
       scrapeMirrorRowsFromDelimitedText(text, rootName, seen, items, '|');
     }
-    if (items.length < 2 && text) {
-      scrapeMirrorRowsFromVerticalText(text, rootName, seen, items);
-    }
 
     items = sanitizeMirrorItems(items, rootName);
-
-    if (expected > 0 && items.length !== expected && items.length > expected) {
-      items = sanitizeMirrorItems(items, rootName);
-    }
-
-    if (items.length < 1 && rootName && isValidMirrorPartName(rootName)) {
-      items = [buildRowFromName(rootName, 0, 0, { title: rootName })];
-    }
-    if (items.length < 1) return null;
-    if (expected > 0 && items.length > expected * 2) return null;
-
+    applyDefaultOwnerFromRoot(items, rootMeta);
     applyOwnersToItems(items);
+
+    if (items.length < 1) return null;
+    if (expected > 0 && items.length > expected + 3) return null;
+
+    var quality = assessMirrorQuality(items);
+    if (!quality.ok) return null;
+
     return {
       version: 1,
       productName: rootName || items[0].name,
@@ -1078,7 +1208,8 @@ var ProductExplorerBridge = (function () {
       items: items,
       scrapeSource: 'explorer-mirror',
       columnMap: colMap || defaultExplorerColumnMap(),
-      explorerExpected: expected || items.length
+      explorerExpected: expected || items.length,
+      mirrorQuality: quality
     };
   }
 
@@ -1534,11 +1665,16 @@ var ProductExplorerBridge = (function () {
     pollDashboardExplorerChrome();
     var text = harvestExplorerTextOnly() || harvestAllExplorerText();
     var m =
+      String(text).match(/(\d+)\s*(?:of|de)\s*(\d+)\s*(?:selected|selecionado)/i) ||
       String(text).match(/(\d+)\s*objetos?\b/i) ||
       String(text).match(/(\d+)\s*objects?\b/i) ||
       String(text).match(/(\d+)\s*itens?\b/i);
-    if (m) return parseInt(m[1], 10) || 0;
+    if (m) return parseInt(m[2] || m[1], 10) || parseInt(m[1], 10) || 0;
     return 0;
+  }
+
+  function assessDashboardMirrorQuality(items) {
+    return assessMirrorQuality(items);
   }
 
   return {
@@ -1570,6 +1706,8 @@ var ProductExplorerBridge = (function () {
     harvestAllExplorerText: harvestAllExplorerText,
     harvestExplorerTextOnly: harvestExplorerTextOnly,
     getExplorerSelectionCount: getExplorerSelectionCount,
-    getExplorerObjectCount: getExplorerObjectCount
+    getExplorerObjectCount: getExplorerObjectCount,
+    assessMirrorQuality: assessMirrorQuality,
+    assessDashboardMirrorQuality: assessDashboardMirrorQuality
   };
 })();

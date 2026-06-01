@@ -31,6 +31,16 @@ var SyncBanner = (function () {
     return null;
   }
 
+  function dashboardQuality() {
+    if (typeof ProductExplorerBridge === 'undefined' || !ProductExplorerBridge.assessMirrorQuality) {
+      return { ok: true, badRows: 0 };
+    }
+    if (typeof BomService === 'undefined' || !BomService.getFlatItems) {
+      return { ok: true, badRows: 0 };
+    }
+    return ProductExplorerBridge.assessMirrorQuality(BomService.getFlatItems());
+  }
+
   function update(dashboardCount) {
     var el = byId('syncBanner');
     if (!el) return;
@@ -47,7 +57,7 @@ var SyncBanner = (function () {
     if (!explorer && dash < 1) {
       el.className = 'bom-sync-banner bom-sync-info';
       el.innerHTML =
-        'Nenhuma estrutura importada. No Explorer: expanda a árvore → Ctrl+A → Ctrl+C → ' +
+        'Nenhuma estrutura importada. Abra o Product Structure Explorer ao lado e clique ' +
         '<strong>Atualizar estrutura</strong>.';
       return;
     }
@@ -58,20 +68,33 @@ var SyncBanner = (function () {
       return;
     }
 
+    var quality = dashboardQuality();
     var diff = Math.abs(explorer - dash);
+    var qualityHint = '';
+
+    if (!quality.ok && quality.badRows > 0) {
+      el.className = 'bom-sync-banner bom-sync-warn';
+      el.innerHTML =
+        'Explorer: <strong>' + explorer + '</strong> · Dashboard: <strong>' + dash +
+        '</strong> — contagem ' + (diff === 0 ? 'OK' : 'difere') +
+        ', mas <strong>' + quality.badRows + '</strong> linha(s) com colunas erradas. ' +
+        'Clique <strong>Atualizar estrutura</strong>.';
+      return;
+    }
+
     if (diff === 0) {
       el.className = 'bom-sync-banner bom-sync-ok';
       el.innerHTML =
         'Explorer: <strong>' + explorer + '</strong> · Dashboard: <strong>' + dash +
-        '</strong> — sincronizado';
+        '</strong> — sincronizado (espelho OK)';
       return;
     }
 
     var skipHint = '';
     if (typeof FileImportService !== 'undefined' && FileImportService.getImportReport) {
-      var rep = FileImportService.getImportReport();
-      if (rep && rep.skippedCount > 0) {
-        skipHint = ' · ' + rep.skippedCount + ' linha(s) ignorada(s) no import';
+      var rep2 = FileImportService.getImportReport();
+      if (rep2 && rep2.skippedCount > 0) {
+        skipHint = ' · ' + rep2.skippedCount + ' linha(s) ignorada(s) no import';
       }
     }
 
@@ -79,7 +102,7 @@ var SyncBanner = (function () {
       el.className = 'bom-sync-banner bom-sync-warn';
       el.innerHTML =
         'Explorer: <strong>' + explorer + '</strong> · Dashboard: <strong>' + dash +
-        '</strong> — falta <strong>1</strong> peça. Expanda tudo → Ctrl+A → Ctrl+C → ' +
+        '</strong> — falta <strong>1</strong> peça. Expanda tudo no Explorer → ' +
         '<strong>Atualizar estrutura</strong>.' + skipHint;
       return;
     }

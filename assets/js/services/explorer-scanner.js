@@ -642,11 +642,11 @@ var ExplorerScanner = (function () {
         }
       }
       var isMirror = grid.payload && grid.payload.scrapeSource === 'explorer-mirror';
-      var preferGrid = grid.count >= 2 && grid.payload && (
-        isMirror ||
-        grid.count > paste.count ||
-        (explorerTotal > paste.count && grid.count >= paste.count) ||
-        (explorerSel > paste.count && grid.count >= paste.count)
+      var mirrorQualityOk = isMirror && grid.payload.mirrorQuality && grid.payload.mirrorQuality.ok;
+      var preferGrid = grid.payload && grid.count >= 1 && (
+        mirrorQualityOk ||
+        (grid.count >= 2 && explorerTotal > 0 && grid.count >= explorerTotal - 1) ||
+        (grid.count > paste.count && grid.count >= 2)
       );
 
       if (preferGrid) {
@@ -655,20 +655,28 @@ var ExplorerScanner = (function () {
         return BomSnapshot.applyPayload(grid.payload).then(function (meta) {
           var count = BomService.getNodeCount() || meta.itemCount || grid.count;
           saveRootName(meta.productName || grid.term);
-          var hint = paste.count > 0 && paste.count < grid.count
-            ? ' (Ctrl+C tinha ' + paste.count + ' — espelho Explorer com ' + grid.count + ')'
+          var hint = paste.count > 0 && paste.count !== grid.count && isMirror
+            ? ' (substituiu cola desalinhada)'
             : (isMirror ? ' (espelho Explorer)' : '');
           return {
             ok: true,
             mode: isMirror ? 'explorer-mirror-import' : 'explorer-grid-import',
             meta: meta,
-            message: 'Importação: ' + count + ' itens — ' + (meta.productName || grid.term || 'E-BOM') + hint
+            message: (isMirror ? 'Espelho Explorer: ' : 'Importação: ') + count + ' itens — ' + (meta.productName || grid.term || 'E-BOM') + hint
           };
         });
       }
 
-      if (paste.count >= 1 && paste.text) {
+      if (paste.count >= 1 && paste.text && APP_CONFIG.EXPLORER_MIRROR_BLOCK_PASTE === true && mirrorQualityOk) {
+        throw new Error('Cola ignorada — espelho Explorer activo.');
+      }
+
+      if (paste.count >= 1 && paste.text && APP_CONFIG.EXPLORER_MIRROR_BLOCK_PASTE !== true) {
         return scanViaText(paste.text, 'Ctrl+C Explorer');
+      }
+
+      if (paste.count >= 1 && paste.text && !mirrorQualityOk && grid.count < 2) {
+        return scanViaText(paste.text, 'Ctrl+C Explorer (fallback)');
       }
 
       if (grid.count >= 2 && grid.payload) {

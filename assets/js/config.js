@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260603y',
+    BUILD: 'bom20260603z',
     /** 3DDashboard: nÃƒÂ£o espera probe CSRF (evita travar em "ConectandoÃ¢â‚¬Â¦") */
     SKIP_SPACE_PROBE: true,
     WAF_REQUEST_TIMEOUT_MS: 15000,
@@ -63,7 +63,9 @@
     SNAPSHOT_DELIVERY_MODE: false,
     /** Poll tÃƒÂ­tulo do Explorer no dashboard (estrutura aberta) */
     /** Piloto: sync automÃƒÂ¡tico gera centenas de 406 Ã¢â‚¬â€ sÃƒÂ³ Varrer manual */
+    /** Espelho Explorer: cola só se iframe inacessível */
     EXPLORER_MIRROR_AUTO_SYNC: true,
+    EXPLORER_MIRROR_BLOCK_PASTE: true,
     AUTO_SYNC_EXPLORER_MS: 3500,
     PILOT_API_TREE_DEPTH: 1,
     STRUCTURE_SYNC_DEBOUNCE_MS: 1800,
