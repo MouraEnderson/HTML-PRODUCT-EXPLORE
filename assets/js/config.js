@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260603p',
+    BUILD: 'bom20260603q',
     /** 3DDashboard: não espera probe CSRF (evita travar em "Conectando…") */
     SKIP_SPACE_PROBE: true,
     WAF_REQUEST_TIMEOUT_MS: 15000,

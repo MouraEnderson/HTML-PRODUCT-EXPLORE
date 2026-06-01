@@ -42,11 +42,13 @@ var LayoutFit = (function () {
 
     var bodyH = Math.max(120, avail - headerH - 4);
     var zone2 = page.querySelector('.bom-zone-2-scroll');
+    var zone3row = page.querySelector('.bom-charts-row-quad');
     var zone3scroll = page.querySelector('.bom-charts-unified-scroll');
     var needMid = 72;
     if (zone2) needMid = Math.max(needMid, zone2.scrollHeight + 6);
-    if (zone3scroll) needMid = Math.max(needMid, zone3scroll.scrollHeight + 6);
-    var midCap = Math.max(88, Math.floor(bodyH * 0.38));
+    if (zone3row) needMid = Math.max(needMid, zone3row.offsetHeight + 8);
+    else if (zone3scroll) needMid = Math.max(needMid, zone3scroll.offsetHeight + 8);
+    var midCap = Math.max(88, Math.floor(bodyH * 0.34));
     var midH = Math.max(68, Math.min(midCap, needMid));
     var botH = Math.max(80, bodyH - midH - 4);
 
@@ -54,6 +56,8 @@ var LayoutFit = (function () {
     page.style.height = avail + 'px';
     page.style.maxHeight = avail + 'px';
     page.style.gridTemplateRows = headerH + 'px ' + midH + 'px ' + botH + 'px';
+
+    if (zone3scroll) zone3scroll.scrollTop = 0;
 
     applyEbom(host, botH);
     applyView3d(host, botH);

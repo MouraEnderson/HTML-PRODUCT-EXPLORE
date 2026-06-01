@@ -34,16 +34,12 @@ var DataTable = (function () {
 
   function init(tableSelector) {
     columns = getColumns();
-    syncTableRefs();
-    if (!tableEl && tableSelector) {
-      tableEl = uiRoot().querySelector(tableSelector);
-      if (tableEl) {
-        tbody = tableEl.querySelector('tbody');
-        thead = tableEl.querySelector('thead tr');
-        scrollContainer = tableEl.closest('.bom-table-wrap') || tableEl.parentElement;
-      }
-    }
+    var sel = tableSelector || '#bomTable';
+    tableEl = uiRoot().querySelector(sel);
     if (!tableEl) return;
+    tbody = tableEl.querySelector('tbody');
+    thead = tableEl.querySelector('thead tr');
+    scrollContainer = tableEl.closest('.bom-table-wrap') || tableEl.parentElement;
     renderHeader();
     bindRowClicks();
     if (scrollContainer) {
@@ -97,26 +93,29 @@ var DataTable = (function () {
 
   function handleRowPointer(ev) {
     if (!ev || !ev.target || !ev.target.closest) return;
-    var tr = ev.target.closest('#bomTable tbody tr.bom-table-row[data-row-index]');
-    if (!tr) return;
     if (!syncTableRefs()) return;
+    var tr = ev.target.closest('tr.bom-table-row[data-row-index]');
+    if (!tr || !tbody || !tbody.contains(tr)) return;
     var idx = parseInt(tr.getAttribute('data-row-index'), 10);
     if (isNaN(idx)) return;
+    if (ev.type === 'click' || ev.type === 'pointerup') {
+      if (ev.button != null && ev.button !== 0) return;
+    }
     selectRow(idx, false);
   }
 
   function bindRowClicks() {
-    var root = uiRoot();
-    if (!root || root.__3DX_TABLE_CLICK_BOUND__) return;
-    root.__3DX_TABLE_CLICK_BOUND__ = true;
-    root.addEventListener('click', handleRowPointer, true);
-    root.addEventListener('keydown', function (ev) {
-      if (!ev || (ev.key !== 'Enter' && ev.key !== ' ')) return;
-      var tr = ev.target && ev.target.closest ? ev.target.closest('#bomTable tbody tr.bom-table-row[data-row-index]') : null;
-      if (!tr) return;
-      ev.preventDefault();
-      handleRowPointer(ev);
-    }, true);
+    syncTableRefs();
+    if (!scrollContainer) return;
+    if (scrollContainer.__3DX_ROW_BOUND__) return;
+    scrollContainer.__3DX_ROW_BOUND__ = true;
+    scrollContainer.addEventListener('pointerup', handleRowPointer);
+    scrollContainer.addEventListener('click', handleRowPointer);
+    if (tableEl && !tableEl.__3DX_ROW_BOUND__) {
+      tableEl.__3DX_ROW_BOUND__ = true;
+      tableEl.addEventListener('pointerup', handleRowPointer);
+      tableEl.addEventListener('click', handleRowPointer);
+    }
   }
 
   function renderHeader() {
@@ -190,7 +189,7 @@ var DataTable = (function () {
       var sel = selectedIndex === idx ? ' bom-row-selected' : '';
       return (
         '<tr class="bom-table-row' + sel + '" data-row-index="' + idx + '" data-id="' +
-        escapeAttr(n.physicalid) + '">' + tds + '</tr>'
+        escapeAttr(n.physicalid) + '" tabindex="0" role="row">' + tds + '</tr>'
       );
     }).join('');
     if (typeof PartImage !== 'undefined' && PartImage.hydrateThumbs) {

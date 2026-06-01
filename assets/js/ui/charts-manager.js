@@ -54,6 +54,31 @@ var ChartsManager = (function () {
     fb.style.display = 'block';
   }
 
+  function clampCanvasBox(canvasId) {
+    var canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    var box = canvas.closest('.bom-chart-canvas-box');
+    if (!box) return;
+    box.style.height = '110px';
+    box.style.maxHeight = '110px';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.maxHeight = '110px';
+    canvas.style.display = 'block';
+    var wrap = box.firstElementChild;
+    if (wrap && wrap !== canvas) {
+      wrap.style.position = 'absolute';
+      wrap.style.left = '0';
+      wrap.style.top = '0';
+      wrap.style.width = '100%';
+      wrap.style.height = '100%';
+      wrap.style.maxHeight = '110px';
+    }
+    if (charts[canvasId] && charts[canvasId].resize) {
+      charts[canvasId].resize();
+    }
+  }
+
   function showCanvas(canvasId) {
     var panel = panelForCanvas(canvasId);
     if (!panel) return;
@@ -220,6 +245,8 @@ var ChartsManager = (function () {
     } catch (e) {
       showFallback(canvasId, title, fallbackPieHtml(slices.labels, slices.values, slices.colors));
       return false;
+    } finally {
+      clampCanvasBox(canvasId);
     }
   }
 
@@ -232,14 +259,21 @@ var ChartsManager = (function () {
   function scheduleResize() {
     window.setTimeout(function () {
       Object.keys(charts).forEach(function (k) {
-        if (charts[k] && charts[k].resize) charts[k].resize();
+        clampCanvasBox(k);
       });
+      resetChartsScroll();
     }, 120);
     window.setTimeout(function () {
       Object.keys(charts).forEach(function (k) {
-        if (charts[k] && charts[k].resize) charts[k].resize();
+        clampCanvasBox(k);
       });
+      resetChartsScroll();
     }, 400);
+  }
+
+  function resetChartsScroll() {
+    var sc = document.querySelector('.bom-zone-3 .bom-charts-unified-scroll');
+    if (sc) sc.scrollTop = 0;
   }
 
   function render(metrics) {
@@ -283,6 +317,7 @@ var ChartsManager = (function () {
       if (matLeg) matLeg.innerHTML = '';
     }
     renderOwnersLegend(ownersLegend, metrics.totalItems || 0);
+    resetChartsScroll();
     scheduleResize();
   }
 
