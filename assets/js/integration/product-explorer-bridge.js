@@ -403,7 +403,7 @@ var ProductExplorerBridge = (function () {
     return {
       level: level,
       name: name,
-      title: name,
+      title: extra.title || extra.description || name,
       type: 'Physical Product',
       displayType: 'Physical Product',
       revision: extra.revision || '—',
@@ -635,7 +635,295 @@ var ProductExplorerBridge = (function () {
     return index;
   }
 
+  function normExplorerHeader(h) {
+    return String(h || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/\.{2,}$/, '')
+      .replace(/[^\w\sà-ú]/gi, '');
+  }
+
+  function classifyExplorerHeader(h) {
+    var n = normExplorerHeader(h);
+    if (!n) return null;
+    if (n.indexOf('titulo') >= 0 || n === 'title' || (n === 'nome' && n.indexOf('numero') < 0)) return 'name';
+    if (n.indexOf('descr') >= 0 || n === 'description') return 'title';
+    if (n.indexOf('revis') >= 0 || n === 'revision') return 'revision';
+    if (n.indexOf('propriet') >= 0 || n === 'owner') return 'owner';
+    if (n.indexOf('tipo') >= 0 || n === 'type') return 'type';
+    if (n.indexOf('matur') >= 0 || n.indexOf('estado de mat') >= 0 || n === 'status' || n === 'state') {
+      return 'maturity';
+    }
+    return null;
+  }
+
+  function mapExplorerColumnsFromHeaders(headerTexts) {
+    var colMap = {};
+    var i;
+    for (i = 0; i < headerTexts.length; i++) {
+      var key = classifyExplorerHeader(headerTexts[i]);
+      if (key && colMap[key] === undefined) colMap[key] = i;
+    }
+    return colMap;
+  }
+
+  function defaultExplorerColumnMap() {
+    return { name: 0, title: 1, revision: 2, owner: 3, type: 4, maturity: 5 };
+  }
+
+  function normalizeMaturityLabel(raw) {
+    var s = String(raw || '').trim();
+    if (!s) return '—';
+    if (/aprovado|released|frozen/i.test(s)) return 'Aprovado';
+    if (/em\s*trabalh|in\s*work/i.test(s)) return 'Em Trabalho';
+    return s;
+  }
+
+  function normalizeRevisionLabel(raw) {
+    var s = String(raw || '').trim();
+    if (!s) return '—';
+    if (/^\d+[.,]\d+$/.test(s)) return s.replace(',', '.');
+    var m = s.match(/\b(\d+\.\d+)\b/);
+    return m ? m[1] : (s === '—' || s === '-' ? '—' : s);
+  }
+
+  function readMirrorField(raw, fieldKey) {
+    var s = String(raw == null ? '' : raw).trim();
+    if (fieldKey === 'owner') {
+      var fromOwner = ownerFromExplorerCell(s);
+      return isPersonName(fromOwner) ? fromOwner : (isPersonName(s) ? s : '');
+    }
+    if (fieldKey === 'name') {
+      var name = partNameFromText(s) || s.split('\n')[0].trim();
+      if (!name || isPersonName(name)) return '';
+      if (/^physical product$/i.test(name)) return '';
+      return name;
+    }
+    if (fieldKey === 'revision') return normalizeRevisionLabel(s);
+    if (fieldKey === 'maturity') return normalizeMaturityLabel(s);
+    if (fieldKey === 'type') return s || 'Physical Product';
+    if (fieldKey === 'title') return s || '';
+    return s;
+  }
+
+  function readMirrorFieldFromCell(cell, fieldKey) {
+    if (!cell) return '';
+    if (fieldKey === 'owner') {
+      var fromDom = extractOwnerFromDomCell(cell);
+      if (isPersonName(fromDom)) return fromDom;
+      return readMirrorField(cell.innerText || cell.textContent || '', 'owner');
+    }
+    return readMirrorField(cell.innerText || cell.textContent || '', fieldKey);
+  }
+
+  function buildMirrorItemFromValues(values, colMap, idx, level) {
+    colMap = colMap || defaultExplorerColumnMap();
+    function val(key, fieldKey) {
+      var ci = colMap[key];
+      if (ci === undefined || ci >= values.length) return '';
+      if (values[ci] && values[ci].nodeType === 1) {
+        return readMirrorFieldFromCell(values[ci], fieldKey || key);
+      }
+      return readMirrorField(values[ci], fieldKey || key);
+    }
+    var name = val('name', 'name');
+    if (!name && colMap.name !== 0) name = readMirrorField(values[0], 'name');
+    if (!name || isPersonName(name)) return null;
+    var title = val('title', 'title') || name;
+    var revision = val('revision', 'revision') || '—';
+    var owner = val('owner', 'owner') || '';
+    var type = val('type', 'type') || 'Physical Product';
+    var maturity = val('maturity', 'maturity') || '—';
+    var approved = /aprovado|released|frozen/i.test(maturity);
+    return {
+      level: level,
+      name: name,
+      title: title,
+      type: type,
+      displayType: type,
+      revision: revision,
+      state: maturity,
+      maturity: maturity,
+      owner: owner,
+      approval: approved ? 'Approved' : 'Unknown',
+      physicalid: makeGridPhysicalId(name, idx, level === 0)
+    };
+  }
+
+  function getExplorerHeaderTexts(doc) {
+    if (!doc) return [];
+    var headers = doc.querySelectorAll(
+      '[role="columnheader"], th, .wux-controls-header-cell, [class*="HeaderCell"], [class*="header-cell"]'
+    );
+    var texts = [];
+    var i;
+    for (i = 0; i < headers.length; i++) {
+      texts.push((headers[i].innerText || headers[i].textContent || '').trim());
+    }
+    return texts;
+  }
+
+  function getExplorerDataRows(doc) {
+    if (!doc) return [];
+    return doc.querySelectorAll(
+      '[role="row"], tr.wux-controls-datagrid-row, .wux-layouts-datagrid-row, [class*="DataGridRow"]'
+    );
+  }
+
+  function getRowCells(row) {
+    return row.querySelectorAll('[role="gridcell"], td, .wux-controls-datagrid-cell, [class*="DataGridCell"]');
+  }
+
+  function scrapeMirrorRowsFromDom(doc, rootName, seen, items) {
+    if (!doc || !doc.body) return 0;
+    var headerTexts = getExplorerHeaderTexts(doc);
+    var colMap = mapExplorerColumnsFromHeaders(headerTexts);
+    if (colMap.name === undefined) colMap = defaultExplorerColumnMap();
+    var rows = getExplorerDataRows(doc);
+    var added = 0;
+    var ri;
+    for (ri = 0; ri < rows.length; ri++) {
+      var row = rows[ri];
+      if (row.querySelector('[role="columnheader"]')) continue;
+      var cells = getRowCells(row);
+      if (cells.length < 2) continue;
+      var values = [];
+      var ci;
+      for (ci = 0; ci < cells.length; ci++) values.push(cells[ci]);
+      var item = buildMirrorItemFromValues(values, colMap, items.length, items.length === 0 ? 0 : 1);
+      if (!item) continue;
+      if (rootName && item.name.toLowerCase() === String(rootName).toLowerCase() && items.length > 0) continue;
+      var before = items.length;
+      pushGridItem(items, seen, item);
+      if (items.length > before) added++;
+    }
+    return added;
+  }
+
+  function scrapeMirrorRowsFromDelimitedText(text, rootName, seen, items, delimiter) {
+    var lines = String(text || '').split('\n');
+    var headerLineIdx = -1;
+    var colMap = null;
+    var i;
+    for (i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (line.indexOf(delimiter) < 0) continue;
+      var parts = line.split(delimiter).map(function (p) { return p.trim(); });
+      var map = mapExplorerColumnsFromHeaders(parts);
+      if (map.name !== undefined && (map.revision !== undefined || map.owner !== undefined || map.maturity !== undefined)) {
+        headerLineIdx = i;
+        colMap = map;
+        break;
+      }
+    }
+    if (headerLineIdx < 0 || !colMap) return 0;
+    var added = 0;
+    for (i = headerLineIdx + 1; i < lines.length; i++) {
+      var dl = String(lines[i] || '').trim();
+      if (!dl || dl.indexOf(delimiter) < 0) continue;
+      if (/^physical product\s/i.test(dl)) continue;
+      if (/product structure explorer/i.test(dl)) continue;
+      var cells = dl.split(delimiter).map(function (p) { return p.trim(); });
+      if (cells.length < 3) continue;
+      var item = buildMirrorItemFromValues(cells, colMap, items.length, 1);
+      if (!item) continue;
+      if (rootName && item.name.toLowerCase() === String(rootName).toLowerCase() && items.length > 0) continue;
+      var before = items.length;
+      pushGridItem(items, seen, item);
+      if (items.length > before) added++;
+    }
+    return added;
+  }
+
+  function scrapeMirrorRowsFromVerticalText(text, rootName, seen, items) {
+    var lines = String(text || '').split('\n').map(function (l) { return String(l || '').trim(); });
+    var headerIdx = -1;
+    var i;
+    for (i = 0; i < lines.length - 5; i++) {
+      if (/^t[ií]tulo$/i.test(lines[i]) && /descri/i.test(lines[i + 1]) && /revis/i.test(lines[i + 2]) && /propriet/i.test(lines[i + 3])) {
+        headerIdx = i;
+        break;
+      }
+    }
+    if (headerIdx < 0) return 0;
+    var colCount = 6;
+    var added = 0;
+    for (i = headerIdx + colCount; i + colCount - 1 < lines.length; ) {
+      var chunk = lines.slice(i, i + colCount);
+      if (!chunk[0] || /^t[ií]tulo$/i.test(chunk[0])) {
+        i++;
+        continue;
+      }
+      var item = buildMirrorItemFromValues(chunk, defaultExplorerColumnMap(), items.length, 1);
+      if (!item) {
+        i++;
+        continue;
+      }
+      if (rootName && item.name.toLowerCase() === String(rootName).toLowerCase() && items.length > 0) {
+        i += colCount;
+        continue;
+      }
+      var before = items.length;
+      pushGridItem(items, seen, item);
+      if (items.length > before) {
+        added++;
+        i += colCount;
+      } else {
+        i++;
+      }
+    }
+    return added;
+  }
+
+  /**
+   * Espelho literal do Product Structure Explorer — colunas por cabeçalho, célula a célula.
+   */
+  function scrapeExplorerMirror(rootName) {
+    pollDashboardExplorerChrome();
+    pollStructureHint();
+    var doc = readExplorerIframeDocument();
+    var text = harvestAllExplorerText();
+    var fromTitle = extractRootNameFromExplorerText(text);
+    rootName = String(rootName || fromTitle || structureNameHint || '').trim();
+    var items = [];
+    var seen = {};
+    var colMap = null;
+
+    if (doc) {
+      var headerTexts = getExplorerHeaderTexts(doc);
+      colMap = mapExplorerColumnsFromHeaders(headerTexts);
+      if (colMap.name === undefined) colMap = defaultExplorerColumnMap();
+      scrapeMirrorRowsFromDom(doc, rootName, seen, items);
+    }
+    if (items.length < 2) {
+      scrapeMirrorRowsFromDelimitedText(text, rootName, seen, items, '\t');
+    }
+    if (items.length < 2) {
+      scrapeMirrorRowsFromDelimitedText(text, rootName, seen, items, '|');
+    }
+    if (items.length < 2) {
+      scrapeMirrorRowsFromVerticalText(text, rootName, seen, items);
+    }
+    if (items.length < 1 && rootName) {
+      pushGridItem(items, seen, buildRowFromName(rootName, 0, 0, { title: rootName }));
+    }
+    if (items.length < 2) return null;
+    applyOwnersToItems(items);
+    return {
+      version: 1,
+      productName: rootName || items[0].name,
+      rootPhysicalId: makeGridPhysicalId(rootName || items[0].name, 0, true),
+      items: items,
+      scrapeSource: 'explorer-mirror',
+      columnMap: colMap || defaultExplorerColumnMap()
+    };
+  }
+
   function scrapeExplorerGrid(rootName) {
+    var mirror = scrapeExplorerMirror(rootName);
+    if (mirror && mirror.items && mirror.items.length >= 2) return mirror;
+
     pollDashboardExplorerChrome();
     var text = harvestAllExplorerText();
     if (!text || text.length < 20) return null;
@@ -1072,6 +1360,17 @@ var ProductExplorerBridge = (function () {
     var text = harvestAllExplorerText();
     var m = String(text).match(/(\d+)\s*(?:de|of)\s*(\d+)\s*(?:selecionado|selected)/i);
     if (m) return parseInt(m[2], 10) || parseInt(m[1], 10) || 0;
+    return getExplorerObjectCount();
+  }
+
+  function getExplorerObjectCount() {
+    pollDashboardExplorerChrome();
+    var text = harvestAllExplorerText();
+    var m =
+      String(text).match(/(\d+)\s*objetos?\b/i) ||
+      String(text).match(/(\d+)\s*objects?\b/i) ||
+      String(text).match(/(\d+)\s*itens?\b/i);
+    if (m) return parseInt(m[1], 10) || 0;
     return 0;
   }
 
@@ -1096,11 +1395,13 @@ var ProductExplorerBridge = (function () {
     resolveFromExplorerCatalog: resolveFromExplorerCatalog,
     readExplorerIframeDocument: readExplorerIframeDocument,
     scrapeExplorerGrid: scrapeExplorerGrid,
+    scrapeExplorerMirror: scrapeExplorerMirror,
     scrapeExplorerOwnerMap: scrapeExplorerOwnerMap,
     applyOwnersToItems: applyOwnersToItems,
     applyOwnersToIndex: applyOwnersToIndex,
     fetchPilotStructurePayload: fetchPilotStructurePayload,
     harvestAllExplorerText: harvestAllExplorerText,
-    getExplorerSelectionCount: getExplorerSelectionCount
+    getExplorerSelectionCount: getExplorerSelectionCount,
+    getExplorerObjectCount: getExplorerObjectCount
   };
 })();

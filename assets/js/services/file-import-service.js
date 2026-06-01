@@ -55,18 +55,22 @@ var FileImportService = (function () {
   function captureExplorerExpected(pasteLineCount, hasHeader) {
     var expected = null;
     if (typeof ProductExplorerBridge !== 'undefined') {
-      if (ProductExplorerBridge.getExplorerSelectionCount) {
-        var sel = ProductExplorerBridge.getExplorerSelectionCount();
-        if (sel > 0) expected = sel;
+      if (ProductExplorerBridge.getExplorerObjectCount) {
+        var objCount = ProductExplorerBridge.getExplorerObjectCount();
+        if (objCount > 0) expected = objCount;
       }
-      if (ProductExplorerBridge.scrapeExplorerGrid) {
-        var hint =
-          ProductExplorerBridge.getStructureNameHint &&
-          ProductExplorerBridge.getStructureNameHint();
-        var grid = ProductExplorerBridge.scrapeExplorerGrid(hint);
-        if (grid && grid.items && grid.items.length) {
-          if (!expected || grid.items.length > expected) expected = grid.items.length;
-        }
+      var hint =
+        ProductExplorerBridge.getStructureNameHint &&
+        ProductExplorerBridge.getStructureNameHint();
+      var grid = null;
+      if (ProductExplorerBridge.scrapeExplorerMirror) {
+        grid = ProductExplorerBridge.scrapeExplorerMirror(hint);
+      }
+      if ((!grid || !grid.items || !grid.items.length) && ProductExplorerBridge.scrapeExplorerGrid) {
+        grid = ProductExplorerBridge.scrapeExplorerGrid(hint);
+      }
+      if (grid && grid.items && grid.items.length) {
+        if (!expected || grid.items.length > expected) expected = grid.items.length;
       }
     }
     if (!expected && pasteLineCount > 0) {
@@ -78,7 +82,7 @@ var FileImportService = (function () {
 
   function mergeMissingGridItems(items) {
     if (!items || !items.length) return items;
-    if (typeof ProductExplorerBridge === 'undefined' || !ProductExplorerBridge.scrapeExplorerGrid) {
+    if (typeof ProductExplorerBridge === 'undefined') {
       return items;
     }
     var expected = lastImportReport.explorerExpected;
@@ -86,7 +90,13 @@ var FileImportService = (function () {
     var hint =
       ProductExplorerBridge.getStructureNameHint &&
       ProductExplorerBridge.getStructureNameHint();
-    var grid = ProductExplorerBridge.scrapeExplorerGrid(hint);
+    var grid = null;
+    if (ProductExplorerBridge.scrapeExplorerMirror) {
+      grid = ProductExplorerBridge.scrapeExplorerMirror(hint);
+    }
+    if ((!grid || !grid.items || !grid.items.length) && ProductExplorerBridge.scrapeExplorerGrid) {
+      grid = ProductExplorerBridge.scrapeExplorerGrid(hint);
+    }
     if (!grid || !grid.items || grid.items.length <= items.length) return items;
     var have = {};
     items.forEach(function (it) {

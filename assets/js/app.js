@@ -269,8 +269,16 @@ var App = (function () {
     if (!APP_CONFIG.PILOT_FALLBACK_SNAPSHOT || typeof ProductExplorerBridge === 'undefined') {
       return Promise.resolve(false);
     }
-    if (!ProductExplorerBridge.scrapeExplorerGrid) return Promise.resolve(false);
-    var payload = ProductExplorerBridge.scrapeExplorerGrid(structureName);
+    if (!ProductExplorerBridge.scrapeExplorerGrid && !ProductExplorerBridge.scrapeExplorerMirror) {
+      return Promise.resolve(false);
+    }
+    var payload = null;
+    if (ProductExplorerBridge.scrapeExplorerMirror) {
+      payload = ProductExplorerBridge.scrapeExplorerMirror(structureName);
+    }
+    if ((!payload || !payload.items || payload.items.length < 2) && ProductExplorerBridge.scrapeExplorerGrid) {
+      payload = ProductExplorerBridge.scrapeExplorerGrid(structureName);
+    }
     function applyGrid(pl) {
       if (!pl || !pl.items || pl.items.length < 2) return Promise.resolve(false);
       return BomSnapshot.applyPayload(pl).then(function (meta) {
@@ -567,8 +575,13 @@ var App = (function () {
 
   function syncOpenExplorerStructure(force) {
     if (root.__3DX_BLOCK_AUTO_SYNC__) return;
-    if (!APP_CONFIG.CAN_USE_ENOVIA_API || typeof ExplorerScanner === 'undefined') return;
     if (!force && (APP_CONFIG.AUTO_SYNC_EXPLORER_MS || 0) < 1) return;
+    if (typeof ExplorerScanner === 'undefined') return;
+
+    var useMirrorSync = APP_CONFIG.EXPLORER_MIRROR_AUTO_SYNC !== false && !APP_CONFIG.CAN_USE_ENOVIA_API;
+    var useApiSync = APP_CONFIG.CAN_USE_ENOVIA_API;
+    if (!useMirrorSync && !useApiSync) return;
+
     if (typeof ProductExplorerBridge !== 'undefined') {
       if (ProductExplorerBridge.pollDashboardExplorerChrome) {
         ProductExplorerBridge.pollDashboardExplorerChrome();
@@ -580,29 +593,39 @@ var App = (function () {
       ? ProductExplorerBridge.getStructureNameHint()
       : null;
     var sel = typeof ProductExplorerBridge !== 'undefined' ? ProductExplorerBridge.getSelection() : null;
+    var explorerCount = typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getExplorerObjectCount
+      ? ProductExplorerBridge.getExplorerObjectCount() || 0
+      : 0;
     var key = hint || (sel && (sel.displayName || sel.name)) || '';
-    if (!key) return;
+    if (!key && !explorerCount) return;
+    var syncKey = (key || 'explorer') + '|' + explorerCount;
     var label = byId('selectionLabel');
-    if (label) label.textContent = key;
-    if (!force && key === lastSyncedStructure && BomService.getNodeCount() > 1) return;
+    if (label && key) label.textContent = key;
+    if (!force && syncKey === lastSyncedStructure && BomService.getNodeCount() > 1) return;
     if (loading && !force) return;
     if (structureSyncTimer) window.clearTimeout(structureSyncTimer);
     structureSyncTimer = window.setTimeout(function () {
-      lastSyncedStructure = key;
-      root.__3DX_ALLOW_API__ = true;
+      lastSyncedStructure = syncKey;
       setLoading(true);
-      setStatus('Carregando estrutura aberta: ' + key + '…', 'info');
-      apiTimeout(
-        ExplorerScanner.scan(),
-        APP_CONFIG.SCAN_TIMEOUT_MS || 90000,
-        'Timeout ao carregar ' + key
-      )
+      setStatus('Espelhando Explorer' + (key ? ': ' + key : '') + '…', 'info');
+      var scanPromise;
+      if (useMirrorSync && ExplorerScanner.scanViaExplorerGrid) {
+        scanPromise = ExplorerScanner.scanViaExplorerGrid();
+      } else {
+        root.__3DX_ALLOW_API__ = true;
+        scanPromise = apiTimeout(
+          ExplorerScanner.scan(),
+          APP_CONFIG.SCAN_TIMEOUT_MS || 90000,
+          'Timeout ao carregar ' + (key || 'estrutura')
+        );
+      }
+      scanPromise
         .then(function (res) {
           APP_CONFIG.DEMO_MODE = false;
           APP_CONFIG.IMPORT_MODE = res.mode !== 'api';
           if (res.meta) lastLoadedId = res.meta.rootPhysicalId;
           refreshUI();
-          setStatus(res.message || ('Carregado: ' + key + ' — ' + BomService.getNodeCount() + ' itens'), 'ok');
+          setStatus(res.message || ('Espelho: ' + (key || 'Explorer') + ' — ' + BomService.getNodeCount() + ' itens'), 'ok');
         })
         .catch(function (err) {
           var msg = (err && err.message) ? err.message : String(err);

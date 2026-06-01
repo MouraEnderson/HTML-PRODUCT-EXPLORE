@@ -104,7 +104,7 @@
 ;/* --- assets\js\config.js --- */
 /**
  * @file config.js
- * ConfiguraÃ§Ã£o central â€” ajuste por tenant/release ENOVIA.
+ * Configuração central — ajuste por tenant/release ENOVIA.
  */
 (function (global) {
   'use strict';
@@ -112,20 +112,20 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260603w',
-    /** 3DDashboard: nÃ£o espera probe CSRF (evita travar em "Conectandoâ€¦") */
+    BUILD: 'bom20260603v',
+    /** 3DDashboard: não espera probe CSRF (evita travar em "Conectando…") */
     SKIP_SPACE_PROBE: true,
     WAF_REQUEST_TIMEOUT_MS: 15000,
     SCAN_CONNECT_TIMEOUT_MS: 35000,
     /** Piloto: se API falhar no 3DDashboard, carrega snapshot validado (Mont10) */
     PILOT_FALLBACK_SNAPSHOT: true,
-    /** Piloto: Varrer lÃª a Ã¡rvore visÃ­vel do Explorer antes da API (evita 406) */
+    /** Piloto: Varrer lê a árvore visível do Explorer antes da API (evita 406) */
     PILOT_GRID_FIRST: true,
-    /** Bloqueia REST /enovia atÃ© Varrer (ou ?api=1 / ID manual) */
+    /** Bloqueia REST /enovia até Varrer (ou ?api=1 / ID manual) */
     PILOT_BLOCK_API_UNLESS_ALLOWED: true,
-    /** Tenant cloud: nÃ£o usar dseng:EngItem nem host *-space no 3DDashboard */
+    /** Tenant cloud: não usar dseng:EngItem nem host *-space no 3DDashboard */
     CLOUD_PHYSICAL_ONLY: true,
-    /** Fallback offline sÃ³ com ?snapshot= na URL */
+    /** Fallback offline só com ?snapshot= na URL */
     DEFAULT_SNAPSHOT_PATH: 'data/mont10.json',
 
     /** Se *-space falhar (DNS), tenta mesmo tenant via *-ifwe/enovia */
@@ -135,25 +135,25 @@
     /** Tenant cloud: objetos usam prefixo prd- (ex. prd-R1132100929518-00511496) */
     PHYSICAL_ID_PREFIX: 'prd-',
     NORMALIZE_PRD_IDS: true,
-    /** NÃ£o carrega BOM automÃ¡tico no boot â€” sÃ³ apÃ³s Varrer */
+    /** Não carrega BOM automático no boot — só após Varrer */
     WAIT_FOR_USER_SCAN: true,
-    /** Piloto: grade Explorer primeiro; API sÃ³ com ?api=1 ou apÃ³s falha da grade */
+    /** Piloto: grade Explorer primeiro; API só com ?api=1 ou após falha da grade */
     USE_API_SCAN_FIRST: false,
-    /** 3DDashboard: Ctrl+C / Ã¡rea de cola como fonte principal (qualquer projeto) */
+    /** 3DDashboard: Ctrl+C / área de cola como fonte principal (qualquer projeto) */
     ALLOW_PASTE_FALLBACK: true,
-    /** Snapshot Mont10/Drone sÃ³ se grade e cola falharem */
+    /** Snapshot Mont10/Drone só se grade e cola falharem */
     PILOT_BUILTIN_LAST: true,
     SCAN_TIMEOUT_MS: 90000,
     AUTO_SCAN_ON_SELECTION: false,
     CAN_USE_ENOVIA_API: false,
 
-    /** Somente Explorer â†’ grÃ¡ficos + tabela */
+    /** Somente Explorer → gráficos + tabela */
     EXPLORER_ONLY: true,
     UI_CLEAN: true,
-    /** Oculta botÃ£o Varrer no widget (sÃ³ Importar Ctrl+C) */
-    /** Oculta tag de build no widget (visÃ­vel sÃ³ com ?debug=1) */
+    /** Oculta botão Varrer no widget (só Importar Ctrl+C) */
+    /** Oculta tag de build no widget (visível só com ?debug=1) */
     SHOW_BUILD_TAG: false,
-    /** GrÃ¡ficos recolhidos por padrÃ£o â€” tabela ocupa o widget */
+    /** Gráficos recolhidos por padrão — tabela ocupa o widget */
     CHARTS_EXPANDED: false,
     IMPORT_BUTTON_LABEL: 'Atualizar estrutura',
     SHOW_CHARTS: true,
@@ -165,8 +165,8 @@
     DEMO_ON_API_FAIL: false,
     SNAPSHOT_FIRST: false,
     SNAPSHOT_DELIVERY_MODE: false,
-    /** Poll tÃ­tulo do Explorer no dashboard (estrutura aberta) */
-    /** Piloto: sync automÃ¡tico gera centenas de 406 â€” sÃ³ Varrer manual */
+    /** Poll título do Explorer no dashboard (estrutura aberta) */
+    /** Piloto: sync automático gera centenas de 406 — só Varrer manual */
     EXPLORER_MIRROR_AUTO_SYNC: true,
     AUTO_SYNC_EXPLORER_MS: 3500,
     PILOT_API_TREE_DEPTH: 1,
@@ -174,22 +174,22 @@
     SKIP_PP_ENRICH: true,
     BOM_FAST_DEPTH: 3,
     USE_FAST_BOOT: true,
-    /** Se Explorer nÃ£o responder em N ms, carrega produto padrÃ£o do tenant */
+    /** Se Explorer não responder em N ms, carrega produto padrão do tenant */
     EXPLORER_FALLBACK_MS: 3000,
 
-    /** Limite de nÃ³s na Ã¡rvore (proteÃ§Ã£o memÃ³ria) */
+    /** Limite de nós na árvore (proteção memória) */
     BOM_MAX_NODES: 50000,
 
-    /** Filhos carregados por requisiÃ§Ã£o lazy */
+    /** Filhos carregados por requisição lazy */
     BOM_LAZY_BATCH_SIZE: 100,
 
-    /** Profundidade inicial automÃ¡tica */
+    /** Profundidade inicial automática */
     BOM_INITIAL_DEPTH: 3,
 
     /** Debounce busca/filtros (ms) */
     SEARCH_DEBOUNCE_MS: 280,
 
-    /** Auto-refresh quando seleÃ§Ã£o muda (ms); 0 = desligado */
+    /** Auto-refresh quando seleção muda (ms); 0 = desligado */
     AUTO_REFRESH_MS: 0,
 
     /** Modo demo via ?demo=true ou ?physicalid= em widget externo */
@@ -206,30 +206,30 @@
 
     /**
      * Colunas alinhadas ao Product Explorer (ajuste conforme tenant).
-     * key = campo no modelo interno; label = cabeÃ§alho na tabela.
+     * key = campo no modelo interno; label = cabeçalho na tabela.
      */
     /** Tabela compacta no modo UI_CLEAN */
     PILOT_TABLE_COLUMNS: [
       { key: '_thumb', label: '', format: 'thumb', width: 44 },
-      { key: 'name', label: 'TÃ­tulo' },
-      { key: 'title', label: 'DescriÃ§Ã£o' },
-      { key: 'revision', label: 'RevisÃ£o' },
-      { key: 'owner', label: 'ProprietÃ¡rio' },
+      { key: 'name', label: 'Título' },
+      { key: 'title', label: 'Descrição' },
+      { key: 'revision', label: 'Revisão' },
+      { key: 'owner', label: 'Proprietário' },
       { key: 'type', label: 'Tipo' },
       { key: 'maturity', label: 'Estado de maturidade', format: 'status' }
     ],
 
     PRODUCT_EXPLORER_COLUMNS: [
-      { key: 'level', label: 'NÃ­vel', width: 48 },
+      { key: 'level', label: 'Nível', width: 48 },
       { key: 'name', label: 'Nome' },
-      { key: 'title', label: 'TÃ­tulo' },
-      { key: 'description', label: 'DescriÃ§Ã£o' },
+      { key: 'title', label: 'Título' },
+      { key: 'description', label: 'Descrição' },
       { key: 'displayType', label: 'Tipo exibido' },
       { key: 'type', label: 'Tipo' },
-      { key: 'revision', label: 'RevisÃ£o' },
+      { key: 'revision', label: 'Revisão' },
       { key: 'state', label: 'Estado' },
       { key: 'maturity', label: 'Maturidade' },
-      { key: 'approval', label: 'AprovaÃ§Ã£o' },
+      { key: 'approval', label: 'Aprovação' },
       { key: 'engineeringState', label: 'Estado engenharia' },
       { key: 'quantity', label: 'Qtd' },
       { key: 'owner', label: 'Owner' },
@@ -250,7 +250,7 @@
       PHYS_PRODUCT_TYPE: 'dspfl:PhysicalProduct'
     },
 
-    /** RelaÃ§Ãµes expand REST */
+    /** Relações expand REST */
     EXPAND: {
       BOM_CHILDREN: 'boM,dseng:EngInstance',
       ATTRIBUTES: 'dseng:EngInstance',
@@ -273,7 +273,7 @@
       { level: 'good', label: 'Bom (verde)', states: 'Aprovado, Released, Frozen, Approved' },
       { level: 'moderate', label: 'Moderado (amarelo)', states: 'Em Trabalho, Em Espera, In Work, IN_WORK, WIP' },
       { level: 'bad', label: 'Ruim (vermelho)', states: 'Obsoleto, OBSOLETE, Abandoned' },
-      { level: 'other', label: 'Outros (cinza)', states: 'Estado vazio ou nÃ£o reconhecido no tenant' }
+      { level: 'other', label: 'Outros (cinza)', states: 'Estado vazio ou não reconhecido no tenant' }
     ],
 
     /** Tipos considerados assembly */
@@ -285,7 +285,7 @@
       'Assembly'
     ],
 
-    /** Tenant / collabspace extraÃ­dos do seu link 3DEXPERIENCE (override via deep-link) */
+    /** Tenant / collabspace extraídos do seu link 3DEXPERIENCE (override via deep-link) */
     TENANT_DEFAULTS: {
       envId: 'R1132100929518',
       securityContext: 'ctx::VPLMProjectLeader.Company Name.CS_IMPLANTACAO',
@@ -296,7 +296,7 @@
     },
 
     /**
-     * Fallback nome â†’ prd- (cloud). Prioridade: ler prd- dinÃ¢mico do Explorer (Recentes).
+     * Fallback nome → prd- (cloud). Prioridade: ler prd- dinâmico do Explorer (Recentes).
      */
     PILOT_SNAPSHOT_BY_STRUCTURE: {
       Mont10: 'data/mont10.json',

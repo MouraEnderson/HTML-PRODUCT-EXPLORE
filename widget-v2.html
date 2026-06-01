@@ -8,7 +8,7 @@
   <style type="text/css">
     html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: "Segoe UI", sans-serif; }
     .bom-hidden { display: none !important; }
-    /* Grid 5 zonas — crítico inline (não depende de cache do dashboard.css) */
+    /* Grid 5 zonas â€” crÃ­tico inline (nÃ£o depende de cache do dashboard.css) */
     .bom-layout-page {
       display: grid !important;
       grid-template-columns: repeat(10, minmax(0, 1fr));
@@ -113,7 +113,7 @@
     window.__3DX_TRUSTED_WIDGET__ = true;
     window.__3DX_BOOT_DEFER__ = true;
 
-    var BOM_BUILD = 'bom20260603u';
+    var BOM_BUILD = 'bom20260603w';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
     var BUNDLE;
 
@@ -158,19 +158,19 @@
       '</div>' +
       '<div class="bom-topbar-actions">' +
       '<button type="button" id="btnImportPaste" class="bom-btn bom-btn-primary">Atualizar estrutura</button>' +
-      '<span class="bom-topbar-clock" title="Última atualização">' +
+      '<span class="bom-topbar-clock" title="Ãšltima atualizaÃ§Ã£o">' +
       '<span id="lastUpdateClock" class="bom-clock-time">--:--:--</span></span>' +
       '<button type="button" id="btnThemeToggle" class="bom-btn bom-btn-secondary bom-btn-compact">Tema</button>' +
       '<span class="bom-build-pill" title="Build">' + BOM_BUILD + '</span>' +
       '<details class="bom-topbar-more">' +
-      '<summary>Avançado</summary>' +
+      '<summary>AvanÃ§ado</summary>' +
       '<div id="bomRulesPanel"></div>' +
-      '<input type="text" id="explorerObjectId" class="bom-input" placeholder="ID físico" />' +
+      '<input type="text" id="explorerObjectId" class="bom-input" placeholder="ID fÃ­sico" />' +
       '<button type="button" id="btnLoadPhysicalId" class="bom-btn bom-btn-secondary">Varrer por ID</button>' +
       '<textarea id="pasteArea" class="bom-paste" placeholder="Colar grade Explorer (Ctrl+V)"></textarea>' +
       '</details>' +
       '</div></header>' +
-      '<section class="bom-quad bom-zone-2" aria-label="Filtros e estatísticas">' +
+      '<section class="bom-quad bom-zone-2" aria-label="Filtros e estatÃ­sticas">' +
       '<div class="bom-zone-2-scroll">' +
       '<div id="syncBanner" class="bom-sync-banner bom-sync-inline bom-sync-info bom-hidden">' +
       'Abra a estrutura no Explorer e clique <strong>Atualizar estrutura</strong>.</div>' +
@@ -180,51 +180,51 @@
       '<option value="released">Bom (Aprovado)</option><option value="in_work">Moderado</option>' +
       '<option value="obsolete">Ruim</option><option value="other">Outros</option></select></label>' +
       '<label class="bom-filter-item bom-f-type"><span>Tipo</span><select id="filterType"><option value="all">Todos</option></select></label>' +
-      '<label class="bom-filter-item bom-f-appr"><span>Aprovação</span>' +
+      '<label class="bom-filter-item bom-f-appr"><span>AprovaÃ§Ã£o</span>' +
       '<select id="filterApproval"><option value="all">Todas</option>' +
       '<option value="approved">Aprovado</option><option value="pending">Pendente</option></select></label>' +
       '<label class="bom-filter-item bom-filter-grow bom-f-search"><span>Buscar</span>' +
-      '<input type="search" id="searchInput" placeholder="Nome, descrição, proprietário…" /></label>' +
+      '<input type="search" id="searchInput" placeholder="Nome, descriÃ§Ã£o, proprietÃ¡rioâ€¦" /></label>' +
       '<button type="button" id="btnClearFilters" class="bom-btn bom-btn-filter-clear bom-f-clear">Limpar</button>' +
       '</div>' +
-      '<section id="kpiGrid" class="stat-markers-row stat-markers-compact stat-markers-quad" aria-label="Estatísticas"></section>' +
+      '<section id="kpiGrid" class="stat-markers-row stat-markers-compact stat-markers-quad" aria-label="EstatÃ­sticas"></section>' +
       '</div>' +
-      '<div id="statusBar" class="bom-st bom-st-inline bom-st-quad">Carregando…</div>' +
+      '<div id="statusBar" class="bom-st bom-st-inline bom-st-quad">Carregandoâ€¦</div>' +
       '</section>' +
-      '<section class="bom-quad bom-zone-3" id="chartsSection" aria-label="Gráficos">' +
+      '<section class="bom-quad bom-zone-3" id="chartsSection" aria-label="GrÃ¡ficos">' +
       '<div class="bom-charts-unified-scroll">' +
       '<section class="bom-charts-row bom-charts-row-quad">' +
       '<div class="bom-chart-panel">' +
-      '<h3 class="bom-chart-heading">Saúde da Maturidade</h3>' +
+      '<h3 class="bom-chart-heading">SaÃºde da Maturidade</h3>' +
       '<div class="bom-chart-canvas-box"><canvas id="chartMaturity"></canvas></div>' +
       '<div id="maturityLegendScroll" class="bom-chart-legend-list"></div></div>' +
       '<div class="bom-chart-panel bom-chart-owners">' +
-      '<h3 class="bom-chart-heading">Proprietários</h3>' +
+      '<h3 class="bom-chart-heading">ProprietÃ¡rios</h3>' +
       '<div class="bom-chart-canvas-box"><canvas id="chartOwners"></canvas></div>' +
       '<div id="ownersLegendScroll" class="bom-chart-legend-list"></div></div>' +
       '</section></div></section>' +
       '<section class="bom-quad bom-zone-4" aria-label="E-BOM">' +
       '<section class="bom-ebom-block bom-ebom-block-quad">' +
       '<div class="bom-ebom-head">' +
-      '<h2>E-BOM — <span id="tableProductLabel" title="-">-</span></h2>' +
-      '<p id="ebomMeta" class="bom-ebom-meta bom-hidden">Clique numa linha para ver preview 3D à direita.</p>' +
+      '<h2>E-BOM â€” <span id="tableProductLabel" title="-">-</span></h2>' +
+      '<p id="ebomMeta" class="bom-ebom-meta bom-hidden">Clique numa linha para ver preview 3D Ã  direita.</p>' +
       '</div>' +
       '<div class="bom-ebom-list">' +
       '<div class="bom-table-wrap table-scroll">' +
       '<table id="bomTable" class="bom-table"><thead><tr></tr></thead><tbody></tbody></table>' +
       '</div>' +
-      '<footer id="tablePager" class="bom-table-pager">0 peças</footer>' +
+      '<footer id="tablePager" class="bom-table-pager">0 peÃ§as</footer>' +
       '</div></section></section>' +
-      '<section class="bom-quad bom-zone-5" aria-label="Visualização 3D">' +
+      '<section class="bom-quad bom-zone-5" aria-label="VisualizaÃ§Ã£o 3D">' +
       '<div class="bom-part-preview bom-preview-quad" id="partPreviewPanel">' +
       '<div class="bom-preview-body">' +
       '<p class="bom-preview-hint">Clique numa linha da E-BOM</p>' +
       '<div id="partPreviewImage" class="bom-preview-image">' +
-      '<span class="bom-preview-placeholder">Preview 2D · 3DPlay em breve</span></div>' +
+      '<span class="bom-preview-placeholder">Preview 2D Â· 3DPlay em breve</span></div>' +
       '<div id="partPreviewMeta" class="bom-preview-meta"></div>' +
       '</div></div></section>' +
       '<button type="button" id="btnScanExplorer" class="bom-hidden">Varrer</button>' +
-      '<div id="loadingOverlay" class="bom-loading bom-hidden">Processando…</div>' +
+      '<div id="loadingOverlay" class="bom-loading bom-hidden">Processandoâ€¦</div>' +
       '<span class="bom-build-tag bom-hidden" id="buildTag">' + BOM_BUILD + '</span>' +
       '<div class="bom-hidden" id="hiddenFields">' +
       '<canvas id="chartType" class="bom-hidden"></canvas>' +
@@ -311,7 +311,7 @@
               if (App.rebindScanButton) App.rebindScanButton();
               if (App.rebindImportButton) App.rebindImportButton();
             } else {
-              setBar('App não iniciou.', 'error');
+              setBar('App nÃ£o iniciou.', 'error');
             }
           } catch (ex) {
             setBar('Erro: ' + (ex.message || ex), 'error');
@@ -331,7 +331,7 @@
 
     function executeInit() {
       paint();
-      setBar('Carregando dashboard…', 'info');
+      setBar('Carregando dashboardâ€¦', 'info');
       loadCss(function () {
         loadWaf(function () { startBundle(); });
       });

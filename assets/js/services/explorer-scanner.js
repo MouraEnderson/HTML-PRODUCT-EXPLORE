@@ -607,7 +607,7 @@ var ExplorerScanner = (function () {
     }
 
     function tryGridBundle() {
-      if (typeof ProductExplorerBridge === 'undefined' || !ProductExplorerBridge.scrapeExplorerGrid) {
+      if (typeof ProductExplorerBridge === 'undefined') {
         return Promise.resolve({ count: 0, payload: null });
       }
       if (ProductExplorerBridge.pollDashboardExplorerChrome) {
@@ -615,7 +615,13 @@ var ExplorerScanner = (function () {
       }
       if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
       var term = getExplorerRootSearchTerm();
-      var payload = ProductExplorerBridge.scrapeExplorerGrid(term);
+      var payload = null;
+      if (ProductExplorerBridge.scrapeExplorerMirror) {
+        payload = ProductExplorerBridge.scrapeExplorerMirror(term);
+      }
+      if ((!payload || !payload.items || payload.items.length < 2) && ProductExplorerBridge.scrapeExplorerGrid) {
+        payload = ProductExplorerBridge.scrapeExplorerGrid(term);
+      }
       if (!payload || !payload.items || payload.items.length < 1) {
         return Promise.resolve({ count: 0, payload: null });
       }
@@ -626,11 +632,20 @@ var ExplorerScanner = (function () {
       var paste = parts[0];
       var grid = parts[1];
       var explorerSel = 0;
-      if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getExplorerSelectionCount) {
-        explorerSel = ProductExplorerBridge.getExplorerSelectionCount() || 0;
+      var explorerTotal = 0;
+      if (typeof ProductExplorerBridge !== 'undefined') {
+        if (ProductExplorerBridge.getExplorerSelectionCount) {
+          explorerSel = ProductExplorerBridge.getExplorerSelectionCount() || 0;
+        }
+        if (ProductExplorerBridge.getExplorerObjectCount) {
+          explorerTotal = ProductExplorerBridge.getExplorerObjectCount() || 0;
+        }
       }
+      var isMirror = grid.payload && grid.payload.scrapeSource === 'explorer-mirror';
       var preferGrid = grid.count >= 2 && grid.payload && (
+        isMirror ||
         grid.count > paste.count ||
+        (explorerTotal > paste.count && grid.count >= paste.count) ||
         (explorerSel > paste.count && grid.count >= paste.count)
       );
 
@@ -641,11 +656,11 @@ var ExplorerScanner = (function () {
           var count = BomService.getNodeCount() || meta.itemCount || grid.count;
           saveRootName(meta.productName || grid.term);
           var hint = paste.count > 0 && paste.count < grid.count
-            ? ' (Ctrl+C tinha ' + paste.count + ' — usamos grade Explorer com ' + grid.count + ')'
-            : '';
+            ? ' (Ctrl+C tinha ' + paste.count + ' — espelho Explorer com ' + grid.count + ')'
+            : (isMirror ? ' (espelho Explorer)' : '');
           return {
             ok: true,
-            mode: 'explorer-grid-import',
+            mode: isMirror ? 'explorer-mirror-import' : 'explorer-grid-import',
             meta: meta,
             message: 'Importação: ' + count + ' itens — ' + (meta.productName || grid.term || 'E-BOM') + hint
           };
@@ -678,7 +693,7 @@ var ExplorerScanner = (function () {
   }
 
   function scanViaExplorerGrid() {
-    if (typeof ProductExplorerBridge === 'undefined' || !ProductExplorerBridge.scrapeExplorerGrid) {
+    if (typeof ProductExplorerBridge === 'undefined') {
       return Promise.reject(new Error('Iframe do Explorer inacessível — abra a árvore ao lado do widget.'));
     }
     if (ProductExplorerBridge.pollDashboardExplorerChrome) {
@@ -686,7 +701,13 @@ var ExplorerScanner = (function () {
     }
     if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
     var term = getExplorerRootSearchTerm();
-    var payload = ProductExplorerBridge.scrapeExplorerGrid(term);
+    var payload = null;
+    if (ProductExplorerBridge.scrapeExplorerMirror) {
+      payload = ProductExplorerBridge.scrapeExplorerMirror(term);
+    }
+    if ((!payload || !payload.items || payload.items.length < 2) && ProductExplorerBridge.scrapeExplorerGrid) {
+      payload = ProductExplorerBridge.scrapeExplorerGrid(term);
+    }
     function applyGrid(pl, sourceLabel) {
       if (typeof BomSnapshot === 'undefined' || !BomSnapshot.applyPayload) {
         return Promise.reject(new Error('Módulo snapshot indisponível'));
@@ -699,12 +720,10 @@ var ExplorerScanner = (function () {
         saveRootName(meta.productName || term);
         return {
           ok: true,
-          mode: 'explorer-grid',
+          mode: pl.scrapeSource === 'explorer-mirror' ? 'explorer-mirror' : 'explorer-grid',
           meta: meta,
           message:
-            'Varredura (' +
-            (sourceLabel || 'árvore Explorer') +
-            '): ' +
+            'Espelho Explorer: ' +
             count +
             ' itens — ' +
             (meta.productName || term || 'E-BOM')
@@ -712,7 +731,7 @@ var ExplorerScanner = (function () {
       });
     }
     if (payload && payload.items && payload.items.length >= 2) {
-      return applyGrid(payload, 'árvore Explorer');
+      return applyGrid(payload, 'espelho Explorer');
     }
     return Promise.reject(
       new Error(
