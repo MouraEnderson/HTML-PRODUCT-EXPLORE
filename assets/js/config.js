@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260605e',
+    BUILD: 'bom20260605g',
     /** 3DDashboard: nÃƒÂ£o espera probe CSRF (evita travar em "ConectandoÃ¢â‚¬Â¦") */
     SKIP_SPACE_PROBE: true,
     WAF_REQUEST_TIMEOUT_MS: 15000,
@@ -71,6 +71,10 @@
     /** Sprint 2.5 — TSV fast-path até N peças; acima disso API lazy */
     FAST_TSV_MAX: 500,
     PRIMARY_LOADER: 'auto',
+    /** Sprint 2.5 item 6: espelho DOM/innerText nunca como primary */
+    USE_DOM_MIRROR_PRIMARY: false,
+    /** Fallback DOM só após API/TSV/cola falharem — banner amarelo */
+    DOM_MIRROR_FALLBACK: true,
     PILOT_API_TREE_DEPTH: 1,
     STRUCTURE_SYNC_DEBOUNCE_MS: 1800,
     SKIP_PP_ENRICH: true,
@@ -124,16 +128,16 @@
     ],
 
     PRODUCT_EXPLORER_COLUMNS: [
-      { key: 'level', label: 'NÃƒÂ­vel', width: 48 },
+      { key: 'level', label: 'N\u00edvel', width: 48 },
       { key: 'name', label: 'Nome' },
-      { key: 'title', label: 'TÃƒÂ­tulo' },
-      { key: 'description', label: 'DescriÃƒÂ§ÃƒÂ£o' },
+      { key: 'title', label: 'T\u00edtulo' },
+      { key: 'description', label: 'Descri\u00e7\u00e3o' },
       { key: 'displayType', label: 'Tipo exibido' },
       { key: 'type', label: 'Tipo' },
-      { key: 'revision', label: 'RevisÃƒÂ£o' },
+      { key: 'revision', label: 'Revis\u00e3o' },
       { key: 'state', label: 'Estado' },
       { key: 'maturity', label: 'Maturidade' },
-      { key: 'approval', label: 'AprovaÃƒÂ§ÃƒÂ£o' },
+      { key: 'approval', label: 'Aprova\u00e7\u00e3o' },
       { key: 'engineeringState', label: 'Estado engenharia' },
       { key: 'quantity', label: 'Qtd' },
       { key: 'owner', label: 'Owner' },
@@ -177,7 +181,7 @@
       { level: 'good', label: 'Bom (verde)', states: 'Aprovado, Released, Frozen, Approved' },
       { level: 'moderate', label: 'Moderado (amarelo)', states: 'Em Trabalho, Em Espera, In Work, IN_WORK, WIP' },
       { level: 'bad', label: 'Ruim (vermelho)', states: 'Obsoleto, OBSOLETE, Abandoned' },
-      { level: 'other', label: 'Outros (cinza)', states: 'Estado vazio ou nÃƒÂ£o reconhecido no tenant' }
+      { level: 'other', label: 'Outros (cinza)', states: 'Estado vazio ou n\u00e3o reconhecido no tenant' }
     ],
 
     /** Tipos considerados assembly */

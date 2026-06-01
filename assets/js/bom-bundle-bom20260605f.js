@@ -112,7 +112,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260605g',
+    BUILD: 'bom20260605f',
     /** 3DDashboard: nÃƒÂ£o espera probe CSRF (evita travar em "ConectandoÃ¢â‚¬Â¦") */
     SKIP_SPACE_PROBE: true,
     WAF_REQUEST_TIMEOUT_MS: 15000,
@@ -232,16 +232,16 @@
     ],
 
     PRODUCT_EXPLORER_COLUMNS: [
-      { key: 'level', label: 'N\u00edvel', width: 48 },
+      { key: 'level', label: 'NÃƒÂ­vel', width: 48 },
       { key: 'name', label: 'Nome' },
-      { key: 'title', label: 'T\u00edtulo' },
-      { key: 'description', label: 'Descri\u00e7\u00e3o' },
+      { key: 'title', label: 'TÃƒÂ­tulo' },
+      { key: 'description', label: 'DescriÃƒÂ§ÃƒÂ£o' },
       { key: 'displayType', label: 'Tipo exibido' },
       { key: 'type', label: 'Tipo' },
-      { key: 'revision', label: 'Revis\u00e3o' },
+      { key: 'revision', label: 'RevisÃƒÂ£o' },
       { key: 'state', label: 'Estado' },
       { key: 'maturity', label: 'Maturidade' },
-      { key: 'approval', label: 'Aprova\u00e7\u00e3o' },
+      { key: 'approval', label: 'AprovaÃƒÂ§ÃƒÂ£o' },
       { key: 'engineeringState', label: 'Estado engenharia' },
       { key: 'quantity', label: 'Qtd' },
       { key: 'owner', label: 'Owner' },
@@ -285,7 +285,7 @@
       { level: 'good', label: 'Bom (verde)', states: 'Aprovado, Released, Frozen, Approved' },
       { level: 'moderate', label: 'Moderado (amarelo)', states: 'Em Trabalho, Em Espera, In Work, IN_WORK, WIP' },
       { level: 'bad', label: 'Ruim (vermelho)', states: 'Obsoleto, OBSOLETE, Abandoned' },
-      { level: 'other', label: 'Outros (cinza)', states: 'Estado vazio ou n\u00e3o reconhecido no tenant' }
+      { level: 'other', label: 'Outros (cinza)', states: 'Estado vazio ou nÃƒÂ£o reconhecido no tenant' }
     ],
 
     /** Tipos considerados assembly */
@@ -11103,16 +11103,10 @@ var App = (function () {
     if (!root || !root.querySelectorAll) return;
     root.querySelectorAll(
       '.bom-chart-heading, .bom-filter-item > span, .bom-ebom-head h2, .bom-st, ' +
-      '.bom-table-pager, .bom-preview-hint, .bom-loading, .bom-sync-banner, summary, label span, h2, h3, p'
+      '.bom-table-pager, .bom-preview-hint, .bom-loading, summary, label span, h2, h3'
     ).forEach(function (el) {
       var t = el.textContent;
       if (t && t.indexOf('Ã') >= 0) el.textContent = fix(t);
-    });
-    root.querySelectorAll('[placeholder], [title], [aria-label]').forEach(function (el) {
-      ['placeholder', 'title', 'aria-label'].forEach(function (attr) {
-        var v = el.getAttribute(attr);
-        if (v && v.indexOf('Ã') >= 0) el.setAttribute(attr, fix(v));
-      });
     });
     var hMat = root.querySelector('.bom-chart-panel .bom-chart-heading');
     var hOwn = root.querySelector('.bom-chart-owners .bom-chart-heading');

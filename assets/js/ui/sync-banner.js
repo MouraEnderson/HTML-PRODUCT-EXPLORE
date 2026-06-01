@@ -9,6 +9,7 @@ var SyncBanner = (function () {
     loaderMode: '',
     partial: false,
     truncated: false,
+    domFallback: false,
     expected: 0
   };
 
@@ -27,6 +28,11 @@ var SyncBanner = (function () {
     lastLoad.loaderMode = res.loaderMode || res.mode || lastLoad.loaderMode;
     lastLoad.partial = !!res.partial;
     lastLoad.truncated = !!(res.meta && res.meta.truncated);
+    lastLoad.domFallback =
+      !!res.domFallback ||
+      lastLoad.loaderMode === 'dom-fallback' ||
+      String(res.mode || '').indexOf('mirror') >= 0 ||
+      String(res.mode || '').indexOf('grid') >= 0;
     if (res.context && res.context.expectedCount > 0) {
       lastLoad.expected = res.context.expectedCount;
     }
@@ -58,6 +64,9 @@ var SyncBanner = (function () {
     if (mode === 'tsv' || mode.indexOf('explorer') >= 0 || mode === 'text') return 'TSV';
     if (mode === 'paste' || mode === 'cola' || mode.indexOf('clipboard') >= 0 || mode.indexOf('ctrl') >= 0) {
       return 'Cola';
+    }
+    if (mode === 'dom-fallback' || mode.indexOf('mirror') >= 0 || mode.indexOf('grid') >= 0) {
+      return 'DOM';
     }
     if (mode === 'builtin-last' || mode === 'snapshot-file') return 'Snapshot';
     return mode ? mode.toUpperCase() : '';
@@ -117,6 +126,14 @@ var SyncBanner = (function () {
     var quality = dashboardQuality();
     var diff = explorer > 0 ? Math.abs(explorer - dash) : 0;
     var partial = lastLoad.partial || (explorer > 0 && dash < explorer - 1);
+
+    if (lastLoad.domFallback) {
+      el.className = 'bom-sync-banner bom-sync-warn';
+      el.innerHTML =
+        '<strong>DOM espelho (fallback)</strong> ' + countLine(mode || 'DOM', dash, explorer) +
+        ' — dados podem estar incompletos; prefira <strong>API</strong> ou <strong>TSV</strong>.';
+      return;
+    }
 
     if (lastLoad.truncated) {
       el.className = 'bom-sync-banner bom-sync-warn';

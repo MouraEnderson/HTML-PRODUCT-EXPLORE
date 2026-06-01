@@ -599,142 +599,48 @@ var ExplorerScanner = (function () {
     });
   }
 
-  /** Usa a fonte com MAIS linhas: Ctrl+C ou grade visível do Explorer (evita 13 de 79). */
-  function scanViaImportBestEffort() {
-    if (!pasteImportEnabled()) {
-      return Promise.reject(new Error('Importação por cola desativada.'));
-    }
-
-    function tryPasteBundle() {
-      return readClipboardText().then(function (clip) {
-        var text = resolveImportText(clip);
-        if (!text) return { count: 0, text: '', items: null };
-        return FileImportService.parseTextAsync(text).then(function (items) {
-          return { count: items ? items.length : 0, text: text, items: items };
-        });
-      }).catch(function () {
-        return { count: 0, text: '', items: null };
-      });
-    }
-
-    function tryGridBundle() {
-      if (typeof ProductExplorerBridge === 'undefined') {
-        return Promise.resolve({ count: 0, payload: null });
-      }
-      if (ProductExplorerBridge.pollDashboardExplorerChrome) {
-        ProductExplorerBridge.pollDashboardExplorerChrome();
-      }
-      if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
-      var term = getExplorerRootSearchTerm();
-      var payload = null;
-      if (ProductExplorerBridge.scrapeExplorerMirror) {
-        payload = ProductExplorerBridge.scrapeExplorerMirror(term);
-      }
-      if ((!payload || !payload.items || payload.items.length < 2) && ProductExplorerBridge.scrapeExplorerGrid) {
-        payload = ProductExplorerBridge.scrapeExplorerGrid(term);
-      }
-      if (!payload || !payload.items || payload.items.length < 1) {
-        return Promise.resolve({ count: 0, payload: null });
-      }
-      return Promise.resolve({ count: payload.items.length, payload: payload, term: term });
-    }
-
-    return Promise.all([tryPasteBundle(), tryGridBundle()]).then(function (parts) {
-      var paste = parts[0];
-      var grid = parts[1];
-      var explorerSel = 0;
-      var explorerTotal = 0;
-      if (typeof ProductExplorerBridge !== 'undefined') {
-        if (ProductExplorerBridge.getExplorerSelectionCount) {
-          explorerSel = ProductExplorerBridge.getExplorerSelectionCount() || 0;
-        }
-        if (ProductExplorerBridge.getExplorerObjectCount) {
-          explorerTotal = ProductExplorerBridge.getExplorerObjectCount() || 0;
-        }
-      }
-      var isMirror = grid.payload && grid.payload.scrapeSource === 'explorer-mirror';
-      var mirrorQualityOk = isMirror && grid.payload.mirrorQuality && grid.payload.mirrorQuality.ok;
-      var preferGrid = grid.payload && grid.count >= 1 && (
-        mirrorQualityOk ||
-        (grid.count >= 2 && explorerTotal > 0 && grid.count >= explorerTotal - 1) ||
-        (grid.count > paste.count && grid.count >= 2)
-      );
-
-      if (preferGrid) {
-        APP_CONFIG.IMPORT_MODE = true;
-        APP_CONFIG.DEMO_MODE = false;
-        return BomSnapshot.applyPayload(grid.payload).then(function (meta) {
-          var count = BomService.getNodeCount() || meta.itemCount || grid.count;
-          saveRootName(meta.productName || grid.term);
-          var hint = paste.count > 0 && paste.count !== grid.count && isMirror
-            ? ' (substituiu cola desalinhada)'
-            : (isMirror ? ' (espelho Explorer)' : '');
-          return {
-            ok: true,
-            mode: isMirror ? 'explorer-mirror-import' : 'explorer-grid-import',
-            meta: meta,
-            message: (isMirror ? 'Espelho Explorer: ' : 'Importação: ') + count + ' itens — ' + (meta.productName || grid.term || 'E-BOM') + hint
-          };
-        });
-      }
-
-      if (paste.count >= 1 && paste.text && APP_CONFIG.EXPLORER_MIRROR_BLOCK_PASTE === true && mirrorQualityOk) {
-        throw new Error('Cola ignorada — espelho Explorer activo.');
-      }
-
-      if (paste.count >= 1 && paste.text && APP_CONFIG.EXPLORER_MIRROR_BLOCK_PASTE !== true) {
-        return scanViaText(paste.text, 'Ctrl+C Explorer');
-      }
-
-      if (paste.count >= 1 && paste.text && !mirrorQualityOk && grid.count < 2) {
-        return scanViaText(paste.text, 'Ctrl+C Explorer (fallback)');
-      }
-
-      if (grid.count >= 2 && grid.payload) {
-        APP_CONFIG.IMPORT_MODE = true;
-        APP_CONFIG.DEMO_MODE = false;
-        return BomSnapshot.applyPayload(grid.payload).then(function (meta) {
-          var count = BomService.getNodeCount() || meta.itemCount || grid.count;
-          saveRootName(meta.productName || grid.term);
-          return {
-            ok: true,
-            mode: 'explorer-grid-import',
-            meta: meta,
-            message: 'Importação (grade Explorer): ' + count + ' itens — ' + (meta.productName || grid.term || 'E-BOM')
-          };
-        });
-      }
-
-      throw new Error(
-        'Nenhum dado. No Explorer: expanda todos os níveis → Ctrl+A na grade → Ctrl+C → Importar (ou Ctrl+V no widget).'
-      );
-    });
+  function domMirrorPrimaryEnabled() {
+    return APP_CONFIG && APP_CONFIG.USE_DOM_MIRROR_PRIMARY === true;
   }
 
-  function scanViaExplorerGrid(options) {
-    options = options || {};
-    var ctx =
-      typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh
-        ? ExplorerContext.refresh(true)
-        : null;
-    if (typeof TsvBomLoader !== 'undefined' && TsvBomLoader.load) {
-      return TsvBomLoader.load(ctx, {
-        allowAutoCopy: options.allowAutoCopy === true,
-        expectedCount: ctx ? ctx.expectedCount : 0
-      });
+  function domMirrorFallbackEnabled() {
+    return APP_CONFIG && APP_CONFIG.DOM_MIRROR_FALLBACK !== false;
+  }
+
+  function tagDomFallbackResult(res, term, expected) {
+    if (!res) return res;
+    res.loaderMode = 'dom-fallback';
+    res.domFallback = true;
+    var count = (res.meta && res.meta.itemCount) || BomService.getNodeCount() || 0;
+    var exp = expected || 0;
+    var msg = 'DOM espelho (fallback) ' + count;
+    if (exp > 0) msg += '/' + exp;
+    msg += ' — ' + ((res.meta && res.meta.productName) || term || 'E-BOM');
+    msg += ' — prefira API ou TSV';
+    res.message = msg;
+    return res;
+  }
+
+  /**
+   * Sprint 2.5 item 6 — espelho DOM só fallback (mirror → scroll → grid).
+   */
+  function scanViaDomMirrorFallback(term, expected) {
+    if (!domMirrorFallbackEnabled()) {
+      return Promise.reject(new Error('Espelho DOM desactivado (use API, TSV ou cola).'));
     }
-    var allowAutoCopy = options.allowAutoCopy === true;
     if (typeof ProductExplorerBridge === 'undefined') {
-      return Promise.reject(new Error('Iframe do Explorer inacessível — abra a árvore ao lado do widget.'));
+      return Promise.reject(new Error('Iframe do Explorer inacessível.'));
     }
     if (ProductExplorerBridge.pollDashboardExplorerChrome) {
       ProductExplorerBridge.pollDashboardExplorerChrome();
     }
     if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
-    var term = getExplorerRootSearchTerm();
-    var expected = ProductExplorerBridge.getExplorerObjectCount
-      ? ProductExplorerBridge.getExplorerObjectCount() || 0
-      : 0;
+    term = term || getExplorerRootSearchTerm();
+    expected = expected || (
+      ProductExplorerBridge.getExplorerObjectCount
+        ? ProductExplorerBridge.getExplorerObjectCount() || 0
+        : 0
+    );
 
     function applyGrid(pl) {
       if (typeof BomSnapshot === 'undefined' || !BomSnapshot.applyPayload) {
@@ -746,27 +652,18 @@ var ExplorerScanner = (function () {
         var count = BomService.getNodeCount();
         if (count < 1) count = meta.itemCount || (pl.items && pl.items.length) || 0;
         saveRootName(meta.productName || term);
-        var src = pl.scrapeSource === 'explorer-auto-copy'
-          ? 'Cópia automática Explorer'
-          : (pl.scrapeSource === 'explorer-scroll'
-            ? 'Varredura Explorer'
-            : (pl.scrapeSource === 'explorer-mirror' ? 'Espelho Explorer' : 'Grade Explorer'));
-        return {
+        return tagDomFallbackResult({
           ok: true,
-          mode: pl.scrapeSource === 'explorer-mirror' ? 'explorer-mirror' : 'explorer-grid',
+          mode: 'dom-fallback',
           meta: meta,
-          message: src + ': ' + count + ' itens — ' + (meta.productName || term || 'E-BOM')
-        };
+          partial: expected > 0 && count < expected - 1
+        }, term, expected);
       });
     }
 
     function pickBest(a, b) {
       if (!a || !a.items) return b;
       if (!b || !b.items) return a;
-      var aq = a.mirrorQuality && a.mirrorQuality.ok;
-      var bq = b.mirrorQuality && b.mirrorQuality.ok;
-      if (bq && !aq) return b;
-      if (aq && !bq) return a;
       if (expected > 0) {
         var ad = Math.abs(a.items.length - expected);
         var bd = Math.abs(b.items.length - expected);
@@ -786,20 +683,11 @@ var ExplorerScanner = (function () {
     if (ProductExplorerBridge.scrapeExplorerMirror) {
       payload = ProductExplorerBridge.scrapeExplorerMirror(term);
     }
-
     var chain = Promise.resolve(payload);
     if (ProductExplorerBridge.tryExplorerScrollHarvestAsync && needsMore(payload)) {
       chain = chain.then(function (pl) {
         return ProductExplorerBridge.tryExplorerScrollHarvestAsync(term).then(function (scrollPl) {
           return pickBest(pl, scrollPl);
-        });
-      });
-    }
-    if (allowAutoCopy && ProductExplorerBridge.tryExplorerAutoCopyParse) {
-      chain = chain.then(function (pl) {
-        if (!needsMore(pl)) return pl;
-        return ProductExplorerBridge.tryExplorerAutoCopyParse(term).then(function (copyPl) {
-          return pickBest(pl, copyPl);
         });
       });
     }
@@ -813,12 +701,74 @@ var ExplorerScanner = (function () {
 
     return chain.then(function (finalPayload) {
       if (!finalPayload || !finalPayload.items || finalPayload.items.length < 1) {
-        return Promise.reject(
-          new Error('Não li a árvore no Explorer. Expanda a estrutura e clique Atualizar estrutura.')
-        );
+        return Promise.reject(new Error('Espelho DOM não obteve dados.'));
       }
       return applyGrid(finalPayload);
     });
+  }
+
+  /** Cola / clipboard — primary paste; DOM só se fallback activo. */
+  function scanViaImportBestEffort() {
+    if (!pasteImportEnabled()) {
+      return Promise.reject(new Error('Importação por cola desativada.'));
+    }
+
+    function tryPasteBundle() {
+      return readClipboardText().then(function (clip) {
+        var text = resolveImportText(clip);
+        if (!text) return { count: 0, text: '', items: null };
+        return FileImportService.parseTextAsync(text).then(function (items) {
+          return { count: items ? items.length : 0, text: text, items: items };
+        });
+      }).catch(function () {
+        return { count: 0, text: '', items: null };
+      });
+    }
+
+    return tryPasteBundle().then(function (paste) {
+      if (paste.count >= 1 && paste.text) {
+        return scanViaText(paste.text, 'Ctrl+C Explorer').then(function (res) {
+          res.loaderMode = 'paste';
+          return res;
+        });
+      }
+      if (domMirrorFallbackEnabled() && !domMirrorPrimaryEnabled()) {
+        var term = getExplorerRootSearchTerm();
+        var expected =
+          typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getExplorerObjectCount
+            ? ProductExplorerBridge.getExplorerObjectCount() || 0
+            : 0;
+        return scanViaDomMirrorFallback(term, expected);
+      }
+      throw new Error(
+        'Nenhum dado colado. No Explorer: expanda todos os níveis → Ctrl+A → Ctrl+C → Atualizar estrutura.'
+      );
+    });
+  }
+
+  function scanViaExplorerGrid(options) {
+    options = options || {};
+    var ctx =
+      typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh
+        ? ExplorerContext.refresh(true)
+        : null;
+    if (typeof TsvBomLoader !== 'undefined' && TsvBomLoader.load) {
+      return TsvBomLoader.load(ctx, {
+        allowAutoCopy: options.allowAutoCopy === true,
+        expectedCount: ctx ? ctx.expectedCount : 0
+      });
+    }
+    if (domMirrorPrimaryEnabled()) {
+      var term = getExplorerRootSearchTerm();
+      var expected =
+        typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getExplorerObjectCount
+          ? ProductExplorerBridge.getExplorerObjectCount() || 0
+          : 0;
+      return scanViaDomMirrorFallback(term, expected);
+    }
+    return Promise.reject(
+      new Error('TSV indisponível. Use Atualizar estrutura (API/TSV) ou cole Ctrl+C.')
+    );
   }
 
   function scanViaBuiltinLast() {
@@ -923,6 +873,7 @@ var ExplorerScanner = (function () {
     ensureSpaceApi: ensureSpaceApi,
     resolveSelection: resolveSelection,
     getSelection: getSelection,
+    scanViaDomMirrorFallback: scanViaDomMirrorFallback,
     scanViaApi: scanViaApi
   };
 })();

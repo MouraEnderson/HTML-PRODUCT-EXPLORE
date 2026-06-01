@@ -267,43 +267,19 @@ var App = (function () {
   }
 
   function pilotFallbackExplorerGrid(structureName) {
-    if (!APP_CONFIG.PILOT_FALLBACK_SNAPSHOT || typeof ProductExplorerBridge === 'undefined') {
+    if (!APP_CONFIG.DOM_MIRROR_FALLBACK || APP_CONFIG.DOM_MIRROR_FALLBACK === false) {
       return Promise.resolve(false);
     }
-    if (!ProductExplorerBridge.scrapeExplorerGrid && !ProductExplorerBridge.scrapeExplorerMirror) {
-      return Promise.resolve(false);
-    }
-    var payload = null;
-    if (ProductExplorerBridge.scrapeExplorerMirror) {
-      payload = ProductExplorerBridge.scrapeExplorerMirror(structureName);
-    }
-    if ((!payload || !payload.items || payload.items.length < 2) && ProductExplorerBridge.scrapeExplorerGrid) {
-      payload = ProductExplorerBridge.scrapeExplorerGrid(structureName);
-    }
-    function applyGrid(pl) {
-      if (!pl || !pl.items || pl.items.length < 2) return Promise.resolve(false);
-      return BomSnapshot.applyPayload(pl).then(function (meta) {
-        APP_CONFIG.IMPORT_MODE = true;
-        APP_CONFIG.DEMO_MODE = false;
-        if (meta && meta.rootPhysicalId) lastLoadedId = meta.rootPhysicalId;
-        refreshUI();
-        var n = BomService.getNodeCount();
-        if (n < 1) n = (meta && meta.itemCount) || (pl.items && pl.items.length) || 0;
-        setStatus('Piloto: ' + (meta.productName || structureName) + ' — ' + n + ' itens (grade Explorer). API 406 em ajuste.', 'ok');
+    if (typeof ExplorerScanner !== 'undefined' && ExplorerScanner.scanViaDomMirrorFallback) {
+      return ExplorerScanner.scanViaDomMirrorFallback(structureName, 0).then(function (res) {
+        applyOrchestratorResult(res);
+        setStatus(res.message || 'DOM espelho (fallback).', 'warn');
         return true;
       }).catch(function () {
         return false;
       });
     }
-    if (builtin && builtin.items && builtin.items.length >= 2) return applyGrid(builtin);
-    if (payload && payload.items.length >= 2) return applyGrid(payload);
-    var fetchPilot =
-      ProductExplorerBridge.fetchPilotStructurePayload &&
-      ProductExplorerBridge.fetchPilotStructurePayload(structureName);
-    return (fetchPilot || Promise.resolve(null)).then(function (pilot) {
-      if (pilot) return applyGrid(pilot);
-      return Promise.resolve(false);
-    });
+    return Promise.resolve(false);
   }
 
   function pilotFallbackSnapshot(structureName) {
@@ -1008,10 +984,16 @@ var App = (function () {
     if (!root || !root.querySelectorAll) return;
     root.querySelectorAll(
       '.bom-chart-heading, .bom-filter-item > span, .bom-ebom-head h2, .bom-st, ' +
-      '.bom-table-pager, .bom-preview-hint, .bom-loading, summary, label span, h2, h3'
+      '.bom-table-pager, .bom-preview-hint, .bom-loading, .bom-sync-banner, summary, label span, h2, h3, p'
     ).forEach(function (el) {
       var t = el.textContent;
       if (t && t.indexOf('Ã') >= 0) el.textContent = fix(t);
+    });
+    root.querySelectorAll('[placeholder], [title], [aria-label]').forEach(function (el) {
+      ['placeholder', 'title', 'aria-label'].forEach(function (attr) {
+        var v = el.getAttribute(attr);
+        if (v && v.indexOf('Ã') >= 0) el.setAttribute(attr, fix(v));
+      });
     });
     var hMat = root.querySelector('.bom-chart-panel .bom-chart-heading');
     var hOwn = root.querySelector('.bom-chart-owners .bom-chart-heading');

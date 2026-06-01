@@ -70,6 +70,7 @@ try {
     assets/js/services/bom-orchestrator.js `
     assets/js/services/api-bom-loader.js `
     assets/js/services/tsv-bom-loader.js `
+    assets/js/services/paste-bom-loader.js `
     assets/js/services/explorer-scanner.js `
     assets/js/ui/sync-banner.js assets/js/app.js `
     scripts/build-bundle.ps1 scripts/deploy.ps1 2>$null

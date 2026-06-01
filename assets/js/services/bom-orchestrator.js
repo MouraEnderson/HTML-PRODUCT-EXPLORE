@@ -87,7 +87,10 @@ var BomOrchestrator = (function () {
     return ExplorerScanner.scanViaExplorerGrid({ allowAutoCopy: options.allowAutoCopy === true });
   }
 
-  function runPasteLoader() {
+  function runPasteLoader(ctx, options) {
+    if (typeof PasteBomLoader !== 'undefined' && PasteBomLoader.load) {
+      return PasteBomLoader.load(ctx, options);
+    }
     if (typeof ExplorerScanner === 'undefined') {
       return Promise.reject(new Error('Importação indisponível.'));
     }
@@ -100,9 +103,16 @@ var BomOrchestrator = (function () {
     return Promise.reject(new Error('Nenhuma fonte de cola disponível.'));
   }
 
+  function runDomFallbackLoader(ctx) {
+    if (typeof ExplorerScanner === 'undefined' || !ExplorerScanner.scanViaDomMirrorFallback) {
+      return Promise.reject(new Error('Espelho DOM indisponível.'));
+    }
+    return ExplorerScanner.scanViaDomMirrorFallback(ctx.rootName, ctx.expectedCount);
+  }
+
   function enrichResult(res, ctx, loaderMode) {
     if (!res) return res;
-    res.loaderMode = loaderMode;
+    if (!res.loaderMode) res.loaderMode = loaderMode;
     res.context = {
       physicalId: ctx.physicalId,
       productName: ctx.productName,
@@ -160,12 +170,20 @@ var BomOrchestrator = (function () {
           root.__3DX_ALLOW_API__ = false;
         }
         if (mode === 'api') {
-          return runTsvLoader(ctx, { source: 'manual', allowAutoCopy: true }).catch(function () {
-            return runPasteLoader(ctx, options);
-          });
+          return runTsvLoader(ctx, { source: 'manual', allowAutoCopy: true })
+            .catch(function () {
+              return runPasteLoader(ctx, options).catch(function () {
+                return runDomFallbackLoader(ctx);
+              });
+            });
         }
         if (mode === 'tsv') {
-          return runPasteLoader(ctx, options);
+          return runPasteLoader(ctx, options).catch(function () {
+            return runDomFallbackLoader(ctx);
+          });
+        }
+        if (mode === 'paste') {
+          return runDomFallbackLoader(ctx);
         }
         throw firstErr;
       });
