@@ -21,6 +21,9 @@ var ChartsManager = (function () {
     document.querySelectorAll('.chart-fallback').forEach(function (el) {
       el.parentNode.removeChild(el);
     });
+    document.querySelectorAll('.cf-pie-quad-holder').forEach(function (el) {
+      el.parentNode.removeChild(el);
+    });
     var leg = document.getElementById('ownersLegendScroll');
     if (leg) leg.innerHTML = '';
     var matLeg = document.getElementById('maturityLegendScroll');
@@ -37,6 +40,45 @@ var ChartsManager = (function () {
   function panelForCanvas(canvasId) {
     var canvas = document.getElementById(canvasId);
     return canvas ? canvas.closest('.bom-chart-panel') : null;
+  }
+
+  function compactPieGradient(labels, values, colors) {
+    var slices = filterSlices(labels, values, colors);
+    if (!slices.labels.length) slices = emptySlice();
+    var total = slices.values.reduce(function (a, b) { return a + b; }, 0) || 1;
+    var gradientParts = [];
+    var acc = 0;
+    slices.labels.forEach(function (lbl, i) {
+      var v = slices.values[i];
+      var pct = (v / total) * 100;
+      var end = acc + pct;
+      gradientParts.push(slices.colors[i] + ' ' + acc.toFixed(2) + '% ' + end.toFixed(2) + '%');
+      acc = end;
+    });
+    return { total: total, gradient: gradientParts.join(', ') };
+  }
+
+  function showCompactPieInBox(canvasId, labels, values, colors) {
+    var canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    var box = canvas.closest('.bom-chart-canvas-box');
+    if (!box) return;
+    var pie = compactPieGradient(labels, values, colors);
+    canvas.style.display = 'none';
+    var panel = panelForCanvas(canvasId);
+    if (panel) {
+      var fb = panel.querySelector('.chart-fallback');
+      if (fb) fb.style.display = 'none';
+    }
+    box.querySelectorAll('.cf-pie-quad-holder').forEach(function (el) {
+      el.parentNode.removeChild(el);
+    });
+    var holder = document.createElement('div');
+    holder.className = 'cf-pie-quad-holder';
+    holder.innerHTML =
+      '<div class="cf-pie cf-pie-quad" style="background:conic-gradient(' + pie.gradient + ')">' +
+      '<div class="cf-pie-hole cf-pie-hole-quad">' + pie.total + '</div></div>';
+    box.appendChild(holder);
   }
 
   function showFallback(canvasId, title, html) {
@@ -195,9 +237,14 @@ var ChartsManager = (function () {
 
     var slices = filterSlices(labels, values, colors);
     if (!slices.labels.length) slices = emptySlice();
+    var quadCharts = !!document.querySelector('.bom-charts-row-quad');
 
     if (typeof Chart === 'undefined') {
-      showFallback(canvasId, title, fallbackPieHtml(slices.labels, slices.values, slices.colors));
+      if (quadCharts) {
+        showCompactPieInBox(canvasId, slices.labels, slices.values, slices.colors);
+      } else {
+        showFallback(canvasId, title, fallbackPieHtml(slices.labels, slices.values, slices.colors));
+      }
       return false;
     }
 
@@ -243,7 +290,11 @@ var ChartsManager = (function () {
       });
       return true;
     } catch (e) {
-      showFallback(canvasId, title, fallbackPieHtml(slices.labels, slices.values, slices.colors));
+      if (quadCharts) {
+        showCompactPieInBox(canvasId, slices.labels, slices.values, slices.colors);
+      } else {
+        showFallback(canvasId, title, fallbackPieHtml(slices.labels, slices.values, slices.colors));
+      }
       return false;
     } finally {
       clampCanvasBox(canvasId);

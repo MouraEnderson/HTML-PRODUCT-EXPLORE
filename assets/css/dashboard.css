@@ -2616,6 +2616,29 @@ body.ui-clean .main-clean {
   max-height: 110px !important;
 }
 
+.cf-pie-quad-holder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.cf-pie.cf-pie-quad {
+  width: 88px;
+  height: 88px;
+  min-height: 0;
+  border-radius: 50%;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.cf-pie-hole.cf-pie-hole-quad {
+  inset: 30%;
+  font-size: 0.72rem;
+}
+
 .bom-zone-3 .bom-chart-legend-list {
   margin: 0;
   padding: 0 2px;

@@ -104,17 +104,33 @@ var DataTable = (function () {
     selectRow(idx, false);
   }
 
+  function exposeRowPicker() {
+    var root = typeof window !== 'undefined' ? window : null;
+    if (!root) return;
+    root.__bomPickRow = function (idx) {
+      var n = parseInt(idx, 10);
+      if (isNaN(n)) return;
+      selectRow(n, false);
+    };
+  }
+
   function bindRowClicks() {
     syncTableRefs();
-    if (!scrollContainer) return;
-    if (scrollContainer.__3DX_ROW_BOUND__) return;
-    scrollContainer.__3DX_ROW_BOUND__ = true;
-    scrollContainer.addEventListener('pointerup', handleRowPointer);
-    scrollContainer.addEventListener('click', handleRowPointer);
-    if (tableEl && !tableEl.__3DX_ROW_BOUND__) {
-      tableEl.__3DX_ROW_BOUND__ = true;
-      tableEl.addEventListener('pointerup', handleRowPointer);
-      tableEl.addEventListener('click', handleRowPointer);
+    exposeRowPicker();
+    var root = uiRoot();
+    if (!root || !root.addEventListener) return;
+    if (root.__3DX_ROW_HANDLER__) {
+      root.removeEventListener('click', root.__3DX_ROW_HANDLER__, true);
+      root.removeEventListener('pointerup', root.__3DX_ROW_HANDLER__, true);
+    }
+    root.__3DX_ROW_HANDLER__ = handleRowPointer;
+    root.__3DX_ROW_ROOT_BOUND__ = true;
+    root.addEventListener('click', handleRowPointer, true);
+    root.addEventListener('pointerup', handleRowPointer, true);
+    if (scrollContainer && !scrollContainer.__3DX_ROW_BOUND__) {
+      scrollContainer.__3DX_ROW_BOUND__ = true;
+      scrollContainer.addEventListener('pointerup', handleRowPointer);
+      scrollContainer.addEventListener('click', handleRowPointer);
     }
   }
 
@@ -189,12 +205,16 @@ var DataTable = (function () {
       var sel = selectedIndex === idx ? ' bom-row-selected' : '';
       return (
         '<tr class="bom-table-row' + sel + '" data-row-index="' + idx + '" data-id="' +
-        escapeAttr(n.physicalid) + '" tabindex="0" role="row">' + tds + '</tr>'
+        escapeAttr(n.physicalid) + '" tabindex="0" role="row"' +
+        ' onclick="window.__bomPickRow&&window.__bomPickRow(' + idx + ')"' +
+        ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();window.__bomPickRow&&window.__bomPickRow(' + idx + ');}">' +
+        tds + '</tr>'
       );
     }).join('');
     if (typeof PartImage !== 'undefined' && PartImage.hydrateThumbs) {
       PartImage.hydrateThumbs(tbody);
     }
+    bindRowClicks();
     if (selectedIndex >= 0) highlightRow(selectedIndex);
   }
 
