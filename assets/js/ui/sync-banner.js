@@ -23,6 +23,14 @@ var SyncBanner = (function () {
     return document.getElementById(id);
   }
 
+  function clearLoad() {
+    lastLoad.loaderMode = '';
+    lastLoad.partial = false;
+    lastLoad.truncated = false;
+    lastLoad.domFallback = false;
+    lastLoad.expected = 0;
+  }
+
   function setLoadResult(res) {
     if (!res) return;
     lastLoad.loaderMode = res.loaderMode || res.mode || lastLoad.loaderMode;
@@ -181,6 +189,7 @@ var SyncBanner = (function () {
   return {
     update: update,
     setLoadResult: setLoadResult,
+    clearLoad: clearLoad,
     parseExplorerCount: parseExplorerCount
   };
 })();

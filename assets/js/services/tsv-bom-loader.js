@@ -74,11 +74,20 @@ var TsvBomLoader = (function () {
     if (typeof BomSnapshot === 'undefined' || !BomSnapshot.applyPayload) {
       return Promise.reject(new Error('Módulo snapshot indisponível.'));
     }
+    var itemN = pl && pl.items ? pl.items.length : 0;
+    if (expected > 0 && itemN < expected - 1) {
+      return Promise.reject(
+        new Error(
+          'TSV parcial ' + itemN + '/' + expected +
+          ' — expanda todos os níveis no Explorer, Ctrl+A+Ctrl+C, ou aguarde API lazy.'
+        )
+      );
+    }
     APP_CONFIG.IMPORT_MODE = true;
     APP_CONFIG.DEMO_MODE = false;
     return BomSnapshot.applyPayload(pl).then(function (meta) {
       var count = BomService.getNodeCount();
-      if (count < 1) count = meta.itemCount || (pl.items && pl.items.length) || 0;
+      if (count < 1) count = meta.itemCount || itemN || 0;
       if (expected > 0 && count < expected - 1) {
         return Promise.reject(
           new Error(

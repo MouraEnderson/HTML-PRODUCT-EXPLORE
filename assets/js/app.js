@@ -270,8 +270,20 @@ var App = (function () {
     if (!APP_CONFIG.DOM_MIRROR_FALLBACK || APP_CONFIG.DOM_MIRROR_FALLBACK === false) {
       return Promise.resolve(false);
     }
+    var expected = 0;
+    if (typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh) {
+      var ctx = ExplorerContext.refresh(true);
+      if (ctx && ctx.expectedCount > 0) expected = ctx.expectedCount;
+    }
+    if (!expected && typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getExplorerObjectCount) {
+      expected = ProductExplorerBridge.getExplorerObjectCount() || 0;
+    }
+    var minComplete = (APP_CONFIG && APP_CONFIG.API_PREFER_ABOVE) || 20;
+    if (expected >= minComplete) {
+      return Promise.resolve(false);
+    }
     if (typeof ExplorerScanner !== 'undefined' && ExplorerScanner.scanViaDomMirrorFallback) {
-      return ExplorerScanner.scanViaDomMirrorFallback(structureName, 0).then(function (res) {
+      return ExplorerScanner.scanViaDomMirrorFallback(structureName, expected).then(function (res) {
         applyOrchestratorResult(res);
         setStatus(res.message || 'DOM espelho (fallback).', 'warn');
         return true;
@@ -621,15 +633,13 @@ var App = (function () {
         })
         .catch(function (err) {
           var msg = (err && err.message) ? err.message : String(err);
+          if (typeof SyncBanner !== 'undefined' && SyncBanner.clearLoad) SyncBanner.clearLoad();
           if (typeof BomService !== 'undefined' && BomService.getNodeCount() > 0) {
             refreshUI();
           }
-          return pilotFallbackExplorerGrid(key).then(function (restored) {
-            if (restored) return;
-            var short = msg;
-            if (short.length > 220) short = short.slice(0, 220) + '…';
-            setStatus(short, 'error');
-          });
+          var short = msg;
+          if (short.length > 220) short = short.slice(0, 220) + '…';
+          setStatus(short, 'error');
         })
         .finally(function () {
           if (force) setLoading(false);
@@ -735,18 +745,19 @@ var App = (function () {
       return;
     }
     setStatus('Lendo Explorer…', 'info');
-    root.__3DX_BLOCK_API_LOAD__ = true;
     root.__3DX_BLOCK_AUTO_SYNC__ = true;
+    root.__3DX_ALLOW_API__ = true;
     if (btnEl) {
       btnEl.disabled = true;
       btnEl.textContent = 'Atualizando…';
     }
-    BomOrchestrator.refreshStructure({ source: 'manual', allowAutoCopy: true })
+    BomOrchestrator.refreshStructure({ source: 'manual', allowAutoCopy: true, preferApi: true })
       .then(function (res) {
         applyOrchestratorResult(res, { updateClock: true, layoutFit: true });
         setStatus(res.message || 'Importação concluída.', res.partial || res.domFallback ? 'warn' : 'ok');
       })
       .catch(function (err) {
+        if (typeof SyncBanner !== 'undefined' && SyncBanner.clearLoad) SyncBanner.clearLoad();
         if (typeof BomService !== 'undefined' && BomService.getNodeCount() > 0) {
           refreshUI();
         }
@@ -760,7 +771,7 @@ var App = (function () {
         }
       })
       .finally(function () {
-        root.__3DX_BLOCK_API_LOAD__ = false;
+        root.__3DX_ALLOW_API__ = false;
         root.__3DX_BLOCK_AUTO_SYNC__ = false;
         if (btnEl) {
           btnEl.disabled = false;

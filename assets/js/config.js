@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260605i',
+    BUILD: 'bom20260605j',
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
     API_PREFER_ABOVE: 20,
     /** 3DDashboard: nÃƒÂ£o espera probe CSRF (evita travar em "ConectandoÃ¢â‚¬Â¦") */
