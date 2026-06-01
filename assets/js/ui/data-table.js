@@ -136,10 +136,13 @@ var DataTable = (function () {
 
   function renderHeader() {
     if (!thead) return;
-    thead.innerHTML = columns.map(function (c) {
-      var cls = c.format === 'thumb' ? ' class="bom-col-thumb"' : '';
-      return '<th' + cls + '>' + escapeHtml(c.label) + '</th>';
-    }).join('');
+    thead.innerHTML = '';
+    columns.forEach(function (c) {
+      var th = document.createElement('th');
+      if (c.format === 'thumb') th.className = 'bom-col-thumb';
+      th.textContent = c.label || '';
+      thead.appendChild(th);
+    });
   }
 
   function maturityLabel(n) {

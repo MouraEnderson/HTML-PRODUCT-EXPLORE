@@ -7,8 +7,8 @@ var FileImportService = (function () {
 
   var COLUMN_ALIASES = {
     level: ['nivel', 'nível', 'level', 'depth', 'profundidade'],
-    name: ['name', 'nome', 'title', 'titulo', 'título', 'display name', 'displayname'],
-    title: ['title', 'titulo', 'título', 'description', 'descricao'],
+    name: ['name', 'nome', 'titulo', 'título', 'display name', 'displayname'],
+    title: ['title', 'description', 'descricao', 'descrição', 'descr', 'subtitle'],
     type: ['type', 'tipo', 'display type', 'policy', 'tipologia', 'physical product'],
     revision: ['revision', 'revisao', 'revisão', 'rev', 'revis', 'majorrevision'],
     state: ['state', 'estado', 'current', 'status'],
@@ -518,6 +518,14 @@ var FileImportService = (function () {
         if (map[key] !== undefined) return;
         if (key === 'maturity' && map.maturity !== undefined) return;
         if (key === 'state' && map.state !== undefined) return;
+        if (key === 'name' && /^title$/i.test(nh)) {
+          map.name = i;
+          return;
+        }
+        if (key === 'title' && /^description$/i.test(nh)) {
+          map.title = i;
+          return;
+        }
         if (COLUMN_ALIASES[key].some(function (a) { return headerMatchesAlias(nh, a); })) {
           map[key] = i;
         }

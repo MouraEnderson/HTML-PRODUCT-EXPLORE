@@ -709,14 +709,11 @@ var ExplorerScanner = (function () {
     }
     if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
     var term = getExplorerRootSearchTerm();
-    var payload = null;
-    if (ProductExplorerBridge.scrapeExplorerMirror) {
-      payload = ProductExplorerBridge.scrapeExplorerMirror(term);
-    }
-    if ((!payload || !payload.items || payload.items.length < 2) && ProductExplorerBridge.scrapeExplorerGrid) {
-      payload = ProductExplorerBridge.scrapeExplorerGrid(term);
-    }
-    function applyGrid(pl, sourceLabel) {
+    var expected = ProductExplorerBridge.getExplorerObjectCount
+      ? ProductExplorerBridge.getExplorerObjectCount() || 0
+      : 0;
+
+    function applyGrid(pl) {
       if (typeof BomSnapshot === 'undefined' || !BomSnapshot.applyPayload) {
         return Promise.reject(new Error('Módulo snapshot indisponível'));
       }
@@ -726,26 +723,69 @@ var ExplorerScanner = (function () {
         var count = BomService.getNodeCount();
         if (count < 1) count = meta.itemCount || (pl.items && pl.items.length) || 0;
         saveRootName(meta.productName || term);
+        var src = pl.scrapeSource === 'explorer-auto-copy'
+          ? 'Cópia automática Explorer'
+          : (pl.scrapeSource === 'explorer-mirror' ? 'Espelho Explorer' : 'Grade Explorer');
         return {
           ok: true,
           mode: pl.scrapeSource === 'explorer-mirror' ? 'explorer-mirror' : 'explorer-grid',
           meta: meta,
-          message:
-            'Espelho Explorer: ' +
-            count +
-            ' itens — ' +
-            (meta.productName || term || 'E-BOM')
+          message: src + ': ' + count + ' itens — ' + (meta.productName || term || 'E-BOM')
         };
       });
     }
-    if (payload && payload.items && payload.items.length >= 2) {
-      return applyGrid(payload, 'espelho Explorer');
+
+    function pickBest(a, b) {
+      if (!a || !a.items) return b;
+      if (!b || !b.items) return a;
+      var aq = a.mirrorQuality && a.mirrorQuality.ok;
+      var bq = b.mirrorQuality && b.mirrorQuality.ok;
+      if (bq && !aq) return b;
+      if (aq && !bq) return a;
+      if (expected > 0) {
+        var ad = Math.abs(a.items.length - expected);
+        var bd = Math.abs(b.items.length - expected);
+        if (bd < ad) return b;
+        if (ad < bd) return a;
+      }
+      return b.items.length > a.items.length ? b : a;
     }
-    return Promise.reject(
-      new Error(
-        'Não li a árvore no Explorer (iframe). Expanda os níveis, Ctrl+A na grade → Ctrl+C → Importar Ctrl+C.'
-      )
-    );
+
+    function needsMore(pl) {
+      if (!pl || !pl.items || pl.items.length < 2) return true;
+      if (expected > 0 && pl.items.length < expected - 1) return true;
+      return false;
+    }
+
+    var payload = null;
+    if (ProductExplorerBridge.scrapeExplorerMirror) {
+      payload = ProductExplorerBridge.scrapeExplorerMirror(term);
+    }
+
+    var chain = Promise.resolve(payload);
+    if (ProductExplorerBridge.tryExplorerAutoCopyParse && needsMore(payload)) {
+      chain = chain.then(function (pl) {
+        return ProductExplorerBridge.tryExplorerAutoCopyParse(term).then(function (copyPl) {
+          return pickBest(pl, copyPl);
+        });
+      });
+    }
+    chain = chain.then(function (pl) {
+      if (!needsMore(pl)) return pl;
+      if ((!pl || !pl.items || pl.items.length < 2) && ProductExplorerBridge.scrapeExplorerGrid) {
+        return pickBest(pl, ProductExplorerBridge.scrapeExplorerGrid(term));
+      }
+      return pl;
+    });
+
+    return chain.then(function (finalPayload) {
+      if (!finalPayload || !finalPayload.items || finalPayload.items.length < 1) {
+        return Promise.reject(
+          new Error('Não li a árvore no Explorer. Expanda a estrutura e clique Atualizar estrutura.')
+        );
+      }
+      return applyGrid(finalPayload);
+    });
   }
 
   function scanViaBuiltinLast() {

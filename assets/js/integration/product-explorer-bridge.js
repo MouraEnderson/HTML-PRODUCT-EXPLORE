@@ -496,10 +496,10 @@ var ProductExplorerBridge = (function () {
   }
 
   function isPersonName(s) {
-    s = String(s || '').trim();
+    s = String(s || '').trim().replace(/\s+/g, ' ');
     if (!s || s.length < 3 || s.length > 64) return false;
     if (isPartIdentifier(s)) return false;
-    if (/^(aprovado|em\s*trabalh|em\s*esper|released|in\s*wor|frozen|obsoleto|physical\s*product)/i.test(s)) {
+    if (/^(aprovado|em\s*trabalh|em\s*esper|released|in\s*wor|frozen|obsoleto|physical\s*product|vpmreference|3dshape)/i.test(s)) {
       return false;
     }
     if (/^\d+[.,]\d+$/.test(s)) return false;
@@ -638,7 +638,7 @@ var ProductExplorerBridge = (function () {
         map[k] = domMap[k];
       });
     }
-    var textMap = scrapeOwnerMapFromText(harvestAllExplorerText());
+    var textMap = scrapeOwnerMapFromText(harvestExplorerTextOnly() || harvestAllExplorerText());
     Object.keys(textMap).forEach(function (k) {
       if (!map[k]) map[k] = textMap[k];
     });
@@ -663,10 +663,10 @@ var ProductExplorerBridge = (function () {
     if (!Object.keys(ownerMap).length) return items;
     items.forEach(function (it) {
       var owner = lookupOwnerForPart(ownerMap, it.name || it.title);
-      if (owner) {
+      if (owner && isPersonName(owner)) {
         it.owner = owner;
       } else if (isPartIdentifier(it.owner) || !isPersonName(it.owner)) {
-        it.owner = '';
+        it.owner = it.owner && isPersonName(it.owner) ? it.owner : '';
       }
     });
     return items;
@@ -883,6 +883,98 @@ var ProductExplorerBridge = (function () {
   /**
    * Formato US/EN do Explorer: NOME\\n1.1\\nNOME\\n1.1 (após bloco de IDs internos).
    */
+  function extractOwnerFromExplorerRow(row, rootMeta) {
+    var owner = (rootMeta && rootMeta.owner) || '';
+    if (!row) return owner;
+    var ownerEl = row.querySelector(
+      '.enx-tile-owner, .enx-tile-subLabel-owner-label, .wux-tweakers-urlobject .wux-tweakers-string-label'
+    );
+    if (ownerEl) {
+      var ot = String(ownerEl.innerText || ownerEl.textContent || '').trim().replace(/\s+/g, ' ');
+      if (isPersonName(ot)) return ot;
+    }
+    return owner;
+  }
+
+  function extractMaturityFromExplorerRow(row) {
+    if (!row) return '—';
+    var rowText = String(row.innerText || row.textContent || '');
+    if (/aprovado|released|frozen/i.test(rowText)) return 'Aprovado';
+    if (/em\s*trabalh|in\s*work/i.test(rowText)) return 'Em Trabalho';
+    return '—';
+  }
+
+  function extractRowsFromExplorerDom(doc, rootMeta, seen, items, rootName) {
+    if (!doc || !doc.body) return 0;
+    var divs = doc.querySelectorAll('div');
+    var added = 0;
+    var di;
+    for (di = 0; di < divs.length; di++) {
+      var el = divs[di];
+      if (el.children.length > 8) continue;
+      var t = String(el.innerText || el.textContent || '').trim();
+      var m = t.match(/^([^\n]{2,120})\n(\d+[.,]\d+[A-Za-z]?)$/);
+      if (!m) continue;
+      var name = m[1].trim();
+      if (!isValidMirrorPartName(name)) continue;
+      if (rootName && name.toLowerCase() === String(rootName).toLowerCase() && items.length > 0) continue;
+      var row = el.closest('[role="row"]') || el.parentElement;
+      var item = buildMirrorRow(name, 1, items.length, {
+        title: name,
+        revision: normalizeRevisionLabel(m[2]),
+        owner: extractOwnerFromExplorerRow(row, rootMeta),
+        type: (rootMeta && rootMeta.type) || 'Physical Product',
+        maturity: extractMaturityFromExplorerRow(row)
+      });
+      var before = items.length;
+      pushGridItem(items, seen, item);
+      if (items.length > before) added++;
+    }
+    return added;
+  }
+
+  function scrapeMirrorRowsFromExplorerDomScroll(doc, rootName, seen, items, rootMeta) {
+    if (!doc || !doc.body) return 0;
+    var scrollers = doc.querySelectorAll('.wux-scroller');
+    var scroller = null;
+    var si;
+    for (si = 0; si < scrollers.length; si++) {
+      if (scrollers[si].scrollHeight > scrollers[si].clientHeight + 20) {
+        scroller = scrollers[si];
+        break;
+      }
+    }
+    if (!scroller) {
+      return extractRowsFromExplorerDom(doc, rootMeta, seen, items, rootName);
+    }
+    var initialScroll = scroller.scrollTop;
+    var totalAdded = 0;
+    var maxSteps = 48;
+    var step = Math.max(100, Math.floor(scroller.clientHeight * 0.7));
+    var stale = 0;
+    var lastLen = items.length;
+    var expected = getExplorerObjectCount();
+    var s;
+    for (s = 0; s < maxSteps; s++) {
+      totalAdded += extractRowsFromExplorerDom(doc, rootMeta, seen, items, rootName);
+      if (items.length > lastLen) stale = 0;
+      else stale++;
+      lastLen = items.length;
+      if (expected > 0 && items.length >= expected) break;
+      if (stale >= 4) break;
+      var nextTop = scroller.scrollTop + step;
+      if (nextTop >= scroller.scrollHeight - 5) {
+        extractRowsFromExplorerDom(doc, rootMeta, seen, items, rootName);
+        break;
+      }
+      scroller.scrollTop = nextTop;
+    }
+    try {
+      scroller.scrollTop = initialScroll;
+    } catch (eScroll) { /* */ }
+    return totalAdded;
+  }
+
   function scrapeMirrorRowsFromNameRevisionPairs(text, rootName, seen, items, rootMeta) {
     rootMeta = rootMeta || {};
     var lines = String(text || '').split('\n').map(function (l) { return String(l || '').trim(); });
@@ -1175,7 +1267,21 @@ var ProductExplorerBridge = (function () {
     var expected = getExplorerObjectCount();
     var rootMeta = parseExplorerRootMetaFromText(text);
 
-    if (text) {
+    if (rootName && isValidMirrorPartName(rootName)) {
+      pushGridItem(items, seen, buildMirrorRow(rootName, 0, 0, {
+        title: rootName,
+        revision: rootMeta.revision || '—',
+        maturity: rootMeta.maturity || '—',
+        owner: rootMeta.owner || '',
+        type: rootMeta.type || 'Physical Product',
+        approved: rootMeta.approved
+      }));
+    }
+
+    if (doc) {
+      scrapeMirrorRowsFromExplorerDomScroll(doc, rootName, seen, items, rootMeta);
+    }
+    if (items.length < 2 && text) {
       scrapeMirrorRowsFromNameRevisionPairs(text, rootName, seen, items, rootMeta);
     }
     if (doc && items.length < 2) {
@@ -1196,10 +1302,12 @@ var ProductExplorerBridge = (function () {
     applyOwnersToItems(items);
 
     if (items.length < 1) return null;
-    if (expected > 0 && items.length > expected + 3) return null;
 
     var quality = assessMirrorQuality(items);
     if (!quality.ok) return null;
+
+    var expectedAfter = getExplorerObjectCount();
+    if (expectedAfter > 0 && items.length > expectedAfter + 3) return null;
 
     return {
       version: 1,
@@ -1653,6 +1761,68 @@ var ProductExplorerBridge = (function () {
     };
   }
 
+  function itemsToMirrorPayload(items, rootName, source) {
+    if (!items || !items.length) return null;
+    var quality = assessMirrorQuality(items);
+    return {
+      version: 1,
+      productName: rootName || items[0].name,
+      rootPhysicalId: makeGridPhysicalId(rootName || items[0].name, 0, true),
+      items: items,
+      scrapeSource: source || 'explorer-auto-copy',
+      mirrorQuality: quality,
+      explorerExpected: getExplorerObjectCount() || items.length
+    };
+  }
+
+  function tryExplorerAutoCopyParse(rootName) {
+    return new Promise(function (resolve) {
+      var doc = readExplorerIframeDocument();
+      if (!doc) return resolve(null);
+      try {
+        var win = doc.defaultView;
+        var target =
+          doc.querySelector('.wux-layouts-gridengine-poolcontainer-sync') ||
+          doc.querySelector('.wux-scroller') ||
+          doc.querySelector('.explorer-root') ||
+          doc.body;
+        var sel = win.getSelection();
+        var range = doc.createRange();
+        range.selectNodeContents(target);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        doc.execCommand('copy');
+        sel.removeAllRanges();
+      } catch (eCopy) {
+        return resolve(null);
+      }
+      if (!navigator.clipboard || !navigator.clipboard.readText) {
+        return resolve(null);
+      }
+      navigator.clipboard.readText().then(function (text) {
+        text = String(text || '').trim();
+        if (text.length < 40) return resolve(null);
+        if (typeof FileImportService === 'undefined' || !FileImportService.parseTextAsync) {
+          return resolve(null);
+        }
+        return FileImportService.parseTextAsync(text).then(function (items) {
+          if (!items || items.length < 2) return resolve(null);
+          var payload = itemsToMirrorPayload(items, rootName, 'explorer-auto-copy');
+          if (!payload) return resolve(null);
+          var exp = getExplorerObjectCount() || 0;
+          if (exp > 0 && payload.items.length >= exp - 1) {
+            resolve(payload);
+            return;
+          }
+          if (!payload.mirrorQuality || !payload.mirrorQuality.ok) return resolve(null);
+          resolve(payload);
+        });
+      }).catch(function () {
+        resolve(null);
+      });
+    });
+  }
+
   function getExplorerSelectionCount() {
     pollDashboardExplorerChrome();
     var text = harvestExplorerTextOnly() || harvestAllExplorerText();
@@ -1708,6 +1878,7 @@ var ProductExplorerBridge = (function () {
     getExplorerSelectionCount: getExplorerSelectionCount,
     getExplorerObjectCount: getExplorerObjectCount,
     assessMirrorQuality: assessMirrorQuality,
-    assessDashboardMirrorQuality: assessDashboardMirrorQuality
+    assessDashboardMirrorQuality: assessDashboardMirrorQuality,
+    tryExplorerAutoCopyParse: tryExplorerAutoCopyParse
   };
 })();
