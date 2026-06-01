@@ -1,1 +1,1 @@
-window.__BOM_BUILD_ID__='bom20260604d';
+window.__BOM_BUILD_ID__='bom20260605b';

@@ -122,6 +122,10 @@ var ExplorerScanner = (function () {
   }
 
   function getExplorerRootSearchTerm() {
+    if (typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh) {
+      var ctx = ExplorerContext.refresh(true);
+      if (ctx && ctx.rootName) return ctx.rootName;
+    }
     var q = typeof APP_QUERY !== 'undefined' ? APP_QUERY : {};
     if (q.structure) return String(q.structure).trim();
     if (q.rootName) return String(q.rootName).trim();

@@ -574,10 +574,27 @@ var App = (function () {
 
   var autoScanTimer = null;
 
+  function applyOrchestratorResult(res, opts) {
+    opts = opts || {};
+    APP_CONFIG.DEMO_MODE = false;
+    var loader = (res && res.loaderMode) || (res && res.mode) || '';
+    APP_CONFIG.IMPORT_MODE = loader !== 'api';
+    if (res && res.meta) {
+      lastLoadedId = res.meta.rootPhysicalId;
+      if (opts.updateLabel !== false) {
+        var lbl = byId('selectionLabel');
+        if (lbl && res.meta.productName) lbl.textContent = res.meta.productName;
+      }
+    }
+    if (opts.updateClock) updateLastUpdateClock();
+    refreshUI();
+    if (opts.layoutFit && typeof LayoutFit !== 'undefined') LayoutFit.apply();
+  }
+
   function syncOpenExplorerStructure(force) {
     if (root.__3DX_BLOCK_AUTO_SYNC__) return;
     if (!force && (APP_CONFIG.AUTO_SYNC_EXPLORER_MS || 0) < 1) return;
-    if (typeof ExplorerScanner === 'undefined') return;
+    if (typeof BomOrchestrator === 'undefined' || !BomOrchestrator.refreshStructure) return;
 
     var useMirrorSync = APP_CONFIG.EXPLORER_MIRROR_AUTO_SYNC !== false && !APP_CONFIG.CAN_USE_ENOVIA_API;
     var useApiSync = APP_CONFIG.CAN_USE_ENOVIA_API;
@@ -590,16 +607,23 @@ var App = (function () {
       ProductExplorerBridge.pollStructureHint();
       ProductExplorerBridge.pollSelection();
     }
-    var hint = typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getStructureNameHint
-      ? ProductExplorerBridge.getStructureNameHint()
-      : null;
-    var sel = typeof ProductExplorerBridge !== 'undefined' ? ProductExplorerBridge.getSelection() : null;
-    var explorerCount = typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getExplorerObjectCount
-      ? ProductExplorerBridge.getExplorerObjectCount() || 0
-      : 0;
-    var key = hint || (sel && (sel.displayName || sel.name)) || '';
+    var ctx =
+      typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh
+        ? ExplorerContext.refresh(true)
+        : null;
+    var hint = ctx ? ctx.rootName : (
+      typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getStructureNameHint
+        ? ProductExplorerBridge.getStructureNameHint()
+        : null
+    );
+    var explorerCount = ctx ? ctx.expectedCount : (
+      typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getExplorerObjectCount
+        ? ProductExplorerBridge.getExplorerObjectCount() || 0
+        : 0
+    );
+    var key = hint || '';
     if (!key && !explorerCount) return;
-    var syncKey = (key || 'explorer') + '|' + explorerCount;
+    var syncKey = ctx ? ctx.syncKey : (key || 'explorer') + '|' + explorerCount;
     var label = byId('selectionLabel');
     if (label && key) label.textContent = key;
     if (!force && syncKey === lastSyncedStructure) return;
@@ -609,23 +633,13 @@ var App = (function () {
       lastSyncedStructure = syncKey;
       if (force) setLoading(true);
       if (force) setStatus('Espelhando Explorer' + (key ? ': ' + key : '') + '…', 'info');
-      var scanPromise;
-      if (useMirrorSync && ExplorerScanner.scanViaExplorerGrid) {
-        scanPromise = ExplorerScanner.scanViaExplorerGrid({ allowAutoCopy: !!force });
-      } else {
-        root.__3DX_ALLOW_API__ = true;
-        scanPromise = apiTimeout(
-          ExplorerScanner.scan(),
-          APP_CONFIG.SCAN_TIMEOUT_MS || 90000,
-          'Timeout ao carregar ' + (key || 'estrutura')
-        );
-      }
-      scanPromise
+      BomOrchestrator.refreshStructure({
+        source: force ? 'manual' : 'auto',
+        allowAutoCopy: !!force,
+        preferApi: useApiSync
+      })
         .then(function (res) {
-          APP_CONFIG.DEMO_MODE = false;
-          APP_CONFIG.IMPORT_MODE = res.mode !== 'api';
-          if (res.meta) lastLoadedId = res.meta.rootPhysicalId;
-          refreshUI();
+          applyOrchestratorResult(res);
           setStatus(res.message || ('Espelho: ' + (key || 'Explorer') + ' — ' + BomService.getNodeCount() + ' itens'), 'ok');
         })
         .catch(function (err) {
@@ -638,7 +652,6 @@ var App = (function () {
           });
         })
         .finally(function () {
-          root.__3DX_ALLOW_API__ = false;
           if (force) setLoading(false);
         });
     }, APP_CONFIG.STRUCTURE_SYNC_DEBOUNCE_MS || 1800);
@@ -737,7 +750,7 @@ var App = (function () {
   }
 
   function runImportFromClipboard(btnEl) {
-    if (typeof ExplorerScanner === 'undefined') {
+    if (typeof BomOrchestrator === 'undefined' || !BomOrchestrator.refreshStructure) {
       setStatus('Importação indisponível.', 'error');
       return;
     }
@@ -748,22 +761,9 @@ var App = (function () {
       btnEl.disabled = true;
       btnEl.textContent = 'Atualizando…';
     }
-    var scanChain =
-      ExplorerScanner.scanViaExplorerGrid
-        ? ExplorerScanner.scanViaExplorerGrid({ allowAutoCopy: true })
-        : ExplorerScanner.scanViaImportBestEffort();
-    scanChain
+    BomOrchestrator.refreshStructure({ source: 'manual', allowAutoCopy: true })
       .then(function (res) {
-        APP_CONFIG.IMPORT_MODE = true;
-        APP_CONFIG.DEMO_MODE = false;
-        if (res.meta) {
-          lastLoadedId = res.meta.rootPhysicalId;
-          var lbl = byId('selectionLabel');
-          if (lbl) lbl.textContent = res.meta.productName || lbl.textContent;
-        }
-        updateLastUpdateClock();
-        refreshUI();
-        if (typeof LayoutFit !== 'undefined') LayoutFit.apply();
+        applyOrchestratorResult(res, { updateClock: true, layoutFit: true });
         setStatus(res.message || 'Importação concluída.', 'ok');
       })
       .catch(function (err) {
@@ -1055,6 +1055,9 @@ var App = (function () {
       } catch (e) { /* */ }
     }
     ProductExplorerBridge.init();
+    if (typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh) {
+      ExplorerContext.refresh(true);
+    }
     ProductExplorerBridge.subscribe(onSelection);
     if (ProductExplorerBridge.subscribeStructure) {
       ProductExplorerBridge.subscribeStructure(function (name) {

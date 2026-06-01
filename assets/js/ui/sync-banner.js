@@ -16,6 +16,10 @@ var SyncBanner = (function () {
   }
 
   function parseExplorerCount() {
+    if (typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh) {
+      var ctx = ExplorerContext.refresh(true);
+      if (ctx && ctx.expectedCount > 0) return ctx.expectedCount;
+    }
     if (typeof ProductExplorerBridge === 'undefined') return null;
     if (ProductExplorerBridge.pollDashboardExplorerChrome) {
       ProductExplorerBridge.pollDashboardExplorerChrome();
