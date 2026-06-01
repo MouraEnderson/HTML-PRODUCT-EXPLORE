@@ -1233,8 +1233,8 @@ body.ui-clean .main-clean {
 .bom-topbar-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 6px;
+  flex-wrap: nowrap;
   flex-shrink: 0;
 }
 
@@ -2046,16 +2046,37 @@ body.ui-clean .main-clean {
 }
 
 .bom-widget-narrow .bom-topbar {
-  padding: 8px 10px;
+  padding: 4px 6px;
+  flex-wrap: nowrap;
+}
+
+.bom-widget-narrow .bom-topbar-left {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bom-widget-narrow .bom-topbar-actions {
+  flex-wrap: nowrap;
+  flex-shrink: 0;
 }
 
 .bom-widget-narrow .bom-topbar-brand {
-  font-size: 0.9rem;
+  font-size: 0.82rem;
+}
+
+.bom-widget-narrow .bom-topbar-product {
+  max-width: 100px;
+  font-size: 0.78rem;
+}
+
+.bom-widget-narrow .bom-topbar-clock,
+.bom-widget-narrow .bom-topbar-more {
+  display: none;
 }
 
 .bom-widget-narrow .bom-btn-primary {
-  padding: 8px 12px;
-  font-size: 0.88rem;
+  padding: 6px 10px;
+  font-size: 0.8rem;
 }
 
 /* Modo compacto — widget 3DDashboard (P0/P2 layout) */
@@ -2247,10 +2268,11 @@ body.ui-clean .main-clean {
   font-weight: 600;
 }
 
-/* —— Layout 5 zonas (spec usuário) —— */
-.bom-layout-five {
-  display: flex;
-  flex-direction: column;
+/* —— Layout 5 zonas: grid 10 col (mid 50/50, bot 60/40) —— */
+.bom-layout-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  grid-template-rows: 34% 1fr;
   flex: 1 1 auto;
   min-height: 0;
   gap: 6px;
@@ -2259,34 +2281,24 @@ body.ui-clean .main-clean {
   background: var(--bom-bg);
 }
 
-.bom-zone-row {
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  gap: 6px;
-  min-height: 0;
-  min-width: 0;
+.bom-zone-2 {
+  grid-column: 1 / 6;
+  grid-row: 1;
 }
 
-.bom-zone-mid .bom-zone-2,
-.bom-zone-mid .bom-zone-3 {
-  flex: 1 1 50%;
-  width: 50%;
-  max-width: 50%;
+.bom-zone-3 {
+  grid-column: 6 / 11;
+  grid-row: 1;
 }
 
-.bom-zone-bot .bom-zone-4 {
-  flex: 3 1 0;
-  min-width: 0;
-  width: 60%;
-  max-width: 60%;
+.bom-zone-4 {
+  grid-column: 1 / 7;
+  grid-row: 2;
 }
 
-.bom-zone-bot .bom-zone-5 {
-  flex: 2 1 0;
-  min-width: 0;
-  width: 40%;
-  max-width: 40%;
+.bom-zone-5 {
+  grid-column: 7 / 11;
+  grid-row: 2;
 }
 
 .bom-quad {
@@ -2432,30 +2444,23 @@ body.ui-clean .main-clean {
   font-size: 0.82rem;
 }
 
-.bom-widget-narrow .bom-layout-five {
+.bom-widget-narrow .bom-layout-grid {
   gap: 4px;
   padding: 0 4px 4px;
 }
 
-.bom-widget-narrow .bom-zone-mid,
-.bom-widget-narrow .bom-zone-bot {
-  flex-direction: column;
+.bom-widget-narrow .stat-markers-quad {
+  grid-template-columns: repeat(2, 1fr) !important;
 }
 
-.bom-widget-narrow .bom-zone-mid .bom-zone-2,
-.bom-widget-narrow .bom-zone-mid .bom-zone-3,
-.bom-widget-narrow .bom-zone-bot .bom-zone-4,
-.bom-widget-narrow .bom-zone-bot .bom-zone-5 {
-  width: 100%;
-  max-width: 100%;
-  flex: 0 0 auto;
+.bom-widget-narrow .bom-filter-bar-quad {
+  flex-wrap: wrap;
 }
 
-.bom-widget-narrow .bom-zone-mid {
-  max-height: 38vh;
+.bom-widget-narrow .bom-filter-item span {
+  display: none;
 }
 
-.bom-widget-narrow .bom-zone-bot .bom-zone-5 {
-  min-height: 100px;
-  max-height: 28vh;
+.bom-widget-narrow .bom-charts-row-quad .owners-legend-scroll {
+  display: none;
 }

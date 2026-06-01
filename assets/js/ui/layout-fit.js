@@ -1,6 +1,6 @@
 /**
  * @file ui/layout-fit.js
- * Layout 5 zonas: ① header · ②③ meio 50/50 · ④⑤ baixo 62/38.
+ * Grid 5 zonas: ① header · ②③ linha meio 50/50 · ④⑤ linha baixo 60/40.
  */
 var LayoutFit = (function () {
   'use strict';
@@ -8,7 +8,7 @@ var LayoutFit = (function () {
   var bound = false;
   var NARROW_W = 620;
   var COMPACT_H = 780;
-  var MID_ROW_RATIO = 0.34;
+  var MID_ROW_RATIO = 0.32;
 
   function hostEl() {
     return window.__3DX_UI_ROOT__ || document.body;
@@ -30,34 +30,24 @@ var LayoutFit = (function () {
     host.classList.toggle('bom-widget-short', vp.h < 520);
   }
 
-  function applyFiveZone(host, vp) {
-    var main = host.querySelector('.bom-layout-five');
-    var mid = host.querySelector('.bom-zone-mid');
-    var bot = host.querySelector('.bom-zone-bot');
-    if (!main || !mid || !bot) return;
+  function applyGrid(host, vp) {
+    var grid = host.querySelector('.bom-layout-grid');
+    if (!grid) return;
 
     var hostBox = host.getBoundingClientRect();
     var viewportBottom = hostBox.top + vp.h;
-    var top = main.getBoundingClientRect().top;
-    var avail = Math.max(180, Math.floor(viewportBottom - top - 4));
+    var top = grid.getBoundingClientRect().top;
+    var avail = Math.max(160, Math.floor(viewportBottom - top - 4));
 
-    main.style.flex = '1 1 auto';
-    main.style.minHeight = '0';
-    main.style.height = avail + 'px';
-    main.style.maxHeight = avail + 'px';
-    main.style.overflow = 'hidden';
+    grid.style.flex = '1 1 auto';
+    grid.style.minHeight = '0';
+    grid.style.height = avail + 'px';
+    grid.style.maxHeight = avail + 'px';
+    grid.style.overflow = 'hidden';
 
-    var midH = Math.max(110, Math.min(Math.floor(avail * MID_ROW_RATIO), 200));
-    var botH = Math.max(120, avail - midH - 6);
-
-    mid.style.flex = '0 0 ' + midH + 'px';
-    mid.style.height = midH + 'px';
-    mid.style.maxHeight = midH + 'px';
-
-    bot.style.flex = '1 1 auto';
-    bot.style.height = botH + 'px';
-    bot.style.maxHeight = botH + 'px';
-    bot.style.minHeight = botH + 'px';
+    var midH = Math.max(96, Math.min(Math.floor(avail * MID_ROW_RATIO), 180));
+    var botH = Math.max(100, avail - midH - 6);
+    grid.style.gridTemplateRows = midH + 'px ' + botH + 'px';
 
     applyEbom(host, botH);
     applyView3d(host, botH);
@@ -72,12 +62,12 @@ var LayoutFit = (function () {
 
     var head = block.querySelector('.bom-ebom-head');
     var headH = head ? head.offsetHeight : 0;
-    var listH = Math.max(72, rowH - headH - 10);
+    var listH = Math.max(64, rowH - headH - 8);
     list.style.height = listH + 'px';
     list.style.maxHeight = listH + 'px';
 
-    var pagerH = pager ? pager.offsetHeight : 26;
-    var tableH = Math.max(56, listH - pagerH);
+    var pagerH = pager ? pager.offsetHeight : 24;
+    var tableH = Math.max(48, listH - pagerH);
     tableWrap.style.height = tableH + 'px';
     tableWrap.style.maxHeight = tableH + 'px';
   }
@@ -86,11 +76,11 @@ var LayoutFit = (function () {
     var body = host.querySelector('.bom-zone-5 .bom-preview-body');
     var image = host.querySelector('.bom-zone-5 .bom-preview-image');
     if (!body) return;
-    var bodyH = Math.max(80, rowH - 8);
+    var bodyH = Math.max(72, rowH - 6);
     body.style.height = bodyH + 'px';
     body.style.maxHeight = bodyH + 'px';
     if (image) {
-      var imgH = Math.max(64, bodyH - 72);
+      var imgH = Math.max(48, bodyH - 64);
       image.style.minHeight = imgH + 'px';
       image.style.maxHeight = imgH + 'px';
     }
@@ -117,8 +107,17 @@ var LayoutFit = (function () {
       root.style.overflow = 'hidden';
     }
 
+    var main = host.querySelector('.bom-main');
+    if (main) {
+      main.style.flex = '1 1 auto';
+      main.style.minHeight = '0';
+      main.style.overflow = 'hidden';
+      main.style.display = 'flex';
+      main.style.flexDirection = 'column';
+    }
+
     applyMode(host, vp);
-    applyFiveZone(host, vp);
+    applyGrid(host, vp);
 
     if (typeof ChartsManager !== 'undefined' && ChartsManager.scheduleResize) {
       ChartsManager.scheduleResize();

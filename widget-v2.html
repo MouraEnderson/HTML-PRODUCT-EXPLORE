@@ -14,7 +14,7 @@
     window.__3DX_TRUSTED_WIDGET__ = true;
     window.__3DX_BOOT_DEFER__ = true;
 
-    var BOM_BUILD = 'bom20260603f';
+    var BOM_BUILD = 'bom20260603g';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
     var BUNDLE;
 
@@ -70,9 +70,8 @@
       '<textarea id="pasteArea" class="bom-paste" placeholder="Colar grade Explorer (Ctrl+V)"></textarea>' +
       '</details>' +
       '</div></header>' +
-      '<main class="bom-main bom-layout-five">' +
-      '<div class="bom-zone-row bom-zone-mid">' +
-      '<section class="bom-quad bom-quad-filters bom-zone-2" aria-label="Filtros e estatísticas">' +
+      '<main class="bom-main bom-layout-grid">' +
+      '<section class="bom-quad bom-zone-2" aria-label="Filtros e estatísticas">' +
       '<div id="syncBanner" class="bom-sync-banner bom-sync-inline bom-sync-info">' +
       'Abra a estrutura no Explorer e clique <strong>Atualizar estrutura</strong>.</div>' +
       '<div class="bom-filter-bar bom-filter-bar-quad">' +
@@ -91,7 +90,7 @@
       '<section id="kpiGrid" class="stat-markers-row stat-markers-compact stat-markers-quad" aria-label="Estatísticas"></section>' +
       '<div id="statusBar" class="bom-st bom-st-inline bom-st-quad">Carregando…</div>' +
       '</section>' +
-      '<section class="bom-quad bom-quad-charts bom-zone-3" id="chartsSection" aria-label="Gráficos">' +
+      '<section class="bom-quad bom-zone-3" id="chartsSection" aria-label="Gráficos">' +
       '<section class="bom-charts-row bom-charts-row-quad">' +
       '<div class="bom-chart-panel"><canvas id="chartMaturity"></canvas></div>' +
       '<div class="bom-chart-panel bom-chart-owners">' +
@@ -100,9 +99,8 @@
       '<canvas id="chartType" class="bom-hidden"></canvas>' +
       '<canvas id="chartRevision" class="bom-hidden"></canvas>' +
       '<canvas id="chartApproval" class="bom-hidden"></canvas>' +
-      '</section></section></div>' +
-      '<div class="bom-zone-row bom-zone-bot">' +
-      '<section class="bom-quad bom-quad-ebom bom-zone-4" aria-label="E-BOM">' +
+      '</section></section>' +
+      '<section class="bom-quad bom-zone-4" aria-label="E-BOM">' +
       '<section class="bom-ebom-block bom-ebom-block-quad">' +
       '<div class="bom-ebom-head">' +
       '<h2>E-BOM — <span id="tableProductLabel" title="-">-</span></h2>' +
@@ -114,14 +112,14 @@
       '</div>' +
       '<footer id="tablePager" class="bom-table-pager">0 peças</footer>' +
       '</div></section></section>' +
-      '<section class="bom-quad bom-quad-view3d bom-zone-5" aria-label="Visualização 3D">' +
+      '<section class="bom-quad bom-zone-5" aria-label="Visualização 3D">' +
       '<div class="bom-part-preview bom-preview-quad" id="partPreviewPanel">' +
       '<div class="bom-preview-body">' +
       '<p class="bom-preview-hint">Clique numa linha da E-BOM</p>' +
       '<div id="partPreviewImage" class="bom-preview-image">' +
       '<span class="bom-preview-placeholder">Preview 2D · 3DPlay em breve</span></div>' +
       '<div id="partPreviewMeta" class="bom-preview-meta"></div>' +
-      '</div></div></section></div></main>' +
+      '</div></div></section></main>' +
       '<button type="button" id="btnScanExplorer" class="bom-hidden">Varrer</button>' +
       '<div id="loadingOverlay" class="bom-loading bom-hidden">Processando…</div>' +
       '<span class="bom-build-tag bom-hidden" id="buildTag">' + BOM_BUILD + '</span>' +
