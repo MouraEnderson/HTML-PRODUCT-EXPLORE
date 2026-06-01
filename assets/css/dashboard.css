@@ -1162,6 +1162,10 @@ body.ui-clean .main-clean {
   z-index: 100;
 }
 
+.bom-loading.bom-hidden {
+  display: none !important;
+}
+
 /* —— Layout referência (sidebar + marcadores + filtros) —— */
 .bom-layout-ref {
   display: flex;
@@ -2365,7 +2369,7 @@ body.ui-clean .main-clean {
 
 .bom-zone-2 {
   grid-column: 1 / 6;
-  grid-row: 1;
+  grid-row: 2 !important;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2376,23 +2380,28 @@ body.ui-clean .main-clean {
   min-height: 0;
   max-height: 100%;
   overflow-x: hidden;
-  overflow-y: scroll;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 
 .bom-zone-3 {
   grid-column: 6 / 11;
-  grid-row: 1;
+  grid-row: 2 !important;
 }
 
 .bom-zone-4 {
   grid-column: 1 / 7;
-  grid-row: 2;
+  grid-row: 3 !important;
 }
 
 .bom-zone-5 {
   grid-column: 7 / 11;
-  grid-row: 2;
+  grid-row: 3 !important;
+}
+
+.bom-layout-page > .bom-zone-1 {
+  grid-row: 1 !important;
+  grid-column: 1 / -1;
 }
 
 .bom-quad {
@@ -2531,38 +2540,38 @@ body.ui-clean .main-clean {
   border: none !important;
   background: transparent !important;
   box-shadow: none !important;
-  overflow: hidden !important;
-  display: grid !important;
-  grid-template-rows: auto 112px auto !important;
-  gap: 3px !important;
-  align-content: start !important;
+  overflow: visible !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
 }
 
 .bom-chart-heading {
-  margin: 0;
+  margin: 0 0 3px;
   padding: 0 2px;
   font-size: 0.78rem;
   font-weight: 600;
   color: var(--bom-text, #263238);
   line-height: 1.2;
   text-align: center;
+  flex: 0 0 auto;
 }
 
 .bom-chart-canvas-box {
   width: 100%;
-  height: 112px;
-  min-height: 112px;
-  max-height: 112px;
+  height: 110px;
+  min-height: 110px;
+  max-height: 110px;
   position: relative;
+  flex: 0 0 110px;
   overflow: hidden;
 }
 
-.bom-zone-3 .bom-chart-canvas-box canvas,
-.bom-zone-3 .bom-chart-canvas-box > div {
+.bom-zone-3 .bom-chart-canvas-box canvas {
   display: block !important;
   width: 100% !important;
-  height: 112px !important;
-  max-height: 112px !important;
+  height: 100% !important;
+  max-height: 110px !important;
 }
 
 .bom-zone-3 .bom-chart-legend-list {

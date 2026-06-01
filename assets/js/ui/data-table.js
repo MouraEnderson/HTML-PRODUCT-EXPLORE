@@ -26,6 +26,12 @@ var DataTable = (function () {
     return APP_CONFIG.PRODUCT_EXPLORER_COLUMNS || [];
   }
 
+  function uiContains(el) {
+    if (!el) return false;
+    var root = uiRoot();
+    return root === el || (root.contains && root.contains(el));
+  }
+
   function init(tableSelector) {
     columns = getColumns();
     tableEl = uiRoot().querySelector(tableSelector);
@@ -73,12 +79,12 @@ var DataTable = (function () {
   }
 
   function bindRowClicks() {
-    if (!tbody) return;
-    if (tbody.__3DX_ROW_BOUND__) return;
-    tbody.__3DX_ROW_BOUND__ = true;
-    tbody.addEventListener('click', function (ev) {
+    if (!tableEl) return;
+    if (tableEl.__3DX_ROW_BOUND__) return;
+    tableEl.__3DX_ROW_BOUND__ = true;
+    tableEl.addEventListener('click', function (ev) {
       var tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-row-index]') : null;
-      if (!tr) return;
+      if (!tr || !tbody || !tbody.contains(tr)) return;
       var idx = parseInt(tr.getAttribute('data-row-index'), 10);
       if (isNaN(idx)) return;
       selectRow(idx, false);
@@ -131,7 +137,7 @@ var DataTable = (function () {
 
   function setData(nodes) {
     data = nodes || [];
-    if (!tbody || !tableEl || !document.body.contains(tableEl)) {
+    if (!tbody || !tableEl || !uiContains(tableEl)) {
       init('#bomTable');
     }
     if (selectedIndex >= data.length) selectedIndex = -1;

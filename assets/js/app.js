@@ -31,7 +31,7 @@ var App = (function () {
   function setLoading(on) {
     loading = on;
     var overlay = byId('loadingOverlay');
-    if (overlay) overlay.classList.toggle('hidden', !on);
+    if (overlay) overlay.classList.toggle('bom-hidden', !on);
   }
 
   /** URL ou registro pede produto real (Mont10 etc.) — nunca substituir por demo Drone. */
@@ -1491,7 +1491,7 @@ var App = (function () {
   function forceStopLoading() {
     setLoading(false);
     var ov = byId('loadingOverlay');
-    if (ov) ov.classList.add('hidden');
+    if (ov) ov.classList.add('bom-hidden');
   }
 
   return {
