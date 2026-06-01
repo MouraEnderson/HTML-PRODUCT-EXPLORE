@@ -73,6 +73,9 @@ var BomService = (function () {
       member['dspfl:Part'] ||
       member['dspfl:Instance'] ||
       member;
+    if (ref === member && member['dseng:EngItem'] && typeof member['dseng:EngItem'] === 'object') {
+      ref = member['dseng:EngItem'];
+    }
     var attrs = AttributeService.extractFromMember(ref);
     var qty = member.quantity || member['dseng:quantity'] || member.qty || 1;
     attrs.quantity = qty;
@@ -113,10 +116,10 @@ var BomService = (function () {
       });
     }
 
-    return fetchPage(false).catch(function () {
+    return fetchPage(EnoviaApi.preferEngBomApi()).catch(function () {
       skip = 0;
       allChildren = [];
-      return fetchPage(true);
+      return fetchPage(!EnoviaApi.preferEngBomApi());
     }).catch(function () {
       if (index[parentId]) index[parentId].loaded = true;
       return [];
@@ -340,11 +343,12 @@ var BomService = (function () {
         rootId = physicalId;
         var member = res.member || res;
         var attrs = AttributeService.extractFromMember(Array.isArray(member) ? member[0] : member);
+        if (res.bomRootId) attrs.physicalid = res.bomRootId;
         if (!attrs.physicalid) attrs.physicalid = physicalId;
         attrs.hasPhysicalProduct = true;
         attrs.displayType = attrs.displayType || 'Physical Product';
         addNode(attrs, null, 0, 1);
-        var bomParentId = attrs.physicalid || physicalId;
+        var bomParentId = attrs.physicalid;
         rootId = bomParentId;
         index[bomParentId].loaded = false;
         report('root');
@@ -388,12 +392,13 @@ var BomService = (function () {
       .then(function (res) {
         var member = res.member || res;
         var attrs = AttributeService.extractFromMember(Array.isArray(member) ? member[0] : member);
+        if (res.bomRootId) attrs.physicalid = res.bomRootId;
         if (!attrs.physicalid) attrs.physicalid = physicalId;
         attrs.hasPhysicalProduct = true;
         attrs.displayType = attrs.displayType || 'Physical Product';
         addNode(attrs, null, 0, 1);
         index[attrs.physicalid].loaded = false;
-        var bomParentId = attrs.physicalid || physicalId;
+        var bomParentId = attrs.physicalid;
         var depth =
           APP_CONFIG.PILOT_API_TREE_DEPTH ||
           APP_CONFIG.BOM_FAST_DEPTH ||

@@ -8,9 +8,11 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260605j',
+    BUILD: 'bom20260605k',
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
     API_PREFER_ABOVE: 20,
+    /** Cloud FD02: dseng EngItem/EngInstance antes de dspfl/boM (evita 406) */
+    API_ENG_BOM_FIRST: true,
     /** 3DDashboard: nÃƒÂ£o espera probe CSRF (evita travar em "ConectandoÃ¢â‚¬Â¦") */
     SKIP_SPACE_PROBE: true,
     WAF_REQUEST_TIMEOUT_MS: 15000,
@@ -21,7 +23,7 @@
     PILOT_GRID_FIRST: true,
     /** Bloqueia REST /enovia atÃƒÂ© Varrer (ou ?api=1 / ID manual) */
     PILOT_BLOCK_API_UNLESS_ALLOWED: true,
-    /** Tenant cloud: nÃƒÂ£o usar dseng:EngItem nem host *-space no 3DDashboard */
+    /** Tenant cloud: objetos usam prefixo prd-; BOM via dseng quando API_ENG_BOM_FIRST */
     CLOUD_PHYSICAL_ONLY: true,
     /** Fallback offline sÃƒÂ³ com ?snapshot= na URL */
     DEFAULT_SNAPSHOT_PATH: 'data/mont10.json',

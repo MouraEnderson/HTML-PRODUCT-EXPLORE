@@ -77,8 +77,18 @@ var EnoviaApi = (function () {
     top = top || APP_CONFIG.BOM_LAZY_BATCH_SIZE;
     var m = APP_CONFIG.MODELERS;
     return (
-      restBase + '/' + m.ENG_ITEM + '/' + encodeURIComponent(apiId(parentPhysicalId)) +
+      restBase + '/' + m.ENG_ITEM + '/' + m.ENG_ITEM_TYPE + '/' + encodeURIComponent(apiId(parentPhysicalId)) +
       '/dseng:EngInstance?$skip=' + skip + '&$top=' + top
+    );
+  }
+
+  function engItemSearchUrl(term, top) {
+    ensureRestBase();
+    top = top || (APP_CONFIG.SEARCH && APP_CONFIG.SEARCH.TOP) || 40;
+    var m = APP_CONFIG.MODELERS;
+    return (
+      restBase + '/' + m.ENG_ITEM + '/' + m.ENG_ITEM_TYPE + '/search?searchStr=' +
+      encodeURIComponent(term) + '&$top=' + top
     );
   }
 
@@ -127,11 +137,11 @@ var EnoviaApi = (function () {
     var member = res.member || res;
     if (Array.isArray(member)) member = member[0];
     if (!member) return null;
-    var eng = member['dseng:engItem'] || member.reference;
+    var eng = member['dseng:engItem'] || member['dseng:EngItem'] || member.reference;
     if (eng && typeof eng === 'object') {
       return eng.physicalid || eng.id || null;
     }
-    return member.physicalid || null;
+    return member.physicalid || member.id || null;
   }
 
   function candidateRootIds(physicalId) {
@@ -153,19 +163,55 @@ var EnoviaApi = (function () {
     return list;
   }
 
-  /** Cloud: Physical Product / VPM — tenta prd- e hex; sem EngItem. */
+  function preferEngBomApi() {
+    return APP_CONFIG.API_ENG_BOM_FIRST !== false;
+  }
+
+  /** Cloud FD02 — dseng EngItem primeiro; Physical Product só para resolver bomRootId. */
   function getProductRoot(physicalId, expand) {
     var ids = candidateRootIds(physicalId);
-    function tryId(i) {
+
+    function pack(res, bomRootId) {
+      return { member: res.member || res, bomRootId: bomRootId || null };
+    }
+
+    function tryEng(i) {
+      if (i >= ids.length) return tryPrd(0);
+      var id = ids[i];
+      return getEngItem(id, expand)
+        .then(function (res) {
+          return pack(res, id);
+        })
+        .catch(function () {
+          return tryEng(i + 1);
+        });
+    }
+
+    function tryPrd(i) {
       if (i >= ids.length) {
-        return Promise.reject(new Error('Physical Product não encontrado para ' + physicalId));
+        return Promise.reject(new Error('Raiz não encontrada para ' + physicalId));
       }
       var id = ids[i];
       return getPhysicalProduct(id, null)
-        .catch(function () { return getVpmReference(id, null); })
-        .catch(function () { return tryId(i + 1); });
+        .then(function (res) {
+          var engId = extractEngItemIdFromResponse(res) || id;
+          return pack(res, engId);
+        })
+        .catch(function () {
+          return getVpmReference(id, null)
+            .then(function (res) {
+              return pack(res, id);
+            })
+            .catch(function () {
+              return tryPrd(i + 1);
+            });
+        });
     }
-    return tryId(0);
+
+    if (preferEngBomApi()) return tryEng(0);
+    return tryPrd(0).catch(function () {
+      return tryEng(0);
+    });
   }
 
   function getPhysicalProductChildren(parentPhysicalId, skip, top) {
@@ -230,6 +276,7 @@ var EnoviaApi = (function () {
     getPhysicalProduct: getPhysicalProduct,
     getProductRoot: getProductRoot,
     extractEngItemIdFromResponse: extractEngItemIdFromResponse,
+    preferEngBomApi: preferEngBomApi,
     getEngItemBomExpand: getEngItemBomExpand,
     getEngInstanceChildren: getEngInstanceChildren,
     getPhysicalProductChildren: getPhysicalProductChildren,

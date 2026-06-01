@@ -70,9 +70,14 @@ var WafClient = (function () {
         url = url.replace(sh, ih);
       }
     }
-    if (APP_CONFIG.CLOUD_PHYSICAL_ONLY && /\/dseng\/dseng:EngItem\//i.test(url)) {
+    if (
+      APP_CONFIG.CLOUD_PHYSICAL_ONLY &&
+      APP_CONFIG.API_ENG_BOM_FIRST === false &&
+      /\/dseng\/dseng:EngItem\//i.test(url)
+    ) {
       throw new Error(
-        'EngItem bloqueado (tenant cloud). Atualize o bundle: ' + (APP_CONFIG.BUILD || 'bom20260602e')
+        'EngItem bloqueado (tenant cloud). Ative API_ENG_BOM_FIRST ou atualize o bundle: ' +
+          (APP_CONFIG.BUILD || 'bom20260605k')
       );
     }
     return url;
