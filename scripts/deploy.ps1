@@ -64,6 +64,8 @@ try {
 
   git add assets/js/config.js assets/js/build-id.js assets/js/bom-bundle.js `
     assets/js/bom-bundle-$build.js widget-v2.html `
+    assets/js/integration/product-explorer-bridge.js `
+    assets/js/services/explorer-scanner.js `
     assets/js/services/file-import-service.js assets/js/services/bom-service.js `
     assets/js/ui/sync-banner.js assets/js/app.js 2>$null
 

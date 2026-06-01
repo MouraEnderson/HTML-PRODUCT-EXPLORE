@@ -20,22 +20,13 @@ var SyncBanner = (function () {
     if (ProductExplorerBridge.pollDashboardExplorerChrome) {
       ProductExplorerBridge.pollDashboardExplorerChrome();
     }
+    if (ProductExplorerBridge.getExplorerObjectCount) {
+      var objN = ProductExplorerBridge.getExplorerObjectCount();
+      if (objN > 0) return objN;
+    }
     if (ProductExplorerBridge.getExplorerSelectionCount) {
       var n = ProductExplorerBridge.getExplorerSelectionCount();
       if (n > 0) return n;
-    }
-    var text =
-      ProductExplorerBridge.harvestAllExplorerText
-        ? ProductExplorerBridge.harvestAllExplorerText()
-        : '';
-    var m = String(text).match(/(\d+)\s*(?:de|of)\s*(\d+)\s*(?:selecionado|selected)/i);
-    if (m) return parseInt(m[2], 10) || parseInt(m[1], 10);
-    if (ProductExplorerBridge.scrapeExplorerGrid) {
-      var hint =
-        ProductExplorerBridge.getStructureNameHint &&
-        ProductExplorerBridge.getStructureNameHint();
-      var payload = ProductExplorerBridge.scrapeExplorerGrid(hint);
-      if (payload && payload.items && payload.items.length) return payload.items.length;
     }
     return null;
   }

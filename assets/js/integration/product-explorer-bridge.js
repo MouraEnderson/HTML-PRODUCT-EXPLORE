@@ -142,6 +142,49 @@ var ProductExplorerBridge = (function () {
     return chunks.join('\n');
   }
 
+  /** Só texto do iframe Explorer — evita ingerir BOM Analytics / filtros / gráficos. */
+  function harvestExplorerTextOnly() {
+    var doc = readExplorerIframeDocument();
+    if (doc && doc.body) {
+      try {
+        return String(doc.body.innerText || doc.body.textContent || '').trim();
+      } catch (e0) { /* */ }
+    }
+    return harvestExplorerWidgetTextFromDashboard();
+  }
+
+  /** Recorta painel do widget Product Structure Explorer no dashboard (sem iframe). */
+  function harvestExplorerWidgetTextFromDashboard() {
+    try {
+      var doc = window.top && window.top.document;
+      if (!doc || !doc.body) return '';
+      var nodes = doc.querySelectorAll(
+        'div, section, article, [class*="widget"], [class*="Widget"], [class*="dashboard-tab"]'
+      );
+      var i;
+      var best = '';
+      var bestScore = 0;
+      for (i = 0; i < nodes.length; i++) {
+        var el = nodes[i];
+        var t = String(el.innerText || el.textContent || '').trim();
+        if (t.length < 40 || t.length > 120000) continue;
+        if (t.indexOf('Product Structure Explorer') < 0 && t.indexOf('Structure Explorer') < 0) continue;
+        if (t.indexOf('BOM Analytics') >= 0) continue;
+        var score = 0;
+        if (/t[ií]tulo/i.test(t)) score += 3;
+        if (/propriet/i.test(t)) score += 2;
+        if (/revis/i.test(t)) score += 1;
+        if (/\d+\s*objetos?\b/i.test(t)) score += 2;
+        if (score > bestScore) {
+          bestScore = score;
+          best = t;
+        }
+      }
+      return best;
+    } catch (e) { /* */ }
+    return '';
+  }
+
   function readExplorerIframeDocument() {
     var docs = [];
     try {
@@ -672,6 +715,105 @@ var ProductExplorerBridge = (function () {
     return { name: 0, title: 1, revision: 2, owner: 3, type: 4, maturity: 5 };
   }
 
+  function isMirrorUiNoise(s) {
+    s = String(s || '').trim();
+    if (!s) return true;
+    if (EXPLORER_SKIP_LINE.test(s)) return true;
+    if (/^\d+\s*objetos?\b/i.test(s)) return true;
+    if (/^\d+\s*objects?\b/i.test(s)) return true;
+    if (/^nenhum item selecionado$/i.test(s)) return true;
+    if (/^loading\.{0,3}$/i.test(s)) return true;
+    if (/^(aprovado|em\s*trabalh|released|frozen|in\s*work|obsolete)$/i.test(s)) return true;
+    if (/^physical\s*product$/i.test(s)) return true;
+    if (/^(t[ií]tulo|descri|revis|propriet|tipo|estado|maturidade|status)$/i.test(s)) return true;
+    if (/^(todos|filtrar|pesquisar|search|filter)$/i.test(s)) return true;
+    if (/^mont\d+\s*-\s*montagem$/i.test(s)) return false;
+    return false;
+  }
+
+  function isValidMirrorPartName(name) {
+    name = String(name || '').trim();
+    if (!name || name.length < 2 || name.length > 120) return false;
+    if (isMirrorUiNoise(name)) return false;
+    if (isPersonName(name)) return false;
+    if (/^\d+[.,]\d+$/.test(name)) return false;
+    if (partNameFromText(name)) return true;
+    if (/^(Mont\d+[A-Za-z0-9_.\-]*|01_SKA_|SKA_)/i.test(name)) return true;
+    if (/^[A-Za-z0-9][A-Za-z0-9_.\-\/]{2,}$/.test(name) && /[A-Za-z]/.test(name) && /\d/.test(name)) return true;
+    if (/^Mont\d+$/i.test(name)) return true;
+    return false;
+  }
+
+  function isValidMirrorRevision(rev) {
+    rev = String(rev || '').trim();
+    if (!rev || rev === '—' || rev === '-') return true;
+    if (isPersonName(rev)) return false;
+    if (/^(aprovado|em\s*trabalh|physical\s*product)$/i.test(rev)) return false;
+    return /^\d+[.,]\d+[A-Za-z]?$/.test(rev) || /^[A-Z]\d+$/i.test(rev) || /^Rev\.?\s*\d/i.test(rev);
+  }
+
+  function isValidMirrorType(type) {
+    type = String(type || '').trim();
+    if (!type) return true;
+    if (isPersonName(type)) return false;
+    if (/^(aprovado|em\s*trabalh|\d+[.,]\d+)$/i.test(type)) return false;
+    return /product|assembly|part|component|reference|montagem|peça|parte/i.test(type);
+  }
+
+  function isValidMirrorMaturity(mat) {
+    mat = String(mat || '').trim();
+    if (!mat || mat === '—' || mat === '-') return true;
+    if (/^physical\s*product$/i.test(mat)) return false;
+    if (isPersonName(mat)) return false;
+    return /aprovado|trabalh|released|frozen|work|obsolete|draft|rascunho|review|matur|estado/i.test(mat);
+  }
+
+  function validateMirrorItem(item) {
+    if (!item || !item.name) return false;
+    if (!isValidMirrorPartName(item.name)) return false;
+    if (!isValidMirrorRevision(item.revision)) return false;
+    if (!isValidMirrorType(item.type)) return false;
+    if (!isValidMirrorMaturity(item.maturity)) return false;
+    if (item.owner && !isPersonName(item.owner)) return false;
+    if (isPersonName(item.title) && item.title !== item.name) return false;
+    return true;
+  }
+
+  function mirrorItemScore(item) {
+    var score = 0;
+    if (/^\d+[.,]\d+/.test(String(item.revision || ''))) score += 4;
+    if (isPersonName(item.owner)) score += 3;
+    if (isValidMirrorMaturity(item.maturity) && item.maturity !== '—') score += 2;
+    if (isValidMirrorType(item.type)) score += 1;
+    if (partNameFromText(item.name)) score += 2;
+    return score;
+  }
+
+  function sanitizeMirrorItems(items, rootName) {
+    if (!items || !items.length) return [];
+    var valid = [];
+    var i;
+    for (i = 0; i < items.length; i++) {
+      if (validateMirrorItem(items[i])) valid.push(items[i]);
+    }
+    var expected = getExplorerObjectCount();
+    if (expected > 0 && valid.length > expected) {
+      valid.sort(function (a, b) { return mirrorItemScore(b) - mirrorItemScore(a); });
+      valid = valid.slice(0, expected);
+    }
+    if (rootName) {
+      var rootLow = String(rootName).toLowerCase();
+      var hasRoot = valid.some(function (it) {
+        return String(it.name || '').toLowerCase() === rootLow;
+      });
+      if (!hasRoot && isValidMirrorPartName(rootName)) {
+        valid.unshift(buildRowFromName(rootName, 0, 0, { title: rootName }));
+        if (expected > 0 && valid.length > expected) valid = valid.slice(0, expected);
+      }
+    }
+    return valid;
+  }
+
   function normalizeMaturityLabel(raw) {
     var s = String(raw || '').trim();
     if (!s) return '—';
@@ -736,7 +878,7 @@ var ProductExplorerBridge = (function () {
     var type = val('type', 'type') || 'Physical Product';
     var maturity = val('maturity', 'maturity') || '—';
     var approved = /aprovado|released|frozen/i.test(maturity);
-    return {
+    var item = {
       level: level,
       name: name,
       title: title,
@@ -749,6 +891,7 @@ var ProductExplorerBridge = (function () {
       approval: approved ? 'Approved' : 'Unknown',
       physicalid: makeGridPhysicalId(name, idx, level === 0)
     };
+    return validateMirrorItem(item) ? item : null;
   }
 
   function getExplorerHeaderTexts(doc) {
@@ -851,7 +994,15 @@ var ProductExplorerBridge = (function () {
     var added = 0;
     for (i = headerIdx + colCount; i + colCount - 1 < lines.length; ) {
       var chunk = lines.slice(i, i + colCount);
-      if (!chunk[0] || /^t[ií]tulo$/i.test(chunk[0])) {
+      if (!chunk[0] || /^t[ií]tulo$/i.test(chunk[0]) || isMirrorUiNoise(chunk[0])) {
+        i++;
+        continue;
+      }
+      if (!isValidMirrorPartName(chunk[0])) {
+        i++;
+        continue;
+      }
+      if (!/^\d+[.,]\d+/.test(String(chunk[2] || '')) && chunk[2] !== '—') {
         i++;
         continue;
       }
@@ -883,12 +1034,13 @@ var ProductExplorerBridge = (function () {
     pollDashboardExplorerChrome();
     pollStructureHint();
     var doc = readExplorerIframeDocument();
-    var text = harvestAllExplorerText();
-    var fromTitle = extractRootNameFromExplorerText(text);
+    var text = harvestExplorerTextOnly();
+    var fromTitle = extractRootNameFromExplorerText(text) || extractRootNameFromExplorerText(harvestAllExplorerText());
     rootName = String(rootName || fromTitle || structureNameHint || '').trim();
     var items = [];
     var seen = {};
     var colMap = null;
+    var expected = getExplorerObjectCount();
 
     if (doc) {
       var headerTexts = getExplorerHeaderTexts(doc);
@@ -896,19 +1048,28 @@ var ProductExplorerBridge = (function () {
       if (colMap.name === undefined) colMap = defaultExplorerColumnMap();
       scrapeMirrorRowsFromDom(doc, rootName, seen, items);
     }
-    if (items.length < 2) {
+    if (items.length < 2 && text) {
       scrapeMirrorRowsFromDelimitedText(text, rootName, seen, items, '\t');
     }
-    if (items.length < 2) {
+    if (items.length < 2 && text) {
       scrapeMirrorRowsFromDelimitedText(text, rootName, seen, items, '|');
     }
-    if (items.length < 2) {
+    if (items.length < 2 && text) {
       scrapeMirrorRowsFromVerticalText(text, rootName, seen, items);
     }
-    if (items.length < 1 && rootName) {
-      pushGridItem(items, seen, buildRowFromName(rootName, 0, 0, { title: rootName }));
+
+    items = sanitizeMirrorItems(items, rootName);
+
+    if (expected > 0 && items.length !== expected && items.length > expected) {
+      items = sanitizeMirrorItems(items, rootName);
     }
-    if (items.length < 2) return null;
+
+    if (items.length < 1 && rootName && isValidMirrorPartName(rootName)) {
+      items = [buildRowFromName(rootName, 0, 0, { title: rootName })];
+    }
+    if (items.length < 1) return null;
+    if (expected > 0 && items.length > expected * 2) return null;
+
     applyOwnersToItems(items);
     return {
       version: 1,
@@ -916,16 +1077,20 @@ var ProductExplorerBridge = (function () {
       rootPhysicalId: makeGridPhysicalId(rootName || items[0].name, 0, true),
       items: items,
       scrapeSource: 'explorer-mirror',
-      columnMap: colMap || defaultExplorerColumnMap()
+      columnMap: colMap || defaultExplorerColumnMap(),
+      explorerExpected: expected || items.length
     };
   }
 
   function scrapeExplorerGrid(rootName) {
     var mirror = scrapeExplorerMirror(rootName);
-    if (mirror && mirror.items && mirror.items.length >= 2) return mirror;
+    if (mirror && mirror.items && mirror.items.length >= 1) {
+      var expected = getExplorerObjectCount();
+      if (!expected || mirror.items.length <= expected + 1) return mirror;
+    }
 
     pollDashboardExplorerChrome();
-    var text = harvestAllExplorerText();
+    var text = harvestExplorerTextOnly() || harvestAllExplorerText();
     if (!text || text.length < 20) return null;
     var fromTitle = extractRootNameFromExplorerText(text);
     rootName = String(rootName || fromTitle || structureNameHint || '').trim();
@@ -974,6 +1139,8 @@ var ProductExplorerBridge = (function () {
 
     if (items.length < 2) return null;
     applyOwnersToItems(items);
+    items = sanitizeMirrorItems(items, rootName);
+    if (!items.length) return null;
     return {
       version: 1,
       productName: rootName || items[0].name,
@@ -1357,15 +1524,15 @@ var ProductExplorerBridge = (function () {
 
   function getExplorerSelectionCount() {
     pollDashboardExplorerChrome();
-    var text = harvestAllExplorerText();
+    var text = harvestExplorerTextOnly() || harvestAllExplorerText();
     var m = String(text).match(/(\d+)\s*(?:de|of)\s*(\d+)\s*(?:selecionado|selected)/i);
     if (m) return parseInt(m[2], 10) || parseInt(m[1], 10) || 0;
-    return getExplorerObjectCount();
+    return 0;
   }
 
   function getExplorerObjectCount() {
     pollDashboardExplorerChrome();
-    var text = harvestAllExplorerText();
+    var text = harvestExplorerTextOnly() || harvestAllExplorerText();
     var m =
       String(text).match(/(\d+)\s*objetos?\b/i) ||
       String(text).match(/(\d+)\s*objects?\b/i) ||
@@ -1401,6 +1568,7 @@ var ProductExplorerBridge = (function () {
     applyOwnersToIndex: applyOwnersToIndex,
     fetchPilotStructurePayload: fetchPilotStructurePayload,
     harvestAllExplorerText: harvestAllExplorerText,
+    harvestExplorerTextOnly: harvestExplorerTextOnly,
     getExplorerSelectionCount: getExplorerSelectionCount,
     getExplorerObjectCount: getExplorerObjectCount
   };
