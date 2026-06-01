@@ -23,6 +23,8 @@ var ChartsManager = (function () {
     });
     var leg = document.getElementById('ownersLegendScroll');
     if (leg) leg.innerHTML = '';
+    var matLeg = document.getElementById('maturityLegendScroll');
+    if (matLeg) matLeg.innerHTML = '';
   }
 
   function themeColors() {
@@ -58,8 +60,13 @@ var ChartsManager = (function () {
     var canvas = document.getElementById(canvasId);
     if (canvas) {
       canvas.style.display = 'block';
-      canvas.style.height = '180px';
-      canvas.style.width = '100%';
+      if (canvas.closest('.bom-chart-canvas-box')) {
+        canvas.style.height = '100%';
+        canvas.style.width = '100%';
+      } else {
+        canvas.style.height = '180px';
+        canvas.style.width = '100%';
+      }
     }
     var fb = panel.querySelector('.chart-fallback');
     if (fb) fb.style.display = 'none';
@@ -115,20 +122,45 @@ var ChartsManager = (function () {
     );
   }
 
-  function renderOwnersLegend(items, total) {
-    var el = document.getElementById('ownersLegendScroll');
-    if (!el || !items || !items.length) return;
-    total = total || items.reduce(function (a, it) { return a + (it.value || 0); }, 0) || 1;
-    el.innerHTML = items.map(function (it, i) {
-      var pct = Math.round(((it.value || 0) / total) * 1000) / 10;
-      var c = OWNER_COLORS[i % OWNER_COLORS.length];
+  function legendItemsHtml(items, total, colorAt) {
+    if (!items || !items.length) return '';
+    total = total || items.reduce(function (a, it) {
+      return a + (it.value != null ? it.value : 0);
+    }, 0) || 1;
+    return items.map(function (it, i) {
+      var val = it.value != null ? it.value : 0;
+      var pct = Math.round((val / total) * 1000) / 10;
+      var c = colorAt(i, it);
       return (
         '<div class="owners-legend-item">' +
         '<span class="cf-pie-dot" style="background:' + c + '"></span>' +
         '<span class="owners-legend-name">' + it.label + '</span>' +
-        '<span class="owners-legend-val">' + it.value + ' (' + pct + '%)</span></div>'
+        '<span class="owners-legend-val">' + val + ' (' + pct + '%)</span></div>'
       );
     }).join('');
+  }
+
+  function renderOwnersLegend(items, total) {
+    var el = document.getElementById('ownersLegendScroll');
+    if (!el) return;
+    if (!items || !items.length) { el.innerHTML = ''; return; }
+    el.innerHTML = legendItemsHtml(items, total, function (i) {
+      return OWNER_COLORS[i % OWNER_COLORS.length];
+    });
+  }
+
+  function renderMaturityLegend(labels, values, colors) {
+    var el = document.getElementById('maturityLegendScroll');
+    if (!el) return;
+    var slices = filterSlices(labels, values, colors);
+    if (!slices.labels.length) { el.innerHTML = ''; return; }
+    var items = slices.labels.map(function (lbl, i) {
+      return { label: lbl, value: slices.values[i] };
+    });
+    var total = slices.values.reduce(function (a, b) { return a + b; }, 0) || 1;
+    el.innerHTML = legendItemsHtml(items, total, function (i) {
+      return slices.colors[i];
+    });
   }
 
   function pieChart(canvasId, labels, values, title, colors, opts) {
@@ -161,10 +193,11 @@ var ChartsManager = (function () {
           animation: { duration: 450, animateRotate: true, animateScale: true },
           plugins: {
             title: {
-              display: true,
+              display: opts.hideTitle !== true,
               text: title,
               color: th.title,
-              font: { size: 18, weight: '600' }
+              font: { size: 14, weight: '600' },
+              padding: { top: 2, bottom: 4 }
             },
             legend: {
               display: opts.hideLegend !== true,
@@ -231,15 +264,24 @@ var ChartsManager = (function () {
       owners = { labels: ['Sem proprietário'], values: [metrics.totalItems || 1] };
     }
 
-    pieChart('chartMaturity', matLabels, matValues, 'Saúde da Maturidade', healthColors);
+    var quadCharts = !!document.querySelector('.bom-charts-row-quad');
+    var chartOpts = quadCharts ? { hideLegend: true, hideTitle: true } : {};
+
+    pieChart('chartMaturity', matLabels, matValues, 'Saúde da Maturidade', healthColors, chartOpts);
     pieChart(
       'chartOwners',
       owners.labels,
       owners.values,
       'Proprietários',
       ownerColors(owners.labels.length),
-      { hideLegend: true }
+      chartOpts
     );
+    if (quadCharts) {
+      renderMaturityLegend(matLabels, matValues, healthColors);
+    } else {
+      var matLeg = document.getElementById('maturityLegendScroll');
+      if (matLeg) matLeg.innerHTML = '';
+    }
     renderOwnersLegend(ownersLegend, metrics.totalItems || 0);
     scheduleResize();
   }
