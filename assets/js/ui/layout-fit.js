@@ -1,6 +1,6 @@
 /**
  * @file ui/layout-fit.js
- * Ajuste dinâmico ao iframe 3DDashboard — E-BOM sempre visível, gráficos limitados.
+ * Layout 3DDashboard: E-BOM principal (esquerda) + painel lateral (KPIs, filtros, gráficos, preview).
  */
 var LayoutFit = (function () {
   'use strict';
@@ -8,8 +8,8 @@ var LayoutFit = (function () {
   var bound = false;
   var NARROW_W = 620;
   var COMPACT_H = 780;
-  var MIN_EBOM_RATIO = 0.36;
-  var CHARTS_MAX_OPEN = 168;
+  var MIN_EBOM_RATIO = 0.48;
+  var CHARTS_MAX_OPEN = 200;
 
   function hostEl() {
     return window.__3DX_UI_ROOT__ || document.body;
@@ -38,32 +38,10 @@ var LayoutFit = (function () {
         panel.open = false;
       }
     }
-  }
 
-  function squeezeCharts(host, neededPx, vp) {
-    var charts = host.querySelector('#chartsSection');
-    if (!charts || !charts.open) return;
-    var row = charts.querySelector('.bom-charts-row');
-    var maxH = Math.max(96, Math.min(CHARTS_MAX_OPEN, Math.floor(vp.h * 0.24) - neededPx));
-    charts.style.maxHeight = maxH + 'px';
-    charts.style.overflowY = 'auto';
-    if (row) {
-      row.style.maxHeight = Math.max(72, maxH - 36) + 'px';
-      row.style.overflowY = 'auto';
-    }
-  }
-
-  function resetChartsStyle(host) {
-    var charts = host.querySelector('#chartsSection');
-    if (!charts) return;
-    if (!charts.open) {
-      charts.style.maxHeight = '';
-      charts.style.overflowY = '';
-    }
-    var row = charts.querySelector('.bom-charts-row');
-    if (row && !charts.open) {
-      row.style.maxHeight = '';
-      row.style.overflowY = '';
+    var filters = host.querySelector('#filtersPanel');
+    if (filters && typeof filters.open === 'boolean') {
+      filters.open = !narrow && !compact;
     }
   }
 
@@ -71,85 +49,90 @@ var LayoutFit = (function () {
     var charts = host.querySelector('#chartsSection');
     if (!charts) return;
     if (!charts.open) {
-      resetChartsStyle(host);
+      charts.style.maxHeight = '';
+      charts.style.overflowY = '';
+      var rowOff = charts.querySelector('.bom-charts-row');
+      if (rowOff) {
+        rowOff.style.maxHeight = '';
+        rowOff.style.overflowY = '';
+      }
       return;
     }
-    var cap = Math.min(CHARTS_MAX_OPEN, Math.floor(vp.h * 0.26));
+    var cap = Math.min(CHARTS_MAX_OPEN, Math.floor(vp.h * 0.28));
     charts.style.maxHeight = cap + 'px';
     charts.style.overflowY = 'auto';
     var row = charts.querySelector('.bom-charts-row');
     if (row) {
-      row.style.maxHeight = Math.max(80, cap - 38) + 'px';
+      row.style.maxHeight = Math.max(88, cap - 40) + 'px';
       row.style.overflowY = 'auto';
     }
   }
 
-  function applyEbom(host, vp) {
-    var main = host.querySelector('.bom-main');
-    var ebom = host.querySelector('.bom-ebom-block');
-    var split = host.querySelector('.bom-ebom-split');
-    var list = host.querySelector('.bom-ebom-list');
-    var tableWrap = host.querySelector('.bom-table-wrap');
-    var pager = host.querySelector('.bom-table-pager');
-    if (!main || !ebom || !split || !list || !tableWrap) return;
+  function applyWorkspace(host, vp) {
+    var workspace = host.querySelector('.bom-workspace');
+    var workMain = host.querySelector('.bom-work-main');
+    var workSide = host.querySelector('.bom-work-side');
+    if (!workspace || !workMain) return;
 
     var hostBox = host.getBoundingClientRect();
     var viewportBottom = hostBox.top + vp.h;
+    var top = workspace.getBoundingClientRect().top;
+    var avail = Math.max(180, Math.floor(viewportBottom - top - 4));
+
+    workspace.style.flex = '1 1 auto';
+    workspace.style.minHeight = '0';
+    workspace.style.height = avail + 'px';
+    workspace.style.maxHeight = avail + 'px';
+    workspace.style.overflow = 'hidden';
+
+    workMain.style.flex = '1 1 auto';
+    workMain.style.minHeight = '0';
+    workMain.style.height = '100%';
+    workMain.style.maxHeight = avail + 'px';
+    workMain.style.overflow = 'hidden';
+
+    if (workSide) {
+      workSide.style.height = '100%';
+      workSide.style.maxHeight = avail + 'px';
+      workSide.style.overflowY = 'auto';
+      workSide.style.overflowX = 'hidden';
+    }
+
+    applyEbom(host, vp, avail);
+  }
+
+  function applyEbom(host, vp, workspaceAvail) {
+    var ebom = host.querySelector('.bom-ebom-block');
+    var list = host.querySelector('.bom-ebom-list');
+    var tableWrap = host.querySelector('.bom-table-wrap');
+    var pager = host.querySelector('.bom-table-pager');
+    if (!ebom || !list || !tableWrap) return;
+
+    var narrow = host.classList.contains('bom-widget-narrow');
     var head = ebom.querySelector('.bom-ebom-head');
     var headH = head ? head.offsetHeight : 0;
-    var minEbom = Math.max(130, Math.floor(vp.h * MIN_EBOM_RATIO));
+    var minEbom = Math.max(140, Math.floor(vp.h * MIN_EBOM_RATIO));
 
-    var ebomTop = ebom.getBoundingClientRect().top;
-    var ebomAvail = Math.floor(viewportBottom - ebomTop - 8);
-
-    if (ebomAvail < minEbom) {
-      squeezeCharts(host, minEbom - ebomAvail, vp);
-      ebomTop = ebom.getBoundingClientRect().top;
-      ebomAvail = Math.floor(viewportBottom - ebomTop - 8);
-    }
-    if (ebomAvail < minEbom) {
-      ebomAvail = minEbom;
+    var ebomAvail = workspaceAvail;
+    if (narrow) {
+      ebomAvail = Math.max(minEbom, Math.floor(workspaceAvail * 0.58));
     }
 
     ebom.style.flex = '1 1 auto';
     ebom.style.minHeight = minEbom + 'px';
-    ebom.style.maxHeight = ebomAvail + 'px';
     ebom.style.height = ebomAvail + 'px';
+    ebom.style.maxHeight = ebomAvail + 'px';
 
-    var splitH = Math.max(100, ebomAvail - headH);
-    split.style.flex = '1 1 auto';
-    split.style.height = splitH + 'px';
-    split.style.minHeight = splitH + 'px';
-    split.style.maxHeight = splitH + 'px';
-
-    var preview = host.querySelector('#partPreviewPanel');
-    var previewH = 0;
-    var narrow = host.classList.contains('bom-widget-narrow');
-    if (preview && preview.offsetParent !== null) {
-      if (narrow) {
-        if (preview.classList.contains('bom-preview-active') && preview.open) {
-          previewH = Math.min(preview.offsetHeight, Math.floor(splitH * 0.45));
-        } else {
-          var summary = preview.querySelector('.bom-preview-summary');
-          previewH = summary ? summary.offsetHeight : 36;
-        }
-      } else {
-        previewH = 0;
-      }
-    }
-
-    var listH = Math.max(80, splitH - previewH);
-    list.style.flex = '1 1 auto';
-    list.style.minHeight = listH + 'px';
-    list.style.maxHeight = listH + 'px';
+    var listH = Math.max(100, ebomAvail - headH);
     list.style.height = listH + 'px';
+    list.style.maxHeight = listH + 'px';
+    list.style.minHeight = listH + 'px';
 
     var pagerH = pager ? pager.offsetHeight : 28;
-    var tableH = Math.max(64, listH - pagerH);
-    tableWrap.style.flex = '1 1 auto';
+    var tableH = Math.max(72, listH - pagerH);
     tableWrap.style.height = tableH + 'px';
     tableWrap.style.maxHeight = tableH + 'px';
-    tableWrap.style.minHeight = '64px';
+    tableWrap.style.minHeight = '72px';
   }
 
   function bindCharts(host) {
@@ -159,6 +142,15 @@ var LayoutFit = (function () {
     charts.addEventListener('toggle', function () {
       window.setTimeout(apply, 0);
       window.setTimeout(apply, 120);
+    });
+  }
+
+  function bindFilters(host) {
+    var filters = host.querySelector('#filtersPanel');
+    if (!filters || filters.__3DX_LAYOUT_BOUND__) return;
+    filters.__3DX_LAYOUT_BOUND__ = true;
+    filters.addEventListener('toggle', function () {
+      window.setTimeout(apply, 0);
     });
   }
 
@@ -188,14 +180,14 @@ var LayoutFit = (function () {
     if (main) {
       main.style.flex = '1 1 auto';
       main.style.minHeight = '0';
-      main.style.overflowY = 'auto';
-      main.style.overflowX = 'hidden';
+      main.style.overflow = 'hidden';
     }
 
     bindCharts(host);
+    bindFilters(host);
     applyMode(host, vp);
     applyChartsCap(host, vp);
-    applyEbom(host, vp);
+    applyWorkspace(host, vp);
 
     if (typeof ChartsManager !== 'undefined' && ChartsManager.scheduleResize) {
       ChartsManager.scheduleResize();

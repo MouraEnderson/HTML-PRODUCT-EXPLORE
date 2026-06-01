@@ -694,6 +694,14 @@ var FileImportService = (function () {
         if (oIdx !== undefined) ownerCol = row[oIdx];
       }
       var ownerMeta = parseOwnerCell(ownerCol);
+      var ownerText = ownerMeta.label || cleanCell(unwrapJsonCell(cell(row, colMap, 'owner', '')));
+      if (!ownerText || ownerText === '[]' || /^\[\s*\]$/.test(ownerText)) {
+        var fbIdx = pickOwnerColumnIndex(row, colMap);
+        if (fbIdx !== undefined && fbIdx !== colMap.owner) {
+          ownerMeta = parseOwnerCell(row[fbIdx]);
+          ownerText = ownerMeta.label || '';
+        }
+      }
       items.push({
         physicalid: pid,
         sourcePhysicalId: cell(row, colMap, 'physicalid', '') || '',
@@ -706,7 +714,7 @@ var FileImportService = (function () {
         maturity: st.maturity,
         iconUrl: extractIconFromRow(row) || ownerMeta.iconUrl || '',
         quantity: parseFloat(cell(row, colMap, 'quantity', '1')) || 1,
-        owner: ownerMeta.label || cleanCell(unwrapJsonCell(cell(row, colMap, 'owner', ''))),
+        owner: ownerText,
         _ownerRaw: ownerCol,
         organization: cell(row, colMap, 'organization', ''),
         collabSpace: cell(row, colMap, 'collabSpace', ''),

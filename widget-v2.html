@@ -14,7 +14,7 @@
     window.__3DX_TRUSTED_WIDGET__ = true;
     window.__3DX_BOOT_DEFER__ = true;
 
-    var BOM_BUILD = 'bom20260603b';
+    var BOM_BUILD = 'bom20260603c';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
     var BUNDLE;
 
@@ -72,8 +72,24 @@
       '</div></header>' +
       '<div id="syncBanner" class="bom-sync-banner bom-sync-info">' +
       'Abra a estrutura no Explorer e clique <strong>Atualizar estrutura</strong>.</div>' +
-      '<main class="bom-main">' +
-      '<div class="bom-filter-bar">' +
+      '<main class="bom-main bom-workspace">' +
+      '<section class="bom-work-main">' +
+      '<section class="bom-ebom-block">' +
+      '<div class="bom-ebom-head">' +
+      '<h2>E-BOM — <span id="tableProductLabel" title="-">-</span></h2>' +
+      '<p id="ebomMeta" class="bom-ebom-meta">Clique numa linha para ver detalhes no painel lateral.</p>' +
+      '</div>' +
+      '<div class="bom-ebom-list">' +
+      '<div class="bom-table-wrap table-scroll">' +
+      '<table id="bomTable" class="bom-table"><thead><tr></tr></thead><tbody></tbody></table>' +
+      '</div>' +
+      '<footer id="tablePager" class="bom-table-pager">0 peças</footer>' +
+      '</div></section></section>' +
+      '<aside class="bom-work-side">' +
+      '<section id="kpiGrid" class="stat-markers-row stat-markers-compact stat-markers-side" aria-label="Estatísticas"></section>' +
+      '<details class="bom-side-panel bom-filters-panel" id="filtersPanel" open>' +
+      '<summary>Filtros e busca</summary>' +
+      '<div class="bom-filter-bar bom-filter-bar-side">' +
       '<label class="bom-filter-item"><span>Maturidade</span>' +
       '<select id="filterMaturity"><option value="all">Todas</option>' +
       '<option value="released">Bom (Aprovado)</option><option value="in_work">Moderado</option>' +
@@ -85,12 +101,11 @@
       '<label class="bom-filter-item bom-filter-grow"><span>Buscar</span>' +
       '<input type="search" id="searchInput" placeholder="Nome, descrição, proprietário…" /></label>' +
       '<button type="button" id="btnClearFilters" class="bom-btn bom-btn-filter-clear">Limpar</button>' +
-      '</div>' +
-      '<div id="statusBar" class="bom-st bom-st-inline">Carregando…</div>' +
-      '<section id="kpiGrid" class="stat-markers-row stat-markers-compact" aria-label="Estatísticas"></section>' +
-      '<details class="bom-charts-collapsible" id="chartsSection">' +
+      '</div></details>' +
+      '<div id="statusBar" class="bom-st bom-st-inline bom-st-side">Carregando…</div>' +
+      '<details class="bom-charts-collapsible bom-side-panel" id="chartsSection">' +
       '<summary>Gráficos — maturidade e proprietários</summary>' +
-      '<section class="bom-charts-row">' +
+      '<section class="bom-charts-row bom-charts-row-side">' +
       '<div class="bom-chart-panel"><canvas id="chartMaturity"></canvas></div>' +
       '<div class="bom-chart-panel bom-chart-owners">' +
       '<canvas id="chartOwners"></canvas>' +
@@ -99,28 +114,15 @@
       '<canvas id="chartRevision" class="bom-hidden"></canvas>' +
       '<canvas id="chartApproval" class="bom-hidden"></canvas>' +
       '</section></details>' +
-      '<section class="bom-ebom-block">' +
-      '<div class="bom-ebom-head">' +
-      '<h2>E-BOM — <span id="tableProductLabel" title="-">-</span></h2>' +
-      '<p id="ebomMeta" class="bom-ebom-meta">Clique numa peça para ver detalhes à direita.</p>' +
-      '</div>' +
-      '<div class="bom-ebom-split">' +
-      '<div class="bom-ebom-list">' +
-      '<div class="bom-table-wrap table-scroll">' +
-      '<table id="bomTable" class="bom-table"><thead><tr></tr></thead><tbody></tbody></table>' +
-      '</div>' +
-      '<footer id="tablePager" class="bom-table-pager">0 peças</footer>' +
-      '</div>' +
-      '<details class="bom-part-preview" id="partPreviewPanel">' +
+      '<details class="bom-part-preview bom-side-panel" id="partPreviewPanel" open>' +
       '<summary class="bom-preview-summary">' +
       '<span id="partPreviewTitle" class="bom-preview-title">Visualização da peça</span></summary>' +
       '<div class="bom-preview-body">' +
       '<p class="bom-preview-hint">Clique numa linha da estrutura</p>' +
       '<div id="partPreviewImage" class="bom-preview-image">' +
-      '<span class="bom-preview-placeholder">Preview 2D da peça selecionada</span></div>' +
+      '<span class="bom-preview-placeholder">Preview 2D · 3DPlay em breve</span></div>' +
       '<div id="partPreviewMeta" class="bom-preview-meta"></div>' +
-      '</div></details></div></section>' +
-      '</main>' +
+      '</div></details></aside></main>' +
       '<button type="button" id="btnScanExplorer" class="bom-hidden">Varrer</button>' +
       '<div id="loadingOverlay" class="bom-loading bom-hidden">Processando…</div>' +
       '<span class="bom-build-tag bom-hidden" id="buildTag">' + BOM_BUILD + '</span>' +

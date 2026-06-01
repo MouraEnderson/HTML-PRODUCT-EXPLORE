@@ -1,0 +1,48 @@
+---
+description: Estado do projeto BOM Analytics — build, sprint, URLs e pendências
+alwaysApply: true
+---
+
+# BOM Analytics — contexto persistente
+
+## Repo e deploy
+
+- Pasta: `C:\Users\Enderson\Projects\3dx-product-explorer-bom-dashboard`
+- GitHub: `https://github.com/MouraEnderson/HTML-PRODUCT-EXPLORE`
+- Pages: `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/`
+- Widget 3DDashboard: `widget-v2.html?v=<BUILD>` (Web Page Reader)
+- Tenant piloto: `R1132100929518`
+- Dashboard piloto: `#dashboard:e9bdf50c-6377-4956-b931-b5566a8e9e97/tabId:AMzDJUOA09wQHOdVtHHY`
+
+## Build atual (atualizar após cada deploy)
+
+- **BUILD:** `bom20260603c`
+- Widget carrega **`bom-bundle-<BUILD>.js`**, não os `.js` soltos
+- `BUILD` deve bater em `assets/js/config.js` e `widget-v2.html` (`BOM_BUILD`)
+- Rebuild: `powershell -ExecutionPolicy Bypass -File scripts/build-bundle.ps1`
+
+## Sprint 2 — status
+
+| Item | Status |
+|------|--------|
+| 2.1 Owner parser | ✅ no bundle `03b` |
+| 2.2 Em Espera + KPI risco | ✅ no bundle `03b` |
+| 2.3 Sync banner + import report | ✅ no bundle `03b` |
+| 2.4 Contagem Explorer = Dashboard (79=79) | ❌ pendente |
+| 2.5 Deploy build no ar | ✅ `ce77afd` |
+
+## Arquivos-chave
+
+- Import/paste: `assets/js/services/file-import-service.js`
+- Sync Explorer vs Dashboard: `assets/js/ui/sync-banner.js`
+- Maturidade/KPI: `attribute-service.js`, `metrics-engine.js`, `kpi-cards.js`, `config.js`
+- Layout iframe: `assets/js/ui/layout-fit.js`, `assets/css/dashboard.css`
+- Bundle: `scripts/build-bundle.ps1`
+
+## Git no Windows (sem git config global)
+
+Antes de commit: `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL` = MouraEnderson / mouraenderson@users.noreply.github.com
+
+## Fluxo de dados no widget
+
+Explorer → expandir árvore → coluna Maturidade visível → Ctrl+A → Ctrl+C → **Atualizar estrutura**. Sem import, KPIs em 0 é esperado.
