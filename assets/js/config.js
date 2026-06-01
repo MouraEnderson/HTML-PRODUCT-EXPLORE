@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260604b',
+    BUILD: 'bom20260604c',
     /** 3DDashboard: nÃƒÂ£o espera probe CSRF (evita travar em "ConectandoÃ¢â‚¬Â¦") */
     SKIP_SPACE_PROBE: true,
     WAF_REQUEST_TIMEOUT_MS: 15000,
@@ -109,10 +109,10 @@
     /** Tabela compacta no modo UI_CLEAN */
     PILOT_TABLE_COLUMNS: [
       { key: '_thumb', label: '', format: 'thumb', width: 44 },
-      { key: 'name', label: 'TÃƒÂ­tulo' },
-      { key: 'title', label: 'DescriÃƒÂ§ÃƒÂ£o' },
-      { key: 'revision', label: 'RevisÃƒÂ£o' },
-      { key: 'owner', label: 'ProprietÃƒÂ¡rio' },
+      { key: 'name', label: 'T\u00edtulo' },
+      { key: 'title', label: 'Descri\u00e7\u00e3o' },
+      { key: 'revision', label: 'Revis\u00e3o' },
+      { key: 'owner', label: 'Propriet\u00e1rio' },
       { key: 'type', label: 'Tipo' },
       { key: 'maturity', label: 'Estado de maturidade', format: 'status' }
     ],

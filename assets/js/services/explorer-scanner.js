@@ -727,7 +727,9 @@ var ExplorerScanner = (function () {
         saveRootName(meta.productName || term);
         var src = pl.scrapeSource === 'explorer-auto-copy'
           ? 'Cópia automática Explorer'
-          : (pl.scrapeSource === 'explorer-mirror' ? 'Espelho Explorer' : 'Grade Explorer');
+          : (pl.scrapeSource === 'explorer-scroll'
+            ? 'Varredura Explorer'
+            : (pl.scrapeSource === 'explorer-mirror' ? 'Espelho Explorer' : 'Grade Explorer'));
         return {
           ok: true,
           mode: pl.scrapeSource === 'explorer-mirror' ? 'explorer-mirror' : 'explorer-grid',
@@ -765,8 +767,16 @@ var ExplorerScanner = (function () {
     }
 
     var chain = Promise.resolve(payload);
-    if (allowAutoCopy && ProductExplorerBridge.tryExplorerAutoCopyParse && needsMore(payload)) {
+    if (ProductExplorerBridge.tryExplorerScrollHarvestAsync && needsMore(payload)) {
       chain = chain.then(function (pl) {
+        return ProductExplorerBridge.tryExplorerScrollHarvestAsync(term).then(function (scrollPl) {
+          return pickBest(pl, scrollPl);
+        });
+      });
+    }
+    if (allowAutoCopy && ProductExplorerBridge.tryExplorerAutoCopyParse) {
+      chain = chain.then(function (pl) {
+        if (!needsMore(pl)) return pl;
         return ProductExplorerBridge.tryExplorerAutoCopyParse(term).then(function (copyPl) {
           return pickBest(pl, copyPl);
         });
