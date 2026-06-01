@@ -621,6 +621,9 @@ var App = (function () {
         })
         .catch(function (err) {
           var msg = (err && err.message) ? err.message : String(err);
+          if (typeof BomService !== 'undefined' && BomService.getNodeCount() > 0) {
+            refreshUI();
+          }
           return pilotFallbackExplorerGrid(key).then(function (restored) {
             if (restored) return;
             var short = msg;
@@ -744,6 +747,9 @@ var App = (function () {
         setStatus(res.message || 'Importação concluída.', res.partial || res.domFallback ? 'warn' : 'ok');
       })
       .catch(function (err) {
+        if (typeof BomService !== 'undefined' && BomService.getNodeCount() > 0) {
+          refreshUI();
+        }
         setStatus('Importação: ' + (err.message || err), 'error');
         var area = byId('pasteArea');
         var details = document.querySelector('.bom-topbar-more') || document.querySelector('.bom-sidebar-more');

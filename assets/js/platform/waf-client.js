@@ -36,7 +36,7 @@ var WafClient = (function () {
   }
 
   function isRetryableHttp(msg) {
-    if (/ResponseCode.*406|\b406\b/i.test(msg || '')) return false;
+    if (/ResponseCode.*406|\b406\b/i.test(msg || '')) return true;
     return /ResponseCode.*(403|400)|\b403\b|\b400\b/i.test(msg || '');
   }
 

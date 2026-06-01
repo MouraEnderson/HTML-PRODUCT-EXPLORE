@@ -16,6 +16,22 @@ var BomService = (function () {
     PhysicalProductService.clearCache();
   }
 
+  function createSnapshot() {
+    return {
+      index: JSON.parse(JSON.stringify(index)),
+      rootId: rootId,
+      nodeCount: nodeCount
+    };
+  }
+
+  function restoreSnapshot(snap) {
+    if (!snap || !snap.index) return false;
+    index = snap.index;
+    rootId = snap.rootId;
+    nodeCount = snap.nodeCount;
+    return true;
+  }
+
   function canAddNode() {
     return nodeCount < APP_CONFIG.BOM_MAX_NODES;
   }
@@ -77,11 +93,10 @@ var BomService = (function () {
     var skip = 0;
     var top = APP_CONFIG.BOM_LAZY_BATCH_SIZE;
 
-    function fetchPage() {
-      var fetcher =
-        typeof EnoviaApi.getPhysicalProductChildren === 'function'
-          ? EnoviaApi.getPhysicalProductChildren.bind(EnoviaApi)
-          : EnoviaApi.getEngInstanceChildren.bind(EnoviaApi);
+    function fetchPage(useEngInstance) {
+      var fetcher = useEngInstance
+        ? EnoviaApi.getEngInstanceChildren.bind(EnoviaApi)
+        : EnoviaApi.getPhysicalProductChildren.bind(EnoviaApi);
       return fetcher(parentId, skip, top).then(function (res) {
         var members = EnoviaApi.extractMembers(res);
         members.forEach(function (m) {
@@ -91,14 +106,18 @@ var BomService = (function () {
         var total = res && res.totalItems ? res.totalItems : members.length;
         skip += members.length;
         if (members.length === top && skip < total && canAddNode()) {
-          return fetchPage();
+          return fetchPage(useEngInstance);
         }
         index[parentId].loaded = true;
         return allChildren;
       });
     }
 
-    return fetchPage().catch(function (err) {
+    return fetchPage(false).catch(function () {
+      skip = 0;
+      allChildren = [];
+      return fetchPage(true);
+    }).catch(function () {
       if (index[parentId]) index[parentId].loaded = true;
       return [];
     });
@@ -304,10 +323,11 @@ var BomService = (function () {
     }
 
     physicalId = normalizePid(physicalId);
-    reset();
-    rootId = physicalId;
+    var prior = createSnapshot();
 
     if (APP_CONFIG.DEMO_MODE) {
+      reset();
+      rootId = physicalId;
       return loadDemoTree(physicalId).then(function () {
         report('done');
         return buildMetaFromIndex();
@@ -316,6 +336,8 @@ var BomService = (function () {
 
     return EnoviaApi.getProductRoot(physicalId, null)
       .then(function (res) {
+        reset();
+        rootId = physicalId;
         var member = res.member || res;
         var attrs = AttributeService.extractFromMember(Array.isArray(member) ? member[0] : member);
         if (!attrs.physicalid) attrs.physicalid = physicalId;
@@ -331,6 +353,10 @@ var BomService = (function () {
       .then(function () {
         report('done');
         return buildMetaFromIndex();
+      })
+      .catch(function (err) {
+        restoreSnapshot(prior);
+        throw err;
       });
   }
 
@@ -454,6 +480,8 @@ var BomService = (function () {
 
   return {
     reset: reset,
+    createSnapshot: createSnapshot,
+    restoreSnapshot: restoreSnapshot,
     loadRoot: loadRoot,
     loadLazyFull: loadLazyFull,
     loadRootFromSelection: loadRootFromSelection,

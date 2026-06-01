@@ -184,6 +184,21 @@ var BomOrchestrator = (function () {
     }
   }
 
+  function formatFailureMessage(err, ctx) {
+    var msg = (err && err.message) ? err.message : String(err || 'Falha na importação.');
+    if (/Ctrl\+A|Ctrl\+C|Atualizar estrutura/i.test(msg)) return msg;
+    if (/406|API parcial|TSV parcial|DOM espelho incompleto|incompleto|parcial/i.test(msg)) {
+      return (
+        msg +
+        ' — No Explorer: expanda todos os níveis → Ctrl+A → Ctrl+C → Atualizar estrutura.'
+      );
+    }
+    if (ctx && ctx.expectedCount > 20) {
+      return msg + ' — Alternativa: Ctrl+A → Ctrl+C na grade → Atualizar estrutura.';
+    }
+    return msg;
+  }
+
   /**
    * @param {object} [options]
    * @param {'manual'|'auto'} [options.source]
@@ -200,6 +215,11 @@ var BomOrchestrator = (function () {
       );
     }
     updateSelectionLabel(ctx);
+
+    var priorIndex =
+      typeof BomService !== 'undefined' && BomService.createSnapshot
+        ? BomService.createSnapshot()
+        : null;
 
     var mode = pickLoaderMode(ctx, options);
     var chain;
@@ -222,6 +242,17 @@ var BomOrchestrator = (function () {
       .then(function (res) {
         var usedMode = (res && res.loaderMode) || mode;
         return enrichResult(res, ctx, usedMode);
+      })
+      .catch(function (err) {
+        if (
+          priorIndex &&
+          priorIndex.nodeCount > 0 &&
+          typeof BomService !== 'undefined' &&
+          BomService.restoreSnapshot
+        ) {
+          BomService.restoreSnapshot(priorIndex);
+        }
+        return Promise.reject(new Error(formatFailureMessage(err, ctx)));
       })
       .finally(function () {
         if (apiFlag) root.__3DX_ALLOW_API__ = false;

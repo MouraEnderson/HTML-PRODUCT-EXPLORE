@@ -110,6 +110,38 @@ var TsvBomLoader = (function () {
     return payload;
   }
 
+  function tryScrollHarvest(term, partialPayload, expected) {
+    if (!needsMore(partialPayload, expected)) return Promise.resolve(partialPayload);
+    if (
+      typeof ProductExplorerBridge === 'undefined' ||
+      !ProductExplorerBridge.tryExplorerScrollHarvestAsync
+    ) {
+      return Promise.resolve(partialPayload);
+    }
+    setStatus('Varrendo grade Explorer (scroll)…');
+    return ProductExplorerBridge.tryExplorerScrollHarvestAsync(term)
+      .then(function (scrollPl) {
+        if (!scrollPl || !scrollPl.items || !scrollPl.items.length) return partialPayload;
+        if (!partialPayload || !partialPayload.items || !partialPayload.items.length) return scrollPl;
+        return scrollPl.items.length >= partialPayload.items.length ? scrollPl : partialPayload;
+      })
+      .catch(function () {
+        return partialPayload;
+      });
+  }
+
+  function pickBestPayload(a, b, expected) {
+    if (!a || !a.items) return b;
+    if (!b || !b.items) return a;
+    if (expected > 0) {
+      var ad = Math.abs(a.items.length - expected);
+      var bd = Math.abs(b.items.length - expected);
+      if (bd < ad) return b;
+      if (ad < bd) return a;
+    }
+    return b.items.length > a.items.length ? b : a;
+  }
+
   function tryAutoCopy(term, allowAutoCopy) {
     if (!allowAutoCopy) return Promise.resolve(null);
     if (typeof ProductExplorerBridge === 'undefined' || !ProductExplorerBridge.tryExplorerAutoCopyParse) {
@@ -178,15 +210,16 @@ var TsvBomLoader = (function () {
 
     return tryAutoCopy(term, allowAutoCopy)
       .then(function (autoPayload) {
-        if (autoPayload && !needsMore(autoPayload, expected)) {
-          return autoPayload;
-        }
-        return tryClipboardTsv(term).then(function (clipPayload) {
-          if (clipPayload && !needsMore(clipPayload, expected)) return clipPayload;
-          if (clipPayload && autoPayload) {
-            return clipPayload.items.length >= autoPayload.items.length ? clipPayload : autoPayload;
-          }
-          return clipPayload || autoPayload;
+        return tryScrollHarvest(term, autoPayload, expected).then(function (harvested) {
+          if (harvested && !needsMore(harvested, expected)) return harvested;
+          return tryClipboardTsv(term).then(function (clipPayload) {
+            var best = pickBestPayload(harvested, clipPayload, expected);
+            if (best && !needsMore(best, expected)) return best;
+            if (clipPayload && harvested) {
+              return pickBestPayload(harvested, clipPayload, expected);
+            }
+            return clipPayload || harvested;
+          });
         });
       })
       .then(function (payload) {

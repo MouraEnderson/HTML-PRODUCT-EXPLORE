@@ -178,8 +178,11 @@ var EnoviaApi = (function () {
     var urls = [
       base + '/dspfl:Part?$skip=' + skip + '&$top=' + top,
       base + '/dspfl:Instance?$skip=' + skip + '&$top=' + top,
+      base + '/boM?$skip=' + skip + '&$top=' + top,
       base + '?$expand=dspfl:Part&$skip=' + skip + '&$top=' + top,
-      base + '?$expand=dspfl:Instance&$skip=' + skip + '&$top=' + top
+      base + '?$expand=dspfl:Instance&$skip=' + skip + '&$top=' + top,
+      base + '?$expand=boM&$skip=' + skip + '&$top=' + top,
+      base + '?$expand=boM,dspfl:Part&$skip=' + skip + '&$top=' + top
     ];
     function tryUrl(i) {
       if (i >= urls.length) {
