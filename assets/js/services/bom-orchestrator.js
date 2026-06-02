@@ -32,6 +32,11 @@ var BomOrchestrator = (function () {
     var expected = ctx.expectedCount || 0;
     var primary = (APP_CONFIG && APP_CONFIG.PRIMARY_LOADER) || 'auto';
 
+    if (options.source === 'auto') {
+      if (options.preferApi === true && ctx.canUseApi) return 'api';
+      return 'tsv';
+    }
+
     var preferApiManual =
       options.preferApi === true ||
       (options.preferApi !== false &&
@@ -115,7 +120,10 @@ var BomOrchestrator = (function () {
     if (typeof TsvBomLoader !== 'undefined' && TsvBomLoader.load) {
       var allowAutoCopy =
         options.allowAutoCopy === true ||
-        (options.source === 'manual' && options.allowAutoCopy !== false);
+        (options.source === 'manual' && options.allowAutoCopy !== false) ||
+        (options.source === 'auto' &&
+          APP_CONFIG.AUTO_SYNC_ALLOW_COPY !== false &&
+          options.allowAutoCopy !== false);
       return TsvBomLoader.load(ctx, {
         allowAutoCopy: allowAutoCopy,
         expectedCount: ctx.expectedCount
@@ -203,6 +211,7 @@ var BomOrchestrator = (function () {
   function enrichResult(res, ctx, loaderMode) {
     if (!res) return res;
     if (!res.loaderMode) res.loaderMode = loaderMode;
+    res.refreshSource = res.refreshSource || '';
     res.context = {
       physicalId: ctx.physicalId,
       productName: ctx.productName,
@@ -295,9 +304,13 @@ var BomOrchestrator = (function () {
         timeoutMs = (APP_CONFIG && APP_CONFIG.MANUAL_REFRESH_TIMEOUT_MS) || 28000;
       }
     }
+    if (!timeoutMs && options.source === 'auto') {
+      timeoutMs = (APP_CONFIG && APP_CONFIG.AUTO_SYNC_TIMEOUT_MS) || 24000;
+    }
     return withTimeout(chain, timeoutMs)
       .then(function (res) {
         var usedMode = (res && res.loaderMode) || mode;
+        if (res) res.refreshSource = options.source || 'manual';
         return enrichResult(res, ctx, usedMode);
       })
       .catch(function (err) {

@@ -592,8 +592,6 @@ var App = (function () {
     if (!force && reason === 'poll' && (APP_CONFIG.AUTO_SYNC_EXPLORER_MS || 0) < 1) return;
     if (typeof BomOrchestrator === 'undefined' || !BomOrchestrator.refreshStructure) return;
 
-    var useApiSync = ctx ? ctx.canUseApi : APP_CONFIG.CAN_USE_ENOVIA_API;
-
     if (typeof ProductExplorerBridge !== 'undefined') {
       if (ProductExplorerBridge.pollDashboardExplorerChrome) {
         ProductExplorerBridge.pollDashboardExplorerChrome();
@@ -620,8 +618,20 @@ var App = (function () {
     var syncKey = ctx ? ctx.syncKey : (key || 'explorer') + '|' + explorerCount;
     var label = byId('selectionLabel');
     if (label && key) label.textContent = key;
+
+    var dashCount =
+      typeof BomService !== 'undefined' && BomService.getNodeCount ? BomService.getNodeCount() : 0;
+    var slack = explorerCount >= 40 ? 3 : explorerCount >= 15 ? 2 : 1;
+    var countMismatch =
+      explorerCount > 0 &&
+      dashCount > 0 &&
+      Math.abs(dashCount - explorerCount) > slack;
+    var structureChanged = syncKey !== lastSyncedStructure;
+    var autoRefreshOn =
+      APP_CONFIG.AUTO_REFRESH_ON_STRUCTURE_CHANGE !== false;
+
     if (
-      syncKey !== lastSyncedStructure &&
+      structureChanged &&
       lastSyncedStructure &&
       typeof BomService !== 'undefined' &&
       BomService.getNodeCount &&
@@ -629,7 +639,7 @@ var App = (function () {
       ctx.expectedCount > 0
     ) {
       var staleCount = BomService.getNodeCount();
-      if (staleCount > 0 && Math.abs(staleCount - ctx.expectedCount) > 1) {
+      if (staleCount > 0 && Math.abs(staleCount - ctx.expectedCount) > slack) {
         BomService.reset();
         refreshUI();
         if (typeof SyncBanner !== 'undefined' && SyncBanner.clearLoad) SyncBanner.clearLoad();
@@ -643,21 +653,53 @@ var App = (function () {
         );
       }
     }
-    if (!force && syncKey === lastSyncedStructure) return;
+
+    if (!force) {
+      if (!autoRefreshOn && reason !== 'context') return;
+      if (!structureChanged && !countMismatch) return;
+      if (syncKey === lastSyncedStructure && !countMismatch) return;
+    }
     if (loading && !force) return;
     if (structureSyncTimer) window.clearTimeout(structureSyncTimer);
+
+    var isManual = !!force;
+    var maxTsv = (APP_CONFIG && APP_CONFIG.FAST_TSV_MAX) || 500;
+    var allowAutoCopy =
+      isManual ||
+      (APP_CONFIG.AUTO_SYNC_ALLOW_COPY !== false &&
+        explorerCount > 0 &&
+        explorerCount <= maxTsv);
+    var preferApiManual =
+      isManual &&
+      ctx &&
+      ctx.canUseApi &&
+      APP_CONFIG.PREFER_API_ON_MANUAL_REFRESH !== false;
+    var preferApiAuto =
+      !isManual && APP_CONFIG.AUTO_SYNC_PREFER_API === true && ctx && ctx.canUseApi;
+
     structureSyncTimer = window.setTimeout(function () {
       if (force) setLoading(true);
       if (force) setStatus('Atualizando estrutura' + (key ? ': ' + key : '') + '…', 'info');
+      else if (structureChanged) {
+        setStatus('Sync Explorer: ' + (key || 'estrutura') + '…', 'info');
+      }
       BomOrchestrator.refreshStructure({
-        source: force ? 'manual' : 'auto',
-        allowAutoCopy: !!force,
-        preferApi: useApiSync
+        source: isManual ? 'manual' : 'auto',
+        allowAutoCopy: allowAutoCopy,
+        preferApi: preferApiManual || preferApiAuto
       })
         .then(function (res) {
           lastSyncedStructure = syncKey;
           applyOrchestratorResult(res);
-          setStatus(res.message || ('Atualizado: ' + BomService.getNodeCount() + ' itens'), res.partial || res.domFallback ? 'warn' : 'ok');
+          var n =
+            typeof BomService !== 'undefined' && BomService.getNodeCount
+              ? BomService.getNodeCount()
+              : 0;
+          var tag = isManual ? '' : ' (sync auto)';
+          setStatus(
+            res.message || ('Atualizado: ' + n + ' itens' + tag),
+            res.partial || res.domFallback ? 'warn' : 'ok'
+          );
         })
         .catch(function (err) {
           var msg = (err && err.message) ? err.message : String(err);
@@ -665,14 +707,21 @@ var App = (function () {
           if (typeof BomService !== 'undefined' && BomService.getNodeCount() > 0) {
             refreshUI();
           }
+          if (!isManual && /Ctrl\+C|cola|clipboard/i.test(msg)) {
+            setStatus(
+              'Sync automático: cole Ctrl+C na grade ou clique Atualizar estrutura.',
+              'warn'
+            );
+            return;
+          }
           var short = msg;
           if (short.length > 220) short = short.slice(0, 220) + '…';
-          setStatus(short, 'error');
+          setStatus(short, isManual ? 'error' : 'warn');
         })
         .finally(function () {
           if (force) setLoading(false);
         });
-    }, APP_CONFIG.STRUCTURE_SYNC_DEBOUNCE_MS || 1800);
+    }, APP_CONFIG.STRUCTURE_SYNC_DEBOUNCE_MS || 2200);
   }
 
   function onSelection(sel) {
@@ -1240,6 +1289,10 @@ var App = (function () {
     var ms = APP_CONFIG.AUTO_SYNC_EXPLORER_MS || 0;
     if (ms < 2000) return;
     setInterval(function () {
+      if (root.__3DX_BLOCK_AUTO_SYNC__ || loading) return;
+      try {
+        if (document.hidden) return;
+      } catch (eHidden) { /* */ }
       pullExplorerSelection();
       syncOpenExplorerStructure(false, 'poll');
     }, ms);

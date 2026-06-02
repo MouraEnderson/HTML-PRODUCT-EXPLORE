@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260606b',
+    BUILD: 'bom20260606c',
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
     API_PREFER_ABOVE: 20,
     /** Cloud FD02: dseng EngItem/EngInstance antes de dspfl/boM (evita 406) */
@@ -86,8 +86,12 @@
     /** Espelho Explorer: cola só se iframe inacessível */
     EXPLORER_MIRROR_AUTO_SYNC: true,
     EXPLORER_MIRROR_BLOCK_PASTE: true,
-    /** Sprint 2.5: sync só em mudança de contexto; poll agressivo desligado */
-    AUTO_SYNC_EXPLORER_MS: 1800,
+    /** Fase C: poll Explorer (só recarrega se estrutura/contagem mudar) */
+    AUTO_SYNC_EXPLORER_MS: 4000,
+    /** Auto-sync: TSV/mirror com copy na grade (sem API — evita 406 em massa) */
+    AUTO_SYNC_ALLOW_COPY: true,
+    AUTO_SYNC_PREFER_API: false,
+    AUTO_REFRESH_ON_STRUCTURE_CHANGE: true,
     /** Sprint 2.5 — TSV fast-path até N peças; acima disso API lazy */
     FAST_TSV_MAX: 500,
     PRIMARY_LOADER: 'api',
@@ -98,7 +102,8 @@
     /** Fallback DOM só após API/TSV/cola falharem — banner amarelo */
     DOM_MIRROR_FALLBACK: true,
     PILOT_API_TREE_DEPTH: 1,
-    STRUCTURE_SYNC_DEBOUNCE_MS: 1800,
+    STRUCTURE_SYNC_DEBOUNCE_MS: 2200,
+    AUTO_SYNC_TIMEOUT_MS: 24000,
     SKIP_PP_ENRICH: true,
     BOM_FAST_DEPTH: 3,
     USE_FAST_BOOT: true,

@@ -7,6 +7,7 @@ var SyncBanner = (function () {
 
   var lastLoad = {
     loaderMode: '',
+    refreshSource: '',
     partial: false,
     truncated: false,
     domFallback: false,
@@ -25,6 +26,7 @@ var SyncBanner = (function () {
 
   function clearLoad() {
     lastLoad.loaderMode = '';
+    lastLoad.refreshSource = '';
     lastLoad.partial = false;
     lastLoad.truncated = false;
     lastLoad.domFallback = false;
@@ -34,6 +36,7 @@ var SyncBanner = (function () {
   function setLoadResult(res) {
     if (!res) return;
     lastLoad.loaderMode = res.loaderMode || res.mode || lastLoad.loaderMode;
+    lastLoad.refreshSource = res.refreshSource || lastLoad.refreshSource;
     lastLoad.partial = !!res.partial;
     lastLoad.truncated = !!(res.meta && res.meta.truncated);
     lastLoad.domFallback =
@@ -172,8 +175,10 @@ var SyncBanner = (function () {
 
     if (explorer > 0 && diff <= 1) {
       el.className = 'bom-sync-banner bom-sync-ok';
+      var autoTag =
+        lastLoad.refreshSource === 'auto' ? ' · <span class="bom-sync-auto">sync auto</span>' : '';
       el.innerHTML =
-        '<strong>' + countLine(mode || 'TSV', dash, explorer) + '</strong> — sincronizado';
+        '<strong>' + countLine(mode || 'TSV', dash, explorer) + '</strong> — sincronizado' + autoTag;
       return;
     }
 

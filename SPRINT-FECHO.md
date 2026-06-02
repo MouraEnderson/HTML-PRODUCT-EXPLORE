@@ -6,7 +6,7 @@ Documento de execução para fechar o projeto **sem dependência de publicação
 Dashboard analytics da E-BOM do Explorer, integrado ao fluxo do utilizador, com preview da peça no painel e carga automática/confiável das estruturas piloto no cloud.
 
 **Tenant piloto:** `R1132100929518`  
-**Build sprint:** `bom20260606a` (entregue nesta sessão)  
+**Build sprint:** `bom20260606b` (Gate B validado no dashboard)  
 **Deploy:** GitHub Pages — `widget-boot.html` → `widget-v3.html?v=<BUILD>`
 
 ---
@@ -202,10 +202,10 @@ Fases seguintes só após gate da fase anterior.
 
 | Fase | Estado     | Notas |
 | ---- | ---------- | ----- |
-| A    | ⬜ pendente |       |
-| B    | ⬜ pendente |       |
-| C    | ⬜ pendente |       |
-| D    | ⬜ pendente |       |
+| A    | ✅ fechado | baseline + testes parse |
+| B    | ✅ fechado | Mont10 + Drone + SKA (Gate B OK, utilizador 2026-06-02) |
+| C    | 🔄 em teste | `bom20260606c` — sync só se estrutura/contagem mudar; auto=TSV |
+| D    | ⬜ pendente | preview 2D painel + README fecho |
 
 
 **A2 runtime (preencher no dashboard):**  
