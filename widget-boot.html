@@ -16,11 +16,11 @@
   //<![CDATA[
     (function () {
       var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-      var FALLBACK = 'bom20260605r';
+      var FALLBACK = 'bom20260605v';
       var target = GH + 'widget-v3.html?v=' + encodeURIComponent(FALLBACK) + '&boot=' + Date.now();
 
       function go(build) {
-        if (build && /^bom20/.test(build) && build >= FALLBACK) {
+        if (build && /^bom20/.test(String(build))) {
           target = GH + 'widget-v3.html?v=' + encodeURIComponent(build) + '&boot=' + Date.now();
         }
         if (window.top && window.top !== window) {

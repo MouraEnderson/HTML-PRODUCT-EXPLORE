@@ -95,7 +95,11 @@ var PartPreview = (function () {
       '<dt>Tipo</dt><dd>' + escapeHtml(node.type || node.displayType || '—') + '</dd>' +
       '<dt>Proprietário</dt><dd>' + escapeHtml(ownerText(node)) + '</dd>' +
       '<dt>Maturidade</dt><dd>' + escapeHtml(maturityText(node)) + '</dd>' +
-      '<dt>ID</dt><dd class="bom-preview-id">' + escapeHtml(node.physicalid || '—') + '</dd>' +
+      '<dt>ID</dt><dd class="bom-preview-id">' + escapeHtml(
+        (typeof PartImage !== 'undefined' && PartImage.lookupPrdId
+          ? PartImage.lookupPrdId(node)
+          : '') || node.sourcePhysicalId || node.physicalid || '—'
+      ) + '</dd>' +
       '</dl>';
   }
 
@@ -119,6 +123,9 @@ var PartPreview = (function () {
     if (!node) {
       clear();
       return;
+    }
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.enrichNodeWithPrd) {
+      ProductExplorerBridge.enrichNodeWithPrd(node);
     }
     if (r.hintEl) r.hintEl.style.display = 'none';
     if (r.titleEl) r.titleEl.textContent = node.title || node.name || 'Peça';

@@ -86,8 +86,8 @@ var ThreeDPlayViewer = (function () {
       hostEl.innerHTML =
         '<div class="bom-3dplay-empty">' +
         '<p>Pré-visualização 3D indisponível para esta linha.</p>' +
-        '<p class="bom-3dplay-empty-sub">IDs de importação (INP_/grid_) só mostram miniatura 2D. ' +
-        'Para 3D real, carregue via Explorer/API (prd-).</p>' +
+        '<p class="bom-3dplay-empty-sub">IDs de importação (IMP_/grid_) só mostram miniatura 2D. ' +
+        'Para 3D real, o Explorer precisa expor prd- (Ctrl+C com linha de ID ou grade visível).</p>' +
         '</div>';
       renderStatus('Sem ID 3D — só metadados.', 'warn');
       renderThumb(node);

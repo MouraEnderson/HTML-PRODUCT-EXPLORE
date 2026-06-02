@@ -118,6 +118,9 @@ var FileImportService = (function () {
     if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.applyOwnersToItems) {
       items = ProductExplorerBridge.applyOwnersToItems(items);
     }
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.enrichItemsWithPrd) {
+      items = ProductExplorerBridge.enrichItemsWithPrd(items);
+    }
     lastImportReport.parsed = items ? items.length : 0;
     return items;
   }
@@ -215,6 +218,18 @@ var FileImportService = (function () {
       }
     }
     return '';
+  }
+
+  /** prd- em qualquer célula ou texto multi-linha da linha (copy Explorer). */
+  function extractPrdFromRow(row) {
+    if (!row || !row.length) return '';
+    var joined = '';
+    var i;
+    for (i = 0; i < row.length; i++) {
+      joined += ' ' + String(row[i] || '');
+    }
+    var m = joined.match(/prd-R\d{10,}-[A-Za-z0-9]+/i);
+    return m ? m[0] : '';
   }
 
   /** Explorer copia proprietário como JSON { icon, label }. */
@@ -922,10 +937,13 @@ var FileImportService = (function () {
       }
       stackLevel = level;
 
-      var pid = cell(row, colMap, 'physicalid', '') || ('IMP_' + (r + 1) + '_' + name.replace(/\W/g, '_').slice(0, 40));
+      var prdFromRow = extractPrdFromRow(row);
+      var pidCell = cell(row, colMap, 'physicalid', '');
+      var pid = pidCell || prdFromRow || ('IMP_' + (r + 1) + '_' + name.replace(/\W/g, '_').slice(0, 40));
       pid = String(pid);
       if (usedIds[pid]) pid = pid + '__r' + (r + 1);
       usedIds[pid] = true;
+      var srcPrd = prdFromRow || (/^prd-R/i.test(pidCell) ? pidCell : '');
       var st = resolveMaturityFields(row, colMap);
       var ownerHit = extractOwnerFromRow(row, colMap);
       var ownerText = ownerHit.text;
@@ -938,7 +956,7 @@ var FileImportService = (function () {
       }
       items.push({
         physicalid: pid,
-        sourcePhysicalId: cell(row, colMap, 'physicalid', '') || '',
+        sourcePhysicalId: srcPrd || (/^prd-R/i.test(pidCell) ? pidCell : ''),
         name: String(name),
         title: stripIconNoise(unwrapJsonCell(cell(row, colMap, 'title', name))) || String(name),
         type: cell(row, colMap, 'type', 'VPMReference'),

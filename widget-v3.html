@@ -108,13 +108,18 @@
     .stat-markers-quad .stat-marker-label { font-size: 0.62rem !important; margin-bottom: 2px !important; line-height: 1.15; }
     .stat-markers-quad .stat-marker-value { font-size: 1.05rem !important; line-height: 1.1; }
   </style>
+  <script type="text/javascript" src="assets/js/build-id.js?v=boot"></script>
   <script type="text/javascript">
   //<![CDATA[
     window.__3DX_TRUSTED_WIDGET__ = true;
     window.__3DX_BOOT_DEFER__ = true;
 
-    var BOM_BUILD = 'bom20260605r';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
+    var CANON_BUILD =
+      window.__BOM_BUILD_ID__ && /^bom20/.test(String(window.__BOM_BUILD_ID__))
+        ? String(window.__BOM_BUILD_ID__)
+        : 'bom20260605v';
+    var BOM_BUILD = CANON_BUILD;
     var BUNDLE;
 
     (function parseEmbedEarly() {
@@ -144,30 +149,14 @@
 
     (function applyBuildFromQuery() {
       var eq = window.__3DX_EMBED_QUERY__ || {};
-      var floor = BOM_BUILD;
       function pickBuild(raw) {
-        if (!raw || !/^bom20/.test(raw)) return null;
-        return raw >= floor ? raw : null;
+        if (!raw || !/^bom20/.test(String(raw))) return null;
+        if (raw < CANON_BUILD) return CANON_BUILD;
+        return raw;
       }
       var fromQuery = pickBuild(eq.v) || pickBuild(eq.build);
       if (fromQuery) BOM_BUILD = fromQuery;
       BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js?v=' + encodeURIComponent(BOM_BUILD);
-    })();
-
-    (function enforceMinimumBuild() {
-      var MIN = 'bom20260605k';
-      if (BOM_BUILD < MIN) {
-        BOM_BUILD = 'bom20260605r';
-        BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js?v=' + encodeURIComponent(BOM_BUILD);
-      }
-    })();
-
-    (function enforceMinimumBuild() {
-      var MIN = 'bom20260605k';
-      if (BOM_BUILD < MIN) {
-        BOM_BUILD = 'bom20260605r';
-        BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js?v=' + encodeURIComponent(BOM_BUILD);
-      }
     })();
 
     var UI_HTML =

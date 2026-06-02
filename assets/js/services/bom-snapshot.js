@@ -159,6 +159,9 @@ var BomSnapshot = (function () {
       if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.applyOwnersToIndex) {
         ProductExplorerBridge.applyOwnersToIndex(BomService.getIndex());
       }
+      if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.applyPrdToIndex) {
+        ProductExplorerBridge.applyPrdToIndex(BomService.getIndex());
+      }
       saveSession(normalizePayload(payload));
       return meta;
     });

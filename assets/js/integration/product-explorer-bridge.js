@@ -257,10 +257,28 @@ var ProductExplorerBridge = (function () {
     return catalog;
   }
 
+  var PRD_ID_RE = /prd-R\d{10,}-[A-Za-z0-9]+/i;
+
+  function extractPrdFromText(text) {
+    var m = String(text || '').match(PRD_ID_RE);
+    return m ? m[0] : '';
+  }
+
+  function extractPrdFromDomRow(row) {
+    if (!row) return '';
+    var fromText = extractPrdFromText(row.innerText || row.textContent || '');
+    if (fromText) return fromText;
+    try {
+      return extractPrdFromText(row.outerHTML || '');
+    } catch (e) {
+      return '';
+    }
+  }
+
   function mergePrdCatalogFromText(text, catalog) {
     catalog = catalog || {};
     var lines = String(text || '').split('\n');
-    var prdRe = /prd-R\d{10,}-[A-Za-z0-9]+/i;
+    var prdRe = PRD_ID_RE;
     var nameRe = /\b(01_SKA_[A-Za-z0-9][A-Za-z0-9_.\-]{2,80}|SKA_ENDERSW-[A-Za-z0-9\-]{2,80})\b/i;
     var lastName = '';
     var i;
@@ -278,10 +296,156 @@ var ProductExplorerBridge = (function () {
     return catalog;
   }
 
+  /** Explorer: linha prd- logo após o título da peça (copy/grid). */
+  function mergePrdCatalogFromAdjacentLines(text, catalog) {
+    catalog = catalog || {};
+    var lines = String(text || '').split('\n');
+    var pendingPrd = '';
+    var lastName = '';
+    var i;
+    for (i = 0; i < lines.length; i++) {
+      var line = String(lines[i] || '').trim();
+      if (!line) continue;
+      var prdOnly = line.match(PRD_ID_RE);
+      if (prdOnly && String(line).replace(prdOnly[0], '').trim().length < 4) {
+        pendingPrd = prdOnly[0];
+        continue;
+      }
+      if (isExplorerColumnHeaderLine(line) || isMirrorUiNoise(line)) continue;
+      if (/^\d+\s*(?:of|de)\s*\d+\s*(?:selected|selecionado)/i.test(line)) continue;
+      var partM = line.match(EXPLORER_PART_LINE) || line.match(EXPLORER_NAME_LINE);
+      var displayName = '';
+      if (partM) displayName = partM[1];
+      else if (isValidMirrorPartName(line) && !isPersonName(line)) displayName = line;
+      else if (
+        line.length >= 4 && line.length <= 96 && !isPersonName(line) &&
+        !/^\d+[.,]\d+/.test(line) && line.indexOf('|') < 0
+      ) {
+        displayName = line;
+      }
+      if (displayName) {
+        lastName = displayName;
+        var next = i + 1 < lines.length ? String(lines[i + 1] || '').trim() : '';
+        var prdNext = extractPrdFromText(next);
+        if (prdNext) {
+          catalog[lastName] = prdNext;
+          if (lastName.length > 24) catalog[lastName.slice(0, 24)] = prdNext;
+          pendingPrd = '';
+          continue;
+        }
+        if (pendingPrd) {
+          catalog[lastName] = pendingPrd;
+          if (lastName.length > 24) catalog[lastName.slice(0, 24)] = pendingPrd;
+          pendingPrd = '';
+        }
+      }
+    }
+    return catalog;
+  }
+
+  function buildPrdCatalogFromExplorerHtml(doc) {
+    var catalog = {};
+    if (!doc) return catalog;
+    try {
+      var html = String(doc.documentElement && doc.documentElement.innerHTML || '');
+      if (html.length < 80) return catalog;
+      var re = /([\wÀ-ú][\wÀ-ú0-9 _.\-]{3,72})\D{0,48}(prd-R\d{10,}-[A-Za-z0-9]+)/gi;
+      var m;
+      while ((m = re.exec(html)) !== null) {
+        var name = String(m[1] || '').trim();
+        var prd = m[2];
+        if (!name || !prd || isPersonName(name)) continue;
+        if (/^(physical|product|reference|title|revision)$/i.test(name)) continue;
+        catalog[name] = prd;
+        if (name.length > 24) catalog[name.slice(0, 24)] = prd;
+      }
+    } catch (eHtml) { /* */ }
+    return catalog;
+  }
+
+  function buildPrdCatalogFull() {
+    var catalog = buildPrdCatalogFromExplorer();
+    var doc = readExplorerIframeDocument();
+    if (doc) {
+      var fromHtml = buildPrdCatalogFromExplorerHtml(doc);
+      Object.keys(fromHtml).forEach(function (k) {
+        catalog[k] = fromHtml[k];
+      });
+    }
+    var text = harvestExplorerTextOnly() || harvestExplorerWidgetTextFromDashboard() || harvestAllExplorerText();
+    mergePrdCatalogFromText(text, catalog);
+    mergePrdCatalogFromAdjacentLines(text, catalog);
+    return catalog;
+  }
+
+  function catalogLookupPrd(catalog, name) {
+    if (!name || !catalog) return '';
+    var key = String(name).trim();
+    if (catalog[key]) return catalog[key];
+    var tLow = key.toLowerCase();
+    var found = '';
+    Object.keys(catalog).forEach(function (k) {
+      if (found) return;
+      var nLow = k.toLowerCase();
+      if (nLow === tLow || nLow.indexOf(tLow) >= 0 || tLow.indexOf(nLow) >= 0) {
+        found = catalog[k];
+      }
+    });
+    return found;
+  }
+
+  function enrichItemWithPrd(item, catalog) {
+    if (!item) return item;
+    catalog = catalog || buildPrdCatalogFull();
+    var names = [item.name, item.title, item.displayName].filter(Boolean);
+    var prd = item.sourcePhysicalId && isPrdCloudId(item.sourcePhysicalId)
+      ? item.sourcePhysicalId
+      : '';
+    var i;
+    if (!prd) {
+      for (i = 0; i < names.length; i++) {
+        prd = catalogLookupPrd(catalog, names[i]) || lookupRegistryId(names[i], true) || '';
+        if (prd) break;
+      }
+    }
+    if (prd && isPrdCloudId(prd)) {
+      item.sourcePhysicalId = prd;
+    }
+    return item;
+  }
+
+  function enrichItemsWithPrd(items) {
+    if (!items || !items.length) return items;
+    var catalog = buildPrdCatalogFull();
+    items.forEach(function (it) {
+      enrichItemWithPrd(it, catalog);
+    });
+    return items;
+  }
+
+  function applyPrdToIndex(index) {
+    if (!index) return index;
+    var catalog = buildPrdCatalogFull();
+    Object.keys(index).forEach(function (k) {
+      enrichItemWithPrd(index[k], catalog);
+      if (typeof PartImage !== 'undefined' && PartImage.buildGetPictureUrl && index[k].sourcePhysicalId) {
+        if (!index[k].iconUrl) {
+          index[k].iconUrl = PartImage.buildGetPictureUrl(index[k].sourcePhysicalId);
+        }
+      }
+    });
+    return index;
+  }
+
+  function enrichNodeWithPrd(node) {
+    if (!node) return node;
+    enrichItemWithPrd(node, buildPrdCatalogFull());
+    return node;
+  }
+
   function lookupPrdByPartName(name) {
     if (!name) return '';
-    var catalog = buildPrdCatalogFromExplorer();
-    mergePrdCatalogFromText(harvestAllExplorerText(), catalog);
+    var catalog = buildPrdCatalogFull();
     var key = String(name).trim();
     if (catalog[key]) return catalog[key];
     var tLow = key.toLowerCase();
@@ -1120,7 +1284,7 @@ var ProductExplorerBridge = (function () {
     extra = extra || {};
     var maturity = extra.maturity || '—';
     var approved = extra.approved || /aprovado|released|frozen/i.test(maturity);
-    return {
+    var row = {
       level: level,
       name: name,
       title: extra.title || name,
@@ -1133,6 +1297,10 @@ var ProductExplorerBridge = (function () {
       approval: approved ? 'Approved' : 'Unknown',
       physicalid: makeGridPhysicalId(name, idx, level === 0)
     };
+    if (extra.sourcePhysicalId && isPrdCloudId(extra.sourcePhysicalId)) {
+      row.sourcePhysicalId = extra.sourcePhysicalId;
+    }
+    return row;
   }
 
   /**
@@ -1179,7 +1347,8 @@ var ProductExplorerBridge = (function () {
         revision: normalizeRevisionLabel(m[2]),
         owner: extractOwnerFromExplorerRow(row, rootMeta),
         type: (rootMeta && rootMeta.type) || 'Physical Product',
-        maturity: extractMaturityFromExplorerRow(row)
+        maturity: extractMaturityFromExplorerRow(row),
+        sourcePhysicalId: extractPrdFromDomRow(row)
       });
       var before = items.length;
       pushGridItem(items, seen, item);
@@ -1250,31 +1419,48 @@ var ProductExplorerBridge = (function () {
       if (items.length > beforeRoot) added++;
     }
 
+    var pendingPrd = '';
     for (i = 0; i < lines.length; i++) {
       var line = lines[i];
       if (!line || isExplorerColumnHeaderLine(line) || isMirrorUiNoise(line)) continue;
       if (/^\d+\s*(?:of|de)\s*\d+\s*(?:selected|selecionado)/i.test(line)) continue;
-      if (isExplorerInternalIdLine(line)) continue;
+      var prdLine = extractPrdFromText(line);
+      if (prdLine && String(line).replace(prdLine, '').trim().length < 4) {
+        pendingPrd = prdLine;
+        continue;
+      }
+      if (isExplorerInternalIdLine(line) && !prdLine) continue;
       if (line.indexOf('|') >= 0) continue;
       var next = i + 1 < lines.length ? String(lines[i + 1] || '').trim() : '';
-      if (!/^\d+[.,]\d+[A-Za-z]?$/.test(next)) continue;
+      var revLine = next;
+      var srcPrd = pendingPrd;
+      if (extractPrdFromText(next)) {
+        srcPrd = extractPrdFromText(next);
+        revLine = i + 2 < lines.length ? String(lines[i + 2] || '').trim() : '';
+        if (!/^\d+[.,]\d+[A-Za-z]?$/.test(revLine)) continue;
+      } else if (!/^\d+[.,]\d+[A-Za-z]?$/.test(next)) {
+        continue;
+      }
       if (!isValidMirrorPartName(line)) continue;
       if (rootName && line.toLowerCase() === String(rootName).toLowerCase()) {
+        pendingPrd = '';
         i++;
         continue;
       }
       var item = buildMirrorRow(line, 1, items.length, {
         title: line,
-        revision: normalizeRevisionLabel(next),
+        revision: normalizeRevisionLabel(revLine),
         owner: rootMeta.owner || '',
         type: rootMeta.type || 'Physical Product',
-        maturity: '—'
+        maturity: '—',
+        sourcePhysicalId: srcPrd
       });
+      pendingPrd = '';
       var before = items.length;
       pushGridItem(items, seen, item);
       if (items.length > before) {
         added++;
-        i++;
+        i += extractPrdFromText(next) ? 2 : 1;
       }
     }
     return added;
@@ -1415,6 +1601,8 @@ var ProductExplorerBridge = (function () {
       for (ci = 0; ci < cells.length; ci++) values.push(cells[ci]);
       var item = buildMirrorItemFromValues(values, colMap, items.length, items.length === 0 ? 0 : 1);
       if (!item) continue;
+      var prdRow = extractPrdFromDomRow(row);
+      if (prdRow) item.sourcePhysicalId = prdRow;
       if (rootName && item.name.toLowerCase() === String(rootName).toLowerCase() && items.length > 0) continue;
       var before = items.length;
       pushGridItem(items, seen, item);
@@ -1677,7 +1865,7 @@ var ProductExplorerBridge = (function () {
 
   function resolveFromExplorerCatalog(term) {
     if (!term) return null;
-    var catalog = buildPrdCatalogFromExplorer();
+    var catalog = buildPrdCatalogFull();
     var key = String(term).trim();
     var prd = catalog[key];
     if (!prd) {
@@ -2323,7 +2511,11 @@ var ProductExplorerBridge = (function () {
     subscribeStructure: subscribeStructure,
     readHashSelection: readHashSelection,
     buildPrdCatalogFromExplorer: buildPrdCatalogFromExplorer,
+    buildPrdCatalogFull: buildPrdCatalogFull,
     lookupPrdByPartName: lookupPrdByPartName,
+    enrichItemsWithPrd: enrichItemsWithPrd,
+    applyPrdToIndex: applyPrdToIndex,
+    enrichNodeWithPrd: enrichNodeWithPrd,
     resolveFromExplorerCatalog: resolveFromExplorerCatalog,
     readExplorerIframeDocument: readExplorerIframeDocument,
     scrapeExplorerGrid: scrapeExplorerGrid,

@@ -169,6 +169,9 @@ var App = (function () {
     if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.applyOwnersToIndex) {
       ProductExplorerBridge.applyOwnersToIndex(index);
     }
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.applyPrdToIndex) {
+      ProductExplorerBridge.applyPrdToIndex(index);
+    }
     var rootId = BomService.getRootId();
     var flat = BomNormalizer.toFlatList(index, rootId);
     Filters.populateTypeOptions(flat);
