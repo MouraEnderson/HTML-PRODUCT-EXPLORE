@@ -763,7 +763,7 @@ var ExplorerScanner = (function () {
         : null;
     if (typeof TsvBomLoader !== 'undefined' && TsvBomLoader.load) {
       return TsvBomLoader.load(ctx, {
-        allowAutoCopy: options.allowAutoCopy === true,
+        allowAutoCopy: options.allowAutoCopy !== false,
         expectedCount: ctx ? ctx.expectedCount : 0
       });
     }
@@ -823,7 +823,7 @@ var ExplorerScanner = (function () {
    * Qualquer projeto: cola/clipboard → grade visível → demo embutido (último).
    */
   function scanViaPilotGeneric() {
-    return scanViaExplorerGrid().catch(function () {
+    return scanViaExplorerGrid({ allowAutoCopy: true }).catch(function () {
       return scanViaClipboardOrPaste().catch(function () {
         return scanViaBuiltinLast();
       });

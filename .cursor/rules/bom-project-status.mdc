@@ -16,7 +16,7 @@ alwaysApply: true
 
 ## Build atual (atualizar após cada deploy)
 
-- **BUILD:** `bom20260605l`
+- **BUILD:** `bom20260605m`
 - Widget carrega **`bom-bundle-<BUILD>.js`**, não os `.js` soltos
 - **Deploy one-click:** `powershell -ExecutionPolicy Bypass -File deploy.ps1`
 - Rebuild só bundle: `powershell -ExecutionPolicy Bypass -File scripts/build-bundle.ps1`

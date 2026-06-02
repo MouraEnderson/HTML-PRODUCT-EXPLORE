@@ -747,11 +747,17 @@ var App = (function () {
     setStatus('Lendo Explorer…', 'info');
     root.__3DX_BLOCK_AUTO_SYNC__ = true;
     root.__3DX_ALLOW_API__ = true;
+    if (typeof ProductExplorerBridge !== 'undefined') {
+      if (ProductExplorerBridge.pollDashboardExplorerChrome) {
+        ProductExplorerBridge.pollDashboardExplorerChrome();
+      }
+      if (ProductExplorerBridge.pollStructureHint) ProductExplorerBridge.pollStructureHint();
+    }
     if (btnEl) {
       btnEl.disabled = true;
       btnEl.textContent = 'Atualizando…';
     }
-    BomOrchestrator.refreshStructure({ source: 'manual', allowAutoCopy: true, preferApi: true })
+    BomOrchestrator.refreshStructure({ source: 'manual', allowAutoCopy: true, preferApi: false })
       .then(function (res) {
         applyOrchestratorResult(res, { updateClock: true, layoutFit: true });
         setStatus(res.message || 'Importação concluída.', res.partial || res.domFallback ? 'warn' : 'ok');
@@ -904,6 +910,12 @@ var App = (function () {
     var btnLoadId = byId('btnLoadPhysicalId');
     if (btnLoadId) {
       btnLoadId.addEventListener('click', function () {
+        var area = byId('pasteArea');
+        var pasted = area && area.value ? String(area.value).trim() : '';
+        if (pasted.indexOf('\t') >= 0) {
+          runImportFromClipboard(btnLoadId);
+          return;
+        }
         var idEl = byId('explorerObjectId');
         var id = idEl && idEl.value ? String(idEl.value).trim() : '';
         if (!id || id.length < 16) {

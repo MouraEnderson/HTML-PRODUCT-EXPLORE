@@ -28,14 +28,20 @@ var BomOrchestrator = (function () {
   function pickLoaderMode(ctx, options) {
     options = options || {};
     if (options.forceLoader) return options.forceLoader;
+    var maxTsv = (APP_CONFIG && APP_CONFIG.FAST_TSV_MAX) || 500;
+    var expected = ctx.expectedCount || 0;
+    if (options.source === 'manual' && expected <= maxTsv) {
+      return 'tsv';
+    }
     if (options.preferApi && ctx.canUseApi) return 'api';
     if (typeof ExplorerContext !== 'undefined' && ExplorerContext.suggestLoaderMode) {
       return ExplorerContext.suggestLoaderMode();
     }
-    var maxTsv = (APP_CONFIG && APP_CONFIG.FAST_TSV_MAX) || 500;
-    if (ctx.expectedCount > maxTsv) return 'paste';
+    if (expected > maxTsv) return 'paste';
     return 'tsv';
   }
+
+  /** SKA 79+: quando expectedCount > maxTsv o suggestLoaderMode escolhe paste/API lazy. */
 
   function withTimeout(promise, ms) {
     ms = ms || (APP_CONFIG && APP_CONFIG.SCAN_TIMEOUT_MS) || 90000;
@@ -127,9 +133,9 @@ var BomOrchestrator = (function () {
   function runManualFallbackChain(ctx, options, failedMode, firstErr) {
     var maxTsv = (APP_CONFIG && APP_CONFIG.FAST_TSV_MAX) || 500;
     var order = [];
-    if (ctx.canUseApi && failedMode !== 'api') order.push('api');
     if (failedMode !== 'tsv' && ctx.expectedCount <= maxTsv) order.push('tsv');
     if (failedMode !== 'paste') order.push('paste');
+    if (ctx.canUseApi && failedMode !== 'api') order.push('api');
     if (APP_CONFIG.DOM_MIRROR_FALLBACK !== false && failedMode !== 'dom-fallback') {
       order.push('dom-fallback');
     }

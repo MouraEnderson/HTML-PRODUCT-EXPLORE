@@ -217,30 +217,33 @@ var TsvBomLoader = (function () {
     var term = rootTerm(ctx);
     var allowAutoCopy = options.allowAutoCopy === true;
 
-    return tryAutoCopy(term, allowAutoCopy)
-      .then(function (autoPayload) {
-        return tryScrollHarvest(term, autoPayload, expected).then(function (harvested) {
-          if (harvested && !needsMore(harvested, expected)) return harvested;
-          return tryClipboardTsv(term).then(function (clipPayload) {
-            var best = pickBestPayload(harvested, clipPayload, expected);
+    function finish(payload) {
+      if (!payload || !payload.items || payload.items.length < 1) {
+        return Promise.reject(
+          new Error(
+            'TSV indisponível. No Explorer: expanda a estrutura → Ctrl+A na grade → Ctrl+C → Atualizar estrutura.'
+          )
+        );
+      }
+      return applyPayload(payload, term, expected);
+    }
+
+    return tryClipboardTsv(term)
+      .then(function (clipPayload) {
+        if (clipPayload && !needsMore(clipPayload, expected)) return clipPayload;
+        return tryAutoCopy(term, allowAutoCopy).then(function (autoPayload) {
+          return tryScrollHarvest(term, autoPayload, expected).then(function (harvested) {
+            var best = pickBestPayload(clipPayload, harvested, expected);
             if (best && !needsMore(best, expected)) return best;
-            if (clipPayload && harvested) {
-              return pickBestPayload(harvested, clipPayload, expected);
-            }
-            return clipPayload || harvested;
+            return tryClipboardTsv(term).then(function (clipAgain) {
+              best = pickBestPayload(best, clipAgain, expected);
+              if (best && !needsMore(best, expected)) return best;
+              return pickBestPayload(best, clipPayload, expected) || clipPayload || harvested || autoPayload;
+            });
           });
         });
       })
-      .then(function (payload) {
-        if (!payload || !payload.items || payload.items.length < 1) {
-          return Promise.reject(
-            new Error(
-              'TSV indisponível. No Explorer: expanda a estrutura → Ctrl+A na grade → Ctrl+C → Atualizar estrutura.'
-            )
-          );
-        }
-        return applyPayload(payload, term, expected);
-      });
+      .then(finish);
   }
 
   return {

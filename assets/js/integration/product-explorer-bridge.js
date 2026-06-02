@@ -2087,8 +2087,8 @@ var ProductExplorerBridge = (function () {
           }).catch(function () {
             resolve(null);
           });
-        }, 120);
-      }, 100);
+        }, 250);
+      }, 180);
     });
   }
 
