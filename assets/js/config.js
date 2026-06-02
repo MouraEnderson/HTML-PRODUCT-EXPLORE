@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260605x',
+    BUILD: 'bom20260606a',
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
     API_PREFER_ABOVE: 20,
     /** Cloud FD02: dseng EngItem/EngInstance antes de dspfl/boM (evita 406) */
@@ -20,9 +20,9 @@
     /** Piloto: se API falhar no 3DDashboard, carrega snapshot validado (Mont10) */
     PILOT_FALLBACK_SNAPSHOT: true,
     /** Piloto: Varrer lÃƒÂª a ÃƒÂ¡rvore visÃƒÂ­vel do Explorer antes da API (evita 406) */
-    PILOT_GRID_FIRST: true,
-    /** Bloqueia REST /enovia atÃƒÂ© Varrer (ou ?api=1 / ID manual) */
-    PILOT_BLOCK_API_UNLESS_ALLOWED: true,
+    PILOT_GRID_FIRST: false,
+    /** Additional App: API dseng quando WAFData disponível */
+    PILOT_BLOCK_API_UNLESS_ALLOWED: false,
     /** Tenant cloud: objetos usam prefixo prd-; BOM via dseng quando API_ENG_BOM_FIRST */
     CLOUD_PHYSICAL_ONLY: true,
     /** Fallback offline sÃƒÂ³ com ?snapshot= na URL */
@@ -54,14 +54,14 @@
     /** Scroll na grade Explorer — limite para não travar o dashboard */
     SCROLL_HARVEST_MAX_STEPS: 36,
     SCROLL_HARVEST_STEP_MS: 80,
-    /** TSV: não espelhar DOM síncrono (só Ctrl+C / copy automático) */
-    SKIP_MIRROR_ON_TSV: true,
+    /** TSV: espelho Explorer antes de cola (Mont10/Drone sem Ctrl+C) */
+    SKIP_MIRROR_ON_TSV: false,
     /** clipboard.readText trava em iframe GitHub no 3DDashboard */
     SKIP_CLIPBOARD_READ: true,
     /** Fallback DOM manual só até N peças */
     DOM_MIRROR_MANUAL_MAX_EXPECTED: 25,
     AUTO_SCAN_ON_SELECTION: false,
-    CAN_USE_ENOVIA_API: false,
+    CAN_USE_ENOVIA_API: true,
 
     /** Somente Explorer Ã¢â€ â€™ grÃƒÂ¡ficos + tabela */
     EXPLORER_ONLY: true,
@@ -87,10 +87,12 @@
     EXPLORER_MIRROR_AUTO_SYNC: true,
     EXPLORER_MIRROR_BLOCK_PASTE: true,
     /** Sprint 2.5: sync só em mudança de contexto; poll agressivo desligado */
-    AUTO_SYNC_EXPLORER_MS: 0,
+    AUTO_SYNC_EXPLORER_MS: 1800,
     /** Sprint 2.5 — TSV fast-path até N peças; acima disso API lazy */
     FAST_TSV_MAX: 500,
     PRIMARY_LOADER: 'api',
+    /** Additional App trusted: tentar API antes de TSV no Atualizar */
+    PREFER_API_ON_MANUAL_REFRESH: true,
     /** Sprint 2.5 item 6: espelho DOM/innerText nunca como primary */
     USE_DOM_MIRROR_PRIMARY: false,
     /** Fallback DOM só após API/TSV/cola falharem — banner amarelo */
@@ -322,7 +324,9 @@
       _host.indexOf('github.io') >= 0 ||
       _host.indexOf('jsdelivr.net') >= 0 ||
       _host.indexOf('githubusercontent.com') >= 0;
-    APP_CONFIG.CAN_USE_ENOVIA_API = false;
+    APP_CONFIG.CAN_USE_ENOVIA_API = !!(
+      typeof WAFData !== 'undefined' && WAFData.authenticatedRequest
+    );
     APP_CONFIG.WIDGET_MODE = APP_CONFIG.CROSS_ORIGIN_WIDGET ? 'web_page_reader' : 'external';
   }
 

@@ -1553,6 +1553,7 @@ var ProductExplorerBridge = (function () {
     if (!name && colMap.name !== 0) name = readMirrorField(values[0], 'name');
     if (!name || isPersonName(name)) return null;
     var title = val('title', 'title') || name;
+    if (isPersonName(title) && !isPersonName(name)) title = name;
     var revision = val('revision', 'revision') || '—';
     var owner = val('owner', 'owner') || '';
     var type = val('type', 'type') || 'Physical Product';

@@ -32,15 +32,22 @@ var BomOrchestrator = (function () {
     var expected = ctx.expectedCount || 0;
     var primary = (APP_CONFIG && APP_CONFIG.PRIMARY_LOADER) || 'auto';
 
-    if (options.source === 'manual' && expected <= maxTsv && options.preferApi === false) {
+    var preferApiManual =
+      options.preferApi === true ||
+      (options.preferApi !== false &&
+        APP_CONFIG.PREFER_API_ON_MANUAL_REFRESH !== false &&
+        options.source === 'manual' &&
+        ctx.canUseApi);
+
+    if (options.source === 'manual' && expected <= maxTsv && !preferApiManual && options.preferApi === false) {
       return 'tsv';
     }
-    if (options.source === 'manual' && expected > maxTsv && options.preferApi === false) {
+    if (options.source === 'manual' && expected > maxTsv && !preferApiManual && options.preferApi === false) {
       return 'paste';
     }
 
     if (ctx.canUseApi) {
-      if (options.preferApi === true && (options.source === 'manual' || primary === 'api')) {
+      if (preferApiManual || (options.preferApi === true && (options.source === 'manual' || primary === 'api'))) {
         return 'api';
       }
       if (primary === 'api' && options.preferApi !== false) return 'api';

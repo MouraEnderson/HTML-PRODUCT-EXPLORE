@@ -350,47 +350,39 @@ var TsvBomLoader = (function () {
       });
     }
 
-    if (fastStructure) {
-      return tryPasteBufferFirst().then(function (pastePayload) {
-        if (pastePayload && payloadInSync(pastePayload, term, expected)) {
-          return finish(pastePayload);
-        }
-        return tryClipboardTsv(term).then(function (clipPayload) {
-          if (clipPayload && payloadInSync(clipPayload, term, expected)) {
-            return finish(clipPayload);
+    function runHarvestChain() {
+      return tryMirrorFirst()
+        .then(function (mirrorPayload) {
+          if (mirrorPayload && payloadInSync(mirrorPayload, term, expected)) {
+            return finish(mirrorPayload);
           }
-          return Promise.reject(
-            new Error(
-              'No Explorer: Ctrl+A → Ctrl+C → clique Atualizar estrutura (ou Ctrl+V na caixa de cola).'
-            )
-          );
-        });
-      });
-    }
-
-    return tryPasteBufferFirst()
-      .then(function (pastePayload) {
-        if (pastePayload && payloadInSync(pastePayload, term, expected)) {
-          return finish(pastePayload);
-        }
-        return tryCopyFirst().then(function (copyPayload) {
-          if (copyPayload && copyPayload.items && payloadInSync(copyPayload, term, expected)) {
-            return finish(copyPayload);
-          }
-          return tryClipboardTsv(term).then(function (clipPayload) {
-            var best = pickBestPayload(copyPayload, clipPayload, expected, term);
-            if (best && payloadInSync(best, term, expected)) return finish(best);
-            return tryScrollHarvest(term, best || copyPayload, expected).then(function (harvested) {
-              if (harvested && payloadInSync(harvested, term, expected)) return finish(harvested);
-              return finish(best || harvested || copyPayload);
+          return tryPasteBufferFirst().then(function (pastePayload) {
+            if (pastePayload && payloadInSync(pastePayload, term, expected)) {
+              return finish(pastePayload);
+            }
+            return tryCopyFirst().then(function (copyPayload) {
+              if (copyPayload && payloadInSync(copyPayload, term, expected)) {
+                return finish(copyPayload);
+              }
+              return tryClipboardTsv(term).then(function (clipPayload) {
+                var best = pickBestPayload(copyPayload, clipPayload, expected, term);
+                if (best && payloadInSync(best, term, expected)) return finish(best);
+                return tryScrollHarvest(term, best || copyPayload, expected).then(function (harvested) {
+                  if (harvested && payloadInSync(harvested, term, expected)) return finish(harvested);
+                  if (best || harvested) return finish(best || harvested);
+                  return Promise.reject(
+                    new Error(
+                      'Não foi possível ler a grade do Explorer. Clique na estrutura → Atualizar estrutura.'
+                    )
+                  );
+                });
+              });
             });
           });
         });
-      })
-      .then(function (res) {
-        if (res && res.ok) return res;
-        return finish(res);
-      });
+    }
+
+    return runHarvestChain();
   }
 
   return {

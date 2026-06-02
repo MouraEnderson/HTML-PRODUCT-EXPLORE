@@ -114,8 +114,10 @@ var FileImportService = (function () {
   }
 
   function finalizeImportReport(items) {
+    items = repairImportedItems(items);
     items = ensureRootItem(items);
     items = mergeMissingGridItems(items);
+    items = repairImportedItems(items);
     if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.applyOwnersToItems) {
       items = ProductExplorerBridge.applyOwnersToItems(items);
     }
@@ -401,10 +403,45 @@ var FileImportService = (function () {
       map.maturity = matIdx;
       map.state = matIdx;
     }
-    if (map.title === undefined && map.name !== undefined && map.name + 1 < colCount && used.indexOf(map.name + 1) < 0) {
-      map.title = map.name + 1;
+    if (map.title === undefined && map.name !== undefined) {
+      var titleIdx = map.name + 1;
+      if (
+        titleIdx < colCount &&
+        used.indexOf(titleIdx) < 0 &&
+        titleIdx !== map.owner
+      ) {
+        var titleLooksOwner = sample.some(function (r) {
+          return r && r.length > titleIdx && looksLikePersonName(unwrapJsonCell(r[titleIdx]));
+        });
+        if (!titleLooksOwner) map.title = titleIdx;
+      }
     }
     return map;
+  }
+
+  /** Corrige TSV Explorer: coluna Descrição com nome do proprietário em vez de M1/M2. */
+  function repairImportedItems(items) {
+    if (!items || !items.length) return items;
+    items.forEach(function (it) {
+      var nm = cleanCell(it.name || '');
+      var tl = cleanCell(it.title || '');
+      if (looksLikePersonName(nm) && !looksLikePersonName(tl) && tl.length >= 1) {
+        it.owner = sanitizeOwnerValue(nm) || nm;
+        it.name = tl;
+        it.title = tl;
+      } else if (looksLikePersonName(tl) && !looksLikePersonName(nm) && nm.length >= 1) {
+        if (!it.owner || /^sem\s*propriet|^-$|^—$/i.test(String(it.owner).trim())) {
+          it.owner = sanitizeOwnerValue(tl) || tl;
+        }
+        it.title = nm;
+      } else if (looksLikePersonName(tl) && looksLikePersonName(nm)) {
+        it.owner = sanitizeOwnerValue(tl) || tl;
+        it.title = nm.split(/\s+/)[0] || nm;
+      }
+      if (it.name && !it.title) it.title = it.name;
+      if (it.title && !it.name) it.name = it.title;
+    });
+    return items;
   }
 
   function pickOwnerColumnIndex(row, headerMap) {
@@ -840,6 +877,15 @@ var FileImportService = (function () {
     var hasHeader = rowsPreview.length && looksLikeHeader(rowsPreview[0]);
     captureExplorerExpected(pasteLines.length, hasHeader);
     if (!looksLikeExplorerPaste(text)) {
+      if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.scrapeExplorerMirror) {
+        var term =
+          ProductExplorerBridge.getStructureNameHint &&
+          ProductExplorerBridge.getStructureNameHint();
+        var mirror = ProductExplorerBridge.scrapeExplorerMirror(term || '');
+        if (mirror && mirror.items && mirror.items.length >= 2) {
+          return finalizeImportReport(mirror.items);
+        }
+      }
       throw new Error(
         'Clipboard não tem a grade do Explorer. No Explorer: clique na tabela → Ctrl+A → Ctrl+C → cole na caixa azul → Varrer.'
       );
@@ -975,7 +1021,11 @@ var FileImportService = (function () {
         physicalid: pid,
         sourcePhysicalId: srcPrd || (/^prd-R/i.test(pidCell) ? pidCell : ''),
         name: String(name),
-        title: stripIconNoise(unwrapJsonCell(cell(row, colMap, 'title', name))) || String(name),
+        title: (function () {
+          var t = stripIconNoise(unwrapJsonCell(cell(row, colMap, 'title', name))) || String(name);
+          if (looksLikePersonName(t) && !looksLikePersonName(name)) return String(name);
+          return t;
+        })(),
         type: cell(row, colMap, 'type', 'VPMReference'),
         displayType: cell(row, colMap, 'type', 'Physical Product'),
         revision: cell(row, colMap, 'revision', ''),

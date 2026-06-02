@@ -833,10 +833,14 @@ var App = (function () {
         expected = ExplorerContext.refresh(true).expectedCount || 0;
       }
       var skipBelow = (APP_CONFIG && APP_CONFIG.SKIP_AUTO_COPY_BELOW) || 12;
+      var ctxApi =
+        typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh
+          ? ExplorerContext.refresh(true).canUseApi
+          : false;
       return BomOrchestrator.refreshStructure({
         source: 'manual',
         allowAutoCopy: !expected || expected > skipBelow,
-        preferApi: false
+        preferApi: ctxApi && APP_CONFIG.PREFER_API_ON_MANUAL_REFRESH !== false
       });
     }
     function primePasteBuffer() {
