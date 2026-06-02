@@ -30,7 +30,20 @@ var BomOrchestrator = (function () {
     if (options.forceLoader) return options.forceLoader;
     var maxTsv = (APP_CONFIG && APP_CONFIG.FAST_TSV_MAX) || 500;
     var expected = ctx.expectedCount || 0;
-    if (options.source === 'manual' && expected <= maxTsv) {
+    var primary = (APP_CONFIG && APP_CONFIG.PRIMARY_LOADER) || 'auto';
+
+    if (ctx.canUseApi) {
+      if (options.preferApi !== false && (options.source === 'manual' || primary === 'api')) {
+        return 'api';
+      }
+      if (primary === 'api') return 'api';
+      if (typeof ExplorerContext !== 'undefined' && ExplorerContext.suggestLoaderMode) {
+        var suggested = ExplorerContext.suggestLoaderMode();
+        if (suggested === 'api') return 'api';
+      }
+    }
+
+    if (options.source === 'manual' && expected <= maxTsv && options.preferApi === false) {
       return 'tsv';
     }
     if (options.preferApi && ctx.canUseApi) return 'api';

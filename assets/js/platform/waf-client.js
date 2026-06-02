@@ -143,6 +143,16 @@ var WafClient = (function () {
           },
           onFailure: function (err) {
             var msg = (err && (err.message || err.error)) || 'WAF request failed';
+            try {
+              if (!window.__3DX_API_DIAG__) window.__3DX_API_DIAG__ = [];
+              window.__3DX_API_DIAG__.push({
+                ts: new Date().toISOString(),
+                step: 'WAF ' + method,
+                ok: false,
+                detail: msg,
+                url: targetUrl
+              });
+            } catch (eDiag) { /* */ }
             if (!retried && (isNetworkZero(msg) || isRetryableHttp(msg))) {
               var onIfwe =
                 typeof CompassServices !== 'undefined' &&

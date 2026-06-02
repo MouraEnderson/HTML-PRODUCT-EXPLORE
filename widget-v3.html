@@ -113,7 +113,7 @@
     window.__3DX_TRUSTED_WIDGET__ = true;
     window.__3DX_BOOT_DEFER__ = true;
 
-    var BOM_BUILD = 'bom20260605p';
+    var BOM_BUILD = 'bom20260605q';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
     var BUNDLE;
 
@@ -157,7 +157,7 @@
     (function enforceMinimumBuild() {
       var MIN = 'bom20260605k';
       if (BOM_BUILD < MIN) {
-        BOM_BUILD = 'bom20260605p';
+        BOM_BUILD = 'bom20260605q';
         BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js?v=' + encodeURIComponent(BOM_BUILD);
       }
     })();
@@ -165,7 +165,7 @@
     (function enforceMinimumBuild() {
       var MIN = 'bom20260605k';
       if (BOM_BUILD < MIN) {
-        BOM_BUILD = 'bom20260605p';
+        BOM_BUILD = 'bom20260605q';
         BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js?v=' + encodeURIComponent(BOM_BUILD);
       }
     })();
@@ -188,6 +188,8 @@
       '<div id="bomRulesPanel"></div>' +
       '<input type="text" id="explorerObjectId" class="bom-input" placeholder="ID f\u00edsico" />' +
       '<button type="button" id="btnLoadPhysicalId" class="bom-btn bom-btn-secondary">Varrer por ID</button>' +
+      '<button type="button" id="btnApiDiagnostic" class="bom-btn bom-btn-secondary">Diagnosticar API</button>' +
+      '<textarea id="apiDiagReport" class="bom-input bom-hidden" rows="6" readonly="readonly" placeholder="Relat\u00f3rio API\u2026"></textarea>' +
       '<textarea id="pasteArea" class="bom-paste" placeholder="Colar grade Explorer (Ctrl+V)"></textarea>' +
       '</details>' +
       '</div></header>' +

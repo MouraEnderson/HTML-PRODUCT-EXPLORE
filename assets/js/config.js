@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260605p',
+    BUILD: 'bom20260605q',
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
     API_PREFER_ABOVE: 20,
     /** Cloud FD02: dseng EngItem/EngInstance antes de dspfl/boM (evita 406) */
@@ -74,7 +74,7 @@
     AUTO_SYNC_EXPLORER_MS: 0,
     /** Sprint 2.5 — TSV fast-path até N peças; acima disso API lazy */
     FAST_TSV_MAX: 500,
-    PRIMARY_LOADER: 'auto',
+    PRIMARY_LOADER: 'api',
     /** Sprint 2.5 item 6: espelho DOM/innerText nunca como primary */
     USE_DOM_MIRROR_PRIMARY: false,
     /** Fallback DOM só após API/TSV/cola falharem — banner amarelo */

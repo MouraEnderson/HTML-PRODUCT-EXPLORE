@@ -587,7 +587,7 @@ var App = (function () {
     if (!force && reason === 'poll' && (APP_CONFIG.AUTO_SYNC_EXPLORER_MS || 0) < 1) return;
     if (typeof BomOrchestrator === 'undefined' || !BomOrchestrator.refreshStructure) return;
 
-    var useApiSync = APP_CONFIG.CAN_USE_ENOVIA_API;
+    var useApiSync = ctx ? ctx.canUseApi : APP_CONFIG.CAN_USE_ENOVIA_API;
 
     if (typeof ProductExplorerBridge !== 'undefined') {
       if (ProductExplorerBridge.pollDashboardExplorerChrome) {
@@ -615,6 +615,29 @@ var App = (function () {
     var syncKey = ctx ? ctx.syncKey : (key || 'explorer') + '|' + explorerCount;
     var label = byId('selectionLabel');
     if (label && key) label.textContent = key;
+    if (
+      syncKey !== lastSyncedStructure &&
+      lastSyncedStructure &&
+      typeof BomService !== 'undefined' &&
+      BomService.getNodeCount &&
+      ctx &&
+      ctx.expectedCount > 0
+    ) {
+      var staleCount = BomService.getNodeCount();
+      if (staleCount > 0 && Math.abs(staleCount - ctx.expectedCount) > 1) {
+        BomService.reset();
+        refreshUI();
+        if (typeof SyncBanner !== 'undefined' && SyncBanner.clearLoad) SyncBanner.clearLoad();
+        setStatus(
+          'Nova estrutura detectada (' +
+            (ctx.rootName || key) +
+            ', ' +
+            ctx.expectedCount +
+            ' peças) — carregando…',
+          'info'
+        );
+      }
+    }
     if (!force && syncKey === lastSyncedStructure) return;
     if (loading && !force) return;
     if (structureSyncTimer) window.clearTimeout(structureSyncTimer);
@@ -739,6 +762,45 @@ var App = (function () {
     });
   }
 
+  function runApiDiagnostic(btnEl) {
+    if (typeof ApiDiagnostic === 'undefined' || !ApiDiagnostic.run) {
+      setStatus('Diagnóstico API indisponível neste build.', 'error');
+      return;
+    }
+    if (btnEl) {
+      btnEl.disabled = true;
+      btnEl.textContent = 'Diagnosticando…';
+    }
+    setStatus('Diagnóstico API ENOVIA…', 'info');
+    ApiDiagnostic.run()
+      .then(function (report) {
+        var box = byId('apiDiagReport');
+        if (box) {
+          box.value = report.summary || '';
+          box.classList.remove('bom-hidden');
+        }
+        var fails = (report.rows || []).filter(function (r) {
+          return !r.ok;
+        });
+        setStatus(
+          fails.length
+            ? 'Diagnóstico: ' + fails.length + ' falha(s) — veja Avançado'
+            : 'Diagnóstico API OK — tente Atualizar estrutura',
+          fails.length ? 'error' : 'ok'
+        );
+        console.log('[BOM API DIAG]', report);
+      })
+      .catch(function (err) {
+        setStatus('Diagnóstico: ' + (err.message || err), 'error');
+      })
+      .finally(function () {
+        if (btnEl) {
+          btnEl.disabled = false;
+          btnEl.textContent = 'Diagnosticar API';
+        }
+      });
+  }
+
   function runImportFromClipboard(btnEl) {
     if (typeof BomOrchestrator === 'undefined' || !BomOrchestrator.refreshStructure) {
       setStatus('Importação indisponível.', 'error');
@@ -759,7 +821,7 @@ var App = (function () {
       btnEl.textContent = 'Atualizando…';
     }
     function startRefresh() {
-      return BomOrchestrator.refreshStructure({ source: 'manual', allowAutoCopy: true, preferApi: false });
+      return BomOrchestrator.refreshStructure({ source: 'manual', allowAutoCopy: true, preferApi: true });
     }
     var clipPromise = Promise.resolve('');
     if (navigator.clipboard && navigator.clipboard.readText) {
@@ -955,6 +1017,17 @@ var App = (function () {
           }, { silent: true });
         }
         runExplorerScan(btnLoadId);
+      });
+    }
+
+    var btnApiDiag = byId('btnApiDiagnostic');
+    if (btnApiDiag && !btnApiDiag.__3DX_DIAG_BOUND__) {
+      btnApiDiag.__3DX_DIAG_BOUND__ = true;
+      btnApiDiag.addEventListener('click', function (ev) {
+        if (ev && ev.preventDefault) ev.preventDefault();
+        var details = document.querySelector('.bom-topbar-more');
+        if (details && !details.open) details.open = true;
+        runApiDiagnostic(btnApiDiag);
       });
     }
 
