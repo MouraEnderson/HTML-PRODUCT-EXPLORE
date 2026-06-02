@@ -623,6 +623,17 @@ var FileImportService = (function () {
     return out;
   }
 
+  /** Explorer: só a raiz traz JSON de ícone; filhos (M1/M2) começam no Título. */
+  function rowLeadingIconOffset(row) {
+    if (!row || !row.length) return 0;
+    if (isJsonBlob(row[0]) || ownerJsonHasLabel(row[0])) return 1;
+    return 0;
+  }
+
+  function colMapForRow(baseMap, row) {
+    return offsetColumnMap(baseMap, rowLeadingIconOffset(row));
+  }
+
   /** Explorer PT: Título, Descrição, Revisão, Proprietário, Tipo, Maturidade (+ coluna ícone JSON). */
   function extractFieldsFromExplorerRow(row) {
     var cells = (row || []).map(function (c) {
@@ -1080,18 +1091,9 @@ var FileImportService = (function () {
     }
     var headers = rows[0].map(function (c) { return String(c || ''); });
     var dataRows = rows.slice(1);
-    var iconOff = leadingIconColumnOffset(dataRows);
-    if (!iconOff && dataRows[0] && dataRows[0].length && isJsonBlob(dataRows[0][0])) {
-      var h0 = normHeader(headers[0]);
-      if (h0.indexOf('titulo') >= 0 || h0.indexOf('title') >= 0) {
-        iconOff = 1;
-      }
-    }
     var colMap = mapColumns(headers);
     if (colMap.name === undefined && colMap.title === undefined) {
-      colMap = standardExplorerColumnMap(iconOff);
-    } else {
-      colMap = offsetColumnMap(colMap, iconOff);
+      colMap = standardExplorerColumnMap(0);
     }
     return buildItemsFromRows(dataRows, colMap, false);
   }
@@ -1104,25 +1106,35 @@ var FileImportService = (function () {
       var row = dataRows[r];
       if (!row || !row.length) continue;
 
+      var rowMap = colMapForRow(colMap, row);
       var level = 0;
       var name = '';
-      if (inferIndent && colMap.level === undefined) {
-        var lead = leadingDepth(row[colMap.name] !== undefined ? row[colMap.name] : row[0]);
+      if (inferIndent && rowMap.level === undefined) {
+        var nameCol = rowMap.name !== undefined ? rowMap.name : 0;
+        var lead = leadingDepth(row[nameCol] !== undefined ? row[nameCol] : row[0]);
         level = lead.depth;
         name = lead.text;
-        if (colMap.name !== undefined && row[colMap.name] !== undefined) {
+        if (rowMap.name !== undefined && row[nameCol] !== undefined) {
           row = row.slice();
-          row[colMap.name] = lead.text;
+          row[rowMap.name] = lead.text;
         }
       } else {
-        level = parseInt(cell(row, colMap, 'level', ''), 10);
+        level = parseInt(cell(row, rowMap, 'level', ''), 10);
         if (isNaN(level)) level = stackLevel;
       }
 
+      var parsedEarly = extractFieldsFromExplorerRow(row);
+      if (parsedEarly.name && isProductName(parsedEarly.name)) {
+        name = parsedEarly.name;
+      }
       if (!name) {
-        name = cleanCell(cell(row, colMap, 'name', '')) || cleanCell(cell(row, colMap, 'title', ''));
+        name =
+          cleanCell(cell(row, rowMap, 'name', '')) || cleanCell(cell(row, rowMap, 'title', ''));
       }
       name = stripIconNoise(unwrapJsonCell(name));
+      if (!isProductName(name) && parsedEarly.name && isProductName(parsedEarly.name)) {
+        name = parsedEarly.name;
+      }
       if (!isProductName(name)) {
         skipRow('nome_invalido', String(name).slice(0, 40), r + 1);
         continue;
@@ -1139,34 +1151,36 @@ var FileImportService = (function () {
       stackLevel = level;
 
       var prdFromRow = extractPrdFromRow(row);
-      var pidCell = cell(row, colMap, 'physicalid', '');
+      var pidCell = cell(row, rowMap, 'physicalid', '');
       var pid = pidCell || prdFromRow || ('IMP_' + (r + 1) + '_' + name.replace(/\W/g, '_').slice(0, 40));
       pid = String(pid);
       if (usedIds[pid]) pid = pid + '__r' + (r + 1);
       usedIds[pid] = true;
       var srcPrd = prdFromRow || (/^prd-R/i.test(pidCell) ? pidCell : '');
-      var st = resolveMaturityFields(row, colMap);
-      var ownerHit = extractOwnerFromRow(row, colMap);
+      var st = resolveMaturityFields(row, rowMap);
+      var ownerHit = extractOwnerFromRow(row, rowMap);
       var ownerText = ownerHit.text;
       var ownerCol = ownerHit.raw;
-      var parsedFields = extractFieldsFromExplorerRow(row);
-      if (parsedFields.name && (parsedFields.name === name || fieldsNeedContentRepair({
+      var parsedFields = parsedEarly.name ? parsedEarly : extractFieldsFromExplorerRow(row);
+      if (parsedFields.name && (parsedFields.name === name || !isProductName(name) || fieldsNeedContentRepair({
         name: name,
-        title: cell(row, colMap, 'title', name),
-        revision: cell(row, colMap, 'revision', ''),
-        type: cell(row, colMap, 'type', ''),
-        maturity: cell(row, colMap, 'maturity', '')
+        title: cell(row, rowMap, 'title', name),
+        revision: cell(row, rowMap, 'revision', ''),
+        type: cell(row, rowMap, 'type', ''),
+        maturity: cell(row, rowMap, 'maturity', '')
       }))) {
-        if (parsedFields.title && !looksLikePersonName(parsedFields.title)) {
-          name = parsedFields.name;
-        }
+        name = parsedFields.name;
       }
-      var titleVal = stripIconNoise(unwrapJsonCell(cell(row, colMap, 'title', name))) || String(name);
-      var revisionVal = cell(row, colMap, 'revision', '');
-      var typeVal = cell(row, colMap, 'type', 'Physical Product');
-      if (parsedFields.name && (parsedFields.name === name || !isProductName(name))) {
+      var titleVal = stripIconNoise(unwrapJsonCell(cell(row, rowMap, 'title', name))) || String(name);
+      var revisionVal = cell(row, rowMap, 'revision', '');
+      var typeVal = cell(row, rowMap, 'type', 'Physical Product');
+      if (parsedFields.name) {
         name = parsedFields.name || name;
-        titleVal = parsedFields.title || name;
+        if (parsedFields.title && !looksLikePersonName(parsedFields.title)) {
+          titleVal = parsedFields.title;
+        } else if (looksLikePersonName(titleVal) && parsedFields.name) {
+          titleVal = parsedFields.name;
+        }
         revisionVal = parsedFields.revision || revisionVal;
         ownerText = parsedFields.owner || ownerText;
         typeVal = parsedFields.type || typeVal;
@@ -1194,14 +1208,14 @@ var FileImportService = (function () {
         state: st.state,
         maturity: st.maturity,
         iconUrl: extractIconFromRow(row) || (ownerCol && parseOwnerCell(ownerCol).iconUrl) || '',
-        quantity: parseFloat(cell(row, colMap, 'quantity', '1')) || 1,
+        quantity: parseFloat(cell(row, rowMap, 'quantity', '1')) || 1,
         owner: ownerText,
         _ownerRaw: ownerCol,
-        organization: cell(row, colMap, 'organization', ''),
-        collabSpace: cell(row, colMap, 'collabSpace', ''),
+        organization: cell(row, rowMap, 'organization', ''),
+        collabSpace: cell(row, rowMap, 'collabSpace', ''),
         approval: st.approval,
         level: level,
-        parentKey: cell(row, colMap, 'parent', ''),
+        parentKey: cell(row, rowMap, 'parent', ''),
         rowIndex: r + 1
       });
     }
