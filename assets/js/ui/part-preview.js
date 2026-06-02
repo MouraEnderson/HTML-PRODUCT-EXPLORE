@@ -1,6 +1,6 @@
 /**
  * @file ui/part-preview.js
- * Painel de preview 2D ao clicar numa linha da E-BOM monitorada.
+ * Painel de visualização 3D (3DPlay) + metadados ao clicar numa linha da E-BOM.
  */
 var PartPreview = (function () {
   'use strict';
@@ -34,6 +34,9 @@ var PartPreview = (function () {
         refs.titleEl = refs.panel.querySelector('#partPreviewTitle');
         refs.hintEl = refs.panel.querySelector('.bom-preview-hint');
       }
+    }
+    if (typeof ThreeDPlayViewer !== 'undefined') {
+      ThreeDPlayViewer.init('#partPreviewImage');
     }
   }
 
@@ -96,16 +99,18 @@ var PartPreview = (function () {
       '</dl>';
   }
 
-  function showImage(node, r) {
+  function showVisual(node, r) {
     if (!r.imageWrap) return;
-    if (typeof PartImage !== 'undefined' && PartImage.mountThumb) {
-      r.imageWrap.innerHTML = '<div class="bom-preview-visual"></div>' +
-        '<p class="bom-preview-ph-sub">Preview 2D · 3DPlay em breve</p>';
-      var visual = r.imageWrap.querySelector('.bom-preview-visual');
-      PartImage.mountThumb(visual, node, 'bom-thumb-lg');
+    if (typeof ThreeDPlayViewer !== 'undefined' && ThreeDPlayViewer.show) {
+      ThreeDPlayViewer.show(node);
       return;
     }
-    r.imageWrap.innerHTML = '<span class="bom-preview-placeholder">Preview indisponível</span>';
+    if (typeof PartImage !== 'undefined' && PartImage.mountThumb) {
+      r.imageWrap.innerHTML = '<div class="bom-preview-visual"></div>';
+      PartImage.mountThumb(r.imageWrap.querySelector('.bom-preview-visual'), node, 'bom-thumb-lg');
+      return;
+    }
+    r.imageWrap.innerHTML = '<span class="bom-preview-placeholder">Visualização indisponível</span>';
   }
 
   function show(node) {
@@ -118,7 +123,7 @@ var PartPreview = (function () {
     if (r.hintEl) r.hintEl.style.display = 'none';
     if (r.titleEl) r.titleEl.textContent = node.title || node.name || 'Peça';
     renderMeta(node, r);
-    showImage(node, r);
+    showVisual(node, r);
     r.panel.classList.add('bom-preview-active');
     openPanel(r);
     reflow();
@@ -131,9 +136,11 @@ var PartPreview = (function () {
     closePanel(r);
     if (r.titleEl) r.titleEl.textContent = 'Visualização da peça';
     if (r.metaEl) r.metaEl.innerHTML = '';
-    if (r.imageWrap) {
+    if (typeof ThreeDPlayViewer !== 'undefined' && ThreeDPlayViewer.clear) {
+      ThreeDPlayViewer.clear();
+    } else if (r.imageWrap) {
       r.imageWrap.innerHTML =
-        '<span class="bom-preview-placeholder">Clique numa peça na lista à esquerda</span>';
+        '<span class="bom-preview-placeholder">Clique numa linha da E-BOM para visualização 3D</span>';
     }
     if (r.hintEl) r.hintEl.style.display = 'block';
     reflow();

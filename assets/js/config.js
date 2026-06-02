@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260605r',
+    BUILD: 'bom20260605s',
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
     API_PREFER_ABOVE: 20,
     /** Cloud FD02: dseng EngItem/EngInstance antes de dspfl/boM (evita 406) */
@@ -232,6 +232,18 @@
     PLATFORM: {
       SEARCH_APP_IDS: ['ENX3DSEARCH_AP', '3DSEARCH_AP', 'SEARCH_AP'],
       EXPLORER_APP_IDS: ['ENOSCEN_AP', 'ENOPSTR_AP', 'ENX3DSEARCH_AP']
+    },
+
+    /** Sprint 3 — visualização 3D no painel direito do widget (não widget 3DPlay separado) */
+    THREE_DPLAY: {
+      ENABLED: true,
+      EMBED_PLAYER: true,
+      /** Visualização só no painel do BOM — não exige widget 3DPlay no dashboard */
+      ALLOW_EXTERNAL_WIDGET_FALLBACK: false,
+      APP_IDS: ['SWX3DPlay_AP', 'X3DPlay_AP', 'ENX3DPlay_AP'],
+      DEFAULT_OBJECT_TYPE: 'Physical Product',
+      PUSH_TIMEOUT_MS: 2200,
+      WIDGET_HINT: 'Modelo 3D no painel à direita.'
     },
 
     CHART_COLORS: {

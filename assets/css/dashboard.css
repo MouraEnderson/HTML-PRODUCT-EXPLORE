@@ -2744,3 +2744,74 @@ body.ui-clean .main-clean {
 .bom-widget-narrow .bom-charts-row-quad .owners-legend-scroll {
   display: none;
 }
+
+/* Sprint 3 — visualização 3D no painel direito (zona 5) */
+.bom-3dplay-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  gap: 4px;
+}
+
+.bom-3dplay-host {
+  flex: 1 1 auto;
+  min-height: 120px;
+  background: #eceff1;
+  border: 1px solid #cfd8dc;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.bom-3dplay-loading,
+.bom-3dplay-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 100px;
+  padding: 8px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: #455a64;
+}
+
+.bom-3dplay-empty-sub {
+  margin-top: 6px;
+  font-size: 0.7rem;
+  color: #78909c;
+  max-width: 220px;
+}
+
+.bom-3dplay-status {
+  margin: 0;
+  font-size: 0.68rem;
+  color: #607d8b;
+  line-height: 1.3;
+}
+
+.bom-3dplay-status-ok { color: #2e7d32; }
+.bom-3dplay-status-warn { color: #ed6c02; }
+.bom-3dplay-status-err { color: #c62828; }
+
+.bom-3dplay-thumb {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+}
+
+.bom-thumb-sm .bom-thumb-wrap,
+.bom-thumb-sm.bom-thumb-wrap {
+  width: 40px;
+  height: 40px;
+}
+
+.bom-zone-5 #partPreviewImage {
+  flex: 1 1 auto;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+}
