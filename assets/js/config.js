@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260605v',
+    BUILD: 'bom20260605w',
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
     API_PREFER_ABOVE: 20,
     /** Cloud FD02: dseng EngItem/EngInstance antes de dspfl/boM (evita 406) */
@@ -44,6 +44,17 @@
     /** Snapshot Mont10/Drone sÃƒÂ³ se grade e cola falharem */
     PILOT_BUILTIN_LAST: true,
     SCAN_TIMEOUT_MS: 90000,
+    /** Atualizar estrutura (manual): evita 90s de overlay */
+    MANUAL_REFRESH_TIMEOUT_MS: 28000,
+    /** Scroll na grade Explorer — limite para não travar o dashboard */
+    SCROLL_HARVEST_MAX_STEPS: 36,
+    SCROLL_HARVEST_STEP_MS: 80,
+    /** TSV: não espelhar DOM síncrono (só Ctrl+C / copy automático) */
+    SKIP_MIRROR_ON_TSV: true,
+    /** clipboard.readText trava em iframe GitHub no 3DDashboard */
+    SKIP_CLIPBOARD_READ: true,
+    /** Fallback DOM manual só até N peças */
+    DOM_MIRROR_MANUAL_MAX_EXPECTED: 25,
     AUTO_SCAN_ON_SELECTION: false,
     CAN_USE_ENOVIA_API: false,
 

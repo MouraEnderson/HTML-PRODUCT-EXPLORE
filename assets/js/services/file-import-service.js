@@ -82,11 +82,12 @@ var FileImportService = (function () {
 
   function mergeMissingGridItems(items) {
     if (!items || !items.length) return items;
+    if (APP_CONFIG && APP_CONFIG.SKIP_MIRROR_ON_TSV) return items;
     if (typeof ProductExplorerBridge === 'undefined') {
       return items;
     }
     var expected = lastImportReport.explorerExpected;
-    if (expected && items.length >= expected) return items;
+    if (expected && items.length >= expected - 1) return items;
     var hint =
       ProductExplorerBridge.getStructureNameHint &&
       ProductExplorerBridge.getStructureNameHint();

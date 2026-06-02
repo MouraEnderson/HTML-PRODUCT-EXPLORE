@@ -112,7 +112,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260605v',
+    BUILD: 'bom20260605w',
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
     API_PREFER_ABOVE: 20,
     /** Cloud FD02: dseng EngItem/EngInstance antes de dspfl/boM (evita 406) */
@@ -148,6 +148,17 @@
     /** Snapshot Mont10/Drone sÃƒÂ³ se grade e cola falharem */
     PILOT_BUILTIN_LAST: true,
     SCAN_TIMEOUT_MS: 90000,
+    /** Atualizar estrutura (manual): evita 90s de overlay */
+    MANUAL_REFRESH_TIMEOUT_MS: 28000,
+    /** Scroll na grade Explorer — limite para não travar o dashboard */
+    SCROLL_HARVEST_MAX_STEPS: 36,
+    SCROLL_HARVEST_STEP_MS: 80,
+    /** TSV: não espelhar DOM síncrono (só Ctrl+C / copy automático) */
+    SKIP_MIRROR_ON_TSV: true,
+    /** clipboard.readText trava em iframe GitHub no 3DDashboard */
+    SKIP_CLIPBOARD_READ: true,
+    /** Fallback DOM manual só até N peças */
+    DOM_MIRROR_MANUAL_MAX_EXPECTED: 25,
     AUTO_SCAN_ON_SELECTION: false,
     CAN_USE_ENOVIA_API: false,
 
@@ -2577,6 +2588,8 @@ var ProductExplorerBridge = (function () {
     if (!doc) return catalog;
     try {
       var html = String(doc.documentElement && doc.documentElement.innerHTML || '');
+      var maxHtml = (APP_CONFIG && APP_CONFIG.PRD_HTML_SCAN_MAX_CHARS) || 250000;
+      if (html.length > maxHtml) html = html.slice(0, maxHtml);
       if (html.length < 80) return catalog;
       var re = /([\wÀ-ú][\wÀ-ú0-9 _.\-]{3,72})\D{0,48}(prd-R\d{10,}-[A-Za-z0-9]+)/gi;
       var m;
@@ -2966,13 +2979,16 @@ var ProductExplorerBridge = (function () {
     };
   }
 
-  function tryExplorerScrollHarvestAsync(rootName) {
+  function tryExplorerScrollHarvestAsync(rootName, options) {
+    options = options || {};
     return new Promise(function (resolve) {
       var doc = readExplorerIframeDocument();
       var expected = Math.max(
         getExplorerObjectCount() || 0,
         getExplorerSelectionCount() || 0
       );
+      var maxStepsCfg = options.maxSteps || (APP_CONFIG && APP_CONFIG.SCROLL_HARVEST_MAX_STEPS) || 36;
+      var stepMs = (APP_CONFIG && APP_CONFIG.SCROLL_HARVEST_STEP_MS) || 80;
       var rootMeta = parseExplorerRootMetaFromText(harvestExplorerTextOnly());
       rootName = String(rootName || structureNameHint || '').trim();
       var items = [];
@@ -3021,11 +3037,16 @@ var ProductExplorerBridge = (function () {
       var initialScroll = scroller.scrollTop;
       var stepPx = Math.max(80, Math.floor(scroller.clientHeight * 0.55));
       var step = 0;
-      var maxSteps = expected > 40 ? 160 : 96;
+      var maxSteps = Math.min(maxStepsCfg, expected > 0 ? Math.max(24, Math.ceil(expected / 3)) : maxStepsCfg);
       var stale = 0;
       var lastLen = items.length;
+      var deadline = Date.now() + ((APP_CONFIG && APP_CONFIG.MANUAL_REFRESH_TIMEOUT_MS) || 28000) - 2000;
 
       function tick() {
+        if (Date.now() > deadline) {
+          try { scroller.scrollTop = initialScroll; } catch (eDl) { /* */ }
+          return finish();
+        }
         extractRowsFromExplorerDom(doc, rootMeta, seen, items, rootName);
         if (items.length > lastLen) stale = 0;
         else stale++;
@@ -3034,13 +3055,13 @@ var ProductExplorerBridge = (function () {
           try { scroller.scrollTop = initialScroll; } catch (eR) { /* */ }
           return finish();
         }
-        if (step >= maxSteps || stale >= 5) {
+        if (step >= maxSteps || stale >= 4) {
           try { scroller.scrollTop = initialScroll; } catch (eR2) { /* */ }
           return finish();
         }
         scroller.scrollTop = Math.min(scroller.scrollTop + stepPx, scroller.scrollHeight);
         step++;
-        window.setTimeout(tick, 100);
+        window.setTimeout(tick, stepMs);
       }
 
       scroller.scrollTop = 0;
@@ -3602,7 +3623,10 @@ var ProductExplorerBridge = (function () {
     }
     var initialScroll = scroller.scrollTop;
     var totalAdded = 0;
-    var maxSteps = expected > 40 ? 120 : 48;
+    var maxSteps = Math.min(
+      (APP_CONFIG && APP_CONFIG.SCROLL_HARVEST_MAX_STEPS) || 24,
+      expected > 40 ? 28 : 24
+    );
     var step = Math.max(100, Math.floor(scroller.clientHeight * 0.7));
     var stale = 0;
     var lastLen = items.length;
@@ -4760,7 +4784,8 @@ var ProductExplorerBridge = (function () {
     assessMirrorQuality: assessMirrorQuality,
     assessDashboardMirrorQuality: assessDashboardMirrorQuality,
     tryExplorerAutoCopyParse: tryExplorerAutoCopyParse,
-    tryExplorerScrollHarvestAsync: tryExplorerScrollHarvestAsync
+    tryExplorerScrollHarvestAsync: tryExplorerScrollHarvestAsync,
+    tryReadClipboardViaPasteTrap: tryReadClipboardViaPasteTrap
   };
 })();
 
@@ -5709,11 +5734,12 @@ var FileImportService = (function () {
 
   function mergeMissingGridItems(items) {
     if (!items || !items.length) return items;
+    if (APP_CONFIG && APP_CONFIG.SKIP_MIRROR_ON_TSV) return items;
     if (typeof ProductExplorerBridge === 'undefined') {
       return items;
     }
     var expected = lastImportReport.explorerExpected;
-    if (expected && items.length >= expected) return items;
+    if (expected && items.length >= expected - 1) return items;
     var hint =
       ProductExplorerBridge.getStructureNameHint &&
       ProductExplorerBridge.getStructureNameHint();
@@ -6832,7 +6858,9 @@ var BomSnapshot = (function () {
         ProductExplorerBridge.applyOwnersToIndex(BomService.getIndex());
       }
       if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.applyPrdToIndex) {
-        ProductExplorerBridge.applyPrdToIndex(BomService.getIndex());
+        window.setTimeout(function () {
+          ProductExplorerBridge.applyPrdToIndex(BomService.getIndex());
+        }, 0);
       }
       saveSession(normalizePayload(payload));
       return meta;
@@ -7983,12 +8011,22 @@ var ExplorerScanner = (function () {
     if (lastPasteText) return Promise.resolve(lastPasteText);
     var areaText = readFromPasteArea();
     if (areaText) return Promise.resolve(areaText);
+    if (APP_CONFIG && APP_CONFIG.SKIP_CLIPBOARD_READ) {
+      return Promise.resolve('');
+    }
     if (!navigator.clipboard || !navigator.clipboard.readText) {
       return Promise.resolve('');
     }
-    return navigator.clipboard.readText().catch(function () {
-      return '';
-    });
+    return Promise.race([
+      navigator.clipboard.readText().catch(function () {
+        return '';
+      }),
+      new Promise(function (resolve) {
+        window.setTimeout(function () {
+          resolve('');
+        }, 1500);
+      })
+    ]);
   }
 
   function resolveImportText(clip) {
@@ -8695,6 +8733,7 @@ var TsvBomLoader = (function () {
 
   function tryScrollHarvest(term, partialPayload, expected) {
     if (!needsMore(partialPayload, expected)) return Promise.resolve(partialPayload);
+    if (expected > 40) return Promise.resolve(partialPayload);
     if (
       typeof ProductExplorerBridge === 'undefined' ||
       !ProductExplorerBridge.tryExplorerScrollHarvestAsync
@@ -8702,7 +8741,7 @@ var TsvBomLoader = (function () {
       return Promise.resolve(partialPayload);
     }
     setStatus('Varrendo grade Explorer (scroll)…');
-    return ProductExplorerBridge.tryExplorerScrollHarvestAsync(term)
+    return ProductExplorerBridge.tryExplorerScrollHarvestAsync(term, { maxSteps: (APP_CONFIG && APP_CONFIG.SCROLL_HARVEST_MAX_STEPS) || 36 })
       .then(function (scrollPl) {
         if (!scrollPl || !scrollPl.items || !scrollPl.items.length) return partialPayload;
         if (!partialPayload || !partialPayload.items || !partialPayload.items.length) return scrollPl;
@@ -8750,12 +8789,22 @@ var TsvBomLoader = (function () {
     if (area && area.value && String(area.value).trim()) {
       return Promise.resolve(String(area.value).trim());
     }
+    if (APP_CONFIG && APP_CONFIG.SKIP_CLIPBOARD_READ) {
+      return Promise.resolve('');
+    }
     if (!navigator.clipboard || !navigator.clipboard.readText) {
       return Promise.resolve('');
     }
-    return navigator.clipboard.readText().catch(function () {
-      return '';
-    });
+    return Promise.race([
+      navigator.clipboard.readText().catch(function () {
+        return '';
+      }),
+      new Promise(function (resolve) {
+        window.setTimeout(function () {
+          resolve('');
+        }, 1500);
+      })
+    ]);
   }
 
   function tryClipboardTsv(term) {
@@ -8821,6 +8870,9 @@ var TsvBomLoader = (function () {
     }
 
     function tryMirrorFirst() {
+      if (APP_CONFIG && APP_CONFIG.SKIP_MIRROR_ON_TSV) {
+        return Promise.resolve(null);
+      }
       if (typeof ProductExplorerBridge === 'undefined' || !ProductExplorerBridge.scrapeExplorerMirror) {
         return Promise.resolve(null);
       }
@@ -8836,33 +8888,38 @@ var TsvBomLoader = (function () {
       return tryAutoCopy(term, true);
     }
 
-    return tryCopyFirst()
-      .then(function (copyPayload) {
-        if (copyPayload && copyPayload.items && payloadInSync(copyPayload, term, expected)) {
-          return finish(copyPayload);
+    function tryPasteBufferFirst() {
+      return readPasteText().then(function (text) {
+        text = String(text || '').trim();
+        if (!text || text.indexOf('\t') < 0) return null;
+        if (typeof FileImportService === 'undefined' || !FileImportService.parseTextAsync) {
+          return null;
         }
-        return tryMirrorFirst().then(function (mirrorPayload) {
-          if (mirrorPayload) return finish(mirrorPayload);
-          return copyPayload;
+        return FileImportService.parseTextAsync(text).then(function (items) {
+          if (!items || items.length < 1) return null;
+          return buildPayloadFromItems(items, term);
         });
-      })
-      .then(function (autoPayload) {
-        if (autoPayload && autoPayload.ok) return autoPayload;
-        return tryAutoCopy(term, true)
-          .then(function (autoPayload2) {
-            return tryScrollHarvest(term, autoPayload2 || autoPayload, expected).then(function (harvested) {
-              if (payloadInSync(harvested, term, expected)) return harvested;
-              return tryClipboardTsv(term).then(function (clipPayload) {
-                var best = pickBestPayload(harvested, clipPayload, expected, term);
-                if (best && payloadInSync(best, term, expected)) return best;
-                return tryAutoCopy(term, true).then(function (retryCopy) {
-                  best = pickBestPayload(best, retryCopy, expected, term);
-                  if (payloadInSync(best, term, expected)) return best;
-                  return pickBestPayload(harvested, clipPayload, expected, term);
-                });
-              });
+      });
+    }
+
+    return tryPasteBufferFirst()
+      .then(function (pastePayload) {
+        if (pastePayload && payloadInSync(pastePayload, term, expected)) {
+          return finish(pastePayload);
+        }
+        return tryCopyFirst().then(function (copyPayload) {
+          if (copyPayload && copyPayload.items && payloadInSync(copyPayload, term, expected)) {
+            return finish(copyPayload);
+          }
+          return tryClipboardTsv(term).then(function (clipPayload) {
+            var best = pickBestPayload(copyPayload, clipPayload, expected, term);
+            if (best && payloadInSync(best, term, expected)) return finish(best);
+            return tryScrollHarvest(term, best || copyPayload, expected).then(function (harvested) {
+              if (harvested && payloadInSync(harvested, term, expected)) return finish(harvested);
+              return finish(best || harvested || copyPayload);
             });
           });
+        });
       })
       .then(function (res) {
         if (res && res.ok) return res;
@@ -8945,11 +9002,11 @@ var BomOrchestrator = (function () {
     var expected = ctx.expectedCount || 0;
     var primary = (APP_CONFIG && APP_CONFIG.PRIMARY_LOADER) || 'auto';
 
-    if (options.source === 'manual' && expected > 15 && options.preferApi === false) {
-      return 'paste';
-    }
     if (options.source === 'manual' && expected <= maxTsv && options.preferApi === false) {
       return 'tsv';
+    }
+    if (options.source === 'manual' && expected > maxTsv && options.preferApi === false) {
+      return 'paste';
     }
 
     if (ctx.canUseApi) {
@@ -9068,7 +9125,12 @@ var BomOrchestrator = (function () {
     var order = [];
     if (failedMode !== 'paste') order.push('paste');
     if (failedMode !== 'tsv' && ctx.expectedCount <= maxTsv) order.push('tsv');
-    if (APP_CONFIG.DOM_MIRROR_FALLBACK !== false && failedMode !== 'dom-fallback') {
+    var domMax = (APP_CONFIG && APP_CONFIG.DOM_MIRROR_MANUAL_MAX_EXPECTED) || 25;
+    if (
+      APP_CONFIG.DOM_MIRROR_FALLBACK !== false &&
+      failedMode !== 'dom-fallback' &&
+      (ctx.expectedCount || 0) <= domMax
+    ) {
       order.push('dom-fallback');
     }
     if (ctx.canUseApi && failedMode !== 'api' && options.preferApi === true) order.push('api');
@@ -9187,7 +9249,11 @@ var BomOrchestrator = (function () {
       });
     }
 
-    return withTimeout(chain, options.timeoutMs)
+    var timeoutMs = options.timeoutMs;
+    if (!timeoutMs && options.source === 'manual') {
+      timeoutMs = (APP_CONFIG && APP_CONFIG.MANUAL_REFRESH_TIMEOUT_MS) || 28000;
+    }
+    return withTimeout(chain, timeoutMs)
       .then(function (res) {
         var usedMode = (res && res.loaderMode) || mode;
         return enrichResult(res, ctx, usedMode);
@@ -11772,7 +11838,9 @@ var App = (function () {
       ProductExplorerBridge.applyOwnersToIndex(index);
     }
     if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.applyPrdToIndex) {
-      ProductExplorerBridge.applyPrdToIndex(index);
+      window.setTimeout(function () {
+        ProductExplorerBridge.applyPrdToIndex(BomService.getIndex());
+      }, 0);
     }
     var rootId = BomService.getRootId();
     var flat = BomNormalizer.toFlatList(index, rootId);
@@ -12411,6 +12479,8 @@ var App = (function () {
       setStatus('Importação indisponível.', 'error');
       return;
     }
+    if (loading) return;
+    setLoading(true);
     setStatus('Lendo Explorer…', 'info');
     root.__3DX_BLOCK_AUTO_SYNC__ = true;
     root.__3DX_ALLOW_API__ = true;
@@ -12429,10 +12499,30 @@ var App = (function () {
       return BomOrchestrator.refreshStructure({
         source: 'manual',
         allowAutoCopy: true,
-        preferApi: false
+        preferApi: false,
+        timeoutMs: (APP_CONFIG && APP_CONFIG.MANUAL_REFRESH_TIMEOUT_MS) || 28000
+      });
+    }
+    function primePasteBuffer() {
+      if (
+        typeof ProductExplorerBridge === 'undefined' ||
+        !ProductExplorerBridge.tryReadClipboardViaPasteTrap
+      ) {
+        return Promise.resolve();
+      }
+      return ProductExplorerBridge.tryReadClipboardViaPasteTrap().then(function (text) {
+        text = String(text || '').trim();
+        if (text && typeof ExplorerScanner !== 'undefined' && ExplorerScanner.setPasteBuffer) {
+          ExplorerScanner.setPasteBuffer(text);
+        }
+        var area = byId('pasteArea');
+        if (text && area) area.value = text;
       });
     }
     Promise.resolve()
+      .then(function () {
+        return primePasteBuffer();
+      })
       .then(function () {
         return startRefresh();
       })
@@ -12461,6 +12551,7 @@ var App = (function () {
       .finally(function () {
         root.__3DX_ALLOW_API__ = false;
         root.__3DX_BLOCK_AUTO_SYNC__ = false;
+        setLoading(false);
         if (btnEl) {
           btnEl.disabled = false;
           btnEl.textContent = (APP_CONFIG && APP_CONFIG.IMPORT_BUTTON_LABEL) || 'Atualizar estrutura';

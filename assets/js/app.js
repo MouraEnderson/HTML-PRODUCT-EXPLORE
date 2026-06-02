@@ -170,7 +170,9 @@ var App = (function () {
       ProductExplorerBridge.applyOwnersToIndex(index);
     }
     if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.applyPrdToIndex) {
-      ProductExplorerBridge.applyPrdToIndex(index);
+      window.setTimeout(function () {
+        ProductExplorerBridge.applyPrdToIndex(BomService.getIndex());
+      }, 0);
     }
     var rootId = BomService.getRootId();
     var flat = BomNormalizer.toFlatList(index, rootId);
@@ -809,6 +811,8 @@ var App = (function () {
       setStatus('Importação indisponível.', 'error');
       return;
     }
+    if (loading) return;
+    setLoading(true);
     setStatus('Lendo Explorer…', 'info');
     root.__3DX_BLOCK_AUTO_SYNC__ = true;
     root.__3DX_ALLOW_API__ = true;
@@ -827,10 +831,30 @@ var App = (function () {
       return BomOrchestrator.refreshStructure({
         source: 'manual',
         allowAutoCopy: true,
-        preferApi: false
+        preferApi: false,
+        timeoutMs: (APP_CONFIG && APP_CONFIG.MANUAL_REFRESH_TIMEOUT_MS) || 28000
+      });
+    }
+    function primePasteBuffer() {
+      if (
+        typeof ProductExplorerBridge === 'undefined' ||
+        !ProductExplorerBridge.tryReadClipboardViaPasteTrap
+      ) {
+        return Promise.resolve();
+      }
+      return ProductExplorerBridge.tryReadClipboardViaPasteTrap().then(function (text) {
+        text = String(text || '').trim();
+        if (text && typeof ExplorerScanner !== 'undefined' && ExplorerScanner.setPasteBuffer) {
+          ExplorerScanner.setPasteBuffer(text);
+        }
+        var area = byId('pasteArea');
+        if (text && area) area.value = text;
       });
     }
     Promise.resolve()
+      .then(function () {
+        return primePasteBuffer();
+      })
       .then(function () {
         return startRefresh();
       })
@@ -859,6 +883,7 @@ var App = (function () {
       .finally(function () {
         root.__3DX_ALLOW_API__ = false;
         root.__3DX_BLOCK_AUTO_SYNC__ = false;
+        setLoading(false);
         if (btnEl) {
           btnEl.disabled = false;
           btnEl.textContent = (APP_CONFIG && APP_CONFIG.IMPORT_BUTTON_LABEL) || 'Atualizar estrutura';

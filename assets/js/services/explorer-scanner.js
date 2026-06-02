@@ -569,12 +569,22 @@ var ExplorerScanner = (function () {
     if (lastPasteText) return Promise.resolve(lastPasteText);
     var areaText = readFromPasteArea();
     if (areaText) return Promise.resolve(areaText);
+    if (APP_CONFIG && APP_CONFIG.SKIP_CLIPBOARD_READ) {
+      return Promise.resolve('');
+    }
     if (!navigator.clipboard || !navigator.clipboard.readText) {
       return Promise.resolve('');
     }
-    return navigator.clipboard.readText().catch(function () {
-      return '';
-    });
+    return Promise.race([
+      navigator.clipboard.readText().catch(function () {
+        return '';
+      }),
+      new Promise(function (resolve) {
+        window.setTimeout(function () {
+          resolve('');
+        }, 1500);
+      })
+    ]);
   }
 
   function resolveImportText(clip) {

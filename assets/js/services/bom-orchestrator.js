@@ -32,11 +32,11 @@ var BomOrchestrator = (function () {
     var expected = ctx.expectedCount || 0;
     var primary = (APP_CONFIG && APP_CONFIG.PRIMARY_LOADER) || 'auto';
 
-    if (options.source === 'manual' && expected > 15 && options.preferApi === false) {
-      return 'paste';
-    }
     if (options.source === 'manual' && expected <= maxTsv && options.preferApi === false) {
       return 'tsv';
+    }
+    if (options.source === 'manual' && expected > maxTsv && options.preferApi === false) {
+      return 'paste';
     }
 
     if (ctx.canUseApi) {
@@ -155,7 +155,12 @@ var BomOrchestrator = (function () {
     var order = [];
     if (failedMode !== 'paste') order.push('paste');
     if (failedMode !== 'tsv' && ctx.expectedCount <= maxTsv) order.push('tsv');
-    if (APP_CONFIG.DOM_MIRROR_FALLBACK !== false && failedMode !== 'dom-fallback') {
+    var domMax = (APP_CONFIG && APP_CONFIG.DOM_MIRROR_MANUAL_MAX_EXPECTED) || 25;
+    if (
+      APP_CONFIG.DOM_MIRROR_FALLBACK !== false &&
+      failedMode !== 'dom-fallback' &&
+      (ctx.expectedCount || 0) <= domMax
+    ) {
       order.push('dom-fallback');
     }
     if (ctx.canUseApi && failedMode !== 'api' && options.preferApi === true) order.push('api');
@@ -274,7 +279,11 @@ var BomOrchestrator = (function () {
       });
     }
 
-    return withTimeout(chain, options.timeoutMs)
+    var timeoutMs = options.timeoutMs;
+    if (!timeoutMs && options.source === 'manual') {
+      timeoutMs = (APP_CONFIG && APP_CONFIG.MANUAL_REFRESH_TIMEOUT_MS) || 28000;
+    }
+    return withTimeout(chain, timeoutMs)
       .then(function (res) {
         var usedMode = (res && res.loaderMode) || mode;
         return enrichResult(res, ctx, usedMode);

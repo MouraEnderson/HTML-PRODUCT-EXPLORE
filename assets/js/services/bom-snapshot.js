@@ -160,7 +160,9 @@ var BomSnapshot = (function () {
         ProductExplorerBridge.applyOwnersToIndex(BomService.getIndex());
       }
       if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.applyPrdToIndex) {
-        ProductExplorerBridge.applyPrdToIndex(BomService.getIndex());
+        window.setTimeout(function () {
+          ProductExplorerBridge.applyPrdToIndex(BomService.getIndex());
+        }, 0);
       }
       saveSession(normalizePayload(payload));
       return meta;

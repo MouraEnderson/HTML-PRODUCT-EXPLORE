@@ -348,6 +348,8 @@ var ProductExplorerBridge = (function () {
     if (!doc) return catalog;
     try {
       var html = String(doc.documentElement && doc.documentElement.innerHTML || '');
+      var maxHtml = (APP_CONFIG && APP_CONFIG.PRD_HTML_SCAN_MAX_CHARS) || 250000;
+      if (html.length > maxHtml) html = html.slice(0, maxHtml);
       if (html.length < 80) return catalog;
       var re = /([\wÀ-ú][\wÀ-ú0-9 _.\-]{3,72})\D{0,48}(prd-R\d{10,}-[A-Za-z0-9]+)/gi;
       var m;
@@ -737,13 +739,16 @@ var ProductExplorerBridge = (function () {
     };
   }
 
-  function tryExplorerScrollHarvestAsync(rootName) {
+  function tryExplorerScrollHarvestAsync(rootName, options) {
+    options = options || {};
     return new Promise(function (resolve) {
       var doc = readExplorerIframeDocument();
       var expected = Math.max(
         getExplorerObjectCount() || 0,
         getExplorerSelectionCount() || 0
       );
+      var maxStepsCfg = options.maxSteps || (APP_CONFIG && APP_CONFIG.SCROLL_HARVEST_MAX_STEPS) || 36;
+      var stepMs = (APP_CONFIG && APP_CONFIG.SCROLL_HARVEST_STEP_MS) || 80;
       var rootMeta = parseExplorerRootMetaFromText(harvestExplorerTextOnly());
       rootName = String(rootName || structureNameHint || '').trim();
       var items = [];
@@ -792,11 +797,16 @@ var ProductExplorerBridge = (function () {
       var initialScroll = scroller.scrollTop;
       var stepPx = Math.max(80, Math.floor(scroller.clientHeight * 0.55));
       var step = 0;
-      var maxSteps = expected > 40 ? 160 : 96;
+      var maxSteps = Math.min(maxStepsCfg, expected > 0 ? Math.max(24, Math.ceil(expected / 3)) : maxStepsCfg);
       var stale = 0;
       var lastLen = items.length;
+      var deadline = Date.now() + ((APP_CONFIG && APP_CONFIG.MANUAL_REFRESH_TIMEOUT_MS) || 28000) - 2000;
 
       function tick() {
+        if (Date.now() > deadline) {
+          try { scroller.scrollTop = initialScroll; } catch (eDl) { /* */ }
+          return finish();
+        }
         extractRowsFromExplorerDom(doc, rootMeta, seen, items, rootName);
         if (items.length > lastLen) stale = 0;
         else stale++;
@@ -805,13 +815,13 @@ var ProductExplorerBridge = (function () {
           try { scroller.scrollTop = initialScroll; } catch (eR) { /* */ }
           return finish();
         }
-        if (step >= maxSteps || stale >= 5) {
+        if (step >= maxSteps || stale >= 4) {
           try { scroller.scrollTop = initialScroll; } catch (eR2) { /* */ }
           return finish();
         }
         scroller.scrollTop = Math.min(scroller.scrollTop + stepPx, scroller.scrollHeight);
         step++;
-        window.setTimeout(tick, 100);
+        window.setTimeout(tick, stepMs);
       }
 
       scroller.scrollTop = 0;
@@ -1373,7 +1383,10 @@ var ProductExplorerBridge = (function () {
     }
     var initialScroll = scroller.scrollTop;
     var totalAdded = 0;
-    var maxSteps = expected > 40 ? 120 : 48;
+    var maxSteps = Math.min(
+      (APP_CONFIG && APP_CONFIG.SCROLL_HARVEST_MAX_STEPS) || 24,
+      expected > 40 ? 28 : 24
+    );
     var step = Math.max(100, Math.floor(scroller.clientHeight * 0.7));
     var stale = 0;
     var lastLen = items.length;
@@ -2531,6 +2544,7 @@ var ProductExplorerBridge = (function () {
     assessMirrorQuality: assessMirrorQuality,
     assessDashboardMirrorQuality: assessDashboardMirrorQuality,
     tryExplorerAutoCopyParse: tryExplorerAutoCopyParse,
-    tryExplorerScrollHarvestAsync: tryExplorerScrollHarvestAsync
+    tryExplorerScrollHarvestAsync: tryExplorerScrollHarvestAsync,
+    tryReadClipboardViaPasteTrap: tryReadClipboardViaPasteTrap
   };
 })();

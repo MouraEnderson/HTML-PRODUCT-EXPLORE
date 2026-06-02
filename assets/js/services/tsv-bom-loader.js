@@ -179,6 +179,7 @@ var TsvBomLoader = (function () {
 
   function tryScrollHarvest(term, partialPayload, expected) {
     if (!needsMore(partialPayload, expected)) return Promise.resolve(partialPayload);
+    if (expected > 40) return Promise.resolve(partialPayload);
     if (
       typeof ProductExplorerBridge === 'undefined' ||
       !ProductExplorerBridge.tryExplorerScrollHarvestAsync
@@ -186,7 +187,7 @@ var TsvBomLoader = (function () {
       return Promise.resolve(partialPayload);
     }
     setStatus('Varrendo grade Explorer (scroll)…');
-    return ProductExplorerBridge.tryExplorerScrollHarvestAsync(term)
+    return ProductExplorerBridge.tryExplorerScrollHarvestAsync(term, { maxSteps: (APP_CONFIG && APP_CONFIG.SCROLL_HARVEST_MAX_STEPS) || 36 })
       .then(function (scrollPl) {
         if (!scrollPl || !scrollPl.items || !scrollPl.items.length) return partialPayload;
         if (!partialPayload || !partialPayload.items || !partialPayload.items.length) return scrollPl;
@@ -234,12 +235,22 @@ var TsvBomLoader = (function () {
     if (area && area.value && String(area.value).trim()) {
       return Promise.resolve(String(area.value).trim());
     }
+    if (APP_CONFIG && APP_CONFIG.SKIP_CLIPBOARD_READ) {
+      return Promise.resolve('');
+    }
     if (!navigator.clipboard || !navigator.clipboard.readText) {
       return Promise.resolve('');
     }
-    return navigator.clipboard.readText().catch(function () {
-      return '';
-    });
+    return Promise.race([
+      navigator.clipboard.readText().catch(function () {
+        return '';
+      }),
+      new Promise(function (resolve) {
+        window.setTimeout(function () {
+          resolve('');
+        }, 1500);
+      })
+    ]);
   }
 
   function tryClipboardTsv(term) {
@@ -305,6 +316,9 @@ var TsvBomLoader = (function () {
     }
 
     function tryMirrorFirst() {
+      if (APP_CONFIG && APP_CONFIG.SKIP_MIRROR_ON_TSV) {
+        return Promise.resolve(null);
+      }
       if (typeof ProductExplorerBridge === 'undefined' || !ProductExplorerBridge.scrapeExplorerMirror) {
         return Promise.resolve(null);
       }
@@ -320,33 +334,38 @@ var TsvBomLoader = (function () {
       return tryAutoCopy(term, true);
     }
 
-    return tryCopyFirst()
-      .then(function (copyPayload) {
-        if (copyPayload && copyPayload.items && payloadInSync(copyPayload, term, expected)) {
-          return finish(copyPayload);
+    function tryPasteBufferFirst() {
+      return readPasteText().then(function (text) {
+        text = String(text || '').trim();
+        if (!text || text.indexOf('\t') < 0) return null;
+        if (typeof FileImportService === 'undefined' || !FileImportService.parseTextAsync) {
+          return null;
         }
-        return tryMirrorFirst().then(function (mirrorPayload) {
-          if (mirrorPayload) return finish(mirrorPayload);
-          return copyPayload;
+        return FileImportService.parseTextAsync(text).then(function (items) {
+          if (!items || items.length < 1) return null;
+          return buildPayloadFromItems(items, term);
         });
-      })
-      .then(function (autoPayload) {
-        if (autoPayload && autoPayload.ok) return autoPayload;
-        return tryAutoCopy(term, true)
-          .then(function (autoPayload2) {
-            return tryScrollHarvest(term, autoPayload2 || autoPayload, expected).then(function (harvested) {
-              if (payloadInSync(harvested, term, expected)) return harvested;
-              return tryClipboardTsv(term).then(function (clipPayload) {
-                var best = pickBestPayload(harvested, clipPayload, expected, term);
-                if (best && payloadInSync(best, term, expected)) return best;
-                return tryAutoCopy(term, true).then(function (retryCopy) {
-                  best = pickBestPayload(best, retryCopy, expected, term);
-                  if (payloadInSync(best, term, expected)) return best;
-                  return pickBestPayload(harvested, clipPayload, expected, term);
-                });
-              });
+      });
+    }
+
+    return tryPasteBufferFirst()
+      .then(function (pastePayload) {
+        if (pastePayload && payloadInSync(pastePayload, term, expected)) {
+          return finish(pastePayload);
+        }
+        return tryCopyFirst().then(function (copyPayload) {
+          if (copyPayload && copyPayload.items && payloadInSync(copyPayload, term, expected)) {
+            return finish(copyPayload);
+          }
+          return tryClipboardTsv(term).then(function (clipPayload) {
+            var best = pickBestPayload(copyPayload, clipPayload, expected, term);
+            if (best && payloadInSync(best, term, expected)) return finish(best);
+            return tryScrollHarvest(term, best || copyPayload, expected).then(function (harvested) {
+              if (harvested && payloadInSync(harvested, term, expected)) return finish(harvested);
+              return finish(best || harvested || copyPayload);
             });
           });
+        });
       })
       .then(function (res) {
         if (res && res.ok) return res;
