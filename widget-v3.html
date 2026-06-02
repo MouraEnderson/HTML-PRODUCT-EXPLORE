@@ -162,6 +162,14 @@
       }
     })();
 
+    (function enforceMinimumBuild() {
+      var MIN = 'bom20260605k';
+      if (BOM_BUILD < MIN) {
+        BOM_BUILD = 'bom20260605n';
+        BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js?v=' + encodeURIComponent(BOM_BUILD);
+      }
+    })();
+
     var UI_HTML =
       '<div class="bom-root bom-dashboard bom-theme-gray ui-clean bom-layout-page">' +
       '<header class="bom-zone-1 bom-topbar">' +
