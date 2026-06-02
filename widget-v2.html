@@ -117,6 +117,10 @@
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
     var BUNDLE;
 
+    if (location.pathname.indexOf('widget-v2') >= 0) {
+      location.replace(GH + 'widget-v3.html?v=' + BOM_BUILD + '&from=v2');
+    }
+
     (function parseEmbedEarly() {
       function pq(s) {
         var q = {}, x = String(s || '').replace(/^\?/, '');

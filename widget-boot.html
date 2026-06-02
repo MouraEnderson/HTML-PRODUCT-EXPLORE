@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>BOM Analytics — loader</title>
+  <style type="text/css">
+    body { margin: 0; font-family: "Segoe UI", sans-serif; padding: 24px; color: #263238; }
+    .ok { color: #2e7d32; font-weight: 600; }
+    .err { color: #c62828; font-weight: 600; }
+  </style>
+  <script type="text/javascript">
+  //<![CDATA[
+    (function () {
+      var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
+      var FALLBACK = 'bom20260605n';
+      var target = GH + 'widget-v3.html?v=' + encodeURIComponent(FALLBACK) + '&boot=' + Date.now();
+
+      function go(build) {
+        if (build && /^bom20/.test(build) && build >= FALLBACK) {
+          target = GH + 'widget-v3.html?v=' + encodeURIComponent(build) + '&boot=' + Date.now();
+        }
+        if (window.top && window.top !== window) {
+          window.location.replace(target);
+        } else {
+          window.location.replace(target);
+        }
+      }
+
+      var s = document.createElement('script');
+      s.charset = 'UTF-8';
+      s.src = GH + 'assets/js/build-id.js?_=' + Date.now();
+      s.onload = function () {
+        go(window.__BOM_BUILD_ID__ || FALLBACK);
+      };
+      s.onerror = function () {
+        go(FALLBACK);
+      };
+      document.getElementsByTagName('head')[0].appendChild(s);
+
+      window.setTimeout(function () {
+        go(window.__BOM_BUILD_ID__ || FALLBACK);
+      }, 2500);
+    })();
+  //]]>
+  </script>
+</head>
+<body>
+  <p>Carregando BOM Analytics (build atual)…</p>
+  <p class="ok">Se ficar preso, use no Additional App:<br />
+  <code>https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-boot.html</code></p>
+</body>
+</html>
