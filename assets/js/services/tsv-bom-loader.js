@@ -72,7 +72,8 @@ var TsvBomLoader = (function () {
 
   function withinExpectedCount(n, expected) {
     if (expected < 1) return true;
-    return n >= expected - 1 && n <= expected + 1;
+    var slack = expected >= 40 ? 3 : expected >= 15 ? 2 : 1;
+    return n >= expected - slack && n <= expected + 1;
   }
 
   function normalizeStructureToken(s) {
@@ -118,7 +119,8 @@ var TsvBomLoader = (function () {
       return Promise.reject(new Error('Módulo snapshot indisponível.'));
     }
     var itemN = pl && pl.items ? pl.items.length : 0;
-    if (expected > 0 && itemN < expected - 1) {
+    var slack = expected >= 40 ? 3 : expected >= 15 ? 2 : 1;
+    if (expected > 0 && itemN < expected - slack) {
       return Promise.reject(
         new Error(
           'TSV parcial ' + itemN + '/' + expected +

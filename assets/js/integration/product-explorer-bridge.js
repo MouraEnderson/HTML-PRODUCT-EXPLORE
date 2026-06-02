@@ -1558,6 +1558,21 @@ var ProductExplorerBridge = (function () {
     var owner = val('owner', 'owner') || '';
     var type = val('type', 'type') || 'Physical Product';
     var maturity = val('maturity', 'maturity') || '—';
+    if (typeof FileImportService !== 'undefined' && FileImportService.extractFieldsFromExplorerRow) {
+      var textCells = values.map(function (v) {
+        if (v && v.nodeType === 1) return v.innerText || v.textContent || '';
+        return v;
+      });
+      var fx = FileImportService.extractFieldsFromExplorerRow(textCells);
+      if (fx.name && (fx.name === name || revision.length > 12 || isRevisionText(type))) {
+        name = fx.name;
+        title = fx.title || title;
+        revision = fx.revision || revision;
+        owner = fx.owner || owner;
+        type = fx.type || type;
+        maturity = fx.maturity || maturity;
+      }
+    }
     var approved = /aprovado|released|frozen/i.test(maturity);
     var item = {
       level: level,

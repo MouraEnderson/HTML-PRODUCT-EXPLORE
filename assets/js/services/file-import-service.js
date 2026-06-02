@@ -512,6 +512,7 @@ var FileImportService = (function () {
     if (/^(01_SKA_|SKA_|Mont\d|M\d{1,4}|prd-R)/i.test(n)) return false;
     if (/^\d+[.,]\d+$/.test(n)) return false;
     if (/^(aprovado|em\s*trabalh|released|physical\s*product|vpmreference)/i.test(n)) return false;
+    if (/\s/.test(n) && !/[a-zà-ú]/.test(n)) return false;
     if (/^[A-Za-zÀ-ú][A-Za-zÀ-ú'.\-]*(\s+[A-Za-zÀ-ú][A-Za-zÀ-ú'.\-]*)+$/.test(n) && !/\d/.test(n)) {
       return true;
     }
@@ -578,36 +579,161 @@ var FileImportService = (function () {
   }
 
   function normHeader(h) {
-    return cleanCell(h).toLowerCase().replace(/\s+/g, ' ');
+    return cleanCell(h)
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ');
+  }
+
+  function standardExplorerColumnMap(offset) {
+    offset = offset || 0;
+    return {
+      name: 0 + offset,
+      title: 1 + offset,
+      revision: 2 + offset,
+      owner: 3 + offset,
+      type: 4 + offset,
+      maturity: 5 + offset,
+      state: 5 + offset
+    };
+  }
+
+  function leadingIconColumnOffset(rows) {
+    var sample = (rows || []).slice(0, Math.min(10, rows.length));
+    if (!sample.length) return 0;
+    var jsonFirst = 0;
+    var revAt2 = 0;
+    sample.forEach(function (row) {
+      if (!row || !row.length) return;
+      if (isJsonBlob(row[0]) || ownerJsonHasLabel(row[0])) jsonFirst++;
+      if (row.length > 2 && isRevisionText(unwrapJsonCell(row[2]))) revAt2++;
+    });
+    if (jsonFirst >= Math.max(1, Math.ceil(sample.length * 0.5))) return 1;
+    if (revAt2 >= Math.max(2, Math.ceil(sample.length * 0.35))) return 0;
+    return 0;
+  }
+
+  function offsetColumnMap(colMap, shift) {
+    if (!shift || !colMap) return colMap;
+    var out = {};
+    Object.keys(colMap).forEach(function (k) {
+      if (colMap[k] !== undefined && colMap[k] >= 0) out[k] = colMap[k] + shift;
+    });
+    return out;
+  }
+
+  /** Explorer PT: Título, Descrição, Revisão, Proprietário, Tipo, Maturidade (+ coluna ícone JSON). */
+  function extractFieldsFromExplorerRow(row) {
+    var cells = (row || []).map(function (c) {
+      return cleanCell(unwrapJsonCell(c));
+    });
+    var out = {
+      name: '',
+      title: '',
+      revision: '',
+      owner: '',
+      type: 'Physical Product',
+      maturity: ''
+    };
+    var partNames = [];
+    var descriptions = [];
+    var i;
+    var v;
+    for (i = 0; i < cells.length; i++) {
+      v = cells[i];
+      if (!v) continue;
+      if (isJsonBlob(row[i]) || ownerJsonHasLabel(row[i])) {
+        var om = parseOwnerCell(row[i]);
+        if (om.label && !out.owner) out.owner = sanitizeOwnerValue(om.label) || om.label;
+        continue;
+      }
+      if (isRevisionText(v)) {
+        if (!out.revision) out.revision = v.replace(',', '.');
+        continue;
+      }
+      if (isTypeText(v)) {
+        if (!out.type) out.type = v;
+        continue;
+      }
+      if (isMaturityText(v)) {
+        if (!out.maturity) out.maturity = v;
+        continue;
+      }
+      if (looksLikePersonName(v)) {
+        if (!out.owner) out.owner = sanitizeOwnerValue(v) || v;
+        continue;
+      }
+      if (
+        /^(SKA_|01_SKA_|Mont\d+|M\d{1,4}|prd-R|[A-Z]{2,}[-_])/i.test(v) &&
+        v.length <= 96 &&
+        !isMaturityText(v)
+      ) {
+        partNames.push(v);
+        continue;
+      }
+      if (v.length >= 6 && /[A-Za-zÀ-ú]{3,}/.test(v) && !isRevisionText(v) && !isTypeText(v)) {
+        descriptions.push(v);
+      }
+    }
+    out.name = partNames[0] || '';
+    out.title = descriptions[0] || '';
+    if (!out.title || out.title === out.name) {
+      out.title = descriptions[0] || partNames[1] || out.name;
+    }
+    if (!out.maturity) out.maturity = findMaturityInCells(row) || '';
+    if (!out.revision) {
+      for (i = 0; i < cells.length; i++) {
+        var rm = String(cells[i]).match(/\b(\d+[.,]\d+[A-Za-z]?)\b/);
+        if (rm) {
+          out.revision = rm[1].replace(',', '.');
+          break;
+        }
+      }
+    }
+    return out;
+  }
+
+  function fieldsNeedContentRepair(fields) {
+    if (!fields || !fields.name) return true;
+    if (fields.revision && !isRevisionText(fields.revision) && fields.revision.length > 10) return true;
+    if (fields.type && isRevisionText(fields.type)) return true;
+    if (fields.maturity && isTypeText(fields.maturity)) return true;
+    return false;
   }
 
   function mapColumns(headers) {
     var map = {};
-    headers.forEach(function (h, i) {
-      var nh = normHeader(h);
-      if (!nh) return;
-      if (nh.indexOf('matur') >= 0 || nh.indexOf('lifecycle') >= 0 || nh === 'status' || nh.indexOf('status') === 0) {
+    var i;
+    for (i = 0; i < headers.length; i++) {
+      var nh = normHeader(headers[i]);
+      if (!nh) continue;
+      if (nh.indexOf('titulo') >= 0) map.name = i;
+      else if (nh.indexOf('descr') >= 0) map.title = i;
+      else if (nh.indexOf('revis') >= 0) map.revision = i;
+      else if (nh.indexOf('propriet') >= 0) map.owner = i;
+      else if (nh.indexOf('tipo') >= 0 || nh === 'type') map.type = i;
+      else if (nh.indexOf('matur') >= 0 || nh.indexOf('estado') >= 0) {
         map.maturity = i;
         map.state = i;
       }
+    }
+    if (map.name !== undefined) return map;
+    headers.forEach(function (h, idx) {
+      var nh = normHeader(h);
+      if (!nh) return;
+      if (nh.indexOf('matur') >= 0 || nh.indexOf('lifecycle') >= 0 || nh === 'status') {
+        map.maturity = idx;
+        map.state = idx;
+      }
     });
-    headers.forEach(function (h, i) {
+    headers.forEach(function (h, idx) {
       var nh = normHeader(h);
       if (!nh) return;
       Object.keys(COLUMN_ALIASES).forEach(function (key) {
         if (map[key] !== undefined) return;
-        if (key === 'maturity' && map.maturity !== undefined) return;
-        if (key === 'state' && map.state !== undefined) return;
-        if (key === 'name' && /^title$/i.test(nh)) {
-          map.name = i;
-          return;
-        }
-        if (key === 'title' && /^description$/i.test(nh)) {
-          map.title = i;
-          return;
-        }
         if (COLUMN_ALIASES[key].some(function (a) { return headerMatchesAlias(nh, a); })) {
-          map[key] = i;
+          map[key] = idx;
         }
       });
     });
@@ -676,8 +802,10 @@ var FileImportService = (function () {
         var colMap = { name: 0, title: 1, type: 2, revision: 3, state: 4 };
         if (/^\d+$/.test(String(cells[0]).trim())) {
           colMap = { level: 0, name: 1, title: 2, type: 3, revision: 4, state: 5 };
+        } else if (cells.length >= 6) {
+          colMap = standardExplorerColumnMap(leadingIconColumnOffset([cells]));
         } else if (cells.length >= 5) {
-          colMap = { name: 0, revision: 1, type: 2, owner: 3, state: 4 };
+          colMap = standardExplorerColumnMap(0);
         }
         try {
           var built = buildItemsFromRows([cells], colMap, true);
@@ -937,10 +1065,11 @@ var FileImportService = (function () {
     if (rows.length && looksLikeHeader(rows[0])) {
       return parseRows(rows);
     }
-    var colMap = inferColumnMapFromRows(rows);
-    if (!colMap.name && colMap.name !== 0) colMap.name = 0;
-    if (rows[0] && rows[0].length >= 5 && colMap.owner === undefined) {
-      colMap = { name: 0, revision: 1, type: 2, owner: 3, state: 4, maturity: 4 };
+    var iconOff = leadingIconColumnOffset(rows);
+    var colMap = offsetColumnMap(inferColumnMapFromRows(rows), iconOff);
+    if (!colMap.name && colMap.name !== 0) colMap.name = 0 + iconOff;
+    if (rows[0] && rows[0].length >= 5) {
+      colMap = standardExplorerColumnMap(iconOff);
     }
     return buildItemsFromRows(rows, colMap, colMap.level === undefined);
   }
@@ -950,12 +1079,21 @@ var FileImportService = (function () {
       throw new Error('Dados insuficientes. Copie pelo menos o cabeçalho e uma linha do Explorer.');
     }
     var headers = rows[0].map(function (c) { return String(c || ''); });
+    var dataRows = rows.slice(1);
+    var iconOff = leadingIconColumnOffset(dataRows);
+    if (!iconOff && dataRows[0] && dataRows[0].length && isJsonBlob(dataRows[0][0])) {
+      var h0 = normHeader(headers[0]);
+      if (h0.indexOf('titulo') >= 0 || h0.indexOf('title') >= 0) {
+        iconOff = 1;
+      }
+    }
     var colMap = mapColumns(headers);
     if (colMap.name === undefined && colMap.title === undefined) {
-      colMap.name = 0;
-      colMap.level = colMap.level !== undefined ? colMap.level : (headers.length > 1 ? 1 : undefined);
+      colMap = standardExplorerColumnMap(iconOff);
+    } else {
+      colMap = offsetColumnMap(colMap, iconOff);
     }
-    return buildItemsFromRows(rows.slice(1), colMap, false);
+    return buildItemsFromRows(dataRows, colMap, false);
   }
 
   function buildItemsFromRows(dataRows, colMap, inferIndent) {
@@ -1011,6 +1149,34 @@ var FileImportService = (function () {
       var ownerHit = extractOwnerFromRow(row, colMap);
       var ownerText = ownerHit.text;
       var ownerCol = ownerHit.raw;
+      var parsedFields = extractFieldsFromExplorerRow(row);
+      if (parsedFields.name && (parsedFields.name === name || fieldsNeedContentRepair({
+        name: name,
+        title: cell(row, colMap, 'title', name),
+        revision: cell(row, colMap, 'revision', ''),
+        type: cell(row, colMap, 'type', ''),
+        maturity: cell(row, colMap, 'maturity', '')
+      }))) {
+        if (parsedFields.title && !looksLikePersonName(parsedFields.title)) {
+          name = parsedFields.name;
+        }
+      }
+      var titleVal = stripIconNoise(unwrapJsonCell(cell(row, colMap, 'title', name))) || String(name);
+      var revisionVal = cell(row, colMap, 'revision', '');
+      var typeVal = cell(row, colMap, 'type', 'Physical Product');
+      if (parsedFields.name && (parsedFields.name === name || !isProductName(name))) {
+        name = parsedFields.name || name;
+        titleVal = parsedFields.title || name;
+        revisionVal = parsedFields.revision || revisionVal;
+        ownerText = parsedFields.owner || ownerText;
+        typeVal = parsedFields.type || typeVal;
+        if (parsedFields.maturity) {
+          st = normalizeImportedState(parsedFields.maturity, st.approval);
+        }
+      }
+      if (looksLikePersonName(titleVal) && !looksLikePersonName(name)) titleVal = String(name);
+      if (revisionVal && !isRevisionText(revisionVal) && parsedFields.revision) revisionVal = parsedFields.revision;
+      if (isRevisionText(typeVal) && parsedFields.type) typeVal = parsedFields.type;
       if (!st.state && !st.maturity) {
         var scanned = findMaturityInCells(row);
         if (scanned) {
@@ -1021,14 +1187,10 @@ var FileImportService = (function () {
         physicalid: pid,
         sourcePhysicalId: srcPrd || (/^prd-R/i.test(pidCell) ? pidCell : ''),
         name: String(name),
-        title: (function () {
-          var t = stripIconNoise(unwrapJsonCell(cell(row, colMap, 'title', name))) || String(name);
-          if (looksLikePersonName(t) && !looksLikePersonName(name)) return String(name);
-          return t;
-        })(),
-        type: cell(row, colMap, 'type', 'VPMReference'),
-        displayType: cell(row, colMap, 'type', 'Physical Product'),
-        revision: cell(row, colMap, 'revision', ''),
+        title: titleVal,
+        type: typeVal || 'VPMReference',
+        displayType: typeVal || 'Physical Product',
+        revision: revisionVal,
         state: st.state,
         maturity: st.maturity,
         iconUrl: extractIconFromRow(row) || (ownerCol && parseOwnerCell(ownerCol).iconUrl) || '',
@@ -1103,6 +1265,7 @@ var FileImportService = (function () {
     parseText: parseText,
     parseTextAsync: parseTextAsync,
     parseRows: parseRows,
+    extractFieldsFromExplorerRow: extractFieldsFromExplorerRow,
     getImportReport: getImportReport,
     getLastImportReport: getLastImportReport,
     fixMojibake: fixMojibake
