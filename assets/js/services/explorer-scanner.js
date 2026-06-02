@@ -741,12 +741,44 @@ var ExplorerScanner = (function () {
           return res;
         });
       }
+      var term = getExplorerRootSearchTerm();
+      var expected =
+        typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getExplorerObjectCount
+          ? ProductExplorerBridge.getExplorerObjectCount() || 0
+          : 0;
+      if (
+        typeof ProductExplorerBridge !== 'undefined' &&
+        ProductExplorerBridge.tryExplorerAutoCopyParse
+      ) {
+        return ProductExplorerBridge.tryExplorerAutoCopyParse(term).then(function (payload) {
+          if (!payload || !payload.items || payload.items.length < 2) {
+            if (domMirrorFallbackEnabled() && !domMirrorPrimaryEnabled()) {
+              return scanViaDomMirrorFallback(term, expected);
+            }
+            throw new Error(
+              'Nenhum dado colado. No Explorer: expanda todos os níveis → Ctrl+A → Ctrl+C → Atualizar estrutura.'
+            );
+          }
+          if (typeof BomSnapshot === 'undefined' || !BomSnapshot.applyPayload) {
+            return Promise.reject(new Error('Módulo snapshot indisponível.'));
+          }
+          APP_CONFIG.IMPORT_MODE = true;
+          APP_CONFIG.DEMO_MODE = false;
+          return BomSnapshot.applyPayload(payload).then(function (meta) {
+            var count = BomService.getNodeCount() || meta.itemCount || payload.items.length;
+            saveRootName(meta.productName || term);
+            return {
+              ok: true,
+              mode: 'paste',
+              loaderMode: 'tsv',
+              meta: meta,
+              partial: expected > 0 && count < expected - 1,
+              message: 'TSV ' + count + (expected > 0 ? '/' + expected : '') + ' — ' + (meta.productName || term)
+            };
+          });
+        });
+      }
       if (domMirrorFallbackEnabled() && !domMirrorPrimaryEnabled()) {
-        var term = getExplorerRootSearchTerm();
-        var expected =
-          typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getExplorerObjectCount
-            ? ProductExplorerBridge.getExplorerObjectCount() || 0
-            : 0;
         return scanViaDomMirrorFallback(term, expected);
       }
       throw new Error(

@@ -2029,66 +2029,158 @@ var ProductExplorerBridge = (function () {
     };
   }
 
+  function readExplorerGridSelectionText(win) {
+    if (!win) return '';
+    try {
+      var sel = win.getSelection();
+      if (!sel || sel.rangeCount < 1) return '';
+      return String(sel.toString() || '').trim();
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function looksLikeExplorerGridTsv(text) {
+    text = String(text || '').trim();
+    if (text.length < 40) return false;
+    if (text.indexOf('\t') >= 0) return true;
+    var lines = text.split(/\r?\n/).filter(function (l) {
+      return String(l || '').trim().length > 0;
+    });
+    return lines.length >= 3;
+  }
+
+  function parseAutoCopyGridText(text, rootName, expected) {
+    text = String(text || '').trim();
+    if (!looksLikeExplorerGridTsv(text)) return Promise.resolve(null);
+    if (typeof FileImportService === 'undefined' || !FileImportService.parseTextAsync) {
+      return Promise.resolve(null);
+    }
+    return FileImportService.parseTextAsync(text).then(function (items) {
+      if (!items || items.length < 2) return null;
+      var payload = itemsToMirrorPayload(items, rootName, 'explorer-auto-copy');
+      if (!payload) return null;
+      var exp = expected || getExplorerObjectCount() || 0;
+      if (exp > 0 && payload.items.length >= exp - 1) return payload;
+      if (exp > 0 && payload.items.length < exp - 1) return null;
+      if (payload.items.length >= 3 && (!exp || exp < 4)) return payload;
+      if (!payload.mirrorQuality || !payload.mirrorQuality.ok) return null;
+      return payload;
+    });
+  }
+
+  /** Lê clipboard via paste no widget (mantém user-gesture do clique Atualizar). */
+  function tryReadClipboardViaPasteTrap() {
+    return new Promise(function (resolve) {
+      var ta = document.createElement('textarea');
+      ta.setAttribute('aria-hidden', 'true');
+      ta.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0';
+      var done = false;
+      function finish(text) {
+        if (done) return;
+        done = true;
+        try {
+          document.body.removeChild(ta);
+        } catch (eR) { /* */ }
+        resolve(String(text || '').trim());
+      }
+      ta.addEventListener('paste', function (ev) {
+        var t = ev.clipboardData ? ev.clipboardData.getData('text/plain') || '' : '';
+        finish(t);
+      });
+      document.body.appendChild(ta);
+      try {
+        ta.focus();
+        document.execCommand('paste');
+      } catch (eP) { /* */ }
+      window.setTimeout(function () {
+        finish('');
+      }, 150);
+    });
+  }
+
+  function selectExplorerGridContents(doc, win, grid) {
+    dispatchExplorerKeyCombo(win, doc, 'a', 'KeyA', true, false);
+    try {
+      var sel = win.getSelection();
+      var range = doc.createRange();
+      range.selectNodeContents(grid || doc.body);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (eSel) { /* */ }
+  }
+
+  function copyExplorerGridSelection(doc, win) {
+    dispatchExplorerKeyCombo(win, doc, 'c', 'KeyC', true, false);
+    try {
+      doc.execCommand('copy');
+    } catch (eCopy) { /* */ }
+  }
+
   function tryExplorerAutoCopyParse(rootName) {
     return new Promise(function (resolve) {
       var doc = readExplorerIframeDocument();
       if (!doc) return resolve(null);
       var frameEl = readExplorerIframeElement();
       var win = doc.defaultView;
+      var expected = getExplorerObjectCount() || 0;
+      var selCount = getExplorerSelectionCount() || 0;
+
       try {
         if (frameEl && frameEl.contentWindow) frameEl.contentWindow.focus();
       } catch (eF) { /* */ }
+
       var grid = focusExplorerGrid(doc, win);
-      dispatchExplorerKeyCombo(win, doc, 'a', 'KeyA', true, false);
-      try {
-        var sel = win.getSelection();
-        var range = doc.createRange();
-        range.selectNodeContents(grid || doc.body);
-        sel.removeAllRanges();
-        sel.addRange(range);
-      } catch (eSel) { /* */ }
-      window.setTimeout(function () {
-        try {
-          doc.execCommand('copy');
-          if (win.getSelection) win.getSelection().removeAllRanges();
-        } catch (eCopy) {
-          return resolve(null);
+
+      function finishFromText(text) {
+        return parseAutoCopyGridText(text, rootName, expected).then(resolve);
+      }
+
+      function afterCopyRead() {
+        var fromSel = readExplorerGridSelectionText(win);
+        if (looksLikeExplorerGridTsv(fromSel)) {
+          return finishFromText(fromSel);
         }
-        if (!navigator.clipboard || !navigator.clipboard.readText) {
-          return resolve(null);
-        }
-        window.setTimeout(function () {
-          navigator.clipboard.readText().then(function (text) {
-            text = String(text || '').trim();
-            if (text.length < 40) return resolve(null);
-            if (typeof FileImportService === 'undefined' || !FileImportService.parseTextAsync) {
-              return resolve(null);
-            }
-            return FileImportService.parseTextAsync(text).then(function (items) {
-              if (!items || items.length < 2) return resolve(null);
-              var payload = itemsToMirrorPayload(items, rootName, 'explorer-auto-copy');
-              if (!payload) return resolve(null);
-              var exp = getExplorerObjectCount() || 0;
-              if (exp > 0 && payload.items.length >= exp - 1) {
-                resolve(payload);
-                return;
-              }
-              if (exp > 0 && payload.items.length < exp - 1) {
-                resolve(null);
-                return;
-              }
-              if (payload.items.length >= 3 && (!exp || exp < 4)) {
-                resolve(payload);
-                return;
-              }
-              if (!payload.mirrorQuality || !payload.mirrorQuality.ok) return resolve(null);
-              resolve(payload);
+        return tryReadClipboardViaPasteTrap().then(function (clip) {
+          if (looksLikeExplorerGridTsv(clip)) {
+            return finishFromText(clip);
+          }
+          if (navigator.clipboard && navigator.clipboard.readText) {
+            return navigator.clipboard.readText().catch(function () {
+              return '';
             });
-          }).catch(function () {
-            resolve(null);
-          });
-        }, 250);
-      }, 180);
+          }
+          return '';
+        }).then(function (clip) {
+          if (looksLikeExplorerGridTsv(clip)) {
+            return finishFromText(clip);
+          }
+          resolve(null);
+        });
+      }
+
+      if (expected > 0 && selCount >= expected - 1) {
+        var preSel = readExplorerGridSelectionText(win);
+        if (looksLikeExplorerGridTsv(preSel)) {
+          return finishFromText(preSel);
+        }
+        copyExplorerGridSelection(doc, win);
+        return afterCopyRead();
+      }
+
+      selectExplorerGridContents(doc, win, grid);
+      var syncSel = readExplorerGridSelectionText(win);
+      if (looksLikeExplorerGridTsv(syncSel)) {
+        var lineN = syncSel.split(/\r?\n/).filter(function (l) {
+          return String(l || '').trim().length > 0;
+        }).length;
+        if (!expected || lineN >= expected - 1 || lineN >= 3) {
+          return finishFromText(syncSel);
+        }
+      }
+
+      copyExplorerGridSelection(doc, win);
+      afterCopyRead();
     });
   }
 
