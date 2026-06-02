@@ -1,6 +1,6 @@
 /**
  * @file ui/3dplay-viewer.js
- * Sprint 3 — painel 3DPlay na zona de preview (clique E-BOM).
+ * Sprint 3 — painel de preview ao clicar numa linha da E-BOM (2D WAF + tentativa 3DPlay).
  */
 var ThreeDPlayViewer = (function () {
   'use strict';
@@ -14,11 +14,17 @@ var ThreeDPlayViewer = (function () {
     return window.__3DX_UI_ROOT__ || document;
   }
 
-  function escapeHtml(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+  function cfg() {
+    return (APP_CONFIG && APP_CONFIG.THREE_DPLAY) || {};
+  }
+
+  function prefer2dPanel() {
+    if (cfg().PREFER_2D_IN_PANEL === true) return true;
+    if (cfg().EMBED_PLAYER === false) return true;
+    try {
+      if (typeof location !== 'undefined' && location.hostname.indexOf('github.io') >= 0) return true;
+    } catch (e) { /* */ }
+    return false;
   }
 
   function bind(container) {
@@ -58,15 +64,38 @@ var ThreeDPlayViewer = (function () {
     if (kind === 'err') statusEl.classList.add('bom-3dplay-status-err');
   }
 
-  function renderThumb(node) {
+  function renderThumb(node, sizeClass) {
     if (!thumbEl) thumbEl = uiRoot().querySelector('#bom3DPlayThumb');
     if (!thumbEl || !node) return;
+    sizeClass = sizeClass || 'bom-thumb-sm';
     if (typeof PartImage !== 'undefined' && PartImage.mountThumb) {
       thumbEl.innerHTML = '<div class="bom-3dplay-thumb-inner"></div>';
-      PartImage.mountThumb(thumbEl.querySelector('.bom-3dplay-thumb-inner'), node, 'bom-thumb-sm');
+      PartImage.mountThumb(thumbEl.querySelector('.bom-3dplay-thumb-inner'), node, sizeClass);
     } else {
       thumbEl.innerHTML = '';
     }
+  }
+
+  function show2dInHost(node) {
+    if (!hostEl) return;
+    hostEl.innerHTML = '<div class="bom-3dplay-2d-panel"></div>';
+    var panel = hostEl.querySelector('.bom-3dplay-2d-panel');
+    if (typeof PartImage !== 'undefined' && PartImage.mountThumb && panel) {
+      PartImage.mountThumb(panel, node, 'bom-thumb-xl');
+    } else if (panel) {
+      panel.innerHTML = '<p class="bom-3dplay-empty">Miniatura indisponível.</p>';
+    }
+    renderThumb(node, 'bom-thumb-sm');
+  }
+
+  function showUnavailable(node, sub) {
+    if (!hostEl) return;
+    hostEl.innerHTML =
+      '<div class="bom-3dplay-empty">' +
+      '<p>Pré-visualização 3D indisponível para esta linha.</p>' +
+      '<p class="bom-3dplay-empty-sub">' + (sub || '') + '</p>' +
+      '</div>';
+    renderThumb(node);
   }
 
   function show(node) {
@@ -78,19 +107,28 @@ var ThreeDPlayViewer = (function () {
       return;
     }
 
+    var resolvedId = typeof ThreeDPlayBridge !== 'undefined' && ThreeDPlayBridge.resolvePhysicalId
+      ? ThreeDPlayBridge.resolvePhysicalId(node)
+      : String(node.sourcePhysicalId || node.physicalid || '');
     var playable = typeof ThreeDPlayBridge !== 'undefined' &&
       ThreeDPlayBridge.isPlayableId &&
-      ThreeDPlayBridge.isPlayableId(ThreeDPlayBridge.resolvePhysicalId(node));
+      ThreeDPlayBridge.isPlayableId(resolvedId);
 
     if (!playable) {
-      hostEl.innerHTML =
-        '<div class="bom-3dplay-empty">' +
-        '<p>Pré-visualização 3D indisponível para esta linha.</p>' +
-        '<p class="bom-3dplay-empty-sub">IDs de importação (IMP_/grid_) só mostram miniatura 2D. ' +
-        'Para 3D real, o Explorer precisa expor prd- (Ctrl+C com linha de ID ou grade visível).</p>' +
-        '</div>';
+      showUnavailable(
+        node,
+        'IDs de importação (IMP_/grid_) só mostram metadados. Carregue com Ctrl+C para obter prd-.'
+      );
       renderStatus('Sem ID 3D — só metadados.', 'warn');
-      renderThumb(node);
+      return;
+    }
+
+    if (prefer2dPanel()) {
+      show2dInHost(node);
+      renderStatus(
+        cfg().WIDGET_HINT || 'Pré-visualização 2D no painel (3DPlay embutido indisponível no Additional App).',
+        'warn'
+      );
       return;
     }
 
@@ -102,14 +140,16 @@ var ThreeDPlayViewer = (function () {
         if (!st) return;
         if (st.mode === 'embedded' && st.ok) {
           renderStatus('3DPlay embutido', 'ok');
-        } else if (st.ok) {
-          renderStatus(st.message || 'Enviado para 3DPlay', 'ok');
-        } else {
-          renderStatus(st.message || '3DPlay indisponível', 'warn');
+          renderThumb(node);
+          return;
         }
+        show2dInHost(node);
+        renderStatus(st.message || 'Pré-visualização 2D (3DPlay indisponível)', 'warn');
       });
+    } else {
+      show2dInHost(node);
+      renderStatus('Pré-visualização 2D', 'warn');
     }
-    renderThumb(node);
   }
 
   function clear() {
@@ -120,7 +160,7 @@ var ThreeDPlayViewer = (function () {
     if (hostEl) {
       hostEl.innerHTML =
         '<div class="bom-3dplay-empty">' +
-        '<p>Clique numa linha da E-BOM para visualizar em 3DPlay.</p>' +
+        '<p>Clique numa linha da E-BOM para visualizar a peça.</p>' +
         '</div>';
     }
     renderStatus('', '');

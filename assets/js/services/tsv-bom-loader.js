@@ -291,7 +291,9 @@ var TsvBomLoader = (function () {
     }
 
     var term = rootTerm(ctx);
-    var allowAutoCopy = options.allowAutoCopy === true;
+    var skipCopyBelow = (APP_CONFIG && APP_CONFIG.SKIP_AUTO_COPY_BELOW) || 12;
+    var fastStructure = expected > 0 && expected <= ((APP_CONFIG && APP_CONFIG.FAST_STRUCTURE_MAX) || 12);
+    var allowAutoCopy = options.allowAutoCopy === true && (!fastStructure || expected > skipCopyBelow);
 
     function finish(payload) {
       if (!payloadInSync(payload, term, expected)) {
@@ -344,6 +346,24 @@ var TsvBomLoader = (function () {
         return FileImportService.parseTextAsync(text).then(function (items) {
           if (!items || items.length < 1) return null;
           return buildPayloadFromItems(items, term);
+        });
+      });
+    }
+
+    if (fastStructure) {
+      return tryPasteBufferFirst().then(function (pastePayload) {
+        if (pastePayload && payloadInSync(pastePayload, term, expected)) {
+          return finish(pastePayload);
+        }
+        return tryClipboardTsv(term).then(function (clipPayload) {
+          if (clipPayload && payloadInSync(clipPayload, term, expected)) {
+            return finish(clipPayload);
+          }
+          return Promise.reject(
+            new Error(
+              'No Explorer: Ctrl+A → Ctrl+C → clique Atualizar estrutura (ou Ctrl+V na caixa de cola).'
+            )
+          );
         });
       });
     }

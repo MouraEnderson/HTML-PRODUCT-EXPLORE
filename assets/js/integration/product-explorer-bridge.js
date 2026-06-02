@@ -367,12 +367,14 @@ var ProductExplorerBridge = (function () {
 
   function buildPrdCatalogFull() {
     var catalog = buildPrdCatalogFromExplorer();
-    var doc = readExplorerIframeDocument();
-    if (doc) {
-      var fromHtml = buildPrdCatalogFromExplorerHtml(doc);
-      Object.keys(fromHtml).forEach(function (k) {
-        catalog[k] = fromHtml[k];
-      });
+    if (!(APP_CONFIG && APP_CONFIG.SKIP_PRD_HTML_SCAN)) {
+      var doc = readExplorerIframeDocument();
+      if (doc) {
+        var fromHtml = buildPrdCatalogFromExplorerHtml(doc);
+        Object.keys(fromHtml).forEach(function (k) {
+          catalog[k] = fromHtml[k];
+        });
+      }
     }
     var text = harvestExplorerTextOnly() || harvestExplorerWidgetTextFromDashboard() || harvestAllExplorerText();
     mergePrdCatalogFromText(text, catalog);
@@ -2383,7 +2385,7 @@ var ProductExplorerBridge = (function () {
       }
       window.setTimeout(function () {
         finish('');
-      }, 120);
+      }, 80);
     });
   }
 

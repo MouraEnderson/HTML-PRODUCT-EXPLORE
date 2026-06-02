@@ -828,11 +828,15 @@ var App = (function () {
       btnEl.textContent = 'Atualizando…';
     }
     function startRefresh() {
+      var expected = 0;
+      if (typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh) {
+        expected = ExplorerContext.refresh(true).expectedCount || 0;
+      }
+      var skipBelow = (APP_CONFIG && APP_CONFIG.SKIP_AUTO_COPY_BELOW) || 12;
       return BomOrchestrator.refreshStructure({
         source: 'manual',
-        allowAutoCopy: true,
-        preferApi: false,
-        timeoutMs: (APP_CONFIG && APP_CONFIG.MANUAL_REFRESH_TIMEOUT_MS) || 28000
+        allowAutoCopy: !expected || expected > skipBelow,
+        preferApi: false
       });
     }
     function primePasteBuffer() {

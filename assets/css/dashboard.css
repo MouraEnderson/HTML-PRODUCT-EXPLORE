@@ -2246,6 +2246,28 @@ body.ui-clean .main-clean {
   height: 120px;
 }
 
+.bom-thumb-xl {
+  width: 100%;
+  min-height: 160px;
+  max-height: 220px;
+  height: 180px;
+}
+
+.bom-thumb-xl .bom-thumb-fallback {
+  font-size: 3rem;
+}
+
+.bom-3dplay-2d-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  width: 100%;
+  background: #f5f7fa;
+  border-radius: 6px;
+  border: 1px solid #e0e6ed;
+}
+
 .bom-thumb-img {
   width: 100%;
   height: 100%;

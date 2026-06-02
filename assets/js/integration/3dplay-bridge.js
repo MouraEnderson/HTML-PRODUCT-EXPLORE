@@ -34,9 +34,9 @@ var ThreeDPlayBridge = (function () {
   function resolvePhysicalId(node) {
     if (!node) return '';
     if (typeof PartImage !== 'undefined' && PartImage.lookupPrdId) {
-      return PartImage.lookupPrdId(node);
+      return String(PartImage.lookupPrdId(node) || '').replace(/^prd::/i, 'prd-');
     }
-    var pid = String(node.sourcePhysicalId || node.physicalid || '').trim();
+    var pid = String(node.sourcePhysicalId || node.physicalid || '').trim().replace(/^prd::/i, 'prd-');
     if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.normalizePhysicalId) {
       pid = ThreeDXContentParser.normalizePhysicalId(pid);
     }

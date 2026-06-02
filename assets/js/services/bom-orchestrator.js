@@ -281,7 +281,12 @@ var BomOrchestrator = (function () {
 
     var timeoutMs = options.timeoutMs;
     if (!timeoutMs && options.source === 'manual') {
-      timeoutMs = (APP_CONFIG && APP_CONFIG.MANUAL_REFRESH_TIMEOUT_MS) || 28000;
+      var smallMax = (APP_CONFIG && APP_CONFIG.FAST_STRUCTURE_MAX) || 12;
+      if (ctx.expectedCount > 0 && ctx.expectedCount <= smallMax) {
+        timeoutMs = (APP_CONFIG && APP_CONFIG.MANUAL_REFRESH_TIMEOUT_SMALL_MS) || 12000;
+      } else {
+        timeoutMs = (APP_CONFIG && APP_CONFIG.MANUAL_REFRESH_TIMEOUT_MS) || 28000;
+      }
     }
     return withTimeout(chain, timeoutMs)
       .then(function (res) {
