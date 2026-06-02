@@ -50,7 +50,27 @@ var ApiDiagnostic = (function () {
   }
 
   function probeEngItem(physicalId) {
-    if (typeof EnoviaApi === 'undefined' || !EnoviaApi.getEngItem) {
+    if (typeof EnoviaApi === 'undefined') {
+      return Promise.resolve(log('dseng:EngItem', false, 'EnoviaApi indisponível'));
+    }
+    if (EnoviaApi.isCloudPrdId && EnoviaApi.isCloudPrdId(physicalId) && EnoviaApi.getPhysicalProduct) {
+      log('cloud prd-', true, 'Tentando dspfl:PhysicalProduct antes de dseng:EngItem');
+      return EnoviaApi.getPhysicalProduct(physicalId, null)
+        .then(function (res) {
+          var eng =
+            EnoviaApi.extractEngItemIdFromResponse &&
+            EnoviaApi.extractEngItemIdFromResponse(res);
+          return log(
+            'dspfl:PhysicalProduct GET',
+            true,
+            'OK' + (eng ? ' — engItem ' + eng : '')
+          );
+        })
+        .catch(function (err) {
+          return log('dspfl:PhysicalProduct GET', false, err.message || String(err));
+        });
+    }
+    if (!EnoviaApi.getEngItem) {
       return Promise.resolve(log('dseng:EngItem', false, 'EnoviaApi indisponível'));
     }
     var url = EnoviaApi.engItemUrl ? EnoviaApi.engItemUrl(physicalId) : physicalId;
@@ -71,7 +91,21 @@ var ApiDiagnostic = (function () {
   }
 
   function probeEngInstance(physicalId) {
-    if (typeof EnoviaApi === 'undefined' || !EnoviaApi.getEngInstanceChildren) {
+    if (typeof EnoviaApi === 'undefined') {
+      return Promise.resolve(log('dseng:EngInstance', false, 'EnoviaApi indisponível'));
+    }
+    if (EnoviaApi.isCloudPrdId && EnoviaApi.isCloudPrdId(physicalId) && EnoviaApi.getPhysicalProductChildren) {
+      return EnoviaApi.getPhysicalProductChildren(physicalId, 0, 5)
+        .then(function (res) {
+          var n = EnoviaApi.extractMembers && EnoviaApi.extractMembers(res);
+          n = n ? n.length : 0;
+          return log('dspfl:Part GET (filhos)', true, 'Filhos: ' + n);
+        })
+        .catch(function (err) {
+          return log('dspfl:Part GET (filhos)', false, err.message || String(err));
+        });
+    }
+    if (!EnoviaApi.getEngInstanceChildren) {
       return Promise.resolve(log('dseng:EngInstance', false, 'EnoviaApi indisponível'));
     }
     return EnoviaApi.getEngInstanceChildren(physicalId, 0, 5)

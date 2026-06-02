@@ -116,10 +116,10 @@ var BomService = (function () {
       });
     }
 
-    return fetchPage(EnoviaApi.preferEngBomApi()).catch(function () {
+    return fetchPage(EnoviaApi.preferEngChildrenForParent(parentId)).catch(function () {
       skip = 0;
       allChildren = [];
-      return fetchPage(!EnoviaApi.preferEngBomApi());
+      return fetchPage(!EnoviaApi.preferEngChildrenForParent(parentId));
     }).catch(function () {
       if (index[parentId]) index[parentId].loaded = true;
       return [];

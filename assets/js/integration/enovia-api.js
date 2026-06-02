@@ -163,6 +163,15 @@ var EnoviaApi = (function () {
     return list;
   }
 
+  function isCloudPrdId(id) {
+    return /^prd-R\d{10,}-/i.test(String(id || ''));
+  }
+
+  function preferEngChildrenForParent(parentId) {
+    if (APP_CONFIG.API_ENG_BOM_FIRST === false) return false;
+    return !isCloudPrdId(parentId);
+  }
+
   function preferEngBomApi() {
     return APP_CONFIG.API_ENG_BOM_FIRST !== false;
   }
@@ -208,6 +217,18 @@ var EnoviaApi = (function () {
         });
     }
 
+    if (isCloudPrdId(physicalId)) {
+      return tryPrd(0).catch(function () {
+        return tryEng(0);
+      });
+    }
+    for (var ci = 0; ci < ids.length; ci++) {
+      if (isCloudPrdId(ids[ci])) {
+        return tryPrd(0).catch(function () {
+          return tryEng(0);
+        });
+      }
+    }
     if (preferEngBomApi()) return tryEng(0);
     return tryPrd(0).catch(function () {
       return tryEng(0);
@@ -277,6 +298,8 @@ var EnoviaApi = (function () {
     getProductRoot: getProductRoot,
     extractEngItemIdFromResponse: extractEngItemIdFromResponse,
     preferEngBomApi: preferEngBomApi,
+    preferEngChildrenForParent: preferEngChildrenForParent,
+    isCloudPrdId: isCloudPrdId,
     getEngItemBomExpand: getEngItemBomExpand,
     getEngInstanceChildren: getEngInstanceChildren,
     getPhysicalProductChildren: getPhysicalProductChildren,
