@@ -758,7 +758,25 @@ var App = (function () {
       btnEl.disabled = true;
       btnEl.textContent = 'Atualizando…';
     }
-    BomOrchestrator.refreshStructure({ source: 'manual', allowAutoCopy: true, preferApi: false })
+    function startRefresh() {
+      return BomOrchestrator.refreshStructure({ source: 'manual', allowAutoCopy: true, preferApi: false });
+    }
+    var clipPromise = Promise.resolve('');
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      clipPromise = navigator.clipboard.readText().catch(function () {
+        return '';
+      });
+    }
+    clipPromise
+      .then(function (clip) {
+        clip = String(clip || '').trim();
+        if (clip && typeof ExplorerScanner !== 'undefined' && ExplorerScanner.setPasteBuffer) {
+          ExplorerScanner.setPasteBuffer(clip);
+        }
+        var area = byId('pasteArea');
+        if (area && clip && !String(area.value || '').trim()) area.value = clip;
+        return startRefresh();
+      })
       .then(function (res) {
         applyOrchestratorResult(res, { updateClock: true, layoutFit: true });
         lastSyncedStructure =

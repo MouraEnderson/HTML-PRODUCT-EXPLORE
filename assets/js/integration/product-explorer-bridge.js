@@ -2029,6 +2029,62 @@ var ProductExplorerBridge = (function () {
     };
   }
 
+  function readExplorerHost() {
+    var doc = readExplorerIframeDocument();
+    if (doc) {
+      return { doc: doc, win: doc.defaultView, frame: readExplorerIframeElement() };
+    }
+    try {
+      var topDoc = window.top && window.top.document;
+      if (!topDoc || !topDoc.body) return null;
+      var nodes = topDoc.querySelectorAll('[role="grid"], .wux-layouts-gridengine-datagrid');
+      var i;
+      for (i = 0; i < nodes.length; i++) {
+        var grid = nodes[i];
+        var panel = grid;
+        var hop = 0;
+        while (panel && hop < 12) {
+          var label = String(panel.innerText || panel.textContent || '').slice(0, 4000);
+          if (label.indexOf('BOM Analytics') >= 0) break;
+          if (
+            label.indexOf('Product Structure Explorer') >= 0 ||
+            label.indexOf('Structure Explorer') >= 0
+          ) {
+            return { doc: topDoc, win: window.top, grid: grid, frame: null };
+          }
+          panel = panel.parentElement;
+          hop++;
+        }
+      }
+    } catch (eTop) { /* */ }
+    return null;
+  }
+
+  /** Captura TSV no evento copy do documento Explorer (não depende de clipboard async). */
+  function captureExplorerCopyText(doc, win) {
+    if (!doc || !win) return '';
+    var captured = '';
+    function onCopy(ev) {
+      try {
+        if (ev && ev.clipboardData) {
+          captured = ev.clipboardData.getData('text/plain') || '';
+        }
+      } catch (e0) { /* */ }
+    }
+    doc.addEventListener('copy', onCopy, true);
+    try {
+      doc.execCommand('copy');
+    } catch (e1) { /* */ }
+    if (!captured || captured.length < 20) {
+      dispatchExplorerKeyCombo(win, doc, 'c', 'KeyC', true, false);
+    }
+    try {
+      doc.removeEventListener('copy', onCopy, true);
+    } catch (e2) { /* */ }
+    captured = String(captured || readExplorerGridSelectionText(win) || '').trim();
+    return captured;
+  }
+
   function readExplorerGridSelectionText(win) {
     if (!win) return '';
     try {
@@ -2041,6 +2097,9 @@ var ProductExplorerBridge = (function () {
   }
 
   function looksLikeExplorerGridTsv(text) {
+    if (typeof FileImportService !== 'undefined' && FileImportService.looksLikeExplorerPaste) {
+      return FileImportService.looksLikeExplorerPaste(text);
+    }
     text = String(text || '').trim();
     if (text.length < 40) return false;
     if (text.indexOf('\t') >= 0) return true;
@@ -2069,33 +2128,58 @@ var ProductExplorerBridge = (function () {
     });
   }
 
-  /** Lê clipboard via paste no widget (mantém user-gesture do clique Atualizar). */
+  /** Lê clipboard via paste no widget (user-gesture do clique Atualizar). */
   function tryReadClipboardViaPasteTrap() {
     return new Promise(function (resolve) {
-      var ta = document.createElement('textarea');
-      ta.setAttribute('aria-hidden', 'true');
-      ta.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0';
+      var target = document.getElementById('pasteArea');
+      var external = false;
+      if (!target) {
+        target = document.createElement('textarea');
+        target.style.cssText =
+          'position:fixed;left:0;top:0;width:2px;height:2px;padding:0;margin:0;border:0;opacity:0.01';
+        document.body.appendChild(target);
+        external = true;
+      }
       var done = false;
       function finish(text) {
         if (done) return;
         done = true;
-        try {
-          document.body.removeChild(ta);
-        } catch (eR) { /* */ }
+        if (external) {
+          try {
+            document.body.removeChild(target);
+          } catch (eR) { /* */ }
+        }
         resolve(String(text || '').trim());
       }
-      ta.addEventListener('paste', function (ev) {
-        var t = ev.clipboardData ? ev.clipboardData.getData('text/plain') || '' : '';
-        finish(t);
-      });
-      document.body.appendChild(ta);
+      target.addEventListener(
+        'paste',
+        function (ev) {
+          var t = ev.clipboardData ? ev.clipboardData.getData('text/plain') || '' : '';
+          finish(t);
+        },
+        { once: true, capture: true }
+      );
       try {
-        ta.focus();
+        target.focus({ preventScroll: true });
+      } catch (eF) {
+        try {
+          target.focus();
+        } catch (eF2) { /* */ }
+      }
+      try {
         document.execCommand('paste');
       } catch (eP) { /* */ }
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        navigator.clipboard
+          .readText()
+          .then(function (clip) {
+            if (clip && String(clip).trim()) finish(clip);
+          })
+          .catch(function () { /* */ });
+      }
       window.setTimeout(function () {
         finish('');
-      }, 150);
+      }, 120);
     });
   }
 
@@ -2111,76 +2195,77 @@ var ProductExplorerBridge = (function () {
   }
 
   function copyExplorerGridSelection(doc, win) {
-    dispatchExplorerKeyCombo(win, doc, 'c', 'KeyC', true, false);
-    try {
-      doc.execCommand('copy');
-    } catch (eCopy) { /* */ }
+    return captureExplorerCopyText(doc, win);
   }
 
   function tryExplorerAutoCopyParse(rootName) {
     return new Promise(function (resolve) {
-      var doc = readExplorerIframeDocument();
-      if (!doc) return resolve(null);
-      var frameEl = readExplorerIframeElement();
-      var win = doc.defaultView;
+      var host = readExplorerHost();
+      if (!host || !host.doc) return resolve(null);
+      var doc = host.doc;
+      var win = host.win;
+      var frameEl = host.frame;
       var expected = getExplorerObjectCount() || 0;
       var selCount = getExplorerSelectionCount() || 0;
 
       try {
         if (frameEl && frameEl.contentWindow) frameEl.contentWindow.focus();
+        else if (win && win.focus) win.focus();
       } catch (eF) { /* */ }
 
-      var grid = focusExplorerGrid(doc, win);
+      var grid = host.grid || focusExplorerGrid(doc, win);
 
-      function finishFromText(text) {
-        return parseAutoCopyGridText(text, rootName, expected).then(resolve);
+      function parseCaptured(text) {
+        return parseAutoCopyGridText(text, rootName, expected);
       }
 
-      function afterCopyRead() {
-        var fromSel = readExplorerGridSelectionText(win);
-        if (looksLikeExplorerGridTsv(fromSel)) {
-          return finishFromText(fromSel);
+      function tryCopyBundle() {
+        var copied = copyExplorerGridSelection(doc, win);
+        if (looksLikeExplorerGridTsv(copied)) {
+          return parseCaptured(copied).then(function (payload) {
+            if (payload) return payload;
+            return tryReadClipboardViaPasteTrap().then(function (clip) {
+              if (looksLikeExplorerGridTsv(clip)) return parseCaptured(clip);
+              return null;
+            });
+          });
         }
         return tryReadClipboardViaPasteTrap().then(function (clip) {
-          if (looksLikeExplorerGridTsv(clip)) {
-            return finishFromText(clip);
-          }
-          if (navigator.clipboard && navigator.clipboard.readText) {
-            return navigator.clipboard.readText().catch(function () {
-              return '';
-            });
-          }
-          return '';
-        }).then(function (clip) {
-          if (looksLikeExplorerGridTsv(clip)) {
-            return finishFromText(clip);
-          }
-          resolve(null);
+          if (looksLikeExplorerGridTsv(clip)) return parseCaptured(clip);
+          return null;
         });
       }
 
+      var chain;
       if (expected > 0 && selCount >= expected - 1) {
         var preSel = readExplorerGridSelectionText(win);
         if (looksLikeExplorerGridTsv(preSel)) {
-          return finishFromText(preSel);
+          chain = parseCaptured(preSel);
+        } else {
+          chain = tryCopyBundle();
         }
-        copyExplorerGridSelection(doc, win);
-        return afterCopyRead();
+      } else {
+        selectExplorerGridContents(doc, win, grid);
+        var syncSel = readExplorerGridSelectionText(win);
+        if (looksLikeExplorerGridTsv(syncSel)) {
+          var lineN = syncSel.split(/\r?\n/).filter(function (l) {
+            return String(l || '').trim().length > 0;
+          }).length;
+          if (!expected || lineN >= expected - 1 || lineN >= 3) {
+            chain = parseCaptured(syncSel).then(function (payload) {
+              return payload || tryCopyBundle();
+            });
+          } else {
+            chain = tryCopyBundle();
+          }
+        } else {
+          chain = tryCopyBundle();
+        }
       }
 
-      selectExplorerGridContents(doc, win, grid);
-      var syncSel = readExplorerGridSelectionText(win);
-      if (looksLikeExplorerGridTsv(syncSel)) {
-        var lineN = syncSel.split(/\r?\n/).filter(function (l) {
-          return String(l || '').trim().length > 0;
-        }).length;
-        if (!expected || lineN >= expected - 1 || lineN >= 3) {
-          return finishFromText(syncSel);
-        }
-      }
-
-      copyExplorerGridSelection(doc, win);
-      afterCopyRead();
+      chain.then(resolve).catch(function () {
+        resolve(null);
+      });
     });
   }
 
