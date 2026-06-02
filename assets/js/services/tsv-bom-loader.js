@@ -352,36 +352,58 @@ var TsvBomLoader = (function () {
       });
     }
 
-    function runHarvestChain() {
-      return tryMirrorFirst()
-        .then(function (mirrorPayload) {
-          if (mirrorPayload && payloadInSync(mirrorPayload, term, expected)) {
-            return finish(mirrorPayload);
+    function runCopyScrollFinish(partialPayload) {
+      return tryCopyFirst().then(function (copyPayload) {
+        return tryClipboardTsv(term).then(function (clipPayload) {
+          var best = pickBestPayload(copyPayload, clipPayload, expected, term);
+          if (partialPayload) {
+            var merged = pickBestPayload(partialPayload, best, expected, term);
+            if (merged) best = merged;
           }
-          return tryPasteBufferFirst().then(function (pastePayload) {
-            if (pastePayload && payloadInSync(pastePayload, term, expected)) {
-              return finish(pastePayload);
+          if (best && payloadInSync(best, term, expected)) return finish(best);
+          return tryScrollHarvest(term, best || copyPayload || partialPayload, expected).then(
+            function (harvested) {
+              if (harvested && payloadInSync(harvested, term, expected)) return finish(harvested);
+              var n = (harvested && harvested.items && harvested.items.length) ||
+                (best && best.items && best.items.length) ||
+                0;
+              return Promise.reject(
+                new Error(
+                  'TSV incompleto ' +
+                    n +
+                    '/' +
+                    expected +
+                    ' — expanda todos os níveis no Explorer → Ctrl+A → Ctrl+C → Atualizar estrutura.'
+                )
+              );
             }
-            return tryCopyFirst().then(function (copyPayload) {
-              if (copyPayload && payloadInSync(copyPayload, term, expected)) {
-                return finish(copyPayload);
-              }
-              return tryClipboardTsv(term).then(function (clipPayload) {
-                var best = pickBestPayload(copyPayload, clipPayload, expected, term);
-                if (best && payloadInSync(best, term, expected)) return finish(best);
-                return tryScrollHarvest(term, best || copyPayload, expected).then(function (harvested) {
-                  if (harvested && payloadInSync(harvested, term, expected)) return finish(harvested);
-                  if (best || harvested) return finish(best || harvested);
-                  return Promise.reject(
-                    new Error(
-                      'Não foi possível ler a grade do Explorer. Clique na estrutura → Atualizar estrutura.'
-                    )
-                  );
-                });
-              });
-            });
-          });
+          );
         });
+      });
+    }
+
+    function runHarvestChain() {
+      var pasteFirst =
+        options.pasteFirst === true ||
+        (options.source === 'auto' && APP_CONFIG.AUTO_SYNC_PREFER_PASTE !== false);
+
+      function afterPaste(pastePayload) {
+        if (pastePayload && payloadInSync(pastePayload, term, expected)) {
+          return finish(pastePayload);
+        }
+        return runCopyScrollFinish(pastePayload);
+      }
+
+      if (pasteFirst) {
+        return tryPasteBufferFirst().then(afterPaste);
+      }
+
+      return tryMirrorFirst().then(function (mirrorPayload) {
+        if (mirrorPayload && payloadInSync(mirrorPayload, term, expected)) {
+          return finish(mirrorPayload);
+        }
+        return tryPasteBufferFirst().then(afterPaste);
+      });
     }
 
     return runHarvestChain();

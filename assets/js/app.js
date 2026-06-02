@@ -50,6 +50,7 @@ var App = (function () {
   }
 
   var lastSyncedStructure = null;
+  var lastFailedSyncKey = null;
   var structureSyncTimer = null;
 
   function allowApiLoad() {
@@ -587,6 +588,21 @@ var App = (function () {
     if (opts.layoutFit && typeof LayoutFit !== 'undefined') LayoutFit.apply();
   }
 
+  function hasPasteBufferForSync() {
+    var text = '';
+    if (typeof ExplorerScanner !== 'undefined' && ExplorerScanner.getPasteBuffer) {
+      text = ExplorerScanner.getPasteBuffer() || '';
+    }
+    if (!text) {
+      var area = byId('pasteArea');
+      if (area && area.value) text = String(area.value);
+    }
+    text = String(text || '').trim();
+    return text.indexOf('\t') >= 0 && text.split(/\r?\n/).filter(function (l) {
+      return l.trim();
+    }).length >= 2;
+  }
+
   function syncOpenExplorerStructure(force, reason) {
     if (root.__3DX_BLOCK_AUTO_SYNC__) return;
     if (!force && reason === 'poll' && (APP_CONFIG.AUTO_SYNC_EXPLORER_MS || 0) < 1) return;
@@ -658,6 +674,21 @@ var App = (function () {
       if (!autoRefreshOn && reason !== 'context') return;
       if (!structureChanged && !countMismatch) return;
       if (syncKey === lastSyncedStructure && !countMismatch) return;
+      if (syncKey === lastFailedSyncKey) return;
+      var skipAutoLarge =
+        (APP_CONFIG.AUTO_SYNC_REQUIRE_PASTE_ABOVE || 12) &&
+        explorerCount > (APP_CONFIG.AUTO_SYNC_REQUIRE_PASTE_ABOVE || 12) &&
+        dashCount < 1 &&
+        !hasPasteBufferForSync();
+      if (skipAutoLarge) {
+        if (reason === 'context' || structureChanged) {
+          setStatus(
+            'Drone/SKA: expanda a árvore no Explorer → Ctrl+A → Ctrl+C → Atualizar estrutura.',
+            'info'
+          );
+        }
+        return;
+      }
     }
     if (loading && !force) return;
     if (structureSyncTimer) window.clearTimeout(structureSyncTimer);
@@ -690,6 +721,7 @@ var App = (function () {
       })
         .then(function (res) {
           lastSyncedStructure = syncKey;
+          lastFailedSyncKey = null;
           applyOrchestratorResult(res);
           var n =
             typeof BomService !== 'undefined' && BomService.getNodeCount
@@ -703,13 +735,14 @@ var App = (function () {
         })
         .catch(function (err) {
           var msg = (err && err.message) ? err.message : String(err);
+          if (!isManual) lastFailedSyncKey = syncKey;
           if (typeof SyncBanner !== 'undefined' && SyncBanner.clearLoad) SyncBanner.clearLoad();
           if (typeof BomService !== 'undefined' && BomService.getNodeCount() > 0) {
             refreshUI();
           }
-          if (!isManual && /Ctrl\+C|cola|clipboard/i.test(msg)) {
+          if (!isManual && /Ctrl\+C|cola|clipboard|TSV|grade|parcial/i.test(msg)) {
             setStatus(
-              'Sync automático: cole Ctrl+C na grade ou clique Atualizar estrutura.',
+              'Sync automático incompleto — expanda a árvore, Ctrl+C na grade, depois Atualizar estrutura.',
               'warn'
             );
             return;
@@ -866,6 +899,7 @@ var App = (function () {
     root.__3DX_BLOCK_AUTO_SYNC__ = true;
     root.__3DX_ALLOW_API__ = true;
     lastSyncedStructure = null;
+    lastFailedSyncKey = null;
     if (typeof ProductExplorerBridge !== 'undefined') {
       if (ProductExplorerBridge.pollDashboardExplorerChrome) {
         ProductExplorerBridge.pollDashboardExplorerChrome();

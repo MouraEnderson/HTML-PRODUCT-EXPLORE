@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260606c',
+    BUILD: 'bom20260606d',
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
     API_PREFER_ABOVE: 20,
     /** Cloud FD02: dseng EngItem/EngInstance antes de dspfl/boM (evita 406) */
@@ -91,6 +91,9 @@
     /** Auto-sync: TSV/mirror com copy na grade (sem API — evita 406 em massa) */
     AUTO_SYNC_ALLOW_COPY: true,
     AUTO_SYNC_PREFER_API: false,
+    AUTO_SYNC_PREFER_PASTE: true,
+    /** Acima de N peças: auto-sync só com cola na área (evita tabela 0/20) */
+    AUTO_SYNC_REQUIRE_PASTE_ABOVE: 12,
     AUTO_REFRESH_ON_STRUCTURE_CHANGE: true,
     /** Sprint 2.5 — TSV fast-path até N peças; acima disso API lazy */
     FAST_TSV_MAX: 500,

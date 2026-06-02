@@ -7,6 +7,21 @@ var BomOrchestrator = (function () {
 
   var root = typeof window !== 'undefined' ? window : global;
 
+  function hasExplorerPasteBuffer() {
+    var text = '';
+    if (typeof ExplorerScanner !== 'undefined' && ExplorerScanner.getPasteBuffer) {
+      text = ExplorerScanner.getPasteBuffer() || '';
+    }
+    if (!text) {
+      var area = document.getElementById('pasteArea');
+      if (area && area.value) text = String(area.value);
+    }
+    text = String(text || '').trim();
+    return text.indexOf('\t') >= 0 && text.split(/\r?\n/).filter(function (l) {
+      return l.trim();
+    }).length >= 2;
+  }
+
   function getContext(refresh) {
     if (typeof ExplorerContext === 'undefined' || !ExplorerContext.refresh) {
       return null;
@@ -34,6 +49,7 @@ var BomOrchestrator = (function () {
 
     if (options.source === 'auto') {
       if (options.preferApi === true && ctx.canUseApi) return 'api';
+      if (hasExplorerPasteBuffer()) return 'paste';
       return 'tsv';
     }
 
@@ -208,6 +224,44 @@ var BomOrchestrator = (function () {
     return attempt(0, firstErr);
   }
 
+  /** Auto-sync: cola → TSV (copy/scroll) → DOM — sem API (evita 406 e tabela vazia). */
+  function runAutoFallbackChain(ctx, options, failedMode, firstErr) {
+    var maxTsv = (APP_CONFIG && APP_CONFIG.FAST_TSV_MAX) || 500;
+    var order = [];
+    if (failedMode !== 'paste') order.push('paste');
+    if (failedMode !== 'tsv' && ctx.expectedCount <= maxTsv) order.push('tsv');
+    var domMax = (APP_CONFIG && APP_CONFIG.DOM_MIRROR_MANUAL_MAX_EXPECTED) || 25;
+    if (
+      APP_CONFIG.DOM_MIRROR_FALLBACK !== false &&
+      failedMode !== 'dom-fallback' &&
+      (ctx.expectedCount || 0) <= domMax
+    ) {
+      order.push('dom-fallback');
+    }
+
+    function attempt(i, lastErr) {
+      if (i >= order.length) {
+        return Promise.reject(lastErr || firstErr || new Error('Sync automático incompleto.'));
+      }
+      var mode = order[i];
+      var runOpts = {
+        source: 'auto',
+        allowAutoCopy: options.allowAutoCopy !== false,
+        preferApi: false,
+        pasteFirst: APP_CONFIG.AUTO_SYNC_PREFER_PASTE !== false,
+        onProgress: options.onProgress
+      };
+      if (mode === 'tsv') {
+        runOpts.allowAutoCopy = true;
+      }
+      return runLoaderMode(mode, ctx, runOpts).catch(function (err) {
+        return attempt(i + 1, err);
+      });
+    }
+
+    return attempt(0, firstErr);
+  }
+
   function enrichResult(res, ctx, loaderMode) {
     if (!res) return res;
     if (!res.loaderMode) res.loaderMode = loaderMode;
@@ -271,7 +325,7 @@ var BomOrchestrator = (function () {
       Math.abs(dashCount - ctx.expectedCount) > 1;
     var priorIndex = null;
     if (
-      !contextMismatch &&
+      dashCount > 0 &&
       typeof BomService !== 'undefined' &&
       BomService.createSnapshot
     ) {
@@ -292,6 +346,10 @@ var BomOrchestrator = (function () {
           root.__3DX_ALLOW_API__ = false;
         }
         return runManualFallbackChain(ctx, options, mode, firstErr);
+      });
+    } else if (options.source === 'auto') {
+      chain = chain.catch(function (firstErr) {
+        return runAutoFallbackChain(ctx, options, mode, firstErr);
       });
     }
 
