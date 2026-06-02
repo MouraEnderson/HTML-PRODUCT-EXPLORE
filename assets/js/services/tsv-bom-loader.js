@@ -70,6 +70,49 @@ var TsvBomLoader = (function () {
     }
   }
 
+  function withinExpectedCount(n, expected) {
+    if (expected < 1) return true;
+    return n >= expected - 1 && n <= expected + 1;
+  }
+
+  function normalizeStructureToken(s) {
+    return String(s || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  }
+
+  function payloadRootMatches(payload, term) {
+    if (!payload || !payload.items || !payload.items.length) return false;
+    if (!term) return true;
+    var hint = normalizeStructureToken(term);
+    if (hint.length < 4) return true;
+    var root = payload.items[0];
+    var rootText = normalizeStructureToken(
+      root.title || root.name || payload.productName || ''
+    );
+    if (!rootText) return true;
+    var parts = hint.split(/\s+/).filter(function (t) {
+      return t.length >= 4;
+    });
+    for (var i = 0; i < parts.length; i++) {
+      if (rootText.indexOf(parts[i]) >= 0) return true;
+    }
+    parts = rootText.split(/\s+/).filter(function (t) {
+      return t.length >= 4;
+    });
+    for (var j = 0; j < parts.length; j++) {
+      if (hint.indexOf(parts[j]) >= 0) return true;
+    }
+    return false;
+  }
+
+  function payloadInSync(payload, term, expected) {
+    if (!payload || !payload.items || !payload.items.length) return false;
+    if (!withinExpectedCount(payload.items.length, expected)) return false;
+    return payloadRootMatches(payload, term);
+  }
+
   function applyPayload(pl, term, expected) {
     if (typeof BomSnapshot === 'undefined' || !BomSnapshot.applyPayload) {
       return Promise.reject(new Error('Módulo snapshot indisponível.'));
@@ -80,6 +123,21 @@ var TsvBomLoader = (function () {
         new Error(
           'TSV parcial ' + itemN + '/' + expected +
           ' — expanda todos os níveis no Explorer, Ctrl+A+Ctrl+C, ou aguarde API lazy.'
+        )
+      );
+    }
+    if (expected > 0 && itemN > expected + 1) {
+      return Promise.reject(
+        new Error(
+          'TSV de estrutura antiga ' + itemN + '/' + expected +
+          ' — clique na raiz no Explorer e Atualizar estrutura (limpa clipboard SKA/Drone).'
+        )
+      );
+    }
+    if (!payloadRootMatches(pl, term)) {
+      return Promise.reject(
+        new Error(
+          'TSV não corresponde à estrutura aberta no Explorer — Atualizar estrutura de novo.'
         )
       );
     }
@@ -139,9 +197,16 @@ var TsvBomLoader = (function () {
       });
   }
 
-  function pickBestPayload(a, b, expected) {
-    if (!a || !a.items) return b;
-    if (!b || !b.items) return a;
+  function pickBestPayload(a, b, expected, term) {
+    function keep(p) {
+      if (!p || !p.items) return null;
+      if (!payloadInSync(p, term, expected)) return null;
+      return p;
+    }
+    a = keep(a);
+    b = keep(b);
+    if (!a) return b;
+    if (!b) return a;
     if (expected > 0) {
       var ad = Math.abs(a.items.length - expected);
       var bd = Math.abs(b.items.length - expected);
@@ -218,6 +283,17 @@ var TsvBomLoader = (function () {
     var allowAutoCopy = options.allowAutoCopy === true;
 
     function finish(payload) {
+      if (!payloadInSync(payload, term, expected)) {
+        return Promise.reject(
+          new Error(
+            'TSV não bate com Explorer (' +
+              (payload && payload.items ? payload.items.length : 0) +
+              '/' +
+              expected +
+              '). Clique na raiz no Explorer → Atualizar estrutura.'
+          )
+        );
+      }
       if (!payload || !payload.items || payload.items.length < 1) {
         return Promise.reject(
           new Error(
@@ -228,17 +304,17 @@ var TsvBomLoader = (function () {
       return applyPayload(payload, term, expected);
     }
 
-    return tryClipboardTsv(term)
-      .then(function (clipPayload) {
-        if (clipPayload && !needsMore(clipPayload, expected)) return clipPayload;
-        return tryAutoCopy(term, allowAutoCopy).then(function (autoPayload) {
-          return tryScrollHarvest(term, autoPayload, expected).then(function (harvested) {
-            var best = pickBestPayload(clipPayload, harvested, expected);
-            if (best && !needsMore(best, expected)) return best;
-            return tryClipboardTsv(term).then(function (clipAgain) {
-              best = pickBestPayload(best, clipAgain, expected);
-              if (best && !needsMore(best, expected)) return best;
-              return pickBestPayload(best, clipPayload, expected) || clipPayload || harvested || autoPayload;
+    return tryAutoCopy(term, allowAutoCopy)
+      .then(function (autoPayload) {
+        return tryScrollHarvest(term, autoPayload, expected).then(function (harvested) {
+          if (payloadInSync(harvested, term, expected)) return harvested;
+          return tryClipboardTsv(term).then(function (clipPayload) {
+            var best = pickBestPayload(harvested, clipPayload, expected, term);
+            if (best && payloadInSync(best, term, expected)) return best;
+            return tryAutoCopy(term, true).then(function (retryCopy) {
+              best = pickBestPayload(best, retryCopy, expected, term);
+              if (payloadInSync(best, term, expected)) return best;
+              return pickBestPayload(harvested, clipPayload, expected, term);
             });
           });
         });

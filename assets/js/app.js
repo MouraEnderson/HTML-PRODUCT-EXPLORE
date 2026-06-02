@@ -747,6 +747,7 @@ var App = (function () {
     setStatus('Lendo Explorer…', 'info');
     root.__3DX_BLOCK_AUTO_SYNC__ = true;
     root.__3DX_ALLOW_API__ = true;
+    lastSyncedStructure = null;
     if (typeof ProductExplorerBridge !== 'undefined') {
       if (ProductExplorerBridge.pollDashboardExplorerChrome) {
         ProductExplorerBridge.pollDashboardExplorerChrome();
@@ -760,6 +761,10 @@ var App = (function () {
     BomOrchestrator.refreshStructure({ source: 'manual', allowAutoCopy: true, preferApi: false })
       .then(function (res) {
         applyOrchestratorResult(res, { updateClock: true, layoutFit: true });
+        lastSyncedStructure =
+          typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh
+            ? ExplorerContext.refresh(true).syncKey
+            : null;
         setStatus(res.message || 'Importação concluída.', res.partial || res.domFallback ? 'warn' : 'ok');
       })
       .catch(function (err) {

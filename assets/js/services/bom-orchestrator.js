@@ -222,10 +222,20 @@ var BomOrchestrator = (function () {
     }
     updateSelectionLabel(ctx);
 
-    var priorIndex =
-      typeof BomService !== 'undefined' && BomService.createSnapshot
-        ? BomService.createSnapshot()
-        : null;
+    var dashCount =
+      typeof BomService !== 'undefined' && BomService.getNodeCount ? BomService.getNodeCount() : 0;
+    var contextMismatch =
+      ctx.expectedCount > 0 &&
+      dashCount > 0 &&
+      Math.abs(dashCount - ctx.expectedCount) > 1;
+    var priorIndex = null;
+    if (
+      !contextMismatch &&
+      typeof BomService !== 'undefined' &&
+      BomService.createSnapshot
+    ) {
+      priorIndex = BomService.createSnapshot();
+    }
 
     var mode = pickLoaderMode(ctx, options);
     var chain;
