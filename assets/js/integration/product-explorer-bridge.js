@@ -1161,10 +1161,22 @@ var ProductExplorerBridge = (function () {
     return false;
   }
 
+  function isRepresentationTypeLabel(name) {
+    name = String(name || '').trim();
+    if (!name) return true;
+    if (/^physical\s*product$/i.test(name)) return true;
+    if (/^produto\s*f[ií]sico$/i.test(name)) return true;
+    if (/^3d\s*shape$/i.test(name)) return true;
+    if (/^vpmreference$/i.test(name)) return true;
+    if (/^reference$/i.test(name)) return true;
+    return false;
+  }
+
   function isValidMirrorPartName(name) {
     name = String(name || '').trim();
     if (!name || name.length < 2 || name.length > 120) return false;
     if (isMirrorUiNoise(name)) return false;
+    if (isRepresentationTypeLabel(name)) return false;
     if (isPersonName(name)) return false;
     if (/^\d+[.,]\d+$/.test(name)) return false;
     if (partNameFromText(name)) return true;
@@ -1519,7 +1531,7 @@ var ProductExplorerBridge = (function () {
     if (fieldKey === 'name') {
       var name = partNameFromText(s) || s.split('\n')[0].trim();
       if (!name || isPersonName(name)) return '';
-      if (/^physical product$/i.test(name)) return '';
+      if (isRepresentationTypeLabel(name)) return '';
       return name;
     }
     if (fieldKey === 'revision') return normalizeRevisionLabel(s);
@@ -1550,8 +1562,13 @@ var ProductExplorerBridge = (function () {
       return readMirrorField(values[ci], fieldKey || key);
     }
     var name = val('name', 'name');
+    var typeCol = val('type', 'type');
     if (!name && colMap.name !== 0) name = readMirrorField(values[0], 'name');
-    if (!name || isPersonName(name)) return null;
+    if (isRepresentationTypeLabel(name) || (typeCol && name && name.toLowerCase() === typeCol.toLowerCase())) {
+      name = val('title', 'title') || '';
+      if (isRepresentationTypeLabel(name)) name = '';
+    }
+    if (!name || isPersonName(name) || isRepresentationTypeLabel(name)) return null;
     var title = val('title', 'title') || name;
     if (isPersonName(title) && !isPersonName(name)) title = name;
     var revision = val('revision', 'revision') || '—';

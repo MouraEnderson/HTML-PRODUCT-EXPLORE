@@ -290,7 +290,23 @@ var FileImportService = (function () {
 
   function isTypeText(v) {
     v = cleanCell(v);
-    return /^physical\s*product|^vpm/i.test(v);
+    return /^physical\s*product|^produto\s*f[ií]sico|^vpm/i.test(v) || /^3d\s*shape$/i.test(v);
+  }
+
+  function isGenericRowLabel(v) {
+    v = cleanCell(v);
+    if (!v) return true;
+    return isTypeText(v) || /^shape$/i.test(v) || /^reference$/i.test(v);
+  }
+
+  function looksLikePartIdentifier(v) {
+    v = cleanCell(unwrapJsonCell(v));
+    if (!v || v.length < 2) return false;
+    if (isGenericRowLabel(v)) return false;
+    if (looksLikePersonName(v)) return false;
+    if (isRevisionText(v) || isMaturityText(v)) return false;
+    if (isJsonBlob(v)) return false;
+    return true;
   }
 
   function sanitizeOwnerValue(raw) {
@@ -523,7 +539,7 @@ var FileImportService = (function () {
     var n = cleanCell(name);
     if (!n || n.length < 2) return false;
     if (isJsonBlob(n)) return false;
-    if (/^physical\s*product$/i.test(n)) return false;
+    if (isGenericRowLabel(n)) return false;
     if (looksLikePersonName(n)) return false;
     return true;
   }
@@ -675,15 +691,11 @@ var FileImportService = (function () {
         if (!out.owner) out.owner = sanitizeOwnerValue(v) || v;
         continue;
       }
-      if (
-        /^(SKA_|01_SKA_|Mont\d+|M\d{1,4}|prd-R|[A-Z]{2,}[-_])/i.test(v) &&
-        v.length <= 96 &&
-        !isMaturityText(v)
-      ) {
+      if (looksLikePartIdentifier(v) && v.length <= 120) {
         partNames.push(v);
         continue;
       }
-      if (v.length >= 6 && /[A-Za-zÀ-ú]{3,}/.test(v) && !isRevisionText(v) && !isTypeText(v)) {
+      if (v.length >= 4 && /[A-Za-zÀ-ú]{2,}/.test(v) && !isRevisionText(v) && !isTypeText(v) && !looksLikePersonName(v)) {
         descriptions.push(v);
       }
     }
@@ -1139,8 +1151,8 @@ var FileImportService = (function () {
         skipRow('nome_invalido', String(name).slice(0, 40), r + 1);
         continue;
       }
-      if (/^physical\s*product$/i.test(name)) {
-        skipRow('tipo_header', name, r + 1);
+      if (isGenericRowLabel(name)) {
+        skipRow('tipo_linha', name, r + 1);
         continue;
       }
       if (isStatusLabel(name) && items.length) {
