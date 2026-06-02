@@ -304,22 +304,36 @@ var TsvBomLoader = (function () {
       return applyPayload(payload, term, expected);
     }
 
-    return tryAutoCopy(term, allowAutoCopy)
-      .then(function (autoPayload) {
-        return tryScrollHarvest(term, autoPayload, expected).then(function (harvested) {
-          if (payloadInSync(harvested, term, expected)) return harvested;
-          return tryClipboardTsv(term).then(function (clipPayload) {
-            var best = pickBestPayload(harvested, clipPayload, expected, term);
-            if (best && payloadInSync(best, term, expected)) return best;
-            return tryAutoCopy(term, true).then(function (retryCopy) {
-              best = pickBestPayload(best, retryCopy, expected, term);
-              if (payloadInSync(best, term, expected)) return best;
-              return pickBestPayload(harvested, clipPayload, expected, term);
+    function tryMirrorFirst() {
+      if (typeof ProductExplorerBridge === 'undefined' || !ProductExplorerBridge.scrapeExplorerMirror) {
+        return Promise.resolve(null);
+      }
+      var mirror = ProductExplorerBridge.scrapeExplorerMirror(term);
+      if (!mirror || !mirror.items || mirror.items.length < 1) return Promise.resolve(null);
+      if (expected > 0 && mirror.items.length < expected - 1) return Promise.resolve(null);
+      if (!payloadRootMatches(mirror, term)) return Promise.resolve(null);
+      return Promise.resolve(mirror);
+    }
+
+    return tryMirrorFirst().then(function (mirrorPayload) {
+      if (mirrorPayload) return finish(mirrorPayload);
+      return tryAutoCopy(term, allowAutoCopy)
+        .then(function (autoPayload) {
+          return tryScrollHarvest(term, autoPayload, expected).then(function (harvested) {
+            if (payloadInSync(harvested, term, expected)) return harvested;
+            return tryClipboardTsv(term).then(function (clipPayload) {
+              var best = pickBestPayload(harvested, clipPayload, expected, term);
+              if (best && payloadInSync(best, term, expected)) return best;
+              return tryAutoCopy(term, true).then(function (retryCopy) {
+                best = pickBestPayload(best, retryCopy, expected, term);
+                if (payloadInSync(best, term, expected)) return best;
+                return pickBestPayload(harvested, clipPayload, expected, term);
+              });
             });
           });
-        });
-      })
-      .then(finish);
+        })
+        .then(finish);
+    });
   }
 
   return {

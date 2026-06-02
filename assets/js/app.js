@@ -821,22 +821,14 @@ var App = (function () {
       btnEl.textContent = 'Atualizando…';
     }
     function startRefresh() {
-      return BomOrchestrator.refreshStructure({ source: 'manual', allowAutoCopy: true, preferApi: true });
-    }
-    var clipPromise = Promise.resolve('');
-    if (navigator.clipboard && navigator.clipboard.readText) {
-      clipPromise = navigator.clipboard.readText().catch(function () {
-        return '';
+      return BomOrchestrator.refreshStructure({
+        source: 'manual',
+        allowAutoCopy: true,
+        preferApi: false
       });
     }
-    clipPromise
-      .then(function (clip) {
-        clip = String(clip || '').trim();
-        if (clip && typeof ExplorerScanner !== 'undefined' && ExplorerScanner.setPasteBuffer) {
-          ExplorerScanner.setPasteBuffer(clip);
-        }
-        var area = byId('pasteArea');
-        if (area && clip && !String(area.value || '').trim()) area.value = clip;
+    Promise.resolve()
+      .then(function () {
         return startRefresh();
       })
       .then(function (res) {
@@ -1515,13 +1507,25 @@ var App = (function () {
   }
 
   function bootstrapTrustedFastWithApis() {
-    setStatus('Conectando APIs 3DEXPERIENCE… v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION), 'info');
+    setStatus('BOM Analytics v' + (APP_CONFIG.BUILD || APP_CONFIG.VERSION) + ' — pronto', 'info');
+    try {
+      initAppCore(getTenantSpaceUrl());
+    } catch (eCore) {
+      try {
+        initAppCore(null);
+      } catch (eCore2) { /* */ }
+    }
 
     var chain = PlatformContext.init();
     if (typeof WafBootstrap !== 'undefined') {
-      chain = WafBootstrap.ensure().then(function () {
-        return PlatformContext.init();
-      });
+      chain = WafBootstrap.ensure()
+        .then(function () {
+          return PlatformContext.init();
+        })
+        .catch(function (wafErr) {
+          console.warn('WAF opcional:', wafErr);
+          return PlatformContext.init();
+        });
     }
 
     return chain
@@ -1533,11 +1537,14 @@ var App = (function () {
       })
       .then(function (spaceUrl) {
         var space = spaceUrl || getTenantSpaceUrl();
-        if (!space) {
-          throw new Error('URL 3DSpace não encontrada');
+        if (space) {
+          try {
+            EnoviaApi.init(space);
+            if (typeof SearchApi !== 'undefined') SearchApi.init(space);
+          } catch (eApi) { /* */ }
+          return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
         }
-        initAppCore(space);
-        return CompassServices.fetchCsrfToken(space).catch(function () { return null; });
+        return null;
       })
       .then(function () {
         if (APP_CONFIG.SNAPSHOT_URL) {
@@ -1546,20 +1553,12 @@ var App = (function () {
             trySyncThenLoad();
           });
         }
-        setStatus('Lendo estrutura aberta no Explorer…', 'info');
         trySyncThenLoad();
         return null;
       })
       .catch(function (err) {
-        console.error(err);
-        try {
-          initAppCore(getTenantSpaceUrl());
-        } catch (eInit) { /* */ }
-        return tryLoadSnapshotFirst().then(function () {
-          if (BomService.getNodeCount() <= 1) {
-            setStatus('API indisponível — cole estrutura do Explorer ou use ?snapshot=', 'warn');
-          }
-        });
+        console.warn('API background:', err);
+        trySyncThenLoad();
       });
   }
 

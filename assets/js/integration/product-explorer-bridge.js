@@ -2279,9 +2279,13 @@ var ProductExplorerBridge = (function () {
 
   function getExplorerObjectCount() {
     pollDashboardExplorerChrome();
-    var text = harvestExplorerTextOnly() || harvestAllExplorerText();
+    var text =
+      harvestExplorerTextOnly() ||
+      harvestExplorerWidgetTextFromDashboard() ||
+      harvestAllExplorerText();
     var m =
       String(text).match(/(\d+)\s*(?:of|de)\s*(\d+)\s*(?:selected|selecionado)/i) ||
+      String(text).match(/(\d+)\s*de\s*(\d+)\s*selecionad/i) ||
       String(text).match(/(\d+)\s*objetos?\b/i) ||
       String(text).match(/(\d+)\s*objects?\b/i) ||
       String(text).match(/(\d+)\s*itens?\b/i);

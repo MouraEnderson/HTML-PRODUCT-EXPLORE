@@ -32,18 +32,22 @@ var BomOrchestrator = (function () {
     var expected = ctx.expectedCount || 0;
     var primary = (APP_CONFIG && APP_CONFIG.PRIMARY_LOADER) || 'auto';
 
+    if (options.source === 'manual' && expected <= maxTsv && options.preferApi === false) {
+      return 'tsv';
+    }
+
     if (ctx.canUseApi) {
-      if (options.preferApi !== false && (options.source === 'manual' || primary === 'api')) {
+      if (options.preferApi === true && (options.source === 'manual' || primary === 'api')) {
         return 'api';
       }
-      if (primary === 'api') return 'api';
+      if (primary === 'api' && options.preferApi !== false) return 'api';
       if (typeof ExplorerContext !== 'undefined' && ExplorerContext.suggestLoaderMode) {
         var suggested = ExplorerContext.suggestLoaderMode();
-        if (suggested === 'api') return 'api';
+        if (suggested === 'api' && options.preferApi !== false) return 'api';
       }
     }
 
-    if (options.source === 'manual' && expected <= maxTsv && options.preferApi === false) {
+    if (options.source === 'manual' && expected <= maxTsv) {
       return 'tsv';
     }
     if (options.preferApi && ctx.canUseApi) return 'api';
@@ -146,12 +150,12 @@ var BomOrchestrator = (function () {
   function runManualFallbackChain(ctx, options, failedMode, firstErr) {
     var maxTsv = (APP_CONFIG && APP_CONFIG.FAST_TSV_MAX) || 500;
     var order = [];
-    if (failedMode !== 'tsv' && ctx.expectedCount <= maxTsv) order.push('tsv');
-    if (failedMode !== 'paste') order.push('paste');
-    if (ctx.canUseApi && failedMode !== 'api') order.push('api');
     if (APP_CONFIG.DOM_MIRROR_FALLBACK !== false && failedMode !== 'dom-fallback') {
       order.push('dom-fallback');
     }
+    if (failedMode !== 'tsv' && ctx.expectedCount <= maxTsv) order.push('tsv');
+    if (failedMode !== 'paste') order.push('paste');
+    if (ctx.canUseApi && failedMode !== 'api' && options.preferApi === true) order.push('api');
 
     function attempt(i, lastErr) {
       if (i >= order.length) {

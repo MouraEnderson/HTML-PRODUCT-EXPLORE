@@ -181,13 +181,14 @@ var ExplorerContext = (function () {
   }
 
   function canUseApiFlag() {
-    if (APP_CONFIG && APP_CONFIG.CAN_USE_ENOVIA_API) return true;
-    if (typeof WidgetRuntime !== 'undefined' && WidgetRuntime.isTrusted && WidgetRuntime.isTrusted()) {
-      return true;
-    }
     try {
       if (typeof WAFData !== 'undefined' && WAFData.authenticatedRequest) return true;
     } catch (e0) { /* */ }
+    try {
+      if (typeof widget !== 'undefined' && widget && widget.WAFData && widget.WAFData.authenticatedRequest) {
+        return true;
+      }
+    } catch (e1) { /* */ }
     return false;
   }
 
