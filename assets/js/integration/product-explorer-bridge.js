@@ -576,7 +576,10 @@ var ProductExplorerBridge = (function () {
   function tryExplorerScrollHarvestAsync(rootName) {
     return new Promise(function (resolve) {
       var doc = readExplorerIframeDocument();
-      var expected = getExplorerObjectCount() || 0;
+      var expected = Math.max(
+        getExplorerObjectCount() || 0,
+        getExplorerSelectionCount() || 0
+      );
       var rootMeta = parseExplorerRootMetaFromText(harvestExplorerTextOnly());
       rootName = String(rootName || structureNameHint || '').trim();
       var items = [];
@@ -625,7 +628,7 @@ var ProductExplorerBridge = (function () {
       var initialScroll = scroller.scrollTop;
       var stepPx = Math.max(80, Math.floor(scroller.clientHeight * 0.55));
       var step = 0;
-      var maxSteps = 96;
+      var maxSteps = expected > 40 ? 160 : 96;
       var stale = 0;
       var lastLen = items.length;
 
@@ -1201,7 +1204,7 @@ var ProductExplorerBridge = (function () {
     }
     var initialScroll = scroller.scrollTop;
     var totalAdded = 0;
-    var maxSteps = 48;
+    var maxSteps = expected > 40 ? 120 : 48;
     var step = Math.max(100, Math.floor(scroller.clientHeight * 0.7));
     var stale = 0;
     var lastLen = items.length;
@@ -2205,7 +2208,10 @@ var ProductExplorerBridge = (function () {
       var doc = host.doc;
       var win = host.win;
       var frameEl = host.frame;
-      var expected = getExplorerObjectCount() || 0;
+      var expected = Math.max(
+        getExplorerObjectCount() || 0,
+        getExplorerSelectionCount() || 0
+      );
       var selCount = getExplorerSelectionCount() || 0;
 
       try {
@@ -2271,7 +2277,10 @@ var ProductExplorerBridge = (function () {
 
   function getExplorerSelectionCount() {
     pollDashboardExplorerChrome();
-    var text = harvestExplorerTextOnly() || harvestAllExplorerText();
+    var text =
+      harvestExplorerTextOnly() ||
+      harvestExplorerWidgetTextFromDashboard() ||
+      harvestAllExplorerText();
     var m = String(text).match(/(\d+)\s*(?:de|of)\s*(\d+)\s*(?:selecionado|selected)/i);
     if (m) return parseInt(m[2], 10) || parseInt(m[1], 10) || 0;
     return 0;
