@@ -1438,15 +1438,12 @@ var App = (function () {
   }
 
   function getApiEnoviaUrl() {
-    if (APP_CONFIG.IFRAME_ON_IFWE_DASHBOARD && typeof CompassServices !== 'undefined' && CompassServices.ifweSpaceUrl) {
-      return CompassServices.ifweSpaceUrl();
-    }
     if (typeof CompassServices !== 'undefined' && CompassServices.getVerifiedSpaceUrl) {
       var verified = CompassServices.getVerifiedSpaceUrl();
       if (verified) return verified;
     }
     if (typeof CompassServices !== 'undefined' && CompassServices.isDashboardOnIfwe && CompassServices.isDashboardOnIfwe()) {
-      return CompassServices.ifweSpaceUrl();
+      return CompassServices.tenantSpaceUrl ? CompassServices.tenantSpaceUrl() : null;
     }
     var h = APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.spaceHost;
     return h ? ('https://' + h + '/enovia') : null;

@@ -1,101 +1,77 @@
-# 3DEXPERIENCE Product Explorer — BOM Analytics Dashboard
+# HTML Product Explore
 
-Dashboard corporativo HTML para widget **3DDashboard**, consumindo estrutura E-BOM e atributos ENOVIA via contexto autenticado da plataforma.
+Aplicacao HTML/JS para analise de E-BOM dentro do 3DEXPERIENCE, executada como Additional App no 3DDashboard e publicada via GitHub Pages.
 
-## Arquitetura
+## Direcao atual
 
-```
-index.html
-└── assets/
-    ├── css/dashboard.css
-    └── js/
-        ├── config.js                 # Configuração e constantes ENOVIA
-        ├── app.js                    # Bootstrap e orquestração
-        ├── platform/
-        │   ├── context.js            # Security context, tenant, CSRF
-        │   ├── compass.js            # Resolução 3DSpace / serviços
-        │   └── waf-client.js         # WAFData authenticated REST
-        ├── integration/
-        │   ├── enovia-api.js         # Endpoints REST modelers
-        │   └── product-explorer-bridge.js  # Seleção Product Explorer
-        ├── services/
-        │   ├── bom-service.js        # Hierarquia BOM lazy/paginada
-        │   ├── attribute-service.js  # Atributos e engenharia
-        │   └── physical-product-service.js
-        ├── processing/
-        │   ├── bom-normalizer.js     # Modelo interno unificado
-        │   ├── metrics-engine.js     # KPIs e agregações
-        │   └── anomaly-detector.js   # Inconsistências / gaps
-        └── ui/
-            ├── kpi-cards.js
-            ├── charts-manager.js
-            ├── data-table.js
-            ├── bom-tree.js
-            └── filters.js
+O produto segue este escopo:
+
+- Runtime: 3DDashboard Additional App.
+- Publicacao: GitHub Pages.
+- Acesso autenticado: WAFData.
+- Dados PLM: 3DSpace REST resolvido via i3DXCompassServices.
+- Estrutura: E-BOM API-first, com fallback manual apenas como contingencia.
+- Visualizacao: viewer 3D proprio dentro da aplicacao.
+
+Fora do escopo:
+
+- Web Page Reader.
+- Deploy admin em `webapps` da plataforma 3DX.
+- Widget 3DPlay como solucao final.
+- Ctrl+A/Ctrl+C como fluxo principal.
+
+## Entrada do app
+
+Use esta URL no Additional App:
+
+```text
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-boot.html
 ```
 
-## Camadas
+Fluxo atual identificado:
 
-| Camada | Responsabilidade |
-|--------|------------------|
-| **Platform** | Autenticação, tenant, 3DSpace URL, CSRF |
-| **Integration** | APIs ENOVIA + bridge Product Explorer |
-| **Services** | Fetch BOM, atributos, Physical Products |
-| **Processing** | Normalização, métricas, anomalias |
-| **UI** | KPIs, gráficos, tabela, árvore, filtros |
+```text
+widget-boot.html
+  -> widget-v3.html
+    -> assets/js/build-id.js
+    -> assets/js/bom-bundle-bom20260606f.js
+    -> assets/vendor/chart.umd.min.js
+    -> assets/css/dashboard.css
+```
 
-## Busca Physical Product (novo)
+## Documentacao principal
 
-No topo do dashboard: campo **Buscar Physical Product na 3DEXPERIENCE**.
+- [Plano tecnico - Fase 0](docs/PLANO-TECNICO-FASE-0.md)
+- [Decisoes tecnicas](docs/DECISOES-TECNICAS.md)
+- [Organizacao do repositorio](docs/ORGANIZACAO-REPOSITORIO.md)
+- [Backlog inicial por sprints](docs/BACKLOG-SPRINTS.md)
+- [Levantamento atual 3DX](docs/levantamento/LEVANTAMENTO-ATUAL-3DX.md)
 
-- Usa API federada do 3DSpace (`/resources/v1/modeler/search`)
-- Filtra **VPMReference / Physical Product**
-- Ao clicar no resultado, carrega BOM + colunas Product Explorer
+## Areas do codigo
 
-Guia passo a passo: [DEPLOY-GITHUB-WIDGET.md](DEPLOY-GITHUB-WIDGET.md)
+```text
+assets/
+  css/                 Estilos do dashboard
+  js/
+    platform/          Runtime 3DX, WAFData, Compass, contexto
+    integration/       APIs ENOVIA, Product Explorer, bridges
+    services/          Carga BOM, atributos, fallback, snapshots
+    processing/        Normalizacao, metricas, anomalias
+    ui/                Tabela, filtros, graficos, preview
+  vendor/              Bibliotecas estaticas vendorizadas
+scripts/               Build e testes auxiliares
+docs/                  Direcionamento tecnico e historico
+```
 
-## Deploy GitHub Pages
+## Build
 
-1. Crie repositório `3dx-product-explorer-bom-dashboard` no GitHub.
-2. Push desta pasta para `main`.
-3. **Settings → Pages → Source**: branch `main`, folder `/ (root)`.
-4. URL do widget: `https://<org>.github.io/3dx-product-explorer-bom-dashboard/index.html`
+O bundle atual e gerado pelos scripts em `scripts/`. Nesta fase, dependencias nao devem ser atualizadas sem aprovacao.
 
-Para desenvolvimento local com dados mock: abra `index.html?demo=true`.
+## Criterios iniciais de aceite
 
-## Widget 3DDashboard
-
-1. **Compass** → **3DDashboard** → criar dashboard.
-2. Adicionar widget **Custom** / **External Content** (conforme versão).
-3. URL: GitHub Pages ou raw (preferir Pages para HTTPS e cache).
-4. Habilitar **Same Origin** / domínio confiável na administração 3DEXPERIENCE se exigido.
-5. Opcional: publicar widget com `x3dPlatformId` e `collabspace` nos metadados.
-
-## Product Explorer — conexão
-
-O dashboard escuta:
-
-- `postMessage` do Product Explorer / widget pai (`3DX_SELECTION`, `selectionChanged`).
-- API `require('DS/PlatformAPI/PlatformAPI')` quando disponível no iframe.
-- Parâmetro URL `?physicalid=<id>&type=VPMReference` para deep-link.
-
-## APIs ENOVIA utilizadas
-
-- `dseng:EngItem` — Engineering Item + expand BOM
-- `dseng:EngInstance` — instâncias na estrutura
-- `dspfl:PhysicalProduct` — produtos físicos
-- `dseng:EngItem/dseng:EngInstance` — filhos diretos (lazy)
-- Security context no header `SecurityContext`
-
-Consulte documentação REST da sua release (R2022x–R2025x) para paths exatos do tenant.
-
-## Performance
-
-- Expansão lazy por nível (config `BOM_LAZY_BATCH_SIZE`).
-- Índice em memória por `physicalid` para filtros O(1).
-- Tabela e árvore com renderização por janela (virtual scroll).
-- Limite configurável `BOM_MAX_NODES` para proteção.
-
-## Licença
-
-Uso interno corporativo — ajuste conforme política da sua organização.
+- Estrutura com 79 itens carrega completa ou reporta falha real, sem parcial silencioso.
+- Estrutura com 20 itens carrega completa.
+- Estrutura com 3 itens carrega completa.
+- Estrutura com 1 item e 2 corpos representa corretamente corpos/representacoes.
+- `getpicture` nao bloqueia E-BOM nem gera tempestade de erro.
+- Clique em item da E-BOM prepara o pipeline para viewer 3D proprio.

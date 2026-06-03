@@ -10,7 +10,7 @@ var path = require('path');
 var https = require('https');
 
 var ROOT = path.join(__dirname, '..');
-var BUILD = 'bom20260605n';
+var BUILD = 'bom20260606f';
 var WIDGET_URL =
   'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v2.html?v=' + BUILD;
 

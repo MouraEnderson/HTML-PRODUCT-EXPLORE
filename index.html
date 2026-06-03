@@ -2,26 +2,70 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>BOM Analytics — URL correta</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HTML Product Explore</title>
   <style>
-    body { font-family: Segoe UI, sans-serif; max-width: 800px; margin: 32px auto; padding: 16px; }
-    .bad { background: #ffcdd2; padding: 14px; border-radius: 8px; margin-bottom: 16px; }
-    .good { background: #c8e6c9; padding: 14px; border-radius: 8px; }
-    a { font-size: 18px; font-weight: bold; }
-    h1 { color: #0d47a1; }
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      margin: 0;
+      color: #172033;
+      background: #f5f7fb;
+    }
+
+    main {
+      max-width: 760px;
+      margin: 48px auto;
+      padding: 0 20px;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 30px;
+      color: #123d6f;
+    }
+
+    p {
+      line-height: 1.55;
+    }
+
+    a {
+      color: #0b5cab;
+      font-weight: 700;
+    }
+
+    .panel {
+      margin-top: 20px;
+      padding: 18px;
+      border: 1px solid #d7deea;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    code {
+      display: block;
+      margin-top: 8px;
+      padding: 10px;
+      overflow-wrap: anywhere;
+      background: #eef3fa;
+      border-radius: 6px;
+    }
   </style>
 </head>
 <body>
-  <h1>BOM Analytics</h1>
-  <div class="bad">
-    Se você abriu <strong>mouraanderson</strong>.github.io → página branca (conta errada).
-    O certo é <strong>mouraenderson</strong> (EN, não AND).
-  </div>
-  <div class="good">
-    <p>Abra o widget:</p>
-    <p><a href="widget-boot.html">widget-boot.html</a> (loader — use no 3DDashboard)</p>
-    <p><a href="widget-v3.html?v=bom20260605n">widget-v3.html</a> (BOM v3 directo)</p>
-    <p><a href="ABRA-ESTE-LINK.html">Guia do link correto</a></p>
-  </div>
+  <main>
+    <h1>HTML Product Explore</h1>
+    <p>Aplicacao para analise E-BOM no 3DEXPERIENCE, executada como Additional App no 3DDashboard.</p>
+
+    <section class="panel">
+      <p>Entrada recomendada para o Additional App:</p>
+      <p><a href="widget-boot.html">Abrir widget-boot.html</a></p>
+      <code>https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-boot.html</code>
+    </section>
+
+    <section class="panel">
+      <p>Documentacao tecnica:</p>
+      <p><a href="docs/PLANO-TECNICO-FASE-0.md">Plano tecnico - Fase 0</a></p>
+    </section>
+  </main>
 </body>
 </html>

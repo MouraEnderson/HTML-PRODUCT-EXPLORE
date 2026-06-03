@@ -37,12 +37,6 @@ var PlatformBridge = (function () {
   }
 
   function getSpaceUrl() {
-    if (APP_CONFIG.IFRAME_ON_IFWE_DASHBOARD && APP_CONFIG.TENANT_DEFAULTS.platformHost) {
-      return 'https://' + APP_CONFIG.TENANT_DEFAULTS.platformHost + '/enovia';
-    }
-    if (typeof CompassServices !== 'undefined' && CompassServices.isDashboardOnIfwe && CompassServices.isDashboardOnIfwe()) {
-      return CompassServices.ifweSpaceUrl();
-    }
     var host = APP_CONFIG.TENANT_DEFAULTS.spaceHost;
     return 'https://' + host + '/enovia';
   }

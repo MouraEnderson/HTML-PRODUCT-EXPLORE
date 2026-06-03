@@ -13,8 +13,10 @@
     API_PREFER_ABOVE: 20,
     /** Cloud FD02: dseng EngItem/EngInstance antes de dspfl/boM (evita 406) */
     API_ENG_BOM_FIRST: true,
+    /** Fallback dspfl/PhysicalProduct para filhos so deve ser ligado explicitamente. */
+    ALLOW_PHYSICAL_BOM_FALLBACK: false,
     /** 3DDashboard: nÃƒÂ£o espera probe CSRF (evita travar em "ConectandoÃ¢â‚¬Â¦") */
-    SKIP_SPACE_PROBE: true,
+    SKIP_SPACE_PROBE: false,
     WAF_REQUEST_TIMEOUT_MS: 15000,
     SCAN_CONNECT_TIMEOUT_MS: 35000,
     /** Piloto: se API falhar no 3DDashboard, carrega snapshot validado (Mont10) */
@@ -29,8 +31,9 @@
     DEFAULT_SNAPSHOT_PATH: 'data/mont10.json',
 
     /** Se *-space falhar (DNS), tenta mesmo tenant via *-ifwe/enovia */
-    SPACE_FALLBACK_VIA_IFWE: true,
-    PREFER_IFWE_FIRST: true,
+    SPACE_FALLBACK_VIA_IFWE: false,
+    PREFER_IFWE_FIRST: false,
+    ALLOW_IFWE_AS_3DSPACE: false,
 
     /** Tenant cloud: objetos usam prefixo prd- (ex. prd-R1132100929518-00511496) */
     PHYSICAL_ID_PREFIX: 'prd-',
@@ -349,10 +352,8 @@
       });
     } catch (e) { /* */ }
     if (onIfwe) {
-      APP_CONFIG.PREFER_IFWE_FIRST = true;
       APP_CONFIG.IFRAME_ON_IFWE_DASHBOARD = true;
       APP_CONFIG.CLOUD_PHYSICAL_ONLY = true;
-      APP_CONFIG.SKIP_SPACE_PROBE = true;
     }
   }
 

@@ -37,9 +37,17 @@ var CompassServices = (function () {
   /** Garante envId correto no host (evita URL errada do Compass). */
   function normalizeSpaceUrl(url) {
     var env = APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.envId;
+    var sh = APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.spaceHost;
+    var ih = APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.platformHost;
     var u = String(url || '').replace(/\/$/, '');
+    if (sh && ih && u.indexOf(ih) >= 0) {
+      u = u.replace(ih, sh);
+    }
     if (!u || (env && u.indexOf(env) < 0)) {
       return tenantSpaceUrl() ? tenantSpaceUrl().replace(/\/$/, '') : u;
+    }
+    if (sh && u.indexOf(sh) >= 0 && !/\/enovia(?:\/|$)/i.test(u)) {
+      u += '/enovia';
     }
     return u;
   }
@@ -88,18 +96,11 @@ var CompassServices = (function () {
       seen[u] = true;
       list.push(u);
     }
-    if (isDashboardOnIfwe() && APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== false) {
-      add(ifweSpaceUrl());
-      return list;
-    }
-    if (APP_CONFIG.PREFER_IFWE_FIRST !== false && APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== false) {
-      add(ifweSpaceUrl());
-    }
     add(normalizeSpaceUrl(primary));
-    if (APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== false) {
+    add(tenantSpaceUrl());
+    if (APP_CONFIG.ALLOW_IFWE_AS_3DSPACE === true && APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== false) {
       add(ifweSpaceUrl());
     }
-    add(tenantSpaceUrl());
     return list;
   }
 
@@ -123,6 +124,7 @@ var CompassServices = (function () {
   }
 
   function fastConnectIfwe() {
+    if (APP_CONFIG.ALLOW_IFWE_AS_3DSPACE !== true) return null;
     if (!APP_CONFIG.SPACE_FALLBACK_VIA_IFWE && APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== undefined) {
       return null;
     }
@@ -168,6 +170,23 @@ var CompassServices = (function () {
     return tryNext();
   }
 
+  function ensure3DSpaceServiceUrl(platformId) {
+    if (cache.spaceUrlVerified && cache.spaceUrl) {
+      return Promise.resolve(cache.spaceUrl);
+    }
+    cache.spaceUrlVerified = false;
+    return get3DSpaceUrl(platformId).then(function (primary) {
+      var candidates = spaceUrlCandidates(primary);
+      if (APP_CONFIG.SKIP_SPACE_PROBE) {
+        return applyVerifiedSpaceUrl(candidates[0] || primary);
+      }
+      return probeCandidates(candidates).catch(function () {
+        if (primary) return applyVerifiedSpaceUrl(primary);
+        return Promise.reject(new Error('3DSpace inacessivel via Compass.'));
+      });
+    });
+  }
+
   function get3DSpaceUrl(platformId) {
     if (isDashboardOnIfwe() && APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== false) {
       var ifwe = ifweSpaceUrl();
@@ -182,7 +201,7 @@ var CompassServices = (function () {
       return Promise.resolve(cache.spaceUrl);
     }
     if (typeof PlatformBridge !== 'undefined' && PlatformBridge.isExternalWidget()) {
-      cache.spaceUrl = PlatformBridge.getSpaceUrl();
+      cache.spaceUrl = normalizeSpaceUrl(PlatformBridge.getSpaceUrl());
       return Promise.resolve(cache.spaceUrl);
     }
     if (cache.spaceUrlVerified && cache.spaceUrl) return Promise.resolve(cache.spaceUrl);
@@ -270,7 +289,7 @@ var CompassServices = (function () {
     isDashboardOnIfwe: isDashboardOnIfwe,
     getVerifiedSpaceUrl: getVerifiedSpaceUrl,
     get3DSpaceUrl: get3DSpaceUrl,
-    ensureWorkingSpaceUrl: ensureWorkingSpaceUrl,
+    ensureWorkingSpaceUrl: ensure3DSpaceServiceUrl,
     applyVerifiedSpaceUrl: applyVerifiedSpaceUrl,
     swapUrlHost: swapUrlHost,
     normalizeSpaceUrl: normalizeSpaceUrl,

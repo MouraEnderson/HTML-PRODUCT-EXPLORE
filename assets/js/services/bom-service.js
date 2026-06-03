@@ -68,11 +68,19 @@ var BomService = (function () {
 
   function parseInstance(member, parentId, level) {
     var ref =
+      member.referencedObject ||
+      member.referenceObject ||
+      member.child ||
+      member.related ||
+      member.to ||
       member.reference ||
       member['dseng:EngItem'] ||
+      member['dseng:referencedObject'] ||
+      member['dseng:child'] ||
       member['dspfl:Part'] ||
       member['dspfl:Instance'] ||
       member;
+    if (Array.isArray(ref)) ref = ref[0];
     if (ref === member && member['dseng:EngItem'] && typeof member['dseng:EngItem'] === 'object') {
       ref = member['dseng:EngItem'];
     }
@@ -116,13 +124,17 @@ var BomService = (function () {
       });
     }
 
-    return fetchPage(EnoviaApi.preferEngChildrenForParent(parentId)).catch(function () {
-      skip = 0;
-      allChildren = [];
-      return fetchPage(!EnoviaApi.preferEngChildrenForParent(parentId));
-    }).catch(function () {
-      if (index[parentId]) index[parentId].loaded = true;
-      return [];
+    return fetchPage(EnoviaApi.preferEngChildrenForParent(parentId)).catch(function (firstErr) {
+      if (APP_CONFIG.ALLOW_PHYSICAL_BOM_FALLBACK === true) {
+        skip = 0;
+        allChildren = [];
+        return fetchPage(false);
+      }
+      if (index[parentId]) {
+        index[parentId].loaded = false;
+        index[parentId].loadError = (firstErr && firstErr.message) || String(firstErr || 'Falha ao carregar filhos.');
+      }
+      return Promise.reject(firstErr);
     });
   }
 
@@ -295,9 +307,12 @@ var BomService = (function () {
           });
           return step();
         })
-        .catch(function () {
-          if (index[parentId]) index[parentId].loaded = true;
-          return step();
+        .catch(function (err) {
+          if (index[parentId]) {
+            index[parentId].loaded = false;
+            index[parentId].loadError = (err && err.message) || String(err || 'Falha ao carregar filhos.');
+          }
+          throw err;
         });
     }
 

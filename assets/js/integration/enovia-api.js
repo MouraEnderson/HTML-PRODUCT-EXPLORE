@@ -12,28 +12,13 @@ var EnoviaApi = (function () {
       var verified = CompassServices.getVerifiedSpaceUrl();
       if (verified) return verified;
     }
-    if (
-      (APP_CONFIG.IFRAME_ON_IFWE_DASHBOARD ||
-        (typeof CompassServices !== 'undefined' &&
-          CompassServices.isDashboardOnIfwe &&
-          CompassServices.isDashboardOnIfwe())) &&
-      typeof CompassServices !== 'undefined' &&
-      CompassServices.ifweSpaceUrl
-    ) {
-      return CompassServices.ifweSpaceUrl();
-    }
     try {
       if ((location.hostname || '').toLowerCase().indexOf('ifwe') >= 0) {
-        if (typeof CompassServices !== 'undefined' && CompassServices.ifweSpaceUrl) {
-          return CompassServices.ifweSpaceUrl();
+        if (typeof CompassServices !== 'undefined' && CompassServices.tenantSpaceUrl) {
+          return CompassServices.tenantSpaceUrl();
         }
-        var ih = APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.platformHost;
-        if (ih) return 'https://' + ih + '/enovia';
       }
     } catch (e) { /* */ }
-    if (typeof CompassServices !== 'undefined' && CompassServices.ifweSpaceUrl && APP_CONFIG.PREFER_IFWE_FIRST !== false) {
-      return CompassServices.ifweSpaceUrl();
-    }
     var h = APP_CONFIG.TENANT_DEFAULTS && APP_CONFIG.TENANT_DEFAULTS.spaceHost;
     return h ? 'https://' + h + '/enovia' : null;
   }
@@ -169,7 +154,7 @@ var EnoviaApi = (function () {
 
   function preferEngChildrenForParent(parentId) {
     if (APP_CONFIG.API_ENG_BOM_FIRST === false) return false;
-    return !isCloudPrdId(parentId);
+    return true;
   }
 
   function preferEngBomApi() {
@@ -236,6 +221,9 @@ var EnoviaApi = (function () {
   }
 
   function getPhysicalProductChildren(parentPhysicalId, skip, top) {
+    if (APP_CONFIG.ALLOW_PHYSICAL_BOM_FALLBACK !== true) {
+      return Promise.reject(new Error('Fallback PhysicalProduct desabilitado; use dseng EngInstance.'));
+    }
     ensureRestBase();
     skip = skip || 0;
     top = top || APP_CONFIG.BOM_LAZY_BATCH_SIZE;

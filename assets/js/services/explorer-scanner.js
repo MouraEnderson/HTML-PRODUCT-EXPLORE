@@ -235,19 +235,12 @@ var ExplorerScanner = (function () {
         (typeof PlatformBridge !== 'undefined' && PlatformBridge.getSpaceUrl && PlatformBridge.getSpaceUrl()) ||
         null;
       if (!space && typeof CompassServices !== 'undefined') {
-        if (CompassServices.isDashboardOnIfwe && CompassServices.isDashboardOnIfwe()) {
-          space = CompassServices.ifweSpaceUrl();
-        } else if (CompassServices.getVerifiedSpaceUrl) {
+        if (CompassServices.getVerifiedSpaceUrl) {
           space = CompassServices.getVerifiedSpaceUrl();
         }
       }
       if (!space && APP_CONFIG.TENANT_DEFAULTS) {
-        var host =
-          typeof CompassServices !== 'undefined' &&
-          CompassServices.isDashboardOnIfwe &&
-          CompassServices.isDashboardOnIfwe()
-            ? APP_CONFIG.TENANT_DEFAULTS.platformHost
-            : APP_CONFIG.TENANT_DEFAULTS.spaceHost;
+        var host = APP_CONFIG.TENANT_DEFAULTS.spaceHost;
         if (host) space = 'https://' + host + '/enovia';
       }
       if (!space) return null;

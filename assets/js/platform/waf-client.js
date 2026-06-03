@@ -21,6 +21,7 @@ var WafClient = (function () {
   }
 
   function ifweRetryUrl(url) {
+    if (APP_CONFIG.ALLOW_IFWE_AS_3DSPACE !== true) return null;
     if (!APP_CONFIG.TENANT_DEFAULTS || APP_CONFIG.SPACE_FALLBACK_VIA_IFWE === false) return null;
     var sh = APP_CONFIG.TENANT_DEFAULTS.spaceHost;
     var ih = APP_CONFIG.TENANT_DEFAULTS.platformHost;
@@ -41,12 +42,7 @@ var WafClient = (function () {
   }
 
   function mustUseIfweOnly() {
-    if (APP_CONFIG.IFRAME_ON_IFWE_DASHBOARD) return true;
-    return (
-      typeof CompassServices !== 'undefined' &&
-      CompassServices.isDashboardOnIfwe &&
-      CompassServices.isDashboardOnIfwe()
-    );
+    return APP_CONFIG.ALLOW_IFWE_AS_3DSPACE === true && APP_CONFIG.FORCE_IFWE_AS_3DSPACE === true;
   }
 
   function swapSpaceIfwe(url) {
@@ -77,7 +73,7 @@ var WafClient = (function () {
     ) {
       throw new Error(
         'EngItem bloqueado (tenant cloud). Ative API_ENG_BOM_FIRST ou atualize o bundle: ' +
-          (APP_CONFIG.BUILD || 'bom20260605k')
+          (APP_CONFIG.BUILD || 'bom20260606f')
       );
     }
     return url;
