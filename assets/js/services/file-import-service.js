@@ -981,28 +981,72 @@ var FileImportService = (function () {
     return isProductName(name) ? name : '';
   }
 
+  function firstPastedProductMeta(text) {
+    var lines = String(text || '').split(/\r?\n/).filter(function (l) { return l.trim(); });
+    if (!lines.length) return null;
+    var row = splitLineRaw(lines[0]);
+    if (looksLikeHeader(row)) return null;
+    var name = firstPastedProductName(text);
+    if (!name) return null;
+    var parsed = extractFieldsFromExplorerRow(row);
+    var st = normalizeImportedState(parsed.maturity || findMaturityInCells(row) || '', 'Unknown');
+    return {
+      name: name,
+      title: parsed.title || name,
+      type: parsed.type || 'Physical Product',
+      displayType: parsed.type || 'Physical Product',
+      revision: parsed.revision || '',
+      state: st.state,
+      maturity: st.maturity,
+      owner: looksLikeOwnerPerson(parsed.owner) ? parsed.owner : '',
+      _ownerRaw: parsed.owner || '',
+      approval: st.approval || 'Unknown'
+    };
+  }
+
+  function fillMissingRootMeta(root, meta) {
+    if (!root || !meta) return root;
+    ['title', 'type', 'displayType', 'revision', 'state', 'maturity', 'owner', '_ownerRaw', 'approval'].forEach(function (k) {
+      var cur = cleanCell(root[k]);
+      if (!cur || cur === '-' || cur === '—' || /^sem\s*propriet/i.test(cur)) {
+        if (meta[k]) root[k] = meta[k];
+      }
+    });
+    return root;
+  }
+
   function ensureFirstPastedRoot(text, items) {
     if (!items || !items.length) return items;
-    var rootName = firstPastedProductName(text);
+    var rootMeta = firstPastedProductMeta(text);
+    var rootName = rootMeta && rootMeta.name;
     if (!rootName) return items;
     var rootKey = rootName.toLowerCase();
-    var hasRoot = items.some(function (it) {
-      return cleanCell(it.name || it.title || '').toLowerCase() === rootKey;
+    var existingRoot = null;
+    items.some(function (it) {
+      if (cleanCell(it.name || it.title || '').toLowerCase() === rootKey) {
+        existingRoot = it;
+        return true;
+      }
+      return false;
     });
-    if (hasRoot) return items;
+    if (existingRoot) {
+      fillMissingRootMeta(existingRoot, rootMeta);
+      return items;
+    }
     items.unshift({
       physicalid: 'IMP_root_' + rootName.replace(/\W/g, '_').slice(0, 40),
       name: rootName,
       title: rootName,
-      type: 'Physical Product',
-      displayType: 'Physical Product',
-      revision: '',
-      state: '',
-      maturity: '',
-      owner: '',
+      type: rootMeta.type || 'Physical Product',
+      displayType: rootMeta.displayType || rootMeta.type || 'Physical Product',
+      revision: rootMeta.revision || '',
+      state: rootMeta.state || '',
+      maturity: rootMeta.maturity || '',
+      owner: rootMeta.owner || '',
+      _ownerRaw: rootMeta._ownerRaw || '',
       organization: '',
       collabSpace: '',
-      approval: 'Unknown',
+      approval: rootMeta.approval || 'Unknown',
       quantity: 1,
       level: 0
     });
