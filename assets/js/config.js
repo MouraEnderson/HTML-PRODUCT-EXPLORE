@@ -277,6 +277,11 @@
       WIDGET_HINT: 'Pré-visualização 2D no painel (3DPlay embutido indisponível neste widget).'
     },
 
+    MEDIA: {
+      AUTO_LOAD_THUMBNAILS: false,
+      BUILD_GETPICTURE_URLS: false
+    },
+
     CHART_COLORS: {
       primary: '#005686',
       success: '#2e7d32',

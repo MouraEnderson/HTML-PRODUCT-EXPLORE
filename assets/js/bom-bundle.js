@@ -381,6 +381,11 @@
       WIDGET_HINT: 'Pré-visualização 2D no painel (3DPlay embutido indisponível neste widget).'
     },
 
+    MEDIA: {
+      AUTO_LOAD_THUMBNAILS: false,
+      BUILD_GETPICTURE_URLS: false
+    },
+
     CHART_COLORS: {
       primary: '#005686',
       success: '#2e7d32',
@@ -10626,6 +10631,18 @@ var PartImage = (function () {
 
   var blobCache = {};
 
+  function mediaCfg() {
+    return (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.MEDIA) || {};
+  }
+
+  function allowGetPictureUrls() {
+    return mediaCfg().BUILD_GETPICTURE_URLS === true;
+  }
+
+  function allowNetworkThumbs() {
+    return mediaCfg().AUTO_LOAD_THUMBNAILS === true;
+  }
+
   function escapeAttr(s) {
     return String(s == null ? '' : s).replace(/"/g, '&quot;');
   }
@@ -10674,6 +10691,7 @@ var PartImage = (function () {
   }
 
   function buildGetPictureUrl(physicalId) {
+    if (!allowGetPictureUrls()) return '';
     var pid = String(physicalId || '').trim();
     if (!pid || isSyntheticId(pid)) return '';
 
@@ -10711,6 +10729,7 @@ var PartImage = (function () {
   }
 
   function resolveUrl(node) {
+    if (!allowNetworkThumbs()) return '';
     if (!node) return '';
     if (node.iconUrl && /https?:|getpicture/i.test(String(node.iconUrl))) {
       return String(node.iconUrl);

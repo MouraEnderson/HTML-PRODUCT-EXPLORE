@@ -60,6 +60,8 @@ Motivo: `getpicture` atualmente gera muitos 404 e nao pode derrubar nem poluir a
 
 Consequencia: erros de imagem devem ser tratados como estado visual secundario.
 
+Atualizacao em 2026-06-03: carregamento automatico de miniaturas foi desativado por padrao. O painel usa placeholder local ate existir pipeline de midia/3D proprio, com cache e tratamento de erro isolado.
+
 ## DEC-008 - Escalabilidade
 
 Decisao: nao deve existir limite funcional de itens como criterio de produto.

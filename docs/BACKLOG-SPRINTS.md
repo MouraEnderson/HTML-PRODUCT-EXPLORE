@@ -30,6 +30,7 @@ Status parcial em 2026-06-03:
 - Fallback para `dspfl/PhysicalProduct` foi desabilitado por padrao para evitar cascata de endpoints 404/406.
 - Falha ao carregar filhos nao e mais convertida em lista vazia com pai marcado como carregado.
 - Bundle `bom20260606f` regenerado.
+- Teste manual no tenant real confirmou fallback Ctrl+A/Ctrl+C carregando 3/3; os erros restantes ficaram associados a preview/midia, nao a contagem E-BOM.
 
 Pendente nesta sprint:
 
@@ -47,6 +48,10 @@ Objetivo: separar carga E-BOM de miniatura e fallback manual.
 - Adicionar cache/limite de tentativas para imagem.
 - Mostrar estado discreto quando thumbnail nao existe.
 - Nao deixar erro de imagem impactar KPIs/tabela/E-BOM.
+
+Status parcial em 2026-06-03:
+
+- Miniaturas automaticas desligadas por padrao via `APP_CONFIG.MEDIA` para impedir chamadas `getpicture`/preview durante carga e selecao de E-BOM.
 
 Aceite:
 
