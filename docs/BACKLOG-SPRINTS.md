@@ -2,6 +2,27 @@
 
 Data: 2026-06-03
 
+## Sprint 0.5 - Auditoria total de codigo e arquitetura
+
+Objetivo: parar implementacoes por tentativa e mapear o produto real antes de novas mudancas.
+
+- Auditar todos os arquivos ativos do bundle.
+- Mapear todos os caminhos que carregam ou alteram estrutura E-BOM.
+- Identificar onde raiz, pai/filho, revisao, proprietario, tipo, maturidade e IDs sao lidos, transformados ou sobrescritos.
+- Separar pipeline principal, fallback manual, legado e codigo morto.
+- Identificar flags conflitantes em `APP_CONFIG`.
+- Mapear dependencias reais do runtime Additional App: WAFData, i3DXCompassServices, 3DSpace REST e contexto do dashboard.
+- Registrar riscos de escala: 1 item, 79 itens, milhares e centenas de milhares.
+- Definir proposta de fluxo unico antes de qualquer refatoracao.
+
+Aceite:
+
+- Documento de auditoria com matriz manter/revisar/remover.
+- Diagrama do fluxo atual e do fluxo alvo.
+- Lista objetiva de arquivos que podem mexer na estrutura.
+- Lista de testes/fixtures necessarios, incluindo os quatro casos reais.
+- Nenhuma alteracao de runtime durante a auditoria.
+
 ## Sprint 1 - Base URL e E-BOM API-first
 
 Objetivo: eliminar a causa raiz dos 404/406 de estrutura.

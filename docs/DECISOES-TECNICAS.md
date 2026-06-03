@@ -69,3 +69,35 @@ Decisao: nao deve existir limite funcional de itens como criterio de produto.
 Motivo: o usuario precisa que qualquer projeto funcione, inclusive estruturas maiores que os exemplos atuais.
 
 Consequencia: a implementacao deve usar paginacao, lazy loading, virtualizacao e controle de concorrencia.
+
+## DEC-009 - Sem limite funcional de estrutura
+
+Decisao: o produto deve suportar estruturas de qualquer tamanho pratico da plataforma, de 1 peca a centenas de milhares de itens.
+
+Motivo: o objetivo do app e trabalhar com projetos reais, nao apenas pilotos pequenos. Qualquer limite fixo de item como criterio de funcionamento contradiz o produto.
+
+Consequencia: clipboard, TSV, DOM mirror e snapshot nao podem ser arquitetura principal. O caminho principal precisa ser API-first, paginado, lazy, cacheado e com UI virtualizada. Qualquer fallback manual deve ser tratado como contingencia temporaria.
+
+## DEC-010 - Carga automatica como fluxo de produto
+
+Decisao: o app deve ler automaticamente a estrutura aberta no Product Structure Explorer.
+
+Motivo: `Ctrl+A`, `Ctrl+C`, `Ctrl+V` e botao manual sao paliativos de teste, nao experiencia final aceitavel.
+
+Consequencia: a auditoria deve identificar todos os caminhos que dependem de clipboard/cola como primary flow e rebaixar esses caminhos para contingencia isolada. O fluxo principal deve usar contexto do dashboard + 3DSpace REST.
+
+## DEC-011 - 3DView proprio vinculado a E-BOM
+
+Decisao: selecionar uma linha da E-BOM deve resolver o objeto real e exibir 3D dentro da propria aplicacao.
+
+Motivo: o requisito do produto e navegar pela E-BOM e visualizar o item selecionado, sem usar widget 3DPlay separado.
+
+Consequencia: a Sprint de 3D deve criar pipeline proprio: item E-BOM -> objeto real -> representacao/derived output -> ticket/download permitido -> viewer proprio, provavelmente Three.js, com cache e estados claros de carregamento/erro/indisponivel.
+
+## DEC-012 - Fluxo unico de estrutura
+
+Decisao: a estrutura normalizada da E-BOM deve ser criada por um unico pipeline principal.
+
+Motivo: o codigo atual tem multiplos caminhos capazes de alterar raiz, metadados e contagem, o que gera comportamento inconsistente entre teste local e dashboard real.
+
+Consequencia: a auditoria deve mapear e reduzir os fluxos concorrentes. API-first deve ser o pipeline principal. Fallback manual deve alimentar o mesmo normalizador, sem regras paralelas para raiz/metadados.
