@@ -33,6 +33,7 @@ Observacao:
 
 - O Product Structure Explorer indicou 20 selecionados na barra inferior, enquanto o widget recebeu 19 linhas no TSV. Isso deve ser validado antes de considerar o caso "20 itens" como aceite pleno, pois pode ser diferenca entre item selecionado/visivel, raiz omitida no TSV ou linha nao copiada.
 - Validacao posterior: coluna `Proprietario` corrigida. O widget deixou de exibir nomes de componente como proprietario e passou a exibir `Enderson Moura` quando esse valor esta presente no TSV.
+- Validacao posterior: a diferenca `20 no Explorer` vs `19 no widget` ocorreu porque `01_SKA_Drone` estava sendo tratado apenas como contexto. Requisito ajustado: a E-BOM deve mostrar pais e filhos, entao a raiz copiada pelo TSV deve aparecer como primeira linha nivel 0.
 
 ## Resultado - estrutura grande
 
@@ -49,6 +50,7 @@ Observacao:
 
 - A coluna `Proprietario` do widget estava recebendo textos de componente/descricao, enquanto o Explorer exibia `Enderson Moura`.
 - Ajuste aplicado e validado no parser TSV: nomes tecnicos de componente deixam de ser aceitos como proprietario por heuristica. Quando houver coluna `Proprietario`, ela deve prevalecer.
+- A diferenca de 1 item tambem ocorreu por raiz tratada como contexto. Requisito ajustado: preservar raiz/pais como linhas da E-BOM, nao apenas como titulo.
 
 ## Estado tecnico validado
 

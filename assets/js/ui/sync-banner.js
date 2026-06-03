@@ -95,6 +95,9 @@ var SyncBanner = (function () {
 
   function countLine(mode, dash, explorer) {
     var line = mode || 'Import';
+    if (explorer > 0 && explorer === dash + 1) {
+      return line + ' ' + dash + ' filhos + raiz (' + explorer + ' no Explorer)';
+    }
     line += ' ' + dash;
     if (explorer > 0) line += '/' + explorer;
     return line;

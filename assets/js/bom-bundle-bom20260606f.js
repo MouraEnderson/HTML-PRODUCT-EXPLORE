@@ -6687,6 +6687,49 @@ var FileImportService = (function () {
     return items;
   }
 
+  function firstPastedProductName(text) {
+    var lines = String(text || '').split(/\r?\n/).filter(function (l) { return l.trim(); });
+    if (!lines.length) return '';
+    var row = splitLineRaw(lines[0]);
+    if (looksLikeHeader(row)) return '';
+    var idx = rowLeadingIconOffset(row);
+    var raw = row[idx] !== undefined ? row[idx] : row[0];
+    var lead = leadingDepth(raw);
+    var name = stripIconNoise(unwrapJsonCell(lead.text || raw));
+    return isProductName(name) ? name : '';
+  }
+
+  function ensureFirstPastedRoot(text, items) {
+    if (!items || !items.length) return items;
+    var rootName = firstPastedProductName(text);
+    if (!rootName) return items;
+    var rootKey = rootName.toLowerCase();
+    var hasRoot = items.some(function (it) {
+      return cleanCell(it.name || it.title || '').toLowerCase() === rootKey;
+    });
+    if (hasRoot) return items;
+    items.unshift({
+      physicalid: 'IMP_root_' + rootName.replace(/\W/g, '_').slice(0, 40),
+      name: rootName,
+      title: rootName,
+      type: 'Physical Product',
+      displayType: 'Physical Product',
+      revision: '',
+      state: '',
+      maturity: '',
+      owner: '',
+      organization: '',
+      collabSpace: '',
+      approval: 'Unknown',
+      quantity: 1,
+      level: 0
+    });
+    for (var i = 1; i < items.length; i++) {
+      if (!items[i].level || items[i].level < 1) items[i].level = 1;
+    }
+    return items;
+  }
+
   function looksLikeExplorerPaste(text) {
     var t = String(text || '').trim();
     if (!t || t.length < 4) return false;
@@ -6771,6 +6814,7 @@ var FileImportService = (function () {
     }
     var gridItems = parseTextFromGridLines(text);
     if (gridItems && gridItems.length) {
+      gridItems = ensureFirstPastedRoot(text, gridItems);
       validateImportedItems(gridItems);
       return finalizeImportReport(enrichItemsWithExplorerIds(inferAssemblyLevels(gridItems)));
     }
@@ -6786,13 +6830,13 @@ var FileImportService = (function () {
       it.name = stripIconNoise(it.name) || it.name;
       it.title = stripIconNoise(it.title) || it.title;
     });
-    items = inferAssemblyLevels(items.filter(function (it) {
+    items = inferAssemblyLevels(ensureFirstPastedRoot(text, items.filter(function (it) {
       if (!it.name || !it.name.length) {
         skipRow('nome_vazio', it.title || '', it.rowIndex || 0);
         return false;
       }
       return true;
-    }));
+    })));
     items.forEach(function (it) {
       if (!it.maturity && !it.state) {
         var scan = findMaturityInCells([
@@ -11462,6 +11506,9 @@ var SyncBanner = (function () {
 
   function countLine(mode, dash, explorer) {
     var line = mode || 'Import';
+    if (explorer > 0 && explorer === dash + 1) {
+      return line + ' ' + dash + ' filhos + raiz (' + explorer + ' no Explorer)';
+    }
     line += ' ' + dash;
     if (explorer > 0) line += '/' + explorer;
     return line;
