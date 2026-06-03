@@ -52,6 +52,9 @@ Objetivo: separar carga E-BOM de miniatura e fallback manual.
 Status parcial em 2026-06-03:
 
 - Miniaturas automaticas desligadas por padrao via `APP_CONFIG.MEDIA` para impedir chamadas `getpicture`/preview durante carga e selecao de E-BOM.
+- Fallback manual controlado validado no 3DDashboard: Explorer `Ctrl+A/Ctrl+C`, area de cola do widget `Ctrl+V`, `Atualizar estrutura`.
+- Resultado observado: `TSV 19/19 - sincronizado`. Observacao pendente: Explorer mostrou 20 selecionados, widget recebeu 19 linhas.
+- Auto-copy e paste trap programaticos foram desativados para reduzir `upload`/ruido no Network e tornar o fallback explicito.
 
 Aceite:
 

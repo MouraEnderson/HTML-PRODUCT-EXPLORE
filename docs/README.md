@@ -8,7 +8,8 @@ Esta pasta concentra o direcionamento tecnico atual do projeto.
 2. [Decisoes tecnicas](DECISOES-TECNICAS.md)
 3. [Organizacao do repositorio](ORGANIZACAO-REPOSITORIO.md)
 4. [Backlog inicial por sprints](BACKLOG-SPRINTS.md)
-5. [Levantamento atual 3DX](levantamento/LEVANTAMENTO-ATUAL-3DX.md)
+5. [Testes 3DX - resultados atuais](TESTES-3DX.md)
+6. [Levantamento atual 3DX](levantamento/LEVANTAMENTO-ATUAL-3DX.md)
 
 ## Historico
 
