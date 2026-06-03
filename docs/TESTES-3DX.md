@@ -33,6 +33,22 @@ Observacao:
 
 - O Product Structure Explorer indicou 20 selecionados na barra inferior, enquanto o widget recebeu 19 linhas no TSV. Isso deve ser validado antes de considerar o caso "20 itens" como aceite pleno, pois pode ser diferenca entre item selecionado/visivel, raiz omitida no TSV ou linha nao copiada.
 
+## Resultado - estrutura grande
+
+Status: aprovado como contingencia, com observacao de parser.
+
+Resultado observado pelo usuario:
+
+- Estrutura SKA carregou via fallback manual.
+- Banner: `TSV 78/78 - sincronizado`.
+- Tabela E-BOM exibiu 78 linhas.
+- Explorer indicava `79 de 79 selecionado`.
+
+Observacao:
+
+- A coluna `Proprietario` do widget estava recebendo textos de componente/descricao, enquanto o Explorer exibia `Enderson Moura`.
+- Ajuste aplicado no parser TSV: nomes tecnicos de componente deixam de ser aceitos como proprietario por heuristica. Quando houver coluna `Proprietario`, ela deve prevalecer.
+
 ## Estado tecnico validado
 
 - `PASTE_TRAP_ENABLED: false`.

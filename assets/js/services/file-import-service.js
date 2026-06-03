@@ -317,6 +317,8 @@ var FileImportService = (function () {
     if (isMaturityText(t)) return '';
     if (/^physical\s*product$/i.test(t)) return '';
     if (/^(01_SKA_|SKA_|Mont\d|prd-R)/i.test(t)) return '';
+    if (/^(LONGARINA|ROLETE|PARAFUSO|SUPORTE|SAPATA|PROTE|PROTECAO|PROTEÇÃO|TRANS|FRAME|ARM|BEARING|GEAR|LEG|DRONE)\b/i.test(t)) return '';
+    if (/[A-Z0-9]{2,}[-_][A-Z0-9]/.test(t)) return '';
     if (/[<][0-9]+[>]/.test(t) || /\(Peça/i.test(t)) return '';
     if (t.length > 64) return t.slice(0, 64);
     return t;
@@ -386,7 +388,7 @@ var FileImportService = (function () {
         if (isTypeText(t)) scores[c].type++;
         if (isMaturityText(t)) scores[c].mat++;
         if (isJsonBlob(v) && ownerJsonHasLabel(v)) scores[c].jsonOwner++;
-        if (/^\S+\s+\S+/.test(t) && !isMaturityText(t) && !isRevisionText(t) && !isTypeText(t) && !/^\d+$/.test(t)) {
+        if (/^\S+\s+\S+/.test(t) && sanitizeOwnerValue(t) && !isMaturityText(t) && !isRevisionText(t) && !isTypeText(t) && !/^\d+$/.test(t)) {
           scores[c].owner++;
         }
       });
