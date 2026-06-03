@@ -7272,12 +7272,24 @@ var BomSnapshot = (function () {
     return root;
   }
 
+  function fallbackRootMeta(items) {
+    var src = items && items.length ? items[0] : null;
+    if (!src) return {};
+    return {
+      revision: src.revision || '',
+      owner: src.owner || '',
+      type: src.type || src.displayType || 'Physical Product',
+      displayType: src.displayType || src.type || 'Physical Product'
+    };
+  }
+
   function ensureContextRoot(items, productName) {
     if (!items || !items.length) return items || [];
     var rootName = contextRootName(productName);
     if (!rootName) return items;
     var firstName = cleanName(items[0].name || items[0].title);
     if (sameName(firstName, rootName)) return items;
+    var meta = fallbackRootMeta(items);
     var hasRoot = items.some(function (it) {
       return sameName(it.name || it.title, rootName);
     });
@@ -7288,12 +7300,12 @@ var BomSnapshot = (function () {
       physicalid: 'IMP_root_' + rootName.replace(/\W/g, '_').slice(0, 40),
       name: rootName,
       title: rootName,
-      type: 'Physical Product',
-      displayType: 'Physical Product',
-      revision: '',
+      type: meta.type || 'Physical Product',
+      displayType: meta.displayType || meta.type || 'Physical Product',
+      revision: meta.revision || '',
       state: '',
       maturity: '',
-      owner: '',
+      owner: meta.owner || '',
       approval: 'Unknown',
       quantity: 1
     });
