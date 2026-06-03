@@ -32,6 +32,7 @@ Resultado observado:
 Observacao:
 
 - O Product Structure Explorer indicou 20 selecionados na barra inferior, enquanto o widget recebeu 19 linhas no TSV. Isso deve ser validado antes de considerar o caso "20 itens" como aceite pleno, pois pode ser diferenca entre item selecionado/visivel, raiz omitida no TSV ou linha nao copiada.
+- Validacao posterior: coluna `Proprietario` corrigida. O widget deixou de exibir nomes de componente como proprietario e passou a exibir `Enderson Moura` quando esse valor esta presente no TSV.
 
 ## Resultado - estrutura grande
 
@@ -47,7 +48,7 @@ Resultado observado pelo usuario:
 Observacao:
 
 - A coluna `Proprietario` do widget estava recebendo textos de componente/descricao, enquanto o Explorer exibia `Enderson Moura`.
-- Ajuste aplicado no parser TSV: nomes tecnicos de componente deixam de ser aceitos como proprietario por heuristica. Quando houver coluna `Proprietario`, ela deve prevalecer.
+- Ajuste aplicado e validado no parser TSV: nomes tecnicos de componente deixam de ser aceitos como proprietario por heuristica. Quando houver coluna `Proprietario`, ela deve prevalecer.
 
 ## Estado tecnico validado
 
