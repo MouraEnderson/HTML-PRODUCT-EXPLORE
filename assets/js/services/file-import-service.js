@@ -324,6 +324,14 @@ var FileImportService = (function () {
     return t;
   }
 
+  function looksLikeOwnerPerson(raw) {
+    var t = sanitizeOwnerValue(raw);
+    if (!t || t.length < 3) return false;
+    if (/^[A-ZÀ-Ú0-9][A-ZÀ-Ú0-9\s.\-\/"'()]{4,}$/.test(t) && t === t.toUpperCase()) return false;
+    return /^[A-Za-zÀ-ú][A-Za-zÀ-ú'.-]*(\s+[A-Za-zÀ-ú][A-Za-zÀ-ú'.-]*)+$/.test(t) ||
+      /^[A-Za-zÀ-ú][A-Za-zÀ-ú'.-]{2,}$/.test(t);
+  }
+
   function extractOwnerFromRow(row, colMap) {
     if (!row || !row.length) return { text: '', raw: '' };
     var tryCell = function (idx) {
@@ -489,12 +497,12 @@ var FileImportService = (function () {
       var ownerRaw = it._ownerRaw != null ? it._ownerRaw : it.owner || '';
       if (ownerRaw) {
         var om = parseOwnerCell(ownerRaw);
-        if (om.label) it.owner = sanitizeOwnerValue(om.label) || om.label;
+        if (om.label && looksLikeOwnerPerson(om.label)) it.owner = sanitizeOwnerValue(om.label) || om.label;
         if (om.iconUrl && !it.iconUrl) it.iconUrl = om.iconUrl;
       }
       if ((!it.owner || /^sem\s*propriet|^-$|^—$/i.test(String(it.owner).trim())) && it._ownerRaw) {
         var om2 = parseOwnerCell(it._ownerRaw);
-        if (om2.label) it.owner = sanitizeOwnerValue(om2.label) || om2.label;
+        if (om2.label && looksLikeOwnerPerson(om2.label)) it.owner = sanitizeOwnerValue(om2.label) || om2.label;
       }
       if (!it.sourcePhysicalId || isSyntheticImportId(it.sourcePhysicalId)) {
         var prd = '';
@@ -1196,7 +1204,9 @@ var FileImportService = (function () {
           titleVal = parsedFields.name;
         }
         revisionVal = parsedFields.revision || revisionVal;
-        ownerText = parsedFields.owner || ownerText;
+        if (!ownerText && looksLikeOwnerPerson(parsedFields.owner)) {
+          ownerText = parsedFields.owner;
+        }
         typeVal = parsedFields.type || typeVal;
         if (parsedFields.maturity) {
           st = normalizeImportedState(parsedFields.maturity, st.approval);
@@ -1223,7 +1233,7 @@ var FileImportService = (function () {
         maturity: st.maturity,
         iconUrl: extractIconFromRow(row) || (ownerCol && parseOwnerCell(ownerCol).iconUrl) || '',
         quantity: parseFloat(cell(row, rowMap, 'quantity', '1')) || 1,
-        owner: ownerText,
+        owner: looksLikeOwnerPerson(ownerText) ? ownerText : '',
         _ownerRaw: ownerCol,
         organization: cell(row, rowMap, 'organization', ''),
         collabSpace: cell(row, rowMap, 'collabSpace', ''),
