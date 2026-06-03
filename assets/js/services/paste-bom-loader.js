@@ -11,7 +11,9 @@ var PasteBomLoader = (function () {
       return Promise.reject(new Error('Importação indisponível.'));
     }
     var chain;
-    if (ExplorerScanner.scanViaImportBestEffort) {
+    if (options.forceLoader === 'paste' && ExplorerScanner.scanViaClipboardOrPaste) {
+      chain = ExplorerScanner.scanViaClipboardOrPaste();
+    } else if (ExplorerScanner.scanViaImportBestEffort) {
       chain = ExplorerScanner.scanViaImportBestEffort();
     } else if (ExplorerScanner.scanViaClipboardOrPaste) {
       chain = ExplorerScanner.scanViaClipboardOrPaste();

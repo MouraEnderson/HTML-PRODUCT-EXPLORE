@@ -165,6 +165,7 @@
     SKIP_MIRROR_ON_TSV: false,
     /** clipboard.readText trava em iframe GitHub no 3DDashboard */
     SKIP_CLIPBOARD_READ: true,
+    PASTE_TRAP_ENABLED: false,
     /** Fallback DOM manual só até N peças */
     DOM_MIRROR_MANUAL_MAX_EXPECTED: 25,
     AUTO_SCAN_ON_SELECTION: false,
@@ -9303,7 +9304,9 @@ var PasteBomLoader = (function () {
       return Promise.reject(new Error('Importação indisponível.'));
     }
     var chain;
-    if (ExplorerScanner.scanViaImportBestEffort) {
+    if (options.forceLoader === 'paste' && ExplorerScanner.scanViaClipboardOrPaste) {
+      chain = ExplorerScanner.scanViaClipboardOrPaste();
+    } else if (ExplorerScanner.scanViaImportBestEffort) {
       chain = ExplorerScanner.scanViaImportBestEffort();
     } else if (ExplorerScanner.scanViaClipboardOrPaste) {
       chain = ExplorerScanner.scanViaClipboardOrPaste();
@@ -9377,6 +9380,10 @@ var BomOrchestrator = (function () {
       if (options.preferApi === true && ctx.canUseApi) return 'api';
       if (hasExplorerPasteBuffer()) return 'paste';
       return 'tsv';
+    }
+
+    if (options.source === 'manual' && hasExplorerPasteBuffer()) {
+      return 'paste';
     }
 
     var preferApiManual =
@@ -9508,6 +9515,9 @@ var BomOrchestrator = (function () {
   }
 
   function runManualFallbackChain(ctx, options, failedMode, firstErr) {
+    if (options && options.forceLoader === 'paste') {
+      return Promise.reject(firstErr || new Error('Nenhuma fonte de cola disponivel.'));
+    }
     var maxTsv = (APP_CONFIG && APP_CONFIG.FAST_TSV_MAX) || 500;
     var order = [];
     if (failedMode !== 'paste') order.push('paste');
@@ -13089,10 +13099,14 @@ var App = (function () {
       return BomOrchestrator.refreshStructure({
         source: 'manual',
         allowAutoCopy: !expected || expected > skipBelow,
-        preferApi: ctxApi && APP_CONFIG.PREFER_API_ON_MANUAL_REFRESH !== false
+        preferApi: false,
+        forceLoader: 'paste'
       });
     }
     function primePasteBuffer() {
+      if (APP_CONFIG && APP_CONFIG.PASTE_TRAP_ENABLED !== true) {
+        return Promise.resolve();
+      }
       if (
         typeof ProductExplorerBridge === 'undefined' ||
         !ProductExplorerBridge.tryReadClipboardViaPasteTrap

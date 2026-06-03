@@ -61,6 +61,7 @@
     SKIP_MIRROR_ON_TSV: false,
     /** clipboard.readText trava em iframe GitHub no 3DDashboard */
     SKIP_CLIPBOARD_READ: true,
+    PASTE_TRAP_ENABLED: false,
     /** Fallback DOM manual só até N peças */
     DOM_MIRROR_MANUAL_MAX_EXPECTED: 25,
     AUTO_SCAN_ON_SELECTION: false,

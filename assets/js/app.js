@@ -923,10 +923,14 @@ var App = (function () {
       return BomOrchestrator.refreshStructure({
         source: 'manual',
         allowAutoCopy: !expected || expected > skipBelow,
-        preferApi: ctxApi && APP_CONFIG.PREFER_API_ON_MANUAL_REFRESH !== false
+        preferApi: false,
+        forceLoader: 'paste'
       });
     }
     function primePasteBuffer() {
+      if (APP_CONFIG && APP_CONFIG.PASTE_TRAP_ENABLED !== true) {
+        return Promise.resolve();
+      }
       if (
         typeof ProductExplorerBridge === 'undefined' ||
         !ProductExplorerBridge.tryReadClipboardViaPasteTrap

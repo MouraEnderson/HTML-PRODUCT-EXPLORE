@@ -53,6 +53,10 @@ var BomOrchestrator = (function () {
       return 'tsv';
     }
 
+    if (options.source === 'manual' && hasExplorerPasteBuffer()) {
+      return 'paste';
+    }
+
     var preferApiManual =
       options.preferApi === true ||
       (options.preferApi !== false &&
@@ -182,6 +186,9 @@ var BomOrchestrator = (function () {
   }
 
   function runManualFallbackChain(ctx, options, failedMode, firstErr) {
+    if (options && options.forceLoader === 'paste') {
+      return Promise.reject(firstErr || new Error('Nenhuma fonte de cola disponivel.'));
+    }
     var maxTsv = (APP_CONFIG && APP_CONFIG.FAST_TSV_MAX) || 500;
     var order = [];
     if (failedMode !== 'paste') order.push('paste');
