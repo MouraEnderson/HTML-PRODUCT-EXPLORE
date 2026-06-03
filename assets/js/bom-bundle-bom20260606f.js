@@ -166,6 +166,7 @@
     /** clipboard.readText trava em iframe GitHub no 3DDashboard */
     SKIP_CLIPBOARD_READ: true,
     PASTE_TRAP_ENABLED: false,
+    EXPLORER_AUTO_COPY_ENABLED: false,
     /** Fallback DOM manual só até N peças */
     DOM_MIRROR_MANUAL_MAX_EXPECTED: 25,
     AUTO_SCAN_ON_SELECTION: false,
@@ -4564,6 +4565,7 @@ var ProductExplorerBridge = (function () {
 
   /** Captura TSV no evento copy do documento Explorer (não depende de clipboard async). */
   function captureExplorerCopyText(doc, win) {
+    if (APP_CONFIG && APP_CONFIG.EXPLORER_AUTO_COPY_ENABLED !== true) return '';
     if (!doc || !win) return '';
     var captured = '';
     function onCopy(ev) {
@@ -4632,6 +4634,9 @@ var ProductExplorerBridge = (function () {
 
   /** Lê clipboard via paste no widget (user-gesture do clique Atualizar). */
   function tryReadClipboardViaPasteTrap() {
+    if (APP_CONFIG && APP_CONFIG.PASTE_TRAP_ENABLED !== true) {
+      return Promise.resolve('');
+    }
     return new Promise(function (resolve) {
       var target = document.getElementById('pasteArea');
       var external = false;
@@ -4701,6 +4706,9 @@ var ProductExplorerBridge = (function () {
   }
 
   function tryExplorerAutoCopyParse(rootName) {
+    if (APP_CONFIG && APP_CONFIG.EXPLORER_AUTO_COPY_ENABLED !== true) {
+      return Promise.resolve(null);
+    }
     return new Promise(function (resolve) {
       var host = readExplorerHost();
       if (!host || !host.doc) return resolve(null);
