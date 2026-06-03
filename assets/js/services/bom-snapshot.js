@@ -118,6 +118,8 @@ var BomSnapshot = (function () {
   }
 
   function buildFromImported(items, productName) {
+    items = ensureContextRoot(items, productName);
+    productName = (items[0] && (items[0].title || items[0].name)) || productName;
     return {
       version: FORMAT_VERSION,
       productName: productName || 'E-BOM',
@@ -125,6 +127,62 @@ var BomSnapshot = (function () {
       rootPhysicalId: items.length ? items[0].physicalid : null,
       items: items
     };
+  }
+
+  function cleanName(s) {
+    return String(s == null ? '' : s).trim();
+  }
+
+  function sameName(a, b) {
+    return cleanName(a).toLowerCase() === cleanName(b).toLowerCase();
+  }
+
+  function contextRootName(fallback) {
+    var root = '';
+    try {
+      if (typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh) {
+        var ctx = ExplorerContext.refresh(false);
+        root = (ctx && (ctx.rootName || ctx.productName)) || '';
+      }
+    } catch (e0) { /* */ }
+    if (!root && typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getStructureNameHint) {
+      root = ProductExplorerBridge.getStructureNameHint() || '';
+    }
+    root = cleanName(root || fallback || '');
+    if (!root || root === '-' || /^e-?bom$/i.test(root) || /^bom analytics/i.test(root)) return '';
+    return root;
+  }
+
+  function ensureContextRoot(items, productName) {
+    if (!items || !items.length) return items || [];
+    var rootName = contextRootName(productName);
+    if (!rootName) return items;
+    var firstName = cleanName(items[0].name || items[0].title);
+    if (sameName(firstName, rootName)) return items;
+    var hasRoot = items.some(function (it) {
+      return sameName(it.name || it.title, rootName);
+    });
+    if (hasRoot) return items;
+    items = items.slice();
+    items.unshift({
+      level: 0,
+      physicalid: 'IMP_root_' + rootName.replace(/\W/g, '_').slice(0, 40),
+      name: rootName,
+      title: rootName,
+      type: 'Physical Product',
+      displayType: 'Physical Product',
+      revision: '',
+      state: '',
+      maturity: '',
+      owner: '',
+      approval: 'Unknown',
+      quantity: 1
+    });
+    for (var i = 1; i < items.length; i++) {
+      var lv = parseInt(items[i].level, 10);
+      if (isNaN(lv) || lv < 1) items[i].level = 1;
+    }
+    return items;
   }
 
   function saveSession(payload) {
