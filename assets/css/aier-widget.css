@@ -1,0 +1,180 @@
+/* Additional App — Documentação 2D (AiER). Não usar estilos do BOM Analytics. */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: #f4f6f9;
+  color: #1a2332;
+}
+
+.aier-root {
+  box-sizing: border-box;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  gap: 10px;
+  overflow: auto;
+}
+
+.aier-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #d8dee8;
+}
+
+.aier-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0d47a1;
+}
+
+.aier-subtitle {
+  margin: 2px 0 0;
+  font-size: 0.75rem;
+  color: #5c6b7a;
+}
+
+.aier-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aier-pill {
+  font-size: 0.68rem;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.aier-pill-ok { background: #e8f5e9; color: #2e7d32; }
+.aier-pill-err { background: #ffebee; color: #c62828; }
+
+.aier-build {
+  font-size: 0.62rem;
+  color: #90a4ae;
+}
+
+.aier-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.aier-btn {
+  border: 1px solid #c5d0dc;
+  background: #fff;
+  color: #1a2332;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.aier-btn:hover { background: #eef2f7; }
+
+.aier-btn-primary {
+  background: #1565c0;
+  border-color: #1565c0;
+  color: #fff;
+}
+
+.aier-btn-primary:hover { background: #0d47a1; }
+
+.aier-panel {
+  background: #fff;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.aier-panel h2 {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.aier-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.aier-kpi {
+  text-align: center;
+  padding: 8px 4px;
+  border-radius: 6px;
+  border: 1px solid #e0e6ed;
+}
+
+.aier-kpi-label {
+  display: block;
+  font-size: 0.65rem;
+  color: #5c6b7a;
+}
+
+.aier-kpi-value {
+  display: block;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.aier-kpi-ok { background: #e8f5e9; }
+.aier-kpi-warn { background: #fff3e0; }
+.aier-kpi-bad { background: #ffebee; }
+.aier-kpi-neutral { background: #eceff1; }
+
+.aier-meta, .aier-muted {
+  font-size: 0.72rem;
+  color: #607d8b;
+  margin: 6px 0;
+}
+
+.aier-meta code {
+  font-size: 0.68rem;
+  word-break: break-all;
+}
+
+.aier-issues {
+  margin: 8px 0;
+  padding-left: 18px;
+  font-size: 0.76rem;
+}
+
+.aier-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: #1565c0;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.aier-link:hover { text-decoration: underline; }
+
+.aier-status {
+  font-size: 0.74rem;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+.aier-status-info { background: #e3f2fd; color: #1565c0; }
+.aier-status-ok { background: #e8f5e9; color: #2e7d32; }
+.aier-status-error { background: #ffebee; color: #c62828; }
+
+.aier-foot {
+  font-size: 0.68rem;
+  color: #90a4ae;
+  line-height: 1.4;
+}

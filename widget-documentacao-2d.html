@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:widget="http://www.netvibes.com/ns/">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>2D AUTOPILOT</title>
+  <script type="text/javascript" src="assets/js/aier/build-id.js"></script>
+  <script type="text/javascript">
+  //<![CDATA[
+    window.__3DX_TRUSTED_WIDGET__ = true;
+
+    var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
+    var BUILD = (window.__AIER_WIDGET_BUILD_ID__ && /^aier20/.test(String(window.__AIER_WIDGET_BUILD_ID__)))
+      ? String(window.__AIER_WIDGET_BUILD_ID__)
+      : 'aier20260604a';
+
+    var SCRIPTS = [
+      'assets/js/aier/config.js',
+      'assets/js/aier/aier-api-service.js',
+      'assets/js/aier/aier-widget-app.js'
+    ];
+
+    function assetUrl(path) {
+      var host = (location && location.hostname) || '';
+      var local = host === 'localhost' || host === '127.0.0.1';
+      var github = host.indexOf('github.io') >= 0;
+      var base = (local || github) ? '' : GH;
+      return base + path + '?v=' + BUILD;
+    }
+
+    var UI_HTML =
+      '<div class="aier-root" id="aierRoot">' +
+      '<header class="aier-header">' +
+      '<div><h1 class="aier-title" id="aierAppTitle">Documentação 2D</h1>' +
+      '<p class="aier-subtitle" id="aierAppSubtitle">AI Engineering Reviewer</p></div>' +
+      '<div class="aier-header-right">' +
+      '<span class="aier-pill aier-pill-err" id="aierApiPill">API …</span>' +
+      '<span class="aier-build" id="aierBuildTag"></span></div></header>' +
+      '<section class="aier-actions">' +
+      '<button type="button" class="aier-btn aier-btn-primary" id="btnAierRefreshHealth">Atualizar saúde</button>' +
+      '<button type="button" class="aier-btn" id="btnAierCollect">Scan montagem (SW)</button>' +
+      '<button type="button" class="aier-btn" id="btnAierDetailA">Gerar desenho peça (A)</button>' +
+      '<button type="button" class="aier-btn" id="btnAierRefreshOutdated">Atualizar desatualizados</button>' +
+      '<button type="button" class="aier-btn" id="btnAierOpenDashboard">Abrir revisão</button>' +
+      '</section>' +
+      '<div class="aier-status aier-status-info" id="aierStatusBar">Iniciando…</div>' +
+      '<section class="aier-panel"><h2>Saúde documentação 2D</h2><div id="aierHealthPanel">' +
+      '<p class="aier-muted">Aguardando API…</p></div></section>' +
+      '<p class="aier-meta" id="aierLastJob"></p>' +
+      '<footer class="aier-foot">API: <span id="aierApiHint"></span><br/>' +
+      'Produto independente do BOM Analytics. Worker SOLIDWORKS processa a fila no servidor de engenharia.</footer>' +
+      '</div>';
+
+    function loadCss(next) {
+      var l = document.createElement('link');
+      l.rel = 'stylesheet';
+      l.href = assetUrl('assets/css/aier-widget.css');
+      l.onload = function () { if (next) next(); };
+      l.onerror = function () { if (next) next(); };
+      document.head.appendChild(l);
+    }
+
+    function loadScript(i, done) {
+      if (i >= SCRIPTS.length) { done(); return; }
+      var s = document.createElement('script');
+      s.src = assetUrl(SCRIPTS[i]);
+      s.async = false;
+      s.onload = function () { loadScript(i + 1, done); };
+      s.onerror = function () {
+        var bar = document.getElementById('aierStatusBar');
+        if (bar) {
+          bar.textContent = 'Erro ao carregar ' + SCRIPTS[i];
+          bar.className = 'aier-status aier-status-error';
+        }
+        loadScript(i + 1, done);
+      };
+      document.head.appendChild(s);
+    }
+
+    function mount() {
+      var body = (typeof widget !== 'undefined' && widget && widget.body) ? widget.body : document.body;
+      body.innerHTML = UI_HTML;
+    }
+
+    function start() {
+      mount();
+      loadCss(function () {
+        loadScript(0, function () {
+          if (typeof AierWidgetApp !== 'undefined' && AierWidgetApp.run) {
+            AierWidgetApp.run();
+          }
+        });
+      });
+    }
+
+    function boot() {
+      if (typeof widget !== 'undefined' && widget) {
+        if (widget.addEvent) widget.addEvent('onLoad', start);
+        if (widget.addEvent) widget.addEvent('onRefresh', start);
+        if (widget.body) start();
+        else window.setTimeout(boot, 80);
+      } else if (document.body) {
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', start);
+        } else {
+          start();
+        }
+      } else {
+        window.setTimeout(boot, 80);
+      }
+    }
+    boot();
+  //]]>
+  </script>
+</head>
+<body></body>
+</html>
