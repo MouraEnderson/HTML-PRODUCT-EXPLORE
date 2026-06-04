@@ -55,6 +55,16 @@ var ApiDiagnostic = (function () {
     return false;
   }
 
+  function getWAFData() {
+    try {
+      if (typeof WAFData !== 'undefined' && WAFData.authenticatedRequest) return WAFData;
+      if (typeof widget !== 'undefined' && widget && widget.WAFData && widget.WAFData.authenticatedRequest) {
+        return widget.WAFData;
+      }
+    } catch (e) { /* */ }
+    return null;
+  }
+
   function ctxSnapshot() {
     if (typeof ExplorerContext === 'undefined' || !ExplorerContext.refresh) {
       return null;
@@ -81,6 +91,27 @@ var ApiDiagnostic = (function () {
     return [];
   }
 
+  function shortJson(value) {
+    if (value == null) return '';
+    try {
+      var s = typeof value === 'string' ? value : JSON.stringify(value);
+      return s.length > 220 ? s.slice(0, 220) + '...' : s;
+    } catch (e) {
+      return String(value).slice(0, 220);
+    }
+  }
+
+  function payloadShape(value) {
+    if (value == null) return 'null';
+    if (typeof value === 'string') return 'string(' + value.length + ')';
+    if (Array.isArray(value)) return 'array(' + value.length + ')';
+    if (typeof value === 'object') {
+      var keys = Object.keys(value).slice(0, 8);
+      return 'object{' + keys.join(',') + '}';
+    }
+    return typeof value;
+  }
+
   function responseTotal(response, count) {
     if (!response) return count || 0;
     return response.totalItems || response.total || response.count || count || 0;
@@ -100,6 +131,93 @@ var ApiDiagnostic = (function () {
         var msg = (err && err.message) ? err.message : String(err || 'erro');
         return log(step + ' GET', false, msg, { url: url, status: parseStatus(msg) });
       });
+  }
+
+  function rawWafRequest(step, url, reqOptions) {
+    reqOptions = reqOptions || {};
+    var WAF = getWAFData();
+    if (!WAF || !WAF.authenticatedRequest) {
+      return Promise.resolve(log(step, false, 'WAFData indisponivel', { url: url }));
+    }
+    return new Promise(function (resolve) {
+      var timeoutMs = reqOptions.timeoutMs || 12000;
+      var settled = false;
+      function finish(row) {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        resolve(row);
+      }
+      var timer = window.setTimeout(function () {
+        finish(log(step, false, 'timeout ' + timeoutMs + 'ms', { url: url }));
+      }, timeoutMs);
+
+      var opts = {
+        method: reqOptions.method || 'GET',
+        onComplete: function (data) {
+          finish(
+            log(
+              step,
+              true,
+              'OK ' + payloadShape(data),
+              {
+                url: url,
+                status: 200,
+                type: reqOptions.type || '',
+                responseType: reqOptions.responseType || '',
+                sample: shortJson(data)
+              }
+            )
+          );
+        },
+        onFailure: function (err) {
+          var raw = shortJson(err);
+          var msg =
+            (err && (err.message || err.error || err.statusText || err.responseText)) ||
+            raw ||
+            'WAF request failed';
+          finish(
+            log(
+              step,
+              false,
+              msg,
+              {
+                url: url,
+                status: parseStatus(msg) || (err && (err.status || err.responseCode)) || null,
+                type: reqOptions.type || '',
+                responseType: reqOptions.responseType || '',
+                raw: raw
+              }
+            )
+          );
+        }
+      };
+      if (reqOptions.headers) opts.headers = reqOptions.headers;
+      if (reqOptions.type) opts.type = reqOptions.type;
+      if (reqOptions.responseType) opts.responseType = reqOptions.responseType;
+      if (reqOptions.data) opts.data = reqOptions.data;
+      try {
+        WAF.authenticatedRequest(url, opts);
+      } catch (e) {
+        finish(log(step, false, e.message || String(e), { url: url }));
+      }
+    });
+  }
+
+  function minimalHeaders() {
+    var h = { Accept: 'application/json' };
+    try {
+      var st = typeof PlatformContext !== 'undefined' && PlatformContext.getState && PlatformContext.getState();
+      if (st && st.securityContext) h.SecurityContext = st.securityContext;
+    } catch (e) { /* */ }
+    return h;
+  }
+
+  function fullHeaders() {
+    if (typeof PlatformContext !== 'undefined' && PlatformContext.getHeaders) {
+      return PlatformContext.getHeaders();
+    }
+    return minimalHeaders();
   }
 
   function probeCompass(rows) {
@@ -140,6 +258,57 @@ var ApiDiagnostic = (function () {
         rows.push(log('Compass/3DSpace', false, err.message || String(err)));
         return null;
       });
+  }
+
+  function probeRawModelerVariants(rows, urls) {
+    urls = urls || {};
+    var jobs = [];
+    if (urls.csrf) {
+      jobs.push(function () { return rawWafRequest('RAW CSRF json minimal', urls.csrf, {
+        type: 'json',
+        headers: { Accept: 'application/json' }
+      }); });
+      jobs.push(function () { return rawWafRequest('RAW CSRF text minimal', urls.csrf, {
+        type: 'text',
+        responseType: 'text',
+        headers: { Accept: 'text/plain,application/json,*/*' }
+      }); });
+    }
+    if (urls.engItem) {
+      jobs.push(function () { return rawWafRequest('RAW EngItem json minimal', urls.engItem, {
+        type: 'json',
+        headers: minimalHeaders()
+      }); });
+      jobs.push(function () { return rawWafRequest('RAW EngItem json full headers', urls.engItem, {
+        type: 'json',
+        headers: fullHeaders()
+      }); });
+      jobs.push(function () { return rawWafRequest('RAW EngItem text minimal', urls.engItem, {
+        type: 'text',
+        responseType: 'text',
+        headers: minimalHeaders()
+      }); });
+    }
+    if (urls.engInstance) {
+      jobs.push(function () { return rawWafRequest('RAW EngInstance json minimal', urls.engInstance, {
+        type: 'json',
+        headers: minimalHeaders()
+      }); });
+      jobs.push(function () { return rawWafRequest('RAW EngInstance text minimal', urls.engInstance, {
+        type: 'text',
+        responseType: 'text',
+        headers: minimalHeaders()
+      }); });
+    }
+    if (!jobs.length) return Promise.resolve();
+    rows.push(log('RAW WAF variants', true, jobs.length + ' request(s) controladas'));
+    return jobs.reduce(function (chain, job) {
+      return chain.then(function () {
+        return job().then(function (row) {
+          rows.push(row);
+        });
+      });
+    }, Promise.resolve());
   }
 
   function probeCsrf(rows, spaceUrl) {
@@ -309,9 +478,24 @@ var ApiDiagnostic = (function () {
               )
             );
             return null;
-          }
-          rows.push(log('physicalId', true, pid));
-          return probeEngItem(rows, pid)
+        }
+        rows.push(log('physicalId', true, pid));
+          var urls = {};
+          try {
+            var spaceState =
+              typeof CompassServices !== 'undefined' &&
+              CompassServices.getVerifiedSpaceUrl &&
+              CompassServices.getVerifiedSpaceUrl();
+            if (spaceState) urls.csrf = String(spaceState).replace(/\/$/, '') + '/resources/v1/application/CSRF';
+            if (typeof EnoviaApi !== 'undefined' && EnoviaApi.engItemUrl) urls.engItem = EnoviaApi.engItemUrl(pid);
+            if (typeof EnoviaApi !== 'undefined' && EnoviaApi.engInstanceChildrenUrl) {
+              urls.engInstance = EnoviaApi.engInstanceChildrenUrl(pid, 0, options.top || 5);
+            }
+          } catch (eUrls) { /* */ }
+          return probeRawModelerVariants(rows, urls)
+            .then(function () {
+              return probeEngItem(rows, pid);
+            })
             .then(function () {
               return probeEngInstance(rows, pid, options.top || 5);
             })
