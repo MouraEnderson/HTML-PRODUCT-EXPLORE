@@ -133,42 +133,45 @@ var ApiDiagnostic = (function () {
       });
   }
 
-  function rawWafRequest(step, url, reqOptions) {
+  function rawWafCall(step, url, reqOptions) {
     reqOptions = reqOptions || {};
     var WAF = getWAFData();
     if (!WAF || !WAF.authenticatedRequest) {
-      return Promise.resolve(log(step, false, 'WAFData indisponivel', { url: url }));
+      return Promise.resolve({
+        row: log(step, false, 'WAFData indisponivel', { url: url }),
+        data: null,
+        error: null
+      });
     }
     return new Promise(function (resolve) {
       var timeoutMs = reqOptions.timeoutMs || 12000;
       var settled = false;
-      function finish(row) {
+      function finish(row, data, error) {
         if (settled) return;
         settled = true;
         window.clearTimeout(timer);
-        resolve(row);
+        resolve({ row: row, data: data || null, error: error || null });
       }
       var timer = window.setTimeout(function () {
-        finish(log(step, false, 'timeout ' + timeoutMs + 'ms', { url: url }));
+        finish(log(step, false, 'timeout ' + timeoutMs + 'ms', { url: url }), null, 'timeout');
       }, timeoutMs);
 
       var opts = {
         method: reqOptions.method || 'GET',
         onComplete: function (data) {
-          finish(
-            log(
-              step,
-              true,
-              'OK ' + payloadShape(data),
-              {
-                url: url,
-                status: 200,
-                type: reqOptions.type || '',
-                responseType: reqOptions.responseType || '',
-                sample: shortJson(data)
-              }
-            )
+          var row = log(
+            step,
+            true,
+            'OK ' + payloadShape(data),
+            {
+              url: url,
+              status: 200,
+              type: reqOptions.type || '',
+              responseType: reqOptions.responseType || '',
+              sample: shortJson(data)
+            }
           );
+          finish(row, data);
         },
         onFailure: function (err) {
           var raw = shortJson(err);
@@ -176,20 +179,19 @@ var ApiDiagnostic = (function () {
             (err && (err.message || err.error || err.statusText || err.responseText)) ||
             raw ||
             'WAF request failed';
-          finish(
-            log(
-              step,
-              false,
-              msg,
-              {
-                url: url,
-                status: parseStatus(msg) || (err && (err.status || err.responseCode)) || null,
-                type: reqOptions.type || '',
-                responseType: reqOptions.responseType || '',
-                raw: raw
-              }
-            )
+          var row = log(
+            step,
+            false,
+            msg,
+            {
+              url: url,
+              status: parseStatus(msg) || (err && (err.status || err.responseCode)) || null,
+              type: reqOptions.type || '',
+              responseType: reqOptions.responseType || '',
+              raw: raw
+            }
           );
+          finish(row, null, err);
         }
       };
       if (reqOptions.headers) opts.headers = reqOptions.headers;
@@ -199,8 +201,14 @@ var ApiDiagnostic = (function () {
       try {
         WAF.authenticatedRequest(url, opts);
       } catch (e) {
-        finish(log(step, false, e.message || String(e), { url: url }));
+        finish(log(step, false, e.message || String(e), { url: url }), null, e);
       }
+    });
+  }
+
+  function rawWafRequest(step, url, reqOptions) {
+    return rawWafCall(step, url, reqOptions).then(function (result) {
+      return result.row;
     });
   }
 
@@ -309,6 +317,186 @@ var ApiDiagnostic = (function () {
         });
       });
     }, Promise.resolve());
+  }
+
+  function modelerBaseUrl() {
+    if (typeof CompassServices === 'undefined' || !CompassServices.getVerifiedSpaceUrl) return '';
+    var space = CompassServices.getVerifiedSpaceUrl();
+    return space ? String(space).replace(/\/$/, '') + '/resources/v1/modeler' : '';
+  }
+
+  function addPrdMatches(text, out, seen) {
+    var re = /prd-R[0-9]+-[A-Za-z0-9._-]+/g;
+    var m;
+    while ((m = re.exec(String(text || '')))) {
+      if (!seen[m[0]]) {
+        seen[m[0]] = true;
+        out.push({ id: m[0], type: '', name: '' });
+      }
+    }
+  }
+
+  function candidateFromObject(obj) {
+    if (!obj || typeof obj !== 'object') return null;
+    var id =
+      obj.physicalid ||
+      obj.physicalId ||
+      obj.objectId ||
+      obj.resourceid ||
+      obj.resourceId ||
+      obj.pid ||
+      obj.id;
+    if (!id || String(id).indexOf('prd-R') !== 0) return null;
+    return {
+      id: String(id),
+      type: String(obj.type || obj.displayType || obj.kind || obj['@type'] || ''),
+      name: String(obj.name || obj.title || obj.label || obj.description || '')
+    };
+  }
+
+  function collectCandidates(value, out, seen, depth) {
+    out = out || [];
+    seen = seen || {};
+    depth = depth || 0;
+    if (value == null || depth > 5) return out;
+    if (typeof value === 'string') {
+      addPrdMatches(value, out, seen);
+      return out;
+    }
+    if (Array.isArray(value)) {
+      value.slice(0, 40).forEach(function (item) {
+        collectCandidates(item, out, seen, depth + 1);
+      });
+      return out;
+    }
+    if (typeof value === 'object') {
+      var direct = candidateFromObject(value);
+      if (direct && !seen[direct.id]) {
+        seen[direct.id] = true;
+        out.push(direct);
+      }
+      Object.keys(value).slice(0, 80).forEach(function (key) {
+        collectCandidates(value[key], out, seen, depth + 1);
+      });
+    }
+    return out;
+  }
+
+  function mergeCandidates(target, candidates, seen) {
+    candidates.forEach(function (candidate) {
+      if (candidate && candidate.id && !seen[candidate.id]) {
+        seen[candidate.id] = true;
+        target.push(candidate);
+      }
+    });
+  }
+
+  function candidateSummary(candidates) {
+    if (!candidates || !candidates.length) return 'nenhum prd-R encontrado';
+    return candidates.slice(0, 6).map(function (c) {
+      return c.id + (c.type ? ' (' + c.type + ')' : '') + (c.name ? ' ' + c.name : '');
+    }).join('; ');
+  }
+
+  function buildResolutionJobs(spaceBase, term, physicalId) {
+    var jobs = [];
+    var encodedTerm = encodeURIComponent(term || '');
+    if (physicalId) {
+      jobs.push({
+        step: 'RAW PhysicalProduct direct',
+        url: spaceBase + '/dspfl/dspfl:PhysicalProduct/' + encodeURIComponent(physicalId)
+      });
+      jobs.push({
+        step: 'RAW VPMReference direct',
+        url: spaceBase + '/dsxcad/dsxcad:VPMReference/' + encodeURIComponent(physicalId)
+      });
+    }
+    if (encodedTerm) {
+      jobs.push({
+        step: 'RAW modeler search searchStr',
+        url: spaceBase + '/search?searchStr=' + encodedTerm + '&$top=10'
+      });
+      jobs.push({
+        step: 'RAW modeler search q',
+        url: spaceBase + '/search?q=' + encodedTerm + '&$top=10'
+      });
+      jobs.push({
+        step: 'RAW PhysicalProduct search',
+        url: spaceBase + '/dspfl/dspfl:PhysicalProduct/search?searchStr=' + encodedTerm + '&$top=10'
+      });
+      jobs.push({
+        step: 'RAW EngItem search',
+        url: spaceBase + '/dseng/dseng:EngItem/search?searchStr=' + encodedTerm + '&$top=10'
+      });
+      jobs.push({
+        step: 'RAW VPMReference search',
+        url: spaceBase + '/dsxcad/dsxcad:VPMReference/search?searchStr=' + encodedTerm + '&$top=10'
+      });
+    }
+    return jobs;
+  }
+
+  function probeCandidateEngItems(rows, candidates, originalPhysicalId) {
+    if (typeof EnoviaApi === 'undefined' || !EnoviaApi.engItemUrl) return Promise.resolve();
+    var seen = {};
+    var ids = candidates
+      .map(function (candidate) { return candidate.id; })
+      .filter(function (id) {
+        if (!id || id === originalPhysicalId || seen[id]) return false;
+        seen[id] = true;
+        return true;
+      })
+      .slice(0, 3);
+    if (!ids.length) {
+      rows.push(log('RAW Candidate EngItem', false, 'nenhum candidato alternativo para testar'));
+      return Promise.resolve();
+    }
+    return ids.reduce(function (chain, id) {
+      return chain.then(function () {
+        return rawWafRequest('RAW Candidate EngItem ' + id, EnoviaApi.engItemUrl(id), {
+          type: 'json',
+          headers: minimalHeaders()
+        }).then(function (row) {
+          rows.push(row);
+        });
+      });
+    }, Promise.resolve());
+  }
+
+  function probeObjectResolution(rows, ctx, physicalId) {
+    var base = modelerBaseUrl();
+    if (!base) {
+      rows.push(log('RAW object resolution', false, '3DSpace/modeler base indisponivel'));
+      return Promise.resolve();
+    }
+    var term = (ctx && (ctx.rootName || ctx.title || ctx.name)) || '';
+    var jobs = buildResolutionJobs(base, term, physicalId);
+    var candidates = [];
+    var seen = {};
+    rows.push(log('RAW object resolution', true, jobs.length + ' request(s) de resolucao'));
+    return jobs.reduce(function (chain, job) {
+      return chain.then(function () {
+        return rawWafCall(job.step, job.url, {
+          type: 'json',
+          headers: minimalHeaders()
+        }).then(function (result) {
+          var found = collectCandidates(result.data);
+          rows.push(result.row);
+          if (result.row.ok) {
+            mergeCandidates(candidates, found, seen);
+            rows.push(log(job.step + ' candidates', !!found.length, candidateSummary(found), {
+              url: job.url,
+              count: found.length
+            }));
+          }
+        });
+      });
+    }, Promise.resolve()).then(function () {
+      rows.push(log('RAW object candidates total', !!candidates.length, candidateSummary(candidates), {
+        count: candidates.length
+      }));
+      return probeCandidateEngItems(rows, candidates, physicalId);
+    });
   }
 
   function probeCsrf(rows, spaceUrl) {
@@ -493,6 +681,9 @@ var ApiDiagnostic = (function () {
             }
           } catch (eUrls) { /* */ }
           return probeRawModelerVariants(rows, urls)
+            .then(function () {
+              return probeObjectResolution(rows, ctx, pid);
+            })
             .then(function () {
               return probeEngItem(rows, pid);
             })

@@ -13,7 +13,8 @@ Esta pasta concentra o direcionamento tecnico atual do projeto.
 7. [Testes 3DX - resultados atuais](TESTES-3DX.md)
 8. [Sprint 01 - Diagnostico API isolado](SPRINT-01-DIAGNOSTICO-API.md)
 9. [Sprint 01.1 - Diagnostico WAF/modeler](SPRINT-01-1-WAF-MODELER.md)
-10. [Levantamento atual 3DX](levantamento/LEVANTAMENTO-ATUAL-3DX.md)
+10. [Sprint 01.2 - Diagnostico de resolucao do objeto real](SPRINT-01-2-RESOLUCAO-OBJETO.md)
+11. [Levantamento atual 3DX](levantamento/LEVANTAMENTO-ATUAL-3DX.md)
 
 ## Historico
 
