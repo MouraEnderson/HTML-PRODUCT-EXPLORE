@@ -15,7 +15,8 @@ Esta pasta concentra o direcionamento tecnico atual do projeto.
 9. [Sprint 01.1 - Diagnostico WAF/modeler](SPRINT-01-1-WAF-MODELER.md)
 10. [Sprint 01.2 - Diagnostico de resolucao do objeto real](SPRINT-01-2-RESOLUCAO-OBJETO.md)
 11. [Sprint 01.3 - Extracao de IDs do EngItem search](SPRINT-01-3-ENGITEM-SEARCH-ID.md)
-12. [Levantamento atual 3DX](levantamento/LEVANTAMENTO-ATUAL-3DX.md)
+12. [Sprint 01.4 - Teste de EngInstance nos candidatos EngItem](SPRINT-01-4-CANDIDATE-ENGINSTANCE.md)
+13. [Levantamento atual 3DX](levantamento/LEVANTAMENTO-ATUAL-3DX.md)
 
 ## Historico
 

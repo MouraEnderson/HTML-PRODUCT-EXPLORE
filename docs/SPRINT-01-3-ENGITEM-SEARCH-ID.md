@@ -70,3 +70,34 @@ O que observar:
 ## Criterio para avancar
 
 A proxima etapa so deve reescrever o loader E-BOM se algum candidato do `member` funcionar em `dseng:EngItem/{id}` ou se a amostra indicar claramente qual campo deve ser usado como ID de EngItem/instancia.
+
+## Resultado recebido - caso 20 itens / Drone
+
+Data do teste: 2026-06-04
+
+Caso testado:
+
+- Estrutura: `01_SKA_Drone Assembly_130520206`
+- Esperado pelo Explorer: `20`
+- `physicalId`: `prd-R1132100929518-01172440`
+- Build: `bom20260606j`
+
+Resultado resumido:
+
+```text
+OK    RAW EngItem search - object{totalItems,member,nlsLabel}
+OK    RAW EngItem search payload - member=10
+OK    RAW EngItem search candidates - IDs de 32 caracteres, tipo VPMReference
+OK    RAW Candidate EngItem B6336E575A4045608AE029CDF65900C9
+OK    RAW Candidate EngItem 8EA67E9CABA9488CB7BC423D41548B3B
+OK    RAW Candidate EngItem 298DB7237C65442BBC650A3B3E806438
+FAIL  dseng:EngItem direto com prd-R...
+FAIL  dseng:EngInstance direto com prd-R...
+```
+
+Leitura tecnica:
+
+- O endpoint correto nao aceita o `prd-R...` do Explorer como ID direto.
+- IDs de 32 caracteres retornados por `dseng:EngItem/search` funcionam em `dseng:EngItem/{id}`.
+- A busca por nome retornou candidatos `VPMReference`, mas a amostra nao confirmou ainda que eles sao a raiz correta do Drone; apareceram itens como `0000001440`, `0000001441`.
+- Proxima etapa: testar `dseng:EngInstance` nos candidatos funcionais e buscar tambem pelo `physicalId` original.

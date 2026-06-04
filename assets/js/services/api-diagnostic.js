@@ -449,6 +449,12 @@ var ApiDiagnostic = (function () {
         url: spaceBase + '/dsxcad/dsxcad:VPMReference/search?searchStr=' + encodedTerm + '&$top=10'
       });
     }
+    if (physicalId) {
+      jobs.push({
+        step: 'RAW EngItem search physicalId',
+        url: spaceBase + '/dseng/dseng:EngItem/search?searchStr=' + encodeURIComponent(physicalId) + '&$top=10'
+      });
+    }
     return jobs;
   }
 
@@ -469,11 +475,32 @@ var ApiDiagnostic = (function () {
     }
     return ids.reduce(function (chain, id) {
       return chain.then(function () {
-        return rawWafRequest('RAW Candidate EngItem ' + id, EnoviaApi.engItemUrl(id), {
+        return rawWafCall('RAW Candidate EngItem ' + id, EnoviaApi.engItemUrl(id), {
           type: 'json',
           headers: minimalHeaders()
-        }).then(function (row) {
-          rows.push(row);
+        }).then(function (result) {
+          rows.push(result.row);
+          if (result.row.ok) {
+            rows.push(log('RAW Candidate EngItem ' + id + ' payload', true, memberSummary(result.data), {
+              url: EnoviaApi.engItemUrl(id),
+              count: extractMembers(result.data).length
+            }));
+          }
+          if (!EnoviaApi.engInstanceChildrenUrl) return null;
+          var childUrl = EnoviaApi.engInstanceChildrenUrl(id, 0, 5);
+          return rawWafCall('RAW Candidate EngInstance ' + id, childUrl, {
+            type: 'json',
+            headers: minimalHeaders()
+          }).then(function (childResult) {
+            rows.push(childResult.row);
+            if (childResult.row.ok) {
+              rows.push(log('RAW Candidate EngInstance ' + id + ' payload', true, memberSummary(childResult.data), {
+                url: childUrl,
+                count: extractMembers(childResult.data).length,
+                total: responseTotal(childResult.data, extractMembers(childResult.data).length)
+              }));
+            }
+          });
         });
       });
     }, Promise.resolve());
