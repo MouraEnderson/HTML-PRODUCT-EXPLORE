@@ -91,14 +91,19 @@ var ApiDiagnostic = (function () {
     return [];
   }
 
-  function shortJson(value) {
+  function jsonSnippet(value, limit) {
     if (value == null) return '';
+    limit = limit || 220;
     try {
       var s = typeof value === 'string' ? value : JSON.stringify(value);
-      return s.length > 220 ? s.slice(0, 220) + '...' : s;
+      return s.length > limit ? s.slice(0, limit) + '...' : s;
     } catch (e) {
-      return String(value).slice(0, 220);
+      return String(value).slice(0, limit);
     }
+  }
+
+  function shortJson(value) {
+    return jsonSnippet(value, 220);
   }
 
   function payloadShape(value) {
@@ -425,10 +430,11 @@ var ApiDiagnostic = (function () {
     }).join('; ');
   }
 
-  function memberSummary(data) {
+  function memberSummary(data, sampleLimit) {
     var members = extractMembers(data);
-    if (!members.length) return 'member=0; sample=' + shortJson(data);
-    return 'member=' + members.length + '; sample=' + shortJson(members.slice(0, 2));
+    sampleLimit = sampleLimit || 220;
+    if (!members.length) return 'member=0; sample=' + jsonSnippet(data, sampleLimit);
+    return 'member=' + members.length + '; sample=' + jsonSnippet(members.slice(0, 2), sampleLimit);
   }
 
   function lc(value) {
@@ -564,7 +570,7 @@ var ApiDiagnostic = (function () {
           }).then(function (childResult) {
             rows.push(childResult.row);
             if (childResult.row.ok) {
-              rows.push(log('RAW Candidate EngInstance ' + id + ' payload', true, memberSummary(childResult.data), {
+              rows.push(log('RAW Candidate EngInstance ' + id + ' payload', true, memberSummary(childResult.data, 5000), {
                 url: childUrl,
                 count: extractMembers(childResult.data).length,
                 total: responseTotal(childResult.data, extractMembers(childResult.data).length)
