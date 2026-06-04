@@ -176,7 +176,12 @@ var WafClient = (function () {
                 'Rede bloqueou *-space. Use build ' + (APP_CONFIG.BUILD || 'bom20260602f') + ' no Additional App.';
             }
             if (isRetryableHttp(msg) && /dseng:EngItem/i.test(targetUrl)) {
-              msg = 'EngItem não suportado neste tenant. Use build ' + (APP_CONFIG.BUILD || 'bom20260602f');
+              msg =
+                'EngItem não suportado neste tenant. Use build ' +
+                (APP_CONFIG.BUILD || 'bom20260602f') +
+                ' (' +
+                msg +
+                ')';
             }
             finish(reject, new Error(msg));
           }
