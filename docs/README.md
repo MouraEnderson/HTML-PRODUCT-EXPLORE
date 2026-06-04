@@ -6,11 +6,12 @@ Esta pasta concentra o direcionamento tecnico atual do projeto.
 
 1. [Plano tecnico - Fase 0](PLANO-TECNICO-FASE-0.md)
 2. [Decisoes tecnicas](DECISOES-TECNICAS.md)
-3. [Organizacao do repositorio](ORGANIZACAO-REPOSITORIO.md)
-4. [Backlog inicial por sprints](BACKLOG-SPRINTS.md)
-5. [Auditoria de codigo e arquitetura](AUDITORIA-CODIGO.md)
-6. [Testes 3DX - resultados atuais](TESTES-3DX.md)
-7. [Levantamento atual 3DX](levantamento/LEVANTAMENTO-ATUAL-3DX.md)
+3. [Plano de sprints priorizado](PLANO-SPRINTS-PRIORIZADO.md)
+4. [Organizacao do repositorio](ORGANIZACAO-REPOSITORIO.md)
+5. [Backlog inicial por sprints](BACKLOG-SPRINTS.md)
+6. [Auditoria de codigo e arquitetura](AUDITORIA-CODIGO.md)
+7. [Testes 3DX - resultados atuais](TESTES-3DX.md)
+8. [Levantamento atual 3DX](levantamento/LEVANTAMENTO-ATUAL-3DX.md)
 
 ## Historico
 
