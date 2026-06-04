@@ -292,6 +292,201 @@ Impacto:
 
 Status: confirmado por leitura de codigo; validacao documental pendente.
 
+### A9 - O orquestrador ainda mistura API, TSV, paste e DOM como fontes equivalentes
+
+Arquivo: `assets/js/services/bom-orchestrator.js`
+
+`pickLoaderMode` escolhe entre `api`, `tsv`, `paste` e `dom-fallback`. Depois, `runManualFallbackChain` e `runAutoFallbackChain` tentam outras fontes quando a primeira falha.
+
+Impacto:
+
+- a aplicacao nao possui uma unica verdade para a estrutura;
+- uma falha de API pode ser escondida por TSV/paste;
+- cada fonte pode aplicar regras diferentes de raiz, contagem e metadados;
+- dificulta reproduzir erros 404/406 e entender se o E-BOM veio da API real ou do paliativo.
+
+Status: confirmado por leitura de codigo.
+
+### A10 - Existe limite funcional no store atual
+
+Arquivos:
+
+- `assets/js/config.js`
+- `assets/js/services/bom-service.js`
+
+`APP_CONFIG.BOM_MAX_NODES` esta definido como `50000` e `BomService.canAddNode()` interrompe inclusao quando `nodeCount` atinge esse valor.
+
+Impacto:
+
+- conflita com o requisito de suportar estruturas sem limite funcional de contagem, inclusive cenarios de 300 mil itens;
+- pode gerar carga parcial sem deixar claro para o usuario;
+- a solucao correta exige paginacao, cache, busca, lazy loading e UI virtualizada, nao apenas aumentar o numero.
+
+Status: confirmado por leitura de codigo.
+
+### A11 - Raiz sintetica e metadados sao corrigidos em mais de um modulo
+
+Arquivos:
+
+- `assets/js/services/file-import-service.js`
+- `assets/js/services/bom-snapshot.js`
+- `assets/js/services/bom-service.js`
+
+`FileImportService.ensureFirstPastedRoot`, `BomSnapshot.ensureContextRoot` e `BomService.loadFromImportedItems` participam da decisao de raiz/level/metadados quando a fonte e TSV/paste.
+
+Impacto:
+
+- explica erros como pai sem revisao/proprietario ou pai criado com dados herdados do filho;
+- torna instavel a diferenca entre 20 linhas copiadas e 19 linhas exibidas;
+- precisa virar uma unica etapa de normalizacao, com regras testaveis.
+
+Status: confirmado por leitura de codigo e pelos testes manuais reportados.
+
+### A12 - O fluxo 3D atual ainda e 3DPlay/2D, nao viewer proprio
+
+Arquivos:
+
+- `assets/js/ui/part-preview.js`
+- `assets/js/ui/3dplay-viewer.js`
+- `assets/js/integration/3dplay-bridge.js`
+- `assets/js/ui/part-image.js`
+
+Ao selecionar uma linha, `PartPreview.show` chama `ThreeDPlayViewer.show`. Esse viewer prefere painel 2D quando `PREFER_2D_IN_PANEL` ou `EMBED_PLAYER === false`, e o bridge ainda tenta resolver IDs para 3DPlay.
+
+Impacto:
+
+- nao atende o requisito final de 3DView proprio dentro da aplicacao;
+- `getpicture`/miniatura fica misturado com visualizacao 3D;
+- IDs sinteticos (`IMP_`, `grid_`) nunca serao suficientes para render 3D real.
+
+Status: confirmado por leitura de codigo.
+
+### A13 - `product-explorer-bridge.js` concentra responsabilidades demais
+
+Arquivo: `assets/js/integration/product-explorer-bridge.js`
+
+Arquivo com 2428 linhas. Ele participa de selecao, espelho DOM, leitura de contexto do dashboard, catalogo de IDs, enrichment de owner/PRD, auto-copy, contagem e filtros de ruido.
+
+Impacto:
+
+- alto acoplamento com fallback manual e heuristicas do Explorer;
+- risco alto de corrigir uma parte e quebrar outra;
+- deve ser isolado como adaptador temporario, nao como fonte principal do produto.
+
+Status: confirmado por leitura de codigo.
+
+### A14 - `DropZone` e `SnapshotPanel` ainda bypassam o fluxo de orquestracao
+
+Arquivos:
+
+- `assets/js/ui/drop-zone.js`
+- `assets/js/ui/snapshot-panel.js`
+
+Esses componentes chamam `FileImportService.parseTextAsync`, `BomSnapshot.buildFromImported` ou `BomService.loadFromImportedItems` diretamente.
+
+Impacto:
+
+- criam entradas paralelas para alterar o E-BOM;
+- podem aplicar dados sem passar por um orquestrador/normalizador unico;
+- devem ser isolados como ferramenta de diagnostico/importacao manual, fora do fluxo principal.
+
+Status: confirmado por leitura de codigo.
+
+### A15 - `CompassServices` possui fallback estatico para tenant
+
+Arquivo: `assets/js/platform/compass.js`
+
+O modulo usa `i3DXCompassServices.getServiceUrl('3DSpace', platformId)`, mas tambem possui fallback para `tenantSpaceUrl()`. O fallback IFWE esta bloqueado por flag, porem o fallback estatico para `spaceHost` continua existindo.
+
+Impacto:
+
+- pode ser util como contingencia, mas precisa aparecer em diagnostico;
+- a URL efetiva deve ser comprovada no tenant real;
+- nao podemos tratar IFWE como 3DSpace.
+
+Status: confirmado por leitura de codigo.
+
+### A16 - Bundles gerados estao versionados junto com fonte
+
+Arquivos:
+
+- `assets/js/bom-bundle.js`
+- `assets/js/bom-bundle-bom20260606f.js`
+
+Os bundles contem copia concatenada dos modulos fonte e aparecem nas buscas com milhares de linhas duplicadas.
+
+Impacto:
+
+- dificulta auditoria e revisao;
+- aumenta risco de editar fonte e esquecer bundle;
+- para publicacao via GitHub Pages pode ser necessario manter bundle, mas a regra de geracao precisa ficar explicita.
+
+Status: confirmado por leitura de codigo.
+
+## Matriz preliminar por arquivo
+
+Legenda:
+
+- **Manter**: faz parte do nucleo provavel do produto.
+- **Revisar**: necessario, mas precisa reduzir acoplamento/risco.
+- **Isolar**: manter como fallback, diagnostico ou legado temporario, fora do fluxo principal.
+- **Remover depois**: nao apagar agora; remover somente apos substituicao validada.
+
+| Area | Arquivo | Decisao | Motivo |
+| --- | --- | --- | --- |
+| Boot/publicacao | `index.html` | Manter | Entrada GitHub Pages/Additional App. |
+| Boot/publicacao | `assets/js/widget-boot.js` | Revisar | Bootstrap WAF/Require precisa permanecer, mas deve ficar pequeno e diagnostico. |
+| Boot/publicacao | `assets/js/boot.js` | Revisar | Confirmar papel frente ao bundle atual. |
+| Boot/publicacao | `assets/js/3dx-boot.js` | Revisar | Confirmar se ainda e usado ou se duplicou bootstrap. |
+| Boot/publicacao | `assets/js/build-id.js` | Manter | Identificacao de build ajuda nos testes em tenant. |
+| Build | `scripts/build-bundle-node.js` | Manter | Define ordem ativa do bundle. |
+| Build | `assets/js/bom-bundle.js` | Revisar | Necessario para Pages, mas deve ser gerado, nao editado manualmente. |
+| Build | `assets/js/bom-bundle-bom20260606f.js` | Isolar | Snapshot de bundle versionado; decidir politica de historico depois. |
+| Config | `assets/js/config.js` | Revisar | Flags conflitam com API-first e ha limite `BOM_MAX_NODES`. |
+| Query | `assets/js/embed-query.js` | Manter | Parametros de embed sao uteis para debug/publicacao. |
+| Plataforma | `assets/js/platform/widget-runtime.js` | Manter | Adaptacao Additional App. |
+| Plataforma | `assets/js/platform/platform-bridge.js` | Revisar | Ponte externa precisa ser pequena e comprovada. |
+| Plataforma | `assets/js/platform/context.js` | Manter | Contexto/CSRF deve ficar centralizado. |
+| Plataforma | `assets/js/platform/compass.js` | Revisar | Resolver 3DSpace via Compass e auditar fallback estatico. |
+| Plataforma | `assets/js/platform/waf-bootstrap.js` | Manter | Base para carregar WAFData/Compass. |
+| Plataforma | `assets/js/platform/waf-client.js` | Revisar | Cliente central, mas precisa expor diagnostico claro de URL/status. |
+| API | `assets/js/integration/enovia-api.js` | Revisar | Nucleo REST dseng, mas root/children precisam ser comprovados na FD02. |
+| API | `assets/js/services/api-bom-loader.js` | Manter | Loader API deve virar caminho principal. |
+| API | `assets/js/services/api-diagnostic.js` | Manter | Essencial para testar tenant sem contaminar fluxo. |
+| API | `assets/js/services/bom-service.js` | Revisar | Store/lazy loader util, mas limite e import path precisam mudar. |
+| API | `assets/js/services/attribute-service.js` | Manter | Normalizacao de atributos deve ser preservada e testada. |
+| API | `assets/js/services/physical-product-service.js` | Revisar | Pode ajudar no pipeline 3D, mas papel precisa ser separado da E-BOM. |
+| Busca | `assets/js/integration/search-api.js` | Isolar | Busca nao e fluxo principal de estrutura. |
+| Busca | `assets/js/services/product-search-service.js` | Isolar | Manter fora da carga E-BOM principal. |
+| Busca | `assets/js/ui/product-search-panel.js` | Isolar | UI auxiliar, nao objetivo central agora. |
+| Explorer | `assets/js/integration/explorer-context.js` | Revisar | Contexto do Explorer e necessario, mas nao deve decidir loader sozinho. |
+| Explorer | `assets/js/integration/product-explorer-bridge.js` | Isolar | Adaptador grande demais; manter temporario como leitura de contexto/fallback. |
+| Fallback | `assets/js/services/file-import-service.js` | Isolar | Parser manual deve alimentar normalizador unico, nao decidir estrutura final. |
+| Fallback | `assets/js/services/tsv-bom-loader.js` | Isolar | Contingencia manual, nao fluxo primario. |
+| Fallback | `assets/js/services/paste-bom-loader.js` | Isolar | Contingencia manual, nao fluxo primario. |
+| Fallback | `assets/js/services/explorer-scanner.js` | Isolar | Mistura API/DOM/paste/builtin; precisa ser quebrado em adaptadores. |
+| Snapshot | `assets/js/services/bom-snapshot.js` | Revisar | Util para testes/sessao, mas nao pode corrigir raiz em paralelo. |
+| Orquestracao | `assets/js/services/bom-orchestrator.js` | Revisar | Deve virar fluxo unico API-first com fallback explicito. |
+| Processamento | `assets/js/processing/bom-normalizer.js` | Manter | Deve virar ponto unico de normalizacao. |
+| Processamento | `assets/js/processing/metrics-engine.js` | Manter | KPIs dependem dele. |
+| Processamento | `assets/js/processing/anomaly-detector.js` | Revisar | Util, mas secundario frente a carga/3D. |
+| UI | `assets/js/app.js` | Revisar | Controlador central com muita responsabilidade; precisa emagrecer por etapas. |
+| UI | `assets/js/ui/data-table.js` | Revisar | Tabela E-BOM e central, mas precisa virtualizacao para grandes estruturas. |
+| UI | `assets/js/ui/kpi-cards.js` | Manter | KPIs do painel. |
+| UI | `assets/js/ui/charts-manager.js` | Manter | Graficos atuais, desde que nao bloqueiem carga. |
+| UI | `assets/js/ui/filters.js` | Manter | Busca/filtros sao essenciais em BOM grande. |
+| UI | `assets/js/ui/sync-banner.js` | Manter | Estado claro de carregamento/erro. |
+| UI | `assets/js/ui/layout-fit.js` | Manter | Ajuste visual dentro do dashboard. |
+| UI | `assets/js/ui/dashboard-theme.js` | Manter | Tema/UX atual. |
+| UI | `assets/js/ui/bom-tree.js` | Isolar | Arvore nao esta como tela principal; pode voltar depois se precisar. |
+| UI | `assets/js/ui/explorer-sync-panel.js` | Isolar | Diagnostico/fallback, nao produto final. |
+| UI | `assets/js/ui/snapshot-panel.js` | Isolar | Ferramenta de snapshot/importacao, fora do fluxo principal. |
+| UI | `assets/js/ui/drop-zone.js` | Isolar | Entrada manual/drag-drop paralela ao orquestrador. |
+| 3D | `assets/js/ui/part-preview.js` | Revisar | Painel certo para selecao, mas precisa trocar backend visual para viewer proprio. |
+| 3D | `assets/js/ui/part-image.js` | Isolar | Miniatura/getpicture separado da estrutura e do 3D real. |
+| 3D | `assets/js/ui/3dplay-viewer.js` | Remover depois | Placeholder/legado 3DPlay/2D; substituir por viewer proprio. |
+| 3D | `assets/js/integration/3dplay-bridge.js` | Remover depois | 3DPlay nao e caminho de produto. |
+
 ## Primeiro corte tecnico recomendado
 
 Ainda sem editar runtime, a auditoria aponta que a proxima implementacao deve separar claramente:
