@@ -110,6 +110,15 @@ Caso testado:
 - `physicalId`: `prd-R1132100929518-01172440`
 - Build: `bom20260606g`
 
+Procedimento executado pelo usuario:
+
+1. Abrir a estrutura no Product Structure Explorer.
+2. Executar `Ctrl+A`.
+3. Executar `Ctrl+C`.
+4. Clicar `Atualizar estrutura`.
+5. Abrir `Avancado`.
+6. Clicar `Diagnosticar API`.
+
 Relatorio resumido:
 
 ```text
@@ -137,6 +146,7 @@ Leitura tecnica:
 - O endpoint CSRF respondeu `200`, mas sem token extraido. Para GET isso nao bloqueia obrigatoriamente, mas deve ser mantido no diagnostico.
 - A falha real comeca nos recursos `modeler`: `dseng:EngItem`, `dseng:EngInstance` e `dspfl:PhysicalProduct`.
 - A Sprint 02 nao pode iniciar ainda, porque nao ha evidencia de endpoint de raiz/filhos funcionando.
+- O contexto do teste foi preparado pelo fluxo paliativo `Ctrl+A/Ctrl+C + Atualizar estrutura`; portanto este teste diagnostica a API com a estrutura ja aberta e conhecida, mas nao valida carga automatica sem clipboard.
 
 Conclusao:
 
