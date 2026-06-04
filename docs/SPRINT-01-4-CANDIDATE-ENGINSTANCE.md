@@ -71,3 +71,33 @@ O que observar:
 A Sprint 02 pode comecar se algum `RAW Candidate EngInstance ...` retornar filhos coerentes com a estrutura do Explorer.
 
 Se os candidatos funcionarem como EngItem mas nao trouxerem filhos, a proxima etapa ainda deve continuar em diagnostico de endpoint/relacao, nao em reescrita do loader principal.
+
+## Resultado recebido - caso 20 itens / Drone
+
+Data do teste: 2026-06-04
+
+Caso testado:
+
+- Estrutura: `01_SKA_Drone Assembly_130520206`
+- Esperado pelo Explorer: `20`
+- `physicalId`: `prd-R1132100929518-01172440`
+- Build: `bom20260606k`
+
+Resultado resumido:
+
+```text
+OK    RAW EngItem search payload - member=10
+OK    RAW EngItem search physicalId payload - member=10
+OK    RAW Candidate EngItem ... payload - member=1
+OK    RAW Candidate EngInstance B6336... - member=0
+OK    RAW Candidate EngInstance 8EA6... - member=4
+OK    RAW Candidate EngInstance 298D... - member=1
+```
+
+Leitura tecnica:
+
+- `dseng:EngInstance` funciona quando recebe ID de 32 caracteres.
+- Os candidatos testados nao parecem ser a raiz correta do Drone; retornaram itens como `Manípulo`, `Tampo` e estrutura de mesa.
+- A busca simples por nome e por `prd-R...` retornou os mesmos candidatos, indicando que `searchStr` simples esta amplo demais ou nao esta aplicando filtro exato suficiente.
+- A Sprint 02 ainda nao deve iniciar, porque ainda nao temos o ID raiz correto da estrutura aberta no Explorer.
+- Proxima etapa: testar `$searchStr` com UQL, principalmente `name:<physicalId>`, e registrar matches exatos antes de aceitar candidatos.

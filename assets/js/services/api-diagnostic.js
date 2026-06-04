@@ -360,7 +360,9 @@ var ApiDiagnostic = (function () {
     return {
       id: String(id),
       type: String(obj.type || obj.displayType || obj.kind || obj['@type'] || ''),
-      name: String(obj.name || obj.title || obj.label || obj.description || '')
+      name: String(obj.name || ''),
+      title: String(obj.title || obj.label || ''),
+      description: String(obj.description || '')
     };
   }
 
@@ -404,7 +406,8 @@ var ApiDiagnostic = (function () {
   function candidateSummary(candidates) {
     if (!candidates || !candidates.length) return 'nenhum ID candidato encontrado';
     return candidates.slice(0, 6).map(function (c) {
-      return c.id + (c.type ? ' (' + c.type + ')' : '') + (c.name ? ' ' + c.name : '');
+      var label = c.name || c.title || c.description || '';
+      return c.id + (c.type ? ' (' + c.type + ')' : '') + (label ? ' ' + label : '');
     }).join('; ');
   }
 
@@ -412,6 +415,40 @@ var ApiDiagnostic = (function () {
     var members = extractMembers(data);
     if (!members.length) return 'member=0; sample=' + shortJson(data);
     return 'member=' + members.length + '; sample=' + shortJson(members.slice(0, 2));
+  }
+
+  function lc(value) {
+    return String(value || '').toLowerCase();
+  }
+
+  function candidateMatches(candidate, terms) {
+    var fields = [
+      candidate.id,
+      candidate.name,
+      candidate.title,
+      candidate.description,
+      candidate.type
+    ].map(lc);
+    return terms.some(function (term) {
+      var t = lc(term);
+      if (!t) return false;
+      return fields.some(function (field) {
+        return field === t || field.indexOf(t) >= 0;
+      });
+    });
+  }
+
+  function collectExactCandidates(data, terms) {
+    var out = [];
+    var seen = {};
+    extractMembers(data).forEach(function (member) {
+      var candidate = candidateFromObject(member);
+      if (candidate && !seen[candidate.id] && candidateMatches(candidate, terms)) {
+        seen[candidate.id] = true;
+        out.push(candidate);
+      }
+    });
+    return out;
   }
 
   function buildResolutionJobs(spaceBase, term, physicalId) {
@@ -445,6 +482,16 @@ var ApiDiagnostic = (function () {
         url: spaceBase + '/dseng/dseng:EngItem/search?searchStr=' + encodedTerm + '&$top=10'
       });
       jobs.push({
+        step: 'RAW EngItem UQL label root',
+        url: spaceBase + '/dseng/dseng:EngItem/search?$searchStr=' +
+          encodeURIComponent('label:"' + term + '"') + '&$top=20'
+      });
+      jobs.push({
+        step: 'RAW EngItem UQL name root',
+        url: spaceBase + '/dseng/dseng:EngItem/search?$searchStr=' +
+          encodeURIComponent('name:"' + term + '"') + '&$top=20'
+      });
+      jobs.push({
         step: 'RAW VPMReference search',
         url: spaceBase + '/dsxcad/dsxcad:VPMReference/search?searchStr=' + encodedTerm + '&$top=10'
       });
@@ -453,6 +500,15 @@ var ApiDiagnostic = (function () {
       jobs.push({
         step: 'RAW EngItem search physicalId',
         url: spaceBase + '/dseng/dseng:EngItem/search?searchStr=' + encodeURIComponent(physicalId) + '&$top=10'
+      });
+      jobs.push({
+        step: 'RAW EngItem $searchStr physicalId',
+        url: spaceBase + '/dseng/dseng:EngItem/search?$searchStr=' + encodeURIComponent(physicalId) + '&$top=20'
+      });
+      jobs.push({
+        step: 'RAW EngItem UQL name physicalId',
+        url: spaceBase + '/dseng/dseng:EngItem/search?$searchStr=' +
+          encodeURIComponent('name:' + physicalId) + '&$top=20'
       });
     }
     return jobs;
@@ -516,6 +572,7 @@ var ApiDiagnostic = (function () {
     var jobs = buildResolutionJobs(base, term, physicalId);
     var candidates = [];
     var seen = {};
+    var exactTerms = [physicalId, term].filter(function (v) { return !!v; });
     rows.push(log('RAW object resolution', true, jobs.length + ' request(s) de resolucao'));
     return jobs.reduce(function (chain, job) {
       return chain.then(function () {
@@ -526,10 +583,16 @@ var ApiDiagnostic = (function () {
           var found = collectCandidates(result.data);
           rows.push(result.row);
           if (result.row.ok) {
+            var exact = collectExactCandidates(result.data, exactTerms);
+            mergeCandidates(candidates, exact, seen);
             mergeCandidates(candidates, found, seen);
             rows.push(log(job.step + ' payload', true, memberSummary(result.data), {
               url: job.url,
               count: extractMembers(result.data).length
+            }));
+            rows.push(log(job.step + ' exact matches', !!exact.length, candidateSummary(exact), {
+              url: job.url,
+              count: exact.length
             }));
             rows.push(log(job.step + ' candidates', !!found.length, candidateSummary(found), {
               url: job.url,
