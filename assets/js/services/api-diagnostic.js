@@ -336,6 +336,16 @@ var ApiDiagnostic = (function () {
     }
   }
 
+  function isUsableCandidateId(value) {
+    if (value == null) return false;
+    var s = String(value);
+    if (!s || s.length < 8 || s.length > 180) return false;
+    if (/^https?:\/\//i.test(s)) return false;
+    if (/[{}[\]\s]/.test(s)) return false;
+    if (s.indexOf('/') >= 0) return false;
+    return true;
+  }
+
   function candidateFromObject(obj) {
     if (!obj || typeof obj !== 'object') return null;
     var id =
@@ -346,7 +356,7 @@ var ApiDiagnostic = (function () {
       obj.resourceId ||
       obj.pid ||
       obj.id;
-    if (!id || String(id).indexOf('prd-R') !== 0) return null;
+    if (!isUsableCandidateId(id)) return null;
     return {
       id: String(id),
       type: String(obj.type || obj.displayType || obj.kind || obj['@type'] || ''),
@@ -392,10 +402,16 @@ var ApiDiagnostic = (function () {
   }
 
   function candidateSummary(candidates) {
-    if (!candidates || !candidates.length) return 'nenhum prd-R encontrado';
+    if (!candidates || !candidates.length) return 'nenhum ID candidato encontrado';
     return candidates.slice(0, 6).map(function (c) {
       return c.id + (c.type ? ' (' + c.type + ')' : '') + (c.name ? ' ' + c.name : '');
     }).join('; ');
+  }
+
+  function memberSummary(data) {
+    var members = extractMembers(data);
+    if (!members.length) return 'member=0; sample=' + shortJson(data);
+    return 'member=' + members.length + '; sample=' + shortJson(members.slice(0, 2));
   }
 
   function buildResolutionJobs(spaceBase, term, physicalId) {
@@ -484,6 +500,10 @@ var ApiDiagnostic = (function () {
           rows.push(result.row);
           if (result.row.ok) {
             mergeCandidates(candidates, found, seen);
+            rows.push(log(job.step + ' payload', true, memberSummary(result.data), {
+              url: job.url,
+              count: extractMembers(result.data).length
+            }));
             rows.push(log(job.step + ' candidates', !!found.length, candidateSummary(found), {
               url: job.url,
               count: found.length

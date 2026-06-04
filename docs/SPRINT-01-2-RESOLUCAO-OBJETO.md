@@ -91,3 +91,42 @@ A Sprint 02 so deve iniciar quando:
 - existir evidencia clara de que o tenant nao permite resolver via esses modelers, indicando qual documentacao/permissao/licenca precisa ser validada.
 
 Enquanto isso, a E-BOM principal nao deve ser reescrita.
+
+## Resultado recebido - caso 79 itens
+
+Data do teste: 2026-06-04
+
+Caso testado:
+
+- Estrutura: `SKA_ENDERSW-BES-00009887`
+- Esperado pelo Explorer: `79`
+- `physicalId`: `prd-R1132100929518-00662677`
+- Build: `bom20260606i`
+
+Resultado resumido:
+
+```text
+OK    WAFData
+OK    SecurityContext
+OK    Compass getServiceUrl(3DSpace)
+OK    3DSpace verificado em *-space
+OK    RAW CSRF json minimal
+FAIL  RAW EngItem direct - 404
+FAIL  RAW EngInstance direct - 404
+FAIL  RAW PhysicalProduct direct - 404
+FAIL  RAW VPMReference direct - 404
+FAIL  RAW modeler search searchStr - 404
+FAIL  RAW modeler search q - 404
+FAIL  RAW PhysicalProduct search - 404
+OK    RAW EngItem search - object{totalItems,member,nlsLabel}
+FAIL  RAW EngItem search candidates - nenhum prd-R encontrado
+FAIL  RAW VPMReference search - 404
+```
+
+Leitura tecnica:
+
+- O modeler `dseng` esta acessivel no Additional App.
+- O endpoint `dseng:EngItem/search` funciona com nome da estrutura.
+- O `physicalId` `prd-R...` capturado do Explorer nao funciona como `dseng:EngItem/{id}`.
+- O diagnostico `bom20260606i` foi estreito demais porque so coletava candidatos `prd-R...`; a busca retornou `member`, mas os IDs dentro de `member` podem nao usar esse prefixo.
+- Proxima correcao: Sprint 01.3 deve extrair IDs reais do `member` e testar esses IDs em `dseng:EngItem/{id}`.
