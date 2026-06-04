@@ -99,6 +99,66 @@ Para cada caso, registrar:
 - se apareceu URL IFWE como 3DSpace;
 - erros `404`, `406`, `CORS` ou timeout.
 
+### Resultado recebido - caso 20 itens / Drone
+
+Data do teste: 2026-06-04
+
+Caso testado:
+
+- Estrutura: `01_SKA_Drone Assembly_130520206`
+- Esperado pelo Explorer: `20`
+- `physicalId`: `prd-R1132100929518-01172440`
+- Build: `bom20260606g`
+
+Relatorio resumido:
+
+```text
+OK    WAFData - authenticatedRequest disponivel
+OK    SecurityContext - ctx::VPLMProjectLeader.Company Name.CS_IMPLANTACAO
+OK    platformId - R1132100929518
+OK    Compass getServiceUrl(3DSpace) - https://r1132100929518-us1-space.3dexperience.3ds.com/enovia
+OK    3DSpace verificado - https://r1132100929518-us1-space.3dexperience.3ds.com/enovia
+OK    CSRF URL - https://r1132100929518-us1-space.3dexperience.3ds.com/enovia/resources/v1/application/CSRF
+FAIL  CSRF GET - sem token (status 200)
+OK    Estrutura - 01_SKA_Drone Assembly_130520206 - expected 20 - physicalId prd-R1132100929518-01172440
+OK    physicalId - prd-R1132100929518-01172440
+FAIL  dseng:EngItem GET - Rede bloqueou *-space
+FAIL  dseng:EngInstance page 0 GET - Rede bloqueou *-space
+FAIL  dspfl:PhysicalProduct resolver GET - Rede bloqueou *-space
+```
+
+Leitura tecnica:
+
+- O Additional App esta com `WAFData` disponivel.
+- O `SecurityContext` foi resolvido.
+- O `platformId` foi resolvido.
+- `i3DXCompassServices.getServiceUrl('3DSpace')` retornou o host correto `*-space`.
+- O diagnostico nao caiu em IFWE como 3DSpace.
+- O endpoint CSRF respondeu `200`, mas sem token extraido. Para GET isso nao bloqueia obrigatoriamente, mas deve ser mantido no diagnostico.
+- A falha real comeca nos recursos `modeler`: `dseng:EngItem`, `dseng:EngInstance` e `dspfl:PhysicalProduct`.
+- A Sprint 02 nao pode iniciar ainda, porque nao ha evidencia de endpoint de raiz/filhos funcionando.
+
+Conclusao:
+
+O problema atual nao e mais "base URL errada". A base `3DSpace` esta correta. O proximo passo deve investigar por que chamadas `modeler` via `WAFData.authenticatedRequest` para `*-space` falham como bloqueio/rede no Additional App.
+
+Hipoteses abertas:
+
+- headers/opcoes do `WAFData.authenticatedRequest` podem estar inadequados para recursos `modeler`;
+- o retorno real pode nao estar sendo capturado pelo diagnostico atual;
+- pode haver exigencia especifica de rota, permissao, role/licenca ou formato para `dseng` no tenant;
+- pode haver diferenca entre endpoint documentado e endpoint aceito neste FD/tenant;
+- `SecurityContext` pode estar valido para dashboard, mas insuficiente para o modeler testado.
+
+Acao recomendada antes da Sprint 02:
+
+- ampliar o diagnostico para testar variantes controladas de request, sem alterar o fluxo principal:
+  - headers minimos versus headers completos;
+  - resposta `json` versus `text`;
+  - GET de recurso `modeler` simples;
+  - captura da mensagem bruta de `WAFData.onFailure`;
+  - registrar se a falha e HTTP real, CORS, timeout ou `ResponseCode 0`.
+
 ## Criterio para avancar para Sprint 02
 
 A Sprint 02 so deve iniciar quando houver evidencia para uma destas situacoes:
