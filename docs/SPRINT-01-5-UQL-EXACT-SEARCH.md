@@ -90,4 +90,36 @@ O que observar:
 
 A Sprint 02 pode comecar se uma busca UQL localizar um match exato da raiz e o `RAW Candidate EngInstance ... payload` desse match retornar filhos coerentes com o Explorer.
 
+## Resultado recebido - caso 20 itens / Drone
+
+Data do teste: 2026-06-04
+
+Caso testado:
+
+- Estrutura: `01_SKA_Drone Assembly_130520206`
+- Esperado pelo Explorer: `20`
+- `physicalId`: `prd-R1132100929518-01172440`
+- Build: `bom20260606l`
+
+Resultado resumido:
+
+```text
+OK    RAW EngItem UQL label root - member=1
+OK    RAW EngItem UQL label root exact matches - 132FB3CE26D70E006A18D1870000316D
+OK    RAW EngItem $searchStr physicalId - member=1
+OK    RAW EngItem $searchStr physicalId exact matches - 132FB3CE26D70E006A18D1870000316D
+OK    RAW EngItem UQL name physicalId - member=1
+OK    RAW EngItem UQL name physicalId exact matches - 132FB3CE26D70E006A18D1870000316D
+```
+
+Leitura tecnica:
+
+- A raiz correta foi resolvida:
+  - `name`: `prd-R1132100929518-01172440`
+  - `title`: `01_SKA_Drone Assembly_130520206`
+  - `id`: `132FB3CE26D70E006A18D1870000316D`
+  - `type`: `VPMReference`
+- O problema restante do diagnostico `bom20260606l` e a ordem de teste: candidatos genericos coletados antes do UQL ainda foram testados primeiro.
+- Proxima etapa: priorizar matches exatos antes de qualquer candidato generico e testar `dseng:EngInstance` no ID raiz `132FB3CE26D70E006A18D1870000316D`.
+
 Se UQL tambem retornar candidatos errados, continuar diagnostico de contexto/seleção do Explorer antes de alterar o loader principal.

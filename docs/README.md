@@ -17,7 +17,8 @@ Esta pasta concentra o direcionamento tecnico atual do projeto.
 11. [Sprint 01.3 - Extracao de IDs do EngItem search](SPRINT-01-3-ENGITEM-SEARCH-ID.md)
 12. [Sprint 01.4 - Teste de EngInstance nos candidatos EngItem](SPRINT-01-4-CANDIDATE-ENGINSTANCE.md)
 13. [Sprint 01.5 - Busca UQL exata para resolver a raiz](SPRINT-01-5-UQL-EXACT-SEARCH.md)
-14. [Levantamento atual 3DX](levantamento/LEVANTAMENTO-ATUAL-3DX.md)
+14. [Sprint 01.6 - Prioridade para match exato da raiz](SPRINT-01-6-PRIORIDADE-MATCH-EXATO.md)
+15. [Levantamento atual 3DX](levantamento/LEVANTAMENTO-ATUAL-3DX.md)
 
 ## Historico
 

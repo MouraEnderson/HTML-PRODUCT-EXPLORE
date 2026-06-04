@@ -403,6 +403,20 @@ var ApiDiagnostic = (function () {
     });
   }
 
+  function mergePriorityCandidates(primary, secondary) {
+    var out = [];
+    var seen = {};
+    [primary || [], secondary || []].forEach(function (list) {
+      list.forEach(function (candidate) {
+        if (candidate && candidate.id && !seen[candidate.id]) {
+          seen[candidate.id] = true;
+          out.push(candidate);
+        }
+      });
+    });
+    return out;
+  }
+
   function candidateSummary(candidates) {
     if (!candidates || !candidates.length) return 'nenhum ID candidato encontrado';
     return candidates.slice(0, 6).map(function (c) {
@@ -571,7 +585,9 @@ var ApiDiagnostic = (function () {
     var term = (ctx && (ctx.rootName || ctx.title || ctx.name)) || '';
     var jobs = buildResolutionJobs(base, term, physicalId);
     var candidates = [];
+    var exactCandidates = [];
     var seen = {};
+    var exactSeen = {};
     var exactTerms = [physicalId, term].filter(function (v) { return !!v; });
     rows.push(log('RAW object resolution', true, jobs.length + ' request(s) de resolucao'));
     return jobs.reduce(function (chain, job) {
@@ -584,6 +600,7 @@ var ApiDiagnostic = (function () {
           rows.push(result.row);
           if (result.row.ok) {
             var exact = collectExactCandidates(result.data, exactTerms);
+            mergeCandidates(exactCandidates, exact, exactSeen);
             mergeCandidates(candidates, exact, seen);
             mergeCandidates(candidates, found, seen);
             rows.push(log(job.step + ' payload', true, memberSummary(result.data), {
@@ -602,10 +619,17 @@ var ApiDiagnostic = (function () {
         });
       });
     }, Promise.resolve()).then(function () {
+      var prioritized = mergePriorityCandidates(exactCandidates, candidates);
+      rows.push(log('RAW object exact candidates total', !!exactCandidates.length, candidateSummary(exactCandidates), {
+        count: exactCandidates.length
+      }));
       rows.push(log('RAW object candidates total', !!candidates.length, candidateSummary(candidates), {
         count: candidates.length
       }));
-      return probeCandidateEngItems(rows, candidates, physicalId);
+      rows.push(log('RAW object prioritized candidates', !!prioritized.length, candidateSummary(prioritized), {
+        count: prioritized.length
+      }));
+      return probeCandidateEngItems(rows, prioritized, physicalId);
     });
   }
 
