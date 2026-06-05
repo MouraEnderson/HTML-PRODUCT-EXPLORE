@@ -923,8 +923,7 @@ var App = (function () {
       return BomOrchestrator.refreshStructure({
         source: 'manual',
         allowAutoCopy: !expected || expected > skipBelow,
-        preferApi: false,
-        forceLoader: 'paste'
+        preferApi: ctxApi !== false
       });
     }
     function primePasteBuffer() {

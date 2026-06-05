@@ -1,7 +1,7 @@
 # Sprint 02 - API-first E-BOM
 
 Data: 2026-06-06  
-Build: `bom20260606t`
+Build: `bom20260606u`
 
 ## Problema
 
@@ -47,9 +47,27 @@ Esta sprint transforma o caminho API em fluxo primario:
   - Mensagem passa a sinalizar possivel diferenca entre E-BOM unica e ocorrencias/selecionados.
 
 - `assets/js/config.js`
-  - Build `bom20260606t`.
+  - Build `bom20260606u`.
   - API passa a ser preferida no auto-sync.
   - Limite tecnico elevado para `1.000.000`.
+
+## Hotfix bom20260606u
+
+O build `bom20260606t` tinha o loader API implementado, mas o botao principal `Atualizar estrutura` ainda chamava o orquestrador com:
+
+```text
+preferApi: false
+forceLoader: paste
+```
+
+Isso fazia o comportamento parecer igual no teste real. No `bom20260606u`, o botao principal passa a usar:
+
+```text
+preferApi: true quando o contexto permitir API
+sem forceLoader paste
+```
+
+Assim a cola fica no fallback do orquestrador, nao no caminho principal do botao.
 
 ## Como testar
 
