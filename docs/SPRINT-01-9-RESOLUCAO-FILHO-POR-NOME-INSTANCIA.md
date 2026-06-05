@@ -105,3 +105,24 @@ Mesmo assim, antes de usar em producao, sera preciso avaliar:
 - se existe API REST melhor para recuperar `Reference` sem busca por nome.
 
 Se as buscas retornarem resultados ambiguos ou incorretos, essa hipotese deve ser descartada.
+
+## Resultado no tenant real
+
+Coleta recebida para build `bom20260606p`:
+
+- `RAW Child search label 01_SKA_Arm Gear of Drone_130520206` retornou 1 match exato:
+  - `id`: `132FB3CE26D70E006A18D18700003187`
+  - `name`: `prd-R1132100929518-01172443`
+  - `title`: `01_SKA_Arm Gear of Drone_130520206`
+  - `type`: `VPMReference`
+- `RAW Child search label 01_SKA_Gearing of Drone_130520206` retornou 1 match exato:
+  - `id`: `132FB3CE26D70E006A18D1880000319F`
+  - `name`: `prd-R1132100929518-01172447`
+  - `title`: `01_SKA_Gearing of Drone_130520206`
+  - `type`: `VPMReference`
+- Busca por `name:` retornou `member=0`.
+- Busca por texto puro tambem encontrou os mesmos filhos, mas `label:"..."` e mais precisa.
+
+Conclusao: a hipotese de resolver filho por `label:"nome da instancia sem sufixo"` funcionou nos dois primeiros filhos testados.
+
+Ainda nao e suficiente para o loader principal, porque precisa validar recursao, risco de duplicidade e escala.

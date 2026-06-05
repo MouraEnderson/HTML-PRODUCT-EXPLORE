@@ -451,6 +451,53 @@ var ApiDiagnostic = (function () {
     return base + '/dseng/dseng:EngItem/search?$searchStr=' + encodeURIComponent(term) + '&$top=' + top;
   }
 
+  function probeResolvedChildEngItems(rows, candidates) {
+    if (!EnoviaApi.engItemUrl || !EnoviaApi.engInstanceChildrenUrl) return Promise.resolve();
+    var ids = (candidates || [])
+      .filter(function (candidate) { return candidate && candidate.id; })
+      .slice(0, 4);
+    if (!ids.length) {
+      rows.push(log('RAW Resolved child recursion probes', false, 'sem filhos resolvidos para testar'));
+      return Promise.resolve();
+    }
+
+    rows.push(log('RAW Resolved child recursion probes', true, ids.length + ' filho(s) resolvidos', {
+      count: ids.length
+    }));
+
+    return ids.reduce(function (chain, candidate) {
+      return chain.then(function () {
+        var childId = candidate.id;
+        return rawWafCall('RAW Resolved child EngItem ' + childId, EnoviaApi.engItemUrl(childId), {
+          type: 'json',
+          headers: minimalHeaders()
+        }).then(function (itemResult) {
+          rows.push(itemResult.row);
+          if (itemResult.row.ok) {
+            rows.push(log('RAW Resolved child EngItem ' + childId + ' payload', true, memberSummary(itemResult.data, 1500), {
+              url: EnoviaApi.engItemUrl(childId),
+              count: extractMembers(itemResult.data).length
+            }));
+          }
+          var childUrl = EnoviaApi.engInstanceChildrenUrl(childId, 0, 5);
+          return rawWafCall('RAW Resolved child EngInstance ' + childId, childUrl, {
+            type: 'json',
+            headers: minimalHeaders()
+          }).then(function (instResult) {
+            rows.push(instResult.row);
+            if (instResult.row.ok) {
+              rows.push(log('RAW Resolved child EngInstance ' + childId + ' payload', true, memberSummary(instResult.data, 2500), {
+                url: childUrl,
+                count: extractMembers(instResult.data).length,
+                total: responseTotal(instResult.data, extractMembers(instResult.data).length)
+              }));
+            }
+          });
+        });
+      });
+    }, Promise.resolve());
+  }
+
   function probeChildResolutionByInstanceName(rows, parentId, childData) {
     var members = extractMembers(childData);
     if (!members.length) {
@@ -459,6 +506,8 @@ var ApiDiagnostic = (function () {
     }
 
     var jobs = [];
+    var resolved = [];
+    var resolvedSeen = {};
     members.slice(0, 2).forEach(function (member) {
       var rawName = member && member.name;
       var baseName = stripOccurrenceSuffix(rawName);
@@ -495,6 +544,7 @@ var ApiDiagnostic = (function () {
           rows.push(result.row);
           if (result.row.ok) {
             var exact = collectExactCandidates(result.data, job.terms);
+            mergeCandidates(resolved, exact, resolvedSeen);
             rows.push(log(job.step + ' payload', true, memberSummary(result.data, 2500), {
               url: job.url,
               count: extractMembers(result.data).length
@@ -506,7 +556,9 @@ var ApiDiagnostic = (function () {
           }
         });
       });
-    }, Promise.resolve());
+    }, Promise.resolve()).then(function () {
+      return probeResolvedChildEngItems(rows, resolved);
+    });
   }
 
   function probeEngInstanceRelationship(rows, parentId, childData) {
