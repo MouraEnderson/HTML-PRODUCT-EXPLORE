@@ -156,10 +156,74 @@ var EnoviaApi = (function () {
     return String((obj && obj[key]) || '').trim();
   }
 
-  function chooseExactEngItem(res, expected) {
+  function lowerText(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function normalizeDateMs(value) {
+    if (!value) return 0;
+    var d = value instanceof Date ? value : new Date(value);
+    var t = d.getTime();
+    return isNaN(t) ? 0 : t;
+  }
+
+  function scoreEngItemCandidate(item, expected, hints) {
+    hints = hints || {};
+    var score = 0;
+    var exp = lowerText(expected);
+    var id = textOf(item, 'id');
+    var physical = textOf(item, 'physicalid');
+    var name = textOf(item, 'name');
+    var title = textOf(item, 'title');
+    var desc = textOf(item, 'description');
+    var nameLow = lowerText(name);
+    var titleLow = lowerText(title);
+    var descLow = lowerText(desc);
+
+    if (id === expected || physical === expected || name === expected || title === expected) score += 1000;
+    if (exp && titleLow === exp) score += 220;
+    if (exp && nameLow === exp) score += 180;
+    if (exp && descLow === exp) score += 80;
+    if (/^prd-/i.test(name)) score += 45;
+
+    var hintOwner = lowerText(hints.owner);
+    var hintCollab = lowerText(hints.collabspace || hints.collabSpace);
+    var hintOrg = lowerText(hints.organization);
+    var hintRevision = lowerText(hints.revision);
+    var hintCestamp = lowerText(hints.cestamp);
+
+    if (hintOwner && lowerText(item.owner) === hintOwner) score += 30;
+    if (hintCollab && lowerText(item.collabspace || item.collabSpace) === hintCollab) score += 30;
+    if (hintOrg && lowerText(item.organization) === hintOrg) score += 12;
+    if (hintRevision && lowerText(item.revision) === hintRevision) score += 12;
+    if (hintCestamp && lowerText(item.cestamp) === hintCestamp) score += 65;
+
+    var parentCreated = normalizeDateMs(hints.created);
+    var itemCreated = normalizeDateMs(item.created || item.originated);
+    if (parentCreated && itemCreated) {
+      var days = Math.abs(parentCreated - itemCreated) / 86400000;
+      if (days <= 1) score += 35;
+      else if (days <= 14) score += 18;
+      else if (days <= 60) score += 8;
+    }
+
+    var parentModified = normalizeDateMs(hints.modified);
+    var itemModified = normalizeDateMs(item.modified);
+    if (parentModified && itemModified) {
+      var modDays = Math.abs(parentModified - itemModified) / 86400000;
+      if (modDays <= 1) score += 20;
+      else if (modDays <= 14) score += 10;
+    }
+
+    return score;
+  }
+
+  function chooseExactEngItem(res, expected, hints) {
     expected = String(expected || '').trim();
     var members = extractMembers(res);
     if (!members.length) return null;
+    var best = null;
+    var bestScore = -1;
     for (var i = 0; i < members.length; i++) {
       var m = members[i];
       if (
@@ -168,10 +232,23 @@ var EnoviaApi = (function () {
         textOf(m, 'name') === expected ||
         textOf(m, 'title') === expected
       ) {
-        return m;
+        var score = scoreEngItemCandidate(m, expected, hints);
+        if (score > bestScore) {
+          best = m;
+          bestScore = score;
+        }
       }
     }
-    return members.length === 1 ? members[0] : null;
+    if (best) return best;
+    if (members.length === 1) return members[0];
+    for (var j = 0; j < members.length; j++) {
+      var candidateScore = scoreEngItemCandidate(members[j], expected, hints);
+      if (candidateScore > bestScore) {
+        best = members[j];
+        bestScore = candidateScore;
+      }
+    }
+    return bestScore > 0 ? best : null;
   }
 
   function quoteUql(value) {
@@ -182,12 +259,12 @@ var EnoviaApi = (function () {
     return WafClient.get(engItemUqlSearchUrl(query, top));
   }
 
-  function findEngItemByLabel(label, top) {
+  function findEngItemByLabel(label, top, hints) {
     var expected = String(label || '').trim();
     if (!expected) return Promise.reject(new Error('Label vazio para resolver EngItem.'));
     return getEngItemUqlSearch('label:' + quoteUql(expected), top || 20)
       .then(function (res) {
-        var exact = chooseExactEngItem(res, expected);
+        var exact = chooseExactEngItem(res, expected, hints);
         if (!exact) throw new Error('EngItem nao encontrado por label: ' + expected);
         return exact;
       });

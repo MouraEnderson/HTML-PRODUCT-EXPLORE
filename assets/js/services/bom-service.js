@@ -178,7 +178,18 @@ var BomService = (function () {
       return Promise.resolve(parseInstance(member, parentId, level));
     }
 
-    return EnoviaApi.findEngItemByLabel(baseName, 20)
+    var parent = index[parentId] || {};
+    var hints = {
+      owner: parent.owner,
+      organization: parent.organization,
+      collabspace: parent.collabSpace,
+      revision: parent.revision,
+      created: parent.created,
+      modified: parent.modified,
+      cestamp: member.cestamp
+    };
+
+    return EnoviaApi.findEngItemByLabel(baseName, 20, hints)
       .then(function (resolved) {
         return addInstanceNode(resolved, member, parentId, level);
       })
