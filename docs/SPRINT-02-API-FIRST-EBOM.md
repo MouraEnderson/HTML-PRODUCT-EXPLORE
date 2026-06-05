@@ -1,7 +1,7 @@
 # Sprint 02 - API-first E-BOM
 
 Data: 2026-06-06  
-Build: `bom20260606u`
+Build: `bom20260606v`
 
 ## Problema
 
@@ -47,7 +47,7 @@ Esta sprint transforma o caminho API em fluxo primario:
   - Mensagem passa a sinalizar possivel diferenca entre E-BOM unica e ocorrencias/selecionados.
 
 - `assets/js/config.js`
-  - Build `bom20260606u`.
+  - Build `bom20260606v`.
   - API passa a ser preferida no auto-sync.
   - Limite tecnico elevado para `1.000.000`.
 
@@ -68,6 +68,23 @@ sem forceLoader paste
 ```
 
 Assim a cola fica no fallback do orquestrador, nao no caminho principal do botao.
+
+## Hotfix bom20260606v
+
+O teste do `bom20260606u` confirmou que a API passou a ser chamada, mas o navegador bloqueou o preflight CORS:
+
+```text
+Request header field x-csrf-token is not allowed by Access-Control-Allow-Headers
+```
+
+Para GETs REST `dseng`, o cliente principal agora usa headers minimos:
+
+```text
+Accept: application/json
+SecurityContext: <ctx quando disponivel>
+```
+
+O header `X-CSRF-Token` deixou de ser enviado em GET. Ele permanece reservado para chamadas mutaveis futuras.
 
 ## Como testar
 

@@ -94,6 +94,14 @@ var WafClient = (function () {
     options = options || {};
     url = normalizeRequestUrl(url);
     var headers = Object.assign({}, PlatformContext.getHeaders(), options.headers || {});
+    if (String(method || '').toUpperCase() === 'GET') {
+      var st =
+        typeof PlatformContext !== 'undefined' && PlatformContext.getState
+          ? PlatformContext.getState()
+          : {};
+      headers = Object.assign({ Accept: 'application/json' }, options.headers || {});
+      if (st && st.securityContext) headers.SecurityContext = st.securityContext;
+    }
 
     if (APP_CONFIG.DEMO_MODE) {
       return Promise.reject(new Error('DEMO_MODE: use BomService mock'));
