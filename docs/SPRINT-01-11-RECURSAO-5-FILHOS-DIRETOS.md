@@ -75,3 +75,25 @@ RAW Resolved child EngInstance
 Se algum dos 5 filhos retornar `EngInstance member>0`, a recursao esta comprovada e podemos desenhar o loader principal com cache e fila controlada.
 
 Se todos os 5 filhos retornarem `member=0`, a diferenca entre 5 diretos e 20 linhas do Explorer provavelmente esta em outro nivel de representacao/ocorrencia ou no modo como o Explorer conta linhas visiveis.
+
+## Resultado no tenant real
+
+Coleta recebida para build `bom20260606r`:
+
+- `RAW Child resolution by instance name` executou 5 buscas por `label`.
+- As 5 buscas retornaram match exato para:
+  - `01_SKA_Arm Gear of Drone_130520206`;
+  - `01_SKA_Gearing of Drone_130520206`;
+  - `01_SKA_Beater Disc_130520206`;
+  - `01_SKA_Leg_130520206`;
+  - `01_SKA_Frame_130520206`.
+- `RAW Resolved child recursion probes` retornou `4 filho(s) resolvidos`, nao 5.
+- Os 4 filhos testados retornaram `EngItem` OK e `EngInstance member=0`.
+
+Conclusao parcial:
+
+- Resolucao dos 5 filhos diretos por `label` funcionou.
+- O diagnostico tinha limite interno de 4 filhos resolvidos na etapa de recursao.
+- Ainda falta testar o quinto filho resolvido (`01_SKA_Frame_130520206`) antes de concluir que todos os filhos diretos sao folhas.
+
+Proxima coleta: corrigir o limite de recursao para 5 filhos resolvidos.

@@ -455,7 +455,7 @@ var ApiDiagnostic = (function () {
     if (!EnoviaApi.engItemUrl || !EnoviaApi.engInstanceChildrenUrl) return Promise.resolve();
     var ids = (candidates || [])
       .filter(function (candidate) { return candidate && candidate.id; })
-      .slice(0, 4);
+      .slice(0, 5);
     if (!ids.length) {
       rows.push(log('RAW Resolved child recursion probes', false, 'sem filhos resolvidos para testar'));
       return Promise.resolve();
