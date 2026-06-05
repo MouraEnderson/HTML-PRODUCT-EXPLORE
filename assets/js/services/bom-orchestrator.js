@@ -48,12 +48,12 @@ var BomOrchestrator = (function () {
     var primary = (APP_CONFIG && APP_CONFIG.PRIMARY_LOADER) || 'auto';
 
     if (options.source === 'auto') {
-      if (options.preferApi === true && ctx.canUseApi) return 'api';
+      if (ctx.canUseApi && options.preferApi !== false) return 'api';
       if (hasExplorerPasteBuffer()) return 'paste';
       return 'tsv';
     }
 
-    if (options.source === 'manual' && hasExplorerPasteBuffer()) {
+    if (options.source === 'manual' && options.forceLoader === 'paste' && hasExplorerPasteBuffer()) {
       return 'paste';
     }
 

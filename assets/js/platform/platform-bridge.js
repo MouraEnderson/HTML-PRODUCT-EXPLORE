@@ -43,7 +43,7 @@ var PlatformBridge = (function () {
 
   /**
    * Envia busca para o 3DDashboard (barra "Pesquisar" / 3DSearch).
-   * Web Page Reader repassa postMessage ao dashboard pai em muitos tenants.
+   * Additional App pode repassar postMessage ao dashboard pai em alguns tenants.
    */
   function launchPlatformSearch(query) {
     var origin = getPlatformOrigin();

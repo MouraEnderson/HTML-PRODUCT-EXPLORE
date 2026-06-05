@@ -88,6 +88,9 @@ var ApiBomLoader = (function () {
     var msg = 'API ' + count;
     if (expected > 0) msg += '/' + expected;
     msg += ' — ' + name;
+    if (expected > 0 && count < expected - 1) {
+      msg += ' (E-BOM unica; Explorer pode contar ocorrencias/selecionados)';
+    }
     if (meta.truncated) {
       msg += ' (estrutura truncada — limite BOM_MAX_NODES)';
     }
@@ -155,12 +158,6 @@ var ApiBomLoader = (function () {
         });
       })
       .then(function (meta) {
-        var count = meta.itemCount || 0;
-        if (expected > 0 && count < expected - 1) {
-          return Promise.reject(
-            new Error('API parcial ' + count + '/' + expected + ' — verifique REST ou expanda a BOM.')
-          );
-        }
         return {
           ok: true,
           mode: 'api',

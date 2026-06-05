@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260606s',
+    BUILD: 'bom20260606t',
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
     API_PREFER_ABOVE: 20,
     /** Cloud FD02: dseng EngItem/EngInstance antes de dspfl/boM (evita 406) */
@@ -95,8 +95,8 @@
     AUTO_SYNC_EXPLORER_MS: 4000,
     /** Auto-sync: TSV/mirror com copy na grade (sem API — evita 406 em massa) */
     AUTO_SYNC_ALLOW_COPY: true,
-    AUTO_SYNC_PREFER_API: false,
-    AUTO_SYNC_PREFER_PASTE: true,
+    AUTO_SYNC_PREFER_API: true,
+    AUTO_SYNC_PREFER_PASTE: false,
     /** Acima de N peças: auto-sync só com cola na área (evita tabela 0/20) */
     AUTO_SYNC_REQUIRE_PASTE_ABOVE: 12,
     AUTO_REFRESH_ON_STRUCTURE_CHANGE: true,
@@ -119,7 +119,7 @@
     EXPLORER_FALLBACK_MS: 3000,
 
     /** Limite de nÃƒÂ³s na ÃƒÂ¡rvore (proteÃƒÂ§ÃƒÂ£o memÃƒÂ³ria) */
-    BOM_MAX_NODES: 50000,
+    BOM_MAX_NODES: 1000000,
 
     /** Filhos carregados por requisiÃƒÂ§ÃƒÂ£o lazy */
     BOM_LAZY_BATCH_SIZE: 100,
@@ -345,7 +345,7 @@
     APP_CONFIG.CAN_USE_ENOVIA_API = !!(
       typeof WAFData !== 'undefined' && WAFData.authenticatedRequest
     );
-    APP_CONFIG.WIDGET_MODE = APP_CONFIG.CROSS_ORIGIN_WIDGET ? 'web_page_reader' : 'external';
+    APP_CONFIG.WIDGET_MODE = APP_CONFIG.CROSS_ORIGIN_WIDGET ? 'github_pages_no_api' : 'external';
   }
 
   function applyParentDashboardHost() {

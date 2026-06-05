@@ -66,7 +66,7 @@ var BomService = (function () {
     return node;
   }
 
-  function parseInstance(member, parentId, level) {
+  function getEmbeddedReference(member) {
     var ref =
       member.referencedObject ||
       member.referenceObject ||
@@ -84,10 +84,54 @@ var BomService = (function () {
     if (ref === member && member['dseng:EngItem'] && typeof member['dseng:EngItem'] === 'object') {
       ref = member['dseng:EngItem'];
     }
+    return ref;
+  }
+
+  function stripOccurrenceSuffix(name) {
+    return String(name || '')
+      .replace(/<\d+>\s*$/g, '')
+      .replace(/\.\d+\s*$/g, '')
+      .trim();
+  }
+
+  function addInstanceNode(ref, member, parentId, level) {
     var attrs = AttributeService.extractFromMember(ref);
     var qty = member.quantity || member['dseng:quantity'] || member.qty || 1;
+    if (!attrs.physicalid && ref && ref.id) attrs.physicalid = ref.id;
+    if (ref && ref.name && /^prd-/i.test(String(ref.name))) attrs.sourcePhysicalId = ref.name;
+    attrs.occurrenceId = member.id || '';
+    attrs.occurrenceName = member.name || '';
     attrs.quantity = qty;
     return addNode(attrs, parentId, level, qty);
+  }
+
+  function parseInstance(member, parentId, level) {
+    return addInstanceNode(getEmbeddedReference(member), member, parentId, level);
+  }
+
+  function resolveEngInstance(member, parentId, level) {
+    var ref = getEmbeddedReference(member);
+    if (ref && ref !== member) {
+      return Promise.resolve(addInstanceNode(ref, member, parentId, level));
+    }
+
+    var baseName = stripOccurrenceSuffix(member && member.name);
+    if (!baseName || !EnoviaApi.findEngItemByLabel || String(member.type || '') !== 'VPMInstance') {
+      return Promise.resolve(parseInstance(member, parentId, level));
+    }
+
+    return EnoviaApi.findEngItemByLabel(baseName, 20)
+      .then(function (resolved) {
+        return addInstanceNode(resolved, member, parentId, level);
+      })
+      .catch(function (err) {
+        var node = parseInstance(member, parentId, level);
+        if (node) {
+          node.loadError = (err && err.message) || String(err || 'Falha ao resolver instancia.');
+          node.isUnresolvedInstance = true;
+        }
+        return node;
+      });
   }
 
   function loadChildren(parentId, level) {
@@ -110,17 +154,22 @@ var BomService = (function () {
         : EnoviaApi.getPhysicalProductChildren.bind(EnoviaApi);
       return fetcher(parentId, skip, top).then(function (res) {
         var members = EnoviaApi.extractMembers(res);
-        members.forEach(function (m) {
-          var node = parseInstance(m, parentId, level);
-          if (node) allChildren.push(node);
+        var parsePage = useEngInstance
+          ? Promise.all(members.map(function (m) { return resolveEngInstance(m, parentId, level); }))
+          : Promise.resolve(members.map(function (m) { return parseInstance(m, parentId, level); }));
+
+        return parsePage.then(function (nodes) {
+          nodes.forEach(function (node) {
+            if (node) allChildren.push(node);
+          });
+          var total = res && res.totalItems ? res.totalItems : members.length;
+          skip += members.length;
+          if (members.length === top && skip < total && canAddNode()) {
+            return fetchPage(useEngInstance);
+          }
+          index[parentId].loaded = true;
+          return allChildren;
         });
-        var total = res && res.totalItems ? res.totalItems : members.length;
-        skip += members.length;
-        if (members.length === top && skip < total && canAddNode()) {
-          return fetchPage(useEngInstance);
-        }
-        index[parentId].loaded = true;
-        return allChildren;
       });
     }
 

@@ -1353,7 +1353,7 @@ var App = (function () {
     return true;
   }
 
-  /** Additional App injeta UWA/require — aguarda antes de assumir Web Page Reader. */
+  /** Additional App injeta UWA/require; aguarda antes de assumir GitHub Pages sem API. */
   function waitForTrustedWidget(ms) {
     ms = ms || 2500;
     return new Promise(function (resolve) {
@@ -1746,8 +1746,8 @@ var App = (function () {
     var modeLabel =
       APP_CONFIG.WIDGET_MODE === 'additional_app'
         ? 'Additional App — API ENOVIA ativa'
-        : APP_CONFIG.WIDGET_MODE === 'web_page_reader'
-          ? 'Web Page Reader — só cola/Varrer (sem API)'
+        : APP_CONFIG.WIDGET_MODE === 'github_pages_no_api'
+          ? 'GitHub Pages sem API ENOVIA'
           : APP_CONFIG.WIDGET_MODE;
     setStatus('Modo: ' + modeLabel + ' | build ' + (APP_CONFIG.BUILD || ''), 'info');
     var fb = document.getElementById('bom-boot-fallback');

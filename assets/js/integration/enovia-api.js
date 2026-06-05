@@ -90,6 +90,16 @@ var EnoviaApi = (function () {
     );
   }
 
+  function engItemUqlSearchUrl(query, top) {
+    ensureRestBase();
+    top = top || (APP_CONFIG.SEARCH && APP_CONFIG.SEARCH.TOP) || 40;
+    var m = APP_CONFIG.MODELERS;
+    return (
+      restBase + '/' + m.ENG_ITEM + '/' + m.ENG_ITEM_TYPE + '/search?$searchStr=' +
+      encodeURIComponent(query) + '&$top=' + top
+    );
+  }
+
   function physicalProductSearchUrl(relatedEngId) {
     ensureRestBase();
     var m = APP_CONFIG.MODELERS;
@@ -142,6 +152,77 @@ var EnoviaApi = (function () {
     return member.physicalid || member.id || null;
   }
 
+  function textOf(obj, key) {
+    return String((obj && obj[key]) || '').trim();
+  }
+
+  function chooseExactEngItem(res, expected) {
+    expected = String(expected || '').trim();
+    var members = extractMembers(res);
+    if (!members.length) return null;
+    for (var i = 0; i < members.length; i++) {
+      var m = members[i];
+      if (
+        textOf(m, 'id') === expected ||
+        textOf(m, 'physicalid') === expected ||
+        textOf(m, 'name') === expected ||
+        textOf(m, 'title') === expected
+      ) {
+        return m;
+      }
+    }
+    return members.length === 1 ? members[0] : null;
+  }
+
+  function quoteUql(value) {
+    return '"' + String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+  }
+
+  function getEngItemUqlSearch(query, top) {
+    return WafClient.get(engItemUqlSearchUrl(query, top));
+  }
+
+  function findEngItemByLabel(label, top) {
+    var expected = String(label || '').trim();
+    if (!expected) return Promise.reject(new Error('Label vazio para resolver EngItem.'));
+    return getEngItemUqlSearch('label:' + quoteUql(expected), top || 20)
+      .then(function (res) {
+        var exact = chooseExactEngItem(res, expected);
+        if (!exact) throw new Error('EngItem nao encontrado por label: ' + expected);
+        return exact;
+      });
+  }
+
+  function resolveEngItemMember(input, titleHint) {
+    input = String(input || '').trim();
+    titleHint = String(titleHint || '').trim();
+    if (!input && !titleHint) return Promise.reject(new Error('Raiz vazia para resolver EngItem.'));
+
+    function byInput() {
+      if (!input) return Promise.reject(new Error('Sem physicalId para busca UQL.'));
+      return getEngItemUqlSearch('name:' + input, 20)
+        .then(function (res) {
+          var exact = chooseExactEngItem(res, input);
+          if (exact) return exact;
+          throw new Error('Sem match exato por name.');
+        })
+        .catch(function () {
+          return getEngItemUqlSearch(input, 20).then(function (res) {
+            var exact = chooseExactEngItem(res, input);
+            if (exact) return exact;
+            throw new Error('Sem match exato por physicalId.');
+          });
+        });
+    }
+
+    function byTitle() {
+      if (!titleHint) return Promise.reject(new Error('Sem titulo para busca UQL.'));
+      return findEngItemByLabel(titleHint, 20);
+    }
+
+    return byInput().catch(byTitle);
+  }
+
   function candidateRootIds(physicalId) {
     var seen = {};
     var list = [];
@@ -182,6 +263,23 @@ var EnoviaApi = (function () {
       return { member: res.member || res, bomRootId: bomRootId || null };
     }
 
+    function packResolved(member) {
+      var id = member && (member.id || member.physicalid);
+      if (!id) return Promise.reject(new Error('EngItem resolvido sem id.'));
+      return getEngItem(id, expand).then(function (res) {
+        return pack(res, id);
+      });
+    }
+
+    function tryResolved(i) {
+      if (i >= ids.length) return Promise.reject(new Error('Raiz nao resolvida por UQL.'));
+      return resolveEngItemMember(ids[i], null)
+        .then(packResolved)
+        .catch(function () {
+          return tryResolved(i + 1);
+        });
+    }
+
     function tryEng(i) {
       if (i >= ids.length) return tryPrd(0);
       var id = ids[i];
@@ -216,14 +314,18 @@ var EnoviaApi = (function () {
     }
 
     if (isCloudPrdId(physicalId)) {
-      return tryPrd(0).catch(function () {
-        return tryEng(0);
+      return tryResolved(0).catch(function () {
+        return tryPrd(0).catch(function () {
+          return tryEng(0);
+        });
       });
     }
     for (var ci = 0; ci < ids.length; ci++) {
       if (isCloudPrdId(ids[ci])) {
-        return tryPrd(0).catch(function () {
-          return tryEng(0);
+        return tryResolved(0).catch(function () {
+          return tryPrd(0).catch(function () {
+            return tryEng(0);
+          });
         });
       }
     }
@@ -310,6 +412,10 @@ var EnoviaApi = (function () {
     getPhysicalProductChildren: getPhysicalProductChildren,
     getPhysicalProductsForEngItem: getPhysicalProductsForEngItem,
     extractMembers: extractMembers,
-    engItemUrl: engItemUrl
+    engItemSearchUrl: engItemSearchUrl,
+    engItemUqlSearchUrl: engItemUqlSearchUrl,
+    getEngItemUqlSearch: getEngItemUqlSearch,
+    findEngItemByLabel: findEngItemByLabel,
+    resolveEngItemMember: resolveEngItemMember
   };
 })();
