@@ -23,6 +23,7 @@ $files = @(
   'assets\js\services\bom-service.js',
   'assets\js\services\explorer-scanner.js',
   'assets\js\services\api-bom-loader.js',
+  'assets\js\services\api-diagnostic.js',
   'assets\js\services\tsv-bom-loader.js',
   'assets\js\services\paste-bom-loader.js',
   'assets\js\services\bom-orchestrator.js',
