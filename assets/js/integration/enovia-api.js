@@ -56,15 +56,28 @@ var EnoviaApi = (function () {
     return restBase + '/' + m.ENG_ITEM + '/' + m.ENG_ITEM_TYPE + '/' + encodeURIComponent(apiId(physicalId));
   }
 
-  function engInstanceChildrenUrl(parentPhysicalId, skip, top) {
+  function engInstanceChildrenUrl(parentPhysicalId, skip, top, expand) {
     ensureRestBase();
     skip = skip || 0;
     top = top || APP_CONFIG.BOM_LAZY_BATCH_SIZE;
     var m = APP_CONFIG.MODELERS;
-    return (
+    var url = (
       restBase + '/' + m.ENG_ITEM + '/' + m.ENG_ITEM_TYPE + '/' + encodeURIComponent(apiId(parentPhysicalId)) +
       '/dseng:EngInstance?$skip=' + skip + '&$top=' + top
     );
+    if (expand) url += '&$expand=' + encodeURIComponent(expand);
+    return url;
+  }
+
+  function engInstanceDetailUrl(parentPhysicalId, instanceId, expand) {
+    ensureRestBase();
+    var m = APP_CONFIG.MODELERS;
+    var url = (
+      restBase + '/' + m.ENG_ITEM + '/' + m.ENG_ITEM_TYPE + '/' + encodeURIComponent(apiId(parentPhysicalId)) +
+      '/dseng:EngInstance/' + encodeURIComponent(apiId(instanceId))
+    );
+    if (expand) url += '?$expand=' + encodeURIComponent(expand);
+    return url;
   }
 
   function engItemSearchUrl(term, top) {
@@ -286,6 +299,7 @@ var EnoviaApi = (function () {
     getProductRoot: getProductRoot,
     engItemUrl: engItemUrl,
     engInstanceChildrenUrl: engInstanceChildrenUrl,
+    engInstanceDetailUrl: engInstanceDetailUrl,
     physicalProductUrl: physicalProductUrl,
     extractEngItemIdFromResponse: extractEngItemIdFromResponse,
     preferEngBomApi: preferEngBomApi,

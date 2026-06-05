@@ -437,6 +437,65 @@ var ApiDiagnostic = (function () {
     return 'member=' + members.length + '; sample=' + jsonSnippet(members.slice(0, 2), sampleLimit);
   }
 
+  function probeEngInstanceRelationship(rows, parentId, childData) {
+    if (!EnoviaApi.engInstanceChildrenUrl || !EnoviaApi.engInstanceDetailUrl) return Promise.resolve();
+    var members = extractMembers(childData);
+    if (!members.length) {
+      rows.push(log('RAW EngInstance relationship probes', false, 'sem instancias para detalhar'));
+      return Promise.resolve();
+    }
+
+    var jobs = [
+      {
+        step: 'RAW EngInstance list expand dseng:EngItem ' + parentId,
+        url: EnoviaApi.engInstanceChildrenUrl(parentId, 0, 5, 'dseng:EngItem')
+      },
+      {
+        step: 'RAW EngInstance list expand referencedObject ' + parentId,
+        url: EnoviaApi.engInstanceChildrenUrl(parentId, 0, 5, 'dseng:referencedObject')
+      }
+    ];
+
+    members.slice(0, 2).forEach(function (member) {
+      var instanceId = member && member.id;
+      if (!instanceId) return;
+      jobs.push({
+        step: 'RAW EngInstance detail ' + instanceId,
+        url: EnoviaApi.engInstanceDetailUrl(parentId, instanceId)
+      });
+      jobs.push({
+        step: 'RAW EngInstance detail expand dseng:EngItem ' + instanceId,
+        url: EnoviaApi.engInstanceDetailUrl(parentId, instanceId, 'dseng:EngItem')
+      });
+      jobs.push({
+        step: 'RAW EngInstance detail expand referencedObject ' + instanceId,
+        url: EnoviaApi.engInstanceDetailUrl(parentId, instanceId, 'dseng:referencedObject')
+      });
+    });
+
+    rows.push(log('RAW EngInstance relationship probes', true, jobs.length + ' request(s) controladas', {
+      count: jobs.length
+    }));
+
+    return jobs.reduce(function (chain, job) {
+      return chain.then(function () {
+        return rawWafCall(job.step, job.url, {
+          type: 'json',
+          headers: minimalHeaders()
+        }).then(function (result) {
+          rows.push(result.row);
+          if (result.row.ok) {
+            rows.push(log(job.step + ' payload', true, memberSummary(result.data, 5000), {
+              url: job.url,
+              count: extractMembers(result.data).length,
+              total: responseTotal(result.data, extractMembers(result.data).length)
+            }));
+          }
+        });
+      });
+    }, Promise.resolve());
+  }
+
   function lc(value) {
     return String(value || '').toLowerCase();
   }
@@ -549,7 +608,7 @@ var ApiDiagnostic = (function () {
       rows.push(log('RAW Candidate EngItem', false, 'nenhum candidato alternativo para testar'));
       return Promise.resolve();
     }
-    return ids.reduce(function (chain, id) {
+    return ids.reduce(function (chain, id, idx) {
       return chain.then(function () {
         return rawWafCall('RAW Candidate EngItem ' + id, EnoviaApi.engItemUrl(id), {
           type: 'json',
@@ -575,6 +634,9 @@ var ApiDiagnostic = (function () {
                 count: extractMembers(childResult.data).length,
                 total: responseTotal(childResult.data, extractMembers(childResult.data).length)
               }));
+            }
+            if (idx === 0 && childResult.row.ok) {
+              return probeEngInstanceRelationship(rows, id, childResult.data);
             }
           });
         });
