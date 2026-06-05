@@ -84,3 +84,15 @@ Se os filhos resolvidos retornarem `EngInstance` coerente, temos evidência para
 5. usar cache e controle de duplicidade para escala.
 
 Se os filhos resolvidos nao retornarem `EngInstance`, a estrategia ainda precisa ser reavaliada.
+
+## Resultado no tenant real
+
+Coleta recebida para build `bom20260606q`:
+
+- `RAW Resolved child recursion probes` retornou `2 filho(s) resolvidos`.
+- Filho `132FB3CE26D70E006A18D18700003187` (`01_SKA_Arm Gear of Drone_130520206`) retornou `EngItem` OK e `EngInstance member=0`.
+- Filho `132FB3CE26D70E006A18D1880000319F` (`01_SKA_Gearing of Drone_130520206`) retornou `EngItem` OK e `EngInstance member=0`.
+
+Conclusao: os dois primeiros filhos diretos sao folhas. A recursao nao foi invalidada, mas ainda nao foi provada para todos os filhos da raiz.
+
+Proxima coleta: resolver todos os 5 filhos diretos da raiz por `label` e consultar `EngInstance` de cada um.

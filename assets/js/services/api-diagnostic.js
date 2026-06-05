@@ -508,23 +508,13 @@ var ApiDiagnostic = (function () {
     var jobs = [];
     var resolved = [];
     var resolvedSeen = {};
-    members.slice(0, 2).forEach(function (member) {
+    members.slice(0, 5).forEach(function (member) {
       var rawName = member && member.name;
       var baseName = stripOccurrenceSuffix(rawName);
       if (!baseName) return;
       jobs.push({
         step: 'RAW Child search label ' + baseName,
         url: engItemUqlUrl('label:"' + baseName + '"', 20),
-        terms: [baseName]
-      });
-      jobs.push({
-        step: 'RAW Child search name ' + baseName,
-        url: engItemUqlUrl('name:' + baseName, 20),
-        terms: [baseName]
-      });
-      jobs.push({
-        step: 'RAW Child search plain ' + baseName,
-        url: engItemUqlUrl(baseName, 20),
         terms: [baseName]
       });
     });
