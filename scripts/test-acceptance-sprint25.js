@@ -145,11 +145,13 @@ function testT4UxAndUtf8() {
   pass('T4-columns', 'Colunas piloto com escapes Unicode');
 
   if (cfg.indexOf('USE_DOM_MIRROR_PRIMARY: false') < 0) {
-    fail('T4-arch', 'USE_DOM_MIRROR_PRIMARY não está false');
-  } else if (cfg.indexOf("PRIMARY_LOADER: 'api'") < 0) {
-    fail('T4-arch', 'PRIMARY_LOADER não está api');
+    fail('T4-arch', 'USE_DOM_MIRROR_PRIMARY nao esta false');
+  } else if (cfg.indexOf("PRIMARY_LOADER: 'tsv'") < 0) {
+    fail('T4-arch', 'PRIMARY_LOADER nao esta tsv');
+  } else if (cfg.indexOf('PREFER_API_ON_MANUAL_REFRESH: false') < 0) {
+    fail('T4-arch', 'Atualizar estrutura ainda prefere API');
   } else {
-    pass('T4-arch', 'DOM off primary + API como loader principal');
+    pass('T4-arch', 'Botao manual usa Explorer/TSV primeiro; API fora do clique');
   }
 }
 

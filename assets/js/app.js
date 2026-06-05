@@ -916,9 +916,14 @@ var App = (function () {
     setLoading(true);
     setStatus('Lendo Explorer…', 'info');
     root.__3DX_BLOCK_AUTO_SYNC__ = true;
-    root.__3DX_ALLOW_API__ = true;
+    root.__3DX_ALLOW_API__ = false;
     lastSyncedStructure = null;
     lastFailedSyncKey = null;
+    if (typeof SyncBanner !== 'undefined' && SyncBanner.clearLoad) SyncBanner.clearLoad();
+    if (typeof BomService !== 'undefined' && BomService.reset) {
+      BomService.reset();
+      refreshUI();
+    }
     if (typeof ProductExplorerBridge !== 'undefined') {
       if (ProductExplorerBridge.pollDashboardExplorerChrome) {
         ProductExplorerBridge.pollDashboardExplorerChrome();
@@ -934,15 +939,11 @@ var App = (function () {
       if (typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh) {
         expected = ExplorerContext.refresh(true).expectedCount || 0;
       }
-      var skipBelow = (APP_CONFIG && APP_CONFIG.SKIP_AUTO_COPY_BELOW) || 12;
-      var ctxApi =
-        typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh
-          ? ExplorerContext.refresh(true).canUseApi
-          : false;
       return BomOrchestrator.refreshStructure({
         source: 'manual',
-        allowAutoCopy: !expected || expected > skipBelow,
-        preferApi: ctxApi !== false
+        allowAutoCopy: true,
+        preferApi: false,
+        allowPartial: true
       });
     }
     function primePasteBuffer() {

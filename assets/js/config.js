@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260606ze',
+    BUILD: 'bom20260606zf',
     /** Product Explorer conta ocorrencias; nao consolidar linhas repetidas por ID. */
     PRESERVE_OCCURRENCE_ROWS: true,
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
@@ -104,9 +104,9 @@
     AUTO_REFRESH_ON_STRUCTURE_CHANGE: false,
     /** Sprint 2.5 — TSV fast-path até N peças; acima disso API lazy */
     FAST_TSV_MAX: 500,
-    PRIMARY_LOADER: 'api',
+    PRIMARY_LOADER: 'tsv',
     /** Additional App trusted: tentar API antes de TSV no Atualizar */
-    PREFER_API_ON_MANUAL_REFRESH: true,
+    PREFER_API_ON_MANUAL_REFRESH: false,
     /** Sprint 2.5 item 6: espelho DOM/innerText nunca como primary */
     USE_DOM_MIRROR_PRIMARY: false,
     /** Fallback DOM só após API/TSV/cola falharem — banner amarelo */

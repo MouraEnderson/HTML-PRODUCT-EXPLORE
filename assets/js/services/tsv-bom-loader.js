@@ -51,10 +51,11 @@ var TsvBomLoader = (function () {
     return false;
   }
 
-  function formatMessage(meta, count, expected, term) {
+  function formatMessage(meta, count, expected, term, partial) {
     var msg = 'TSV ' + count;
     if (expected > 0) msg += '/' + expected;
     msg += ' — ' + (meta.productName || term || 'E-BOM');
+    if (partial) msg += ' - parcial (expanda mais no Explorer e clique Atualizar estrutura)';
     return msg;
   }
 
@@ -114,13 +115,14 @@ var TsvBomLoader = (function () {
     return payloadRootMatches(payload, term);
   }
 
-  function applyPayload(pl, term, expected) {
+  function applyPayload(pl, term, expected, options) {
+    options = options || {};
     if (typeof BomSnapshot === 'undefined' || !BomSnapshot.applyPayload) {
       return Promise.reject(new Error('Módulo snapshot indisponível.'));
     }
     var itemN = pl && pl.items ? pl.items.length : 0;
     var slack = expected >= 40 ? 3 : expected >= 15 ? 2 : 1;
-    if (expected > 0 && itemN < expected - slack) {
+    if (expected > 0 && itemN < expected - slack && options.allowPartial !== true) {
       return Promise.reject(
         new Error(
           'TSV parcial ' + itemN + '/' + expected +
@@ -148,7 +150,7 @@ var TsvBomLoader = (function () {
     return BomSnapshot.applyPayload(pl).then(function (meta) {
       var count = BomService.getNodeCount();
       if (count < 1) count = meta.itemCount || itemN || 0;
-      if (expected > 0 && count < expected - 1) {
+      if (expected > 0 && count < expected - 1 && options.allowPartial !== true) {
         return Promise.reject(
           new Error(
             'TSV parcial ' + count + '/' + expected +
@@ -163,7 +165,7 @@ var TsvBomLoader = (function () {
         loaderMode: 'tsv',
         meta: meta,
         partial: expected > 0 && count < expected - 1,
-        message: formatMessage(meta, count, expected, term)
+        message: formatMessage(meta, count, expected, term, expected > 0 && count < expected - 1)
       };
     });
   }
@@ -298,6 +300,19 @@ var TsvBomLoader = (function () {
     var allowAutoCopy = options.allowAutoCopy === true && (!fastStructure || expected > skipCopyBelow);
 
     function finish(payload) {
+      if (options.allowPartial === true) {
+        if (!payload || !payload.items || payload.items.length < 1) {
+          return Promise.reject(
+            new Error('TSV indisponível. No Explorer: expanda a estrutura e clique Atualizar estrutura.')
+          );
+        }
+        if (!payloadRootMatches(payload, term)) {
+          return Promise.reject(
+            new Error('TSV não corresponde à estrutura aberta no Explorer — clique Atualizar estrutura de novo.')
+          );
+        }
+        return applyPayload(payload, term, expected, options);
+      }
       if (!payloadInSync(payload, term, expected)) {
         return Promise.reject(
           new Error(
@@ -316,7 +331,7 @@ var TsvBomLoader = (function () {
           )
         );
       }
-      return applyPayload(payload, term, expected);
+      return applyPayload(payload, term, expected, options);
     }
 
     function tryMirrorFirst() {
@@ -328,7 +343,7 @@ var TsvBomLoader = (function () {
       }
       var mirror = ProductExplorerBridge.scrapeExplorerMirror(term);
       if (!mirror || !mirror.items || mirror.items.length < 1) return Promise.resolve(null);
-      if (expected > 0 && mirror.items.length < expected - 1) return Promise.resolve(null);
+      if (expected > 0 && mirror.items.length < expected - 1 && options.allowPartial !== true) return Promise.resolve(null);
       if (!payloadRootMatches(mirror, term)) return Promise.resolve(null);
       return Promise.resolve(mirror);
     }
@@ -361,9 +376,16 @@ var TsvBomLoader = (function () {
             if (merged) best = merged;
           }
           if (best && payloadInSync(best, term, expected)) return finish(best);
+          if (options.allowPartial === true && best && payloadRootMatches(best, term)) return finish(best);
           return tryScrollHarvest(term, best || copyPayload || partialPayload, expected).then(
             function (harvested) {
               if (harvested && payloadInSync(harvested, term, expected)) return finish(harvested);
+              if (options.allowPartial === true) {
+                var partial = harvested || best || copyPayload || partialPayload;
+                if (partial && partial.items && partial.items.length >= 1 && payloadRootMatches(partial, term)) {
+                  return finish(partial);
+                }
+              }
               var n = (harvested && harvested.items && harvested.items.length) ||
                 (best && best.items && best.items.length) ||
                 0;

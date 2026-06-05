@@ -189,10 +189,9 @@ var BomOrchestrator = (function () {
     if (options && options.forceLoader === 'paste') {
       return Promise.reject(firstErr || new Error('Nenhuma fonte de cola disponivel.'));
     }
-    var maxTsv = (APP_CONFIG && APP_CONFIG.FAST_TSV_MAX) || 500;
     var order = [];
     if (failedMode !== 'paste') order.push('paste');
-    if (failedMode !== 'tsv' && ctx.expectedCount <= maxTsv) order.push('tsv');
+    if (failedMode !== 'tsv') order.push('tsv');
     var domMax = (APP_CONFIG && APP_CONFIG.DOM_MIRROR_MANUAL_MAX_EXPECTED) || 25;
     if (
       APP_CONFIG.DOM_MIRROR_FALLBACK !== false &&
@@ -201,7 +200,6 @@ var BomOrchestrator = (function () {
     ) {
       order.push('dom-fallback');
     }
-    if (ctx.canUseApi && failedMode !== 'api' && options.preferApi === true) order.push('api');
 
     function attempt(i, lastErr) {
       if (i >= order.length) {
@@ -213,16 +211,12 @@ var BomOrchestrator = (function () {
         runOpts = {
           source: 'manual',
           allowAutoCopy: options.allowAutoCopy !== false,
+          allowPartial: options.allowPartial === true,
+          preferApi: false,
           onProgress: options.onProgress
         };
       }
       var run = runLoaderMode(mode, ctx, runOpts);
-      if (mode === 'api') {
-        root.__3DX_ALLOW_API__ = true;
-        run = run.finally(function () {
-          root.__3DX_ALLOW_API__ = false;
-        });
-      }
       return run.catch(function (err) {
         return attempt(i + 1, err);
       });
@@ -357,6 +351,9 @@ var BomOrchestrator = (function () {
       );
     }
     updateSelectionLabel(ctx);
+    if (options.source === 'manual' && typeof BomService !== 'undefined' && BomService.reset) {
+      BomService.reset();
+    }
 
     var dashCount =
       typeof BomService !== 'undefined' && BomService.getNodeCount ? BomService.getNodeCount() : 0;
@@ -373,7 +370,7 @@ var BomOrchestrator = (function () {
       priorIndex = BomService.createSnapshot();
     }
 
-    var mode = pickLoaderMode(ctx, options);
+    var mode = options.source === 'manual' ? 'tsv' : pickLoaderMode(ctx, options);
     var chain;
     var apiFlag = mode === 'api';
 
