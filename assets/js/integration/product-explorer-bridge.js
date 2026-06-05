@@ -2549,6 +2549,49 @@ var ProductExplorerBridge = (function () {
     return assessMirrorQuality(items);
   }
 
+  function technicalApiName(name) {
+    name = String(name || '').trim();
+    return !name || /^prd-/i.test(name) || /xcadmodel/i.test(name) || /^vpm/i.test(name);
+  }
+
+  function copyExplorerPresentation(target, source) {
+    if (!target || !source) return;
+    if (source.name && (!target.name || technicalApiName(target.name) || target.isUnresolvedInstance)) {
+      target.name = source.name;
+    }
+    if (source.title && source.title !== source.name && (!target.title || technicalApiName(target.title) || target.isUnresolvedInstance)) {
+      target.title = source.title;
+    }
+    if (source.revision && source.revision !== 'â€”') target.revision = source.revision;
+    if (source.owner && isPersonName(source.owner)) target.owner = source.owner;
+    if (source.maturity && source.maturity !== 'â€”') {
+      target.maturity = source.maturity;
+      target.state = source.maturity;
+    }
+  }
+
+  function applyExplorerPresentationToIndex(index) {
+    if (!index) return index;
+    var mirror = scrapeExplorerMirror();
+    if (!mirror || !mirror.items || !mirror.items.length) return index;
+    var nodes = Object.keys(index).map(function (k) { return index[k]; });
+    if (!nodes.length) return index;
+    var items = mirror.items;
+    var offset = 0;
+    if (
+      items.length > 1 &&
+      nodes.length > 1 &&
+      normalizePartKey(items[0].name || items[0].title) !== normalizePartKey(nodes[0].name || nodes[0].title)
+    ) {
+      offset = -1;
+    }
+    nodes.forEach(function (node, idx) {
+      var item = items[idx + offset];
+      if (item) copyExplorerPresentation(node, item);
+    });
+    return index;
+  }
+
   return {
     init: init,
     subscribe: subscribe,
@@ -2578,6 +2621,7 @@ var ProductExplorerBridge = (function () {
     scrapeExplorerOwnerMap: scrapeExplorerOwnerMap,
     applyOwnersToItems: applyOwnersToItems,
     applyOwnersToIndex: applyOwnersToIndex,
+    applyExplorerPresentationToIndex: applyExplorerPresentationToIndex,
     fetchPilotStructurePayload: fetchPilotStructurePayload,
     harvestAllExplorerText: harvestAllExplorerText,
     harvestExplorerTextOnly: harvestExplorerTextOnly,

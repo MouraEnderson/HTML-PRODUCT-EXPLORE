@@ -283,6 +283,40 @@ var BomOrchestrator = (function () {
     return res;
   }
 
+  function resultCount(res) {
+    if (res && res.meta && res.meta.itemCount) return res.meta.itemCount;
+    if (typeof BomService !== 'undefined' && BomService.getNodeCount) return BomService.getNodeCount();
+    return 0;
+  }
+
+  function maybeImprovePartialApi(res, ctx, options, mode) {
+    if (!res || !res.partial || ((res.loaderMode || mode) !== 'api')) return Promise.resolve(res);
+    if (!ctx || ctx.expectedCount < 2) return Promise.resolve(res);
+    var beforeCount = resultCount(res);
+    var apiSnap =
+      typeof BomService !== 'undefined' && BomService.createSnapshot
+        ? BomService.createSnapshot()
+        : null;
+    return runManualFallbackChain(ctx, options || {}, 'api', new Error('API parcial'))
+      .then(function (fallback) {
+        var afterCount = resultCount(fallback);
+        if (afterCount > beforeCount) {
+          fallback.partial = ctx.expectedCount > 0 && afterCount < ctx.expectedCount - 1;
+          return fallback;
+        }
+        if (apiSnap && typeof BomService !== 'undefined' && BomService.restoreSnapshot) {
+          BomService.restoreSnapshot(apiSnap);
+        }
+        return res;
+      })
+      .catch(function () {
+        if (apiSnap && typeof BomService !== 'undefined' && BomService.restoreSnapshot) {
+          BomService.restoreSnapshot(apiSnap);
+        }
+        return res;
+      });
+  }
+
   function updateSelectionLabel(ctx) {
     if (!ctx || !ctx.rootName) return;
     var label = document.getElementById('selectionLabel');
@@ -376,7 +410,11 @@ var BomOrchestrator = (function () {
       .then(function (res) {
         var usedMode = (res && res.loaderMode) || mode;
         if (res) res.refreshSource = options.source || 'manual';
-        return enrichResult(res, ctx, usedMode);
+        return maybeImprovePartialApi(res, ctx, options, usedMode).then(function (best) {
+          var bestMode = (best && best.loaderMode) || usedMode;
+          if (best) best.refreshSource = options.source || 'manual';
+          return enrichResult(best, ctx, bestMode);
+        });
       })
       .catch(function (err) {
         if (

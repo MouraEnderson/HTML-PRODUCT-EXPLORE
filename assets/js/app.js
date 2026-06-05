@@ -170,6 +170,12 @@ var App = (function () {
     if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.applyOwnersToIndex) {
       ProductExplorerBridge.applyOwnersToIndex(index);
     }
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.applyExplorerPresentationToIndex) {
+      ProductExplorerBridge.applyExplorerPresentationToIndex(index);
+    }
+    if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.applyOwnersToIndex) {
+      ProductExplorerBridge.applyOwnersToIndex(index);
+    }
     if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.applyPrdToIndex) {
       window.setTimeout(function () {
         ProductExplorerBridge.applyPrdToIndex(BomService.getIndex());

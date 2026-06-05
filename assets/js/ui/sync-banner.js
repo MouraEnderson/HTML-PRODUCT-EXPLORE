@@ -11,7 +11,8 @@ var SyncBanner = (function () {
     partial: false,
     truncated: false,
     domFallback: false,
-    expected: 0
+    expected: 0,
+    diagnostic: null
   };
 
   function byId(id) {
@@ -31,6 +32,7 @@ var SyncBanner = (function () {
     lastLoad.truncated = false;
     lastLoad.domFallback = false;
     lastLoad.expected = 0;
+    lastLoad.diagnostic = null;
   }
 
   function setLoadResult(res) {
@@ -47,6 +49,7 @@ var SyncBanner = (function () {
     if (res.context && res.context.expectedCount > 0) {
       lastLoad.expected = res.context.expectedCount;
     }
+    lastLoad.diagnostic = res.diagnostic || (res.meta && res.meta.apiDiagnostics) || null;
   }
 
   function parseExplorerCount() {
@@ -159,10 +162,17 @@ var SyncBanner = (function () {
 
     if (partial) {
       if (mode === 'API') {
+        var diag = lastLoad.diagnostic || {};
+        var diagText =
+          ' Raiz: ' + (diag.rootPhysicalId || '-') +
+          ' · pais consultados: ' + (diag.parentRequests || 0) +
+          ' · refs: ' + (diag.resolvedReferences || 0) +
+          ' · instâncias sem referência: ' + (diag.unresolvedInstances || 0) +
+          (diag.lastError ? ' · erro: ' + diag.lastError : '');
         el.className = 'bom-sync-banner bom-sync-info';
         el.innerHTML =
           '<strong>API ' + dash + '/' + explorer + '</strong>' +
-          ' — E-BOM carregada por API; o Explorer pode contar ocorrências/selecionados.';
+          ' — carga parcial diagnosticada.' + diagText;
         return;
       }
       el.className = 'bom-sync-banner bom-sync-warn';

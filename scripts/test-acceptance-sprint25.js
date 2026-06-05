@@ -10,7 +10,7 @@ var path = require('path');
 var https = require('https');
 
 var ROOT = path.join(__dirname, '..');
-var BUILD = 'bom20260606f';
+var BUILD = extractBuild(fs.readFileSync(path.join(ROOT, 'assets/js/config.js'), 'utf8'));
 var WIDGET_URL =
   'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v2.html?v=' + BUILD;
 
@@ -146,10 +146,10 @@ function testT4UxAndUtf8() {
 
   if (cfg.indexOf('USE_DOM_MIRROR_PRIMARY: false') < 0) {
     fail('T4-arch', 'USE_DOM_MIRROR_PRIMARY não está false');
-  } else if (cfg.indexOf('AUTO_SYNC_EXPLORER_MS: 0') < 0) {
-    fail('T4-arch', 'AUTO_SYNC_EXPLORER_MS não está 0');
+  } else if (cfg.indexOf("PRIMARY_LOADER: 'api'") < 0) {
+    fail('T4-arch', 'PRIMARY_LOADER não está api');
   } else {
-    pass('T4-arch', 'DOM off primary + auto-sync desligado (sem loop)');
+    pass('T4-arch', 'DOM off primary + API como loader principal');
   }
 }
 

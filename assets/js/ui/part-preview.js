@@ -92,7 +92,6 @@ var PartPreview = (function () {
     r.metaEl.innerHTML =
       '<dl class="bom-preview-dl">' +
       '<dt>Revisão</dt><dd>' + escapeHtml(node.revision || '—') + '</dd>' +
-      '<dt>Tipo</dt><dd>' + escapeHtml(node.type || node.displayType || '—') + '</dd>' +
       '<dt>Proprietário</dt><dd>' + escapeHtml(ownerText(node)) + '</dd>' +
       '<dt>Maturidade</dt><dd>' + escapeHtml(maturityText(node)) + '</dd>' +
       '<dt>ID</dt><dd class="bom-preview-id">' + escapeHtml(

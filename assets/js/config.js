@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260606w',
+    BUILD: 'bom20260606x',
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
     API_PREFER_ABOVE: 20,
     /** Cloud FD02: dseng EngItem/EngInstance antes de dspfl/boM (evita 406) */
@@ -64,7 +64,7 @@
     PASTE_TRAP_ENABLED: false,
     EXPLORER_AUTO_COPY_ENABLED: false,
     /** Fallback DOM manual só até N peças */
-    DOM_MIRROR_MANUAL_MAX_EXPECTED: 25,
+    DOM_MIRROR_MANUAL_MAX_EXPECTED: 80,
     AUTO_SCAN_ON_SELECTION: false,
     CAN_USE_ENOVIA_API: true,
 
@@ -158,7 +158,6 @@
       { key: 'title', label: 'Descri\u00e7\u00e3o' },
       { key: 'revision', label: 'Revis\u00e3o' },
       { key: 'owner', label: 'Propriet\u00e1rio' },
-      { key: 'type', label: 'Tipo' },
       { key: 'maturity', label: 'Estado de maturidade', format: 'status' }
     ],
 

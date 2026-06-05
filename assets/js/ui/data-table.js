@@ -197,7 +197,7 @@ var DataTable = (function () {
       selectedIndex = -1;
       tbody.innerHTML =
         '<tr><td colspan="' + (columns.length || 1) + '" class="bom-table-empty">' +
-        'Nenhuma linha. Importe Ctrl+C no Explorer (inclua coluna Maturidade).</td></tr>';
+        'Nenhuma linha. Abra uma estrutura no Product Structure Explorer e clique Atualizar estrutura.</td></tr>';
       return;
     }
     tbody.innerHTML = slice.map(function (n, idx) {

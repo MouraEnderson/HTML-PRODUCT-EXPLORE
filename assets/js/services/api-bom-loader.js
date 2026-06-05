@@ -158,11 +158,27 @@ var ApiBomLoader = (function () {
         });
       })
       .then(function (meta) {
+        var count = meta && meta.itemCount ? meta.itemCount : 0;
+        var partial = expected > 0 && count < expected - 1;
+        var diag = (meta && meta.apiDiagnostics) || {};
         return {
           ok: true,
           mode: 'api',
           loaderMode: 'api',
           meta: meta,
+          partial: partial,
+          diagnostic: {
+            rootPhysicalId: diag.rootPhysicalId || physicalId,
+            expectedCount: expected,
+            itemCount: count,
+            resolvedReferences: diag.resolvedReferences || 0,
+            unresolvedInstances: diag.unresolvedInstances || 0,
+            parentRequests: diag.parentRequests || 0,
+            lastParentId: diag.lastParentId || '',
+            lastApiParentId: diag.lastApiParentId || '',
+            lastChildTotal: diag.lastChildTotal || 0,
+            lastError: diag.lastError || ''
+          },
           message: formatMessage(meta, expected)
         };
       });

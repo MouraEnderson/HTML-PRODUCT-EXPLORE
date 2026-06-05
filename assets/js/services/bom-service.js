@@ -8,11 +8,13 @@ var BomService = (function () {
   var index = {};
   var rootId = null;
   var nodeCount = 0;
+  var apiDiagnostics = {};
 
   function reset() {
     index = {};
     rootId = null;
     nodeCount = 0;
+    apiDiagnostics = {};
     PhysicalProductService.clearCache();
   }
 
@@ -30,6 +32,24 @@ var BomService = (function () {
     rootId = snap.rootId;
     nodeCount = snap.nodeCount;
     return true;
+  }
+
+  function resetApiDiagnostics(rootPhysicalId, expected) {
+    apiDiagnostics = {
+      rootPhysicalId: rootPhysicalId || '',
+      expectedCount: expected || 0,
+      resolvedReferences: 0,
+      unresolvedInstances: 0,
+      parentRequests: 0,
+      lastParentId: '',
+      lastApiParentId: '',
+      lastChildTotal: 0,
+      lastError: ''
+    };
+  }
+
+  function isUnresolvedInstance(ref, member) {
+    return ref === member && String(member && member.type || '') === 'VPMInstance';
   }
 
   function canAddNode() {
@@ -97,9 +117,26 @@ var BomService = (function () {
   function addInstanceNode(ref, member, parentId, level) {
     var attrs = AttributeService.extractFromMember(ref);
     var qty = member.quantity || member['dseng:quantity'] || member.qty || 1;
+    var unresolved = isUnresolvedInstance(ref, member);
     if (!attrs.physicalid && ref && ref.id) attrs.physicalid = ref.id;
     normalizeApiDisplayAttrs(attrs, ref);
-    attrs.referencePhysicalId = attrs.physicalid;
+    if (unresolved) {
+      attrs.name = stripOccurrenceSuffix(member && member.name) || attrs.name || 'InstÃ¢ncia sem referÃªncia';
+      attrs.title = member.description || '';
+      attrs.displayType = '';
+      attrs.type = '';
+      attrs.revision = attrs.revision || 'â€”';
+      attrs.owner = '';
+      attrs.maturity = attrs.maturity || attrs.state || 'â€”';
+      attrs.isUnresolvedInstance = true;
+      attrs.apiResolutionStatus = 'unresolved-instance';
+      apiDiagnostics.unresolvedInstances++;
+    } else {
+      attrs.apiResolutionStatus = 'resolved-reference';
+      apiDiagnostics.resolvedReferences++;
+    }
+    attrs.referencePhysicalId = unresolved ? '' : attrs.physicalid;
+    attrs.referenceId = attrs.referencePhysicalId;
     attrs.bomChildrenId = attrs.referencePhysicalId;
     if (member && member.id) {
       attrs.physicalid = member.id;
@@ -108,6 +145,7 @@ var BomService = (function () {
     }
     attrs.occurrenceId = member.id || '';
     attrs.occurrenceName = member.name || '';
+    attrs.occurrenceType = member.type || '';
     attrs.quantity = qty;
     return addNode(attrs, parentId, level, qty);
   }
@@ -121,6 +159,7 @@ var BomService = (function () {
       attrs.name = rawTitle || rawName;
       attrs.title = (ref && ref.description) || attrs.description || '';
     }
+    attrs.referenceId = attrs.referenceId || attrs.referencePhysicalId || attrs.physicalid || '';
     return attrs;
   }
 
@@ -167,6 +206,9 @@ var BomService = (function () {
     var skip = 0;
     var top = APP_CONFIG.BOM_LAZY_BATCH_SIZE;
     var apiParentId = index[parentId].bomChildrenId || index[parentId].referencePhysicalId || parentId;
+    apiDiagnostics.parentRequests++;
+    apiDiagnostics.lastParentId = parentId;
+    apiDiagnostics.lastApiParentId = apiParentId;
 
     function fetchPage(useEngInstance) {
       var fetcher = useEngInstance
@@ -183,6 +225,7 @@ var BomService = (function () {
             if (node) allChildren.push(node);
           });
           var total = res && res.totalItems ? res.totalItems : members.length;
+          apiDiagnostics.lastChildTotal = total;
           skip += members.length;
           if (members.length === top && skip < total && canAddNode()) {
             return fetchPage(useEngInstance);
@@ -203,6 +246,7 @@ var BomService = (function () {
         index[parentId].loaded = false;
         index[parentId].loadError = (firstErr && firstErr.message) || String(firstErr || 'Falha ao carregar filhos.');
       }
+      apiDiagnostics.lastError = (firstErr && firstErr.message) || String(firstErr || 'Falha ao carregar filhos.');
       return Promise.reject(firstErr);
     });
   }
@@ -346,6 +390,7 @@ var BomService = (function () {
       productName: productName,
       rootPhysicalId: rootId,
       itemCount: nodeCount,
+      apiDiagnostics: Object.assign({}, apiDiagnostics),
       truncated: nodeCount >= max * 0.95
     };
   }
@@ -411,6 +456,7 @@ var BomService = (function () {
 
     physicalId = normalizePid(physicalId);
     var prior = createSnapshot();
+    resetApiDiagnostics(physicalId, expected);
 
     if (APP_CONFIG.DEMO_MODE) {
       reset();
