@@ -184,7 +184,13 @@ var EnoviaApi = (function () {
     if (exp && titleLow === exp) score += 220;
     if (exp && nameLow === exp) score += 180;
     if (exp && descLow === exp) score += 80;
-    if (/^prd-/i.test(name)) score += 45;
+    /*
+     * Product Structure Explorer exposes cloud physical objects as prd-R...
+     * When dseng search returns several VPMReference candidates with the same
+     * label, prefer the candidate whose name is the actual cloud physical id.
+     */
+    if (/^prd-/i.test(name)) score += 180;
+    if (/^\d{6,}$/i.test(name)) score -= 20;
 
     var hintOwner = lowerText(hints.owner);
     var hintCollab = lowerText(hints.collabspace || hints.collabSpace);
@@ -196,7 +202,7 @@ var EnoviaApi = (function () {
     if (hintCollab && lowerText(item.collabspace || item.collabSpace) === hintCollab) score += 30;
     if (hintOrg && lowerText(item.organization) === hintOrg) score += 12;
     if (hintRevision && lowerText(item.revision) === hintRevision) score += 12;
-    if (hintCestamp && lowerText(item.cestamp) === hintCestamp) score += 65;
+    if (hintCestamp && lowerText(item.cestamp) === hintCestamp) score += 25;
 
     var parentCreated = normalizeDateMs(hints.created);
     var itemCreated = normalizeDateMs(item.created || item.originated);
