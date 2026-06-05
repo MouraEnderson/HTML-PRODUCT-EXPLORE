@@ -437,6 +437,80 @@ var ApiDiagnostic = (function () {
     return 'member=' + members.length + '; sample=' + jsonSnippet(members.slice(0, 2), sampleLimit);
   }
 
+  function idsFromValue(value, out, seen, depth) {
+    out = out || [];
+    seen = seen || {};
+    depth = depth || 0;
+    if (value == null || depth > 5) return out;
+    if (typeof value === 'string') {
+      if (isUsableCandidateId(value) && !seen[value]) {
+        seen[value] = true;
+        out.push(value);
+      }
+      var re = /prd-R[0-9]+-[A-Za-z0-9._-]+/g;
+      var m;
+      while ((m = re.exec(value))) {
+        if (!seen[m[0]]) {
+          seen[m[0]] = true;
+          out.push(m[0]);
+        }
+      }
+      return out;
+    }
+    if (Array.isArray(value)) {
+      value.slice(0, 80).forEach(function (item) {
+        idsFromValue(item, out, seen, depth + 1);
+      });
+      return out;
+    }
+    if (typeof value === 'object') {
+      ['id', 'physicalid', 'physicalId', 'resourceid', 'resourceId', 'objectId', 'pid'].forEach(function (key) {
+        if (value[key]) idsFromValue(String(value[key]), out, seen, depth + 1);
+      });
+      Object.keys(value).slice(0, 120).forEach(function (key) {
+        idsFromValue(value[key], out, seen, depth + 1);
+      });
+    }
+    return out;
+  }
+
+  function referenceLikeFields(obj, prefix, out, depth) {
+    out = out || [];
+    prefix = prefix || '';
+    depth = depth || 0;
+    if (!obj || typeof obj !== 'object' || depth > 3) return out;
+    Object.keys(obj).slice(0, 120).forEach(function (key) {
+      var path = prefix ? prefix + '.' + key : key;
+      var value = obj[key];
+      if (/ref|reference|referenced|eng|item|child|target|source|from|to/i.test(key)) {
+        out.push(path + '=' + jsonSnippet(value, 120));
+      }
+      if (value && typeof value === 'object') referenceLikeFields(value, path, out, depth + 1);
+    });
+    return out;
+  }
+
+  function instanceContractSummary(member) {
+    if (!member) return 'sem member';
+    var ids = idsFromValue(member).slice(0, 12);
+    var refFields = referenceLikeFields(member).slice(0, 10);
+    return [
+      'type=' + (member.type || member['@type'] || ''),
+      'name=' + (member.name || ''),
+      'id=' + (member.id || member.physicalid || ''),
+      'ids=' + (ids.length ? ids.join(',') : 'nenhum'),
+      'refFields=' + (refFields.length ? refFields.join(' | ') : 'nenhum')
+    ].join('; ');
+  }
+
+  function relationContractSummary(data) {
+    var members = extractMembers(data);
+    if (!members.length) return 'sem instancias';
+    return members.slice(0, 3).map(function (member, idx) {
+      return '#' + (idx + 1) + ' ' + instanceContractSummary(member);
+    }).join('\n');
+  }
+
   function stripOccurrenceSuffix(value) {
     return String(value || '')
       .replace(/<[^>]*>\s*$/g, '')
@@ -498,6 +572,33 @@ var ApiDiagnostic = (function () {
     }, Promise.resolve());
   }
 
+  function probeCandidateChildTotals(rows, candidates, label) {
+    var ids = (candidates || [])
+      .filter(function (candidate) { return candidate && candidate.id; })
+      .slice(0, 6);
+    if (!ids.length || !EnoviaApi.engInstanceChildrenUrl) return Promise.resolve();
+
+    return ids.reduce(function (chain, candidate) {
+      return chain.then(function () {
+        var url = EnoviaApi.engInstanceChildrenUrl(candidate.id, 0, 5);
+        return rawWafCall('RAW Label candidate child total ' + label + ' -> ' + candidate.id, url, {
+          type: 'json',
+          headers: minimalHeaders()
+        }).then(function (result) {
+          rows.push(result.row);
+          if (result.row.ok) {
+            var members = extractMembers(result.data);
+            rows.push(log('RAW Label candidate child total payload ' + label + ' -> ' + candidate.id, true, 'filhos=' + members.length + ', total=' + responseTotal(result.data, members.length), {
+              url: url,
+              count: members.length,
+              total: responseTotal(result.data, members.length)
+            }));
+          }
+        });
+      });
+    }, Promise.resolve());
+  }
+
   function probeChildResolutionByInstanceName(rows, parentId, childData) {
     var members = extractMembers(childData);
     if (!members.length) {
@@ -543,7 +644,15 @@ var ApiDiagnostic = (function () {
               url: job.url,
               count: exact.length
             }));
+            if (exact.length > 1) {
+              rows.push(log('RAW Label ambiguity ' + job.terms[0], false, exact.length + ' candidatos exatos; label nao e identidade', {
+                url: job.url,
+                count: exact.length
+              }));
+            }
+            return probeCandidateChildTotals(rows, exact, job.terms[0]);
           }
+          return null;
         });
       });
     }, Promise.resolve()).then(function () {
@@ -600,6 +709,11 @@ var ApiDiagnostic = (function () {
           rows.push(result.row);
           if (result.row.ok) {
             rows.push(log(job.step + ' payload', true, memberSummary(result.data, 5000), {
+              url: job.url,
+              count: extractMembers(result.data).length,
+              total: responseTotal(result.data, extractMembers(result.data).length)
+            }));
+            rows.push(log(job.step + ' contract scan', true, relationContractSummary(result.data), {
               url: job.url,
               count: extractMembers(result.data).length,
               total: responseTotal(result.data, extractMembers(result.data).length)
