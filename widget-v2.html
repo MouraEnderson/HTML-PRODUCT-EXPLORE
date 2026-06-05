@@ -113,7 +113,7 @@
     window.__3DX_TRUSTED_WIDGET__ = true;
     window.__3DX_BOOT_DEFER__ = true;
 
-    var BOM_BUILD = 'bom20260606z';
+    var BOM_BUILD = 'bom20260606za';
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
     var BUNDLE;
 
@@ -159,9 +159,9 @@
     })();
 
     (function enforceMinimumBuild() {
-      var MIN = 'bom20260606z';
+      var MIN = 'bom20260606za';
       if (BOM_BUILD < MIN) {
-        BOM_BUILD = 'bom20260606z';
+        BOM_BUILD = 'bom20260606za';
         BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js?v=' + encodeURIComponent(BOM_BUILD);
       }
     })();
