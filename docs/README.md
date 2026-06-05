@@ -19,7 +19,8 @@ Esta pasta concentra o direcionamento tecnico atual do projeto.
 13. [Sprint 01.5 - Busca UQL exata para resolver a raiz](SPRINT-01-5-UQL-EXACT-SEARCH.md)
 14. [Sprint 01.6 - Prioridade para match exato da raiz](SPRINT-01-6-PRIORIDADE-MATCH-EXATO.md)
 15. [Sprint 08 - Priorizar referencia prd-R na resolucao dseng](SPRINT-08-PRIORIZAR-PRD-REFERENCE.md)
-16. [Levantamento atual 3DX](levantamento/LEVANTAMENTO-ATUAL-3DX.md)
+16. [Analise docs dseng x caso 50 itens](ANALISE-DOCS-DSENG-CASO-50.md)
+17. [Levantamento atual 3DX](levantamento/LEVANTAMENTO-ATUAL-3DX.md)
 
 ## Historico
 
