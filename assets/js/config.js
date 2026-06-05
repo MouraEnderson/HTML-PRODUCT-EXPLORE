@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260606x',
+    BUILD: 'bom20260606y',
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
     API_PREFER_ABOVE: 20,
     /** Cloud FD02: dseng EngItem/EngInstance antes de dspfl/boM (evita 406) */
@@ -89,17 +89,17 @@
     /** Poll tÃƒÂ­tulo do Explorer no dashboard (estrutura aberta) */
     /** Piloto: sync automÃƒÂ¡tico gera centenas de 406 Ã¢â‚¬â€ sÃƒÂ³ Varrer manual */
     /** Espelho Explorer: cola só se iframe inacessível */
-    EXPLORER_MIRROR_AUTO_SYNC: true,
+    EXPLORER_MIRROR_AUTO_SYNC: false,
     EXPLORER_MIRROR_BLOCK_PASTE: true,
     /** Fase C: poll Explorer (só recarrega se estrutura/contagem mudar) */
-    AUTO_SYNC_EXPLORER_MS: 4000,
+    AUTO_SYNC_EXPLORER_MS: 0,
     /** Auto-sync: TSV/mirror com copy na grade (sem API — evita 406 em massa) */
-    AUTO_SYNC_ALLOW_COPY: true,
-    AUTO_SYNC_PREFER_API: true,
+    AUTO_SYNC_ALLOW_COPY: false,
+    AUTO_SYNC_PREFER_API: false,
     AUTO_SYNC_PREFER_PASTE: false,
     /** Acima de N peças: auto-sync só com cola na área (evita tabela 0/20) */
     AUTO_SYNC_REQUIRE_PASTE_ABOVE: 12,
-    AUTO_REFRESH_ON_STRUCTURE_CHANGE: true,
+    AUTO_REFRESH_ON_STRUCTURE_CHANGE: false,
     /** Sprint 2.5 — TSV fast-path até N peças; acima disso API lazy */
     FAST_TSV_MAX: 500,
     PRIMARY_LOADER: 'api',

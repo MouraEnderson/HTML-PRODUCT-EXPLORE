@@ -612,7 +612,6 @@ var App = (function () {
   function syncOpenExplorerStructure(force, reason) {
     if (root.__3DX_BLOCK_AUTO_SYNC__) return;
     if (!force && reason === 'poll' && (APP_CONFIG.AUTO_SYNC_EXPLORER_MS || 0) < 1) return;
-    if (typeof BomOrchestrator === 'undefined' || !BomOrchestrator.refreshStructure) return;
 
     if (typeof ProductExplorerBridge !== 'undefined') {
       if (ProductExplorerBridge.pollDashboardExplorerChrome) {
@@ -641,6 +640,21 @@ var App = (function () {
     var label = byId('selectionLabel');
     if (label && key) label.textContent = key;
 
+    if (!force) {
+      if (key || explorerCount) {
+        setStatus(
+          'Estrutura detectada' +
+            (key ? ': ' + key : '') +
+            (explorerCount ? ' (' + explorerCount + ' objetos)' : '') +
+            ' — expanda no Explorer e clique Atualizar estrutura.',
+          'info'
+        );
+      }
+      return;
+    }
+
+    if (typeof BomOrchestrator === 'undefined' || !BomOrchestrator.refreshStructure) return;
+
     var dashCount =
       typeof BomService !== 'undefined' && BomService.getNodeCount ? BomService.getNodeCount() : 0;
     var slack = explorerCount >= 40 ? 3 : explorerCount >= 15 ? 2 : 1;
@@ -650,7 +664,7 @@ var App = (function () {
       Math.abs(dashCount - explorerCount) > slack;
     var structureChanged = syncKey !== lastSyncedStructure;
     var autoRefreshOn =
-      APP_CONFIG.AUTO_REFRESH_ON_STRUCTURE_CHANGE !== false;
+      force && APP_CONFIG.AUTO_REFRESH_ON_STRUCTURE_CHANGE !== false;
 
     if (
       structureChanged &&
@@ -711,8 +725,7 @@ var App = (function () {
       ctx &&
       ctx.canUseApi &&
       APP_CONFIG.PREFER_API_ON_MANUAL_REFRESH !== false;
-    var preferApiAuto =
-      !isManual && APP_CONFIG.AUTO_SYNC_PREFER_API === true && ctx && ctx.canUseApi;
+    var preferApiAuto = false;
 
     structureSyncTimer = window.setTimeout(function () {
       if (force) setLoading(true);
@@ -1013,13 +1026,7 @@ var App = (function () {
       }
       var area = byId('pasteArea');
       if (area) area.value = text;
-      setStatus('Dados colados — clique Atualizar estrutura ou aguarde…', 'info');
-      window.clearTimeout(host.__3DX_PASTE_AUTO__);
-      host.__3DX_PASTE_AUTO__ = window.setTimeout(function () {
-        if (String(text).indexOf('\t') >= 0 || String(text).split(/\r?\n/).length >= 2) {
-          runImportFromClipboard(null);
-        }
-      }, 350);
+      setStatus('Dados colados — clique Atualizar estrutura para carregar.', 'info');
     });
   }
 
@@ -1393,13 +1400,11 @@ var App = (function () {
     var watchdog = window.setTimeout(function () {
         if (BomService.getNodeCount() <= 1) {
         if (APP_CONFIG.CAN_USE_ENOVIA_API && pilotGridOnlyMode()) {
-          pilotAutoLoadFromExplorer().then(function (ok) {
-            if (!ok) {
-              setStatus('Abra a montagem no Explorer → clique Varrer estrutura.', 'info');
-            }
-          });
+          pollExplorerStructureLabel();
+          setStatus('Abra/expanda a montagem no Explorer e clique Atualizar estrutura.', 'info');
         } else if (APP_CONFIG.CAN_USE_ENOVIA_API) {
-          syncOpenExplorerStructure(true);
+          pollExplorerStructureLabel();
+          setStatus('Abra/expanda a montagem no Explorer e clique Atualizar estrutura.', 'info');
         } else if (isSnapshotDeliveryMode() && typeof BomSnapshot !== 'undefined' && BomSnapshot.applyBuiltinMont10) {
           BomSnapshot.applyBuiltinMont10().then(function (meta) {
             APP_CONFIG.IMPORT_MODE = true;
@@ -1512,11 +1517,12 @@ var App = (function () {
   function trySyncThenLoad() {
     if (APP_CONFIG.CAN_USE_ENOVIA_API && pilotGridOnlyMode()) {
       pollExplorerStructureLabel();
-      setStatus('Pronto — abra a montagem no Explorer e clique Varrer estrutura.', 'info');
+      setStatus('Pronto — abra/expanda a montagem no Explorer e clique Atualizar estrutura.', 'info');
       return;
     }
     if (APP_CONFIG.CAN_USE_ENOVIA_API) {
-      syncOpenExplorerStructure(true);
+      pollExplorerStructureLabel();
+      setStatus('Pronto — abra/expanda a montagem no Explorer e clique Atualizar estrutura.', 'info');
       return;
     }
     if (isSnapshotDeliveryMode()) {
@@ -1568,17 +1574,19 @@ var App = (function () {
       return;
     }
     setStatus(
-      'Selecione a raiz no Product Explorer → clique Varrer estrutura (API ENOVIA).',
+      'Selecione/expanda a raiz no Product Explorer e clique Atualizar estrutura.',
       'info'
     );
     if (APP_CONFIG.EXPLORER_FALLBACK_MS === 0) return;
     window.setTimeout(function () {
       if (APP_CONFIG.CAN_USE_ENOVIA_API && pilotGridOnlyMode()) {
-        pilotAutoLoadFromExplorer();
+        pollExplorerStructureLabel();
+        setStatus('Pronto — clique Atualizar estrutura para carregar.', 'info');
         return;
       }
       if (APP_CONFIG.CAN_USE_ENOVIA_API) {
-        syncOpenExplorerStructure(true);
+        pollExplorerStructureLabel();
+        setStatus('Pronto — clique Atualizar estrutura para carregar.', 'info');
         return;
       }
       pullExplorerSelection();
