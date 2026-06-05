@@ -6,7 +6,7 @@ var BomWidgetBoot = (function (global) {
   'use strict';
 
   var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-  var VER = 'bom20260606v';
+  var VER = 'bom20260606w';
   var BUNDLE = GH + 'assets/js/bom-bundle-' + VER + '.js';
 
   function setBar(msg, kind) {

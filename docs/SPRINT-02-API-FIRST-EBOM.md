@@ -1,7 +1,7 @@
 # Sprint 02 - API-first E-BOM
 
 Data: 2026-06-06  
-Build: `bom20260606v`
+Build: `bom20260606w`
 
 ## Problema
 
@@ -47,7 +47,7 @@ Esta sprint transforma o caminho API em fluxo primario:
   - Mensagem passa a sinalizar possivel diferenca entre E-BOM unica e ocorrencias/selecionados.
 
 - `assets/js/config.js`
-  - Build `bom20260606v`.
+  - Build `bom20260606w`.
   - API passa a ser preferida no auto-sync.
   - Limite tecnico elevado para `1.000.000`.
 
@@ -85,6 +85,21 @@ SecurityContext: <ctx quando disponivel>
 ```
 
 O header `X-CSRF-Token` deixou de ser enviado em GET. Ele permanece reservado para chamadas mutaveis futuras.
+
+## Hotfix bom20260606w
+
+O teste do `bom20260606v` carregou pela API, mas mostrou `8/20` porque o modelo interno colapsava ocorrencias iguais pelo mesmo ID da referencia `dseng`.
+
+No `bom20260606w`:
+
+- cada `VPMInstance` vira uma linha propria na E-BOM;
+- a linha usa o ID da instancia como `physicalid`;
+- o item real fica em `referencePhysicalId`;
+- a busca de filhos usa `bomChildrenId/referencePhysicalId`;
+- `prd-*` fica em `sourcePhysicalId`;
+- a coluna `Titulo` passa a mostrar o nome legivel (`title` do ENOVIA), nao o `prd-*`.
+
+Isso prepara tambem o caminho do 3D: a selecao da linha sabe qual e a ocorrencia e qual e a referencia real.
 
 ## Como testar
 

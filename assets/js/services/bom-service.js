@@ -98,11 +98,30 @@ var BomService = (function () {
     var attrs = AttributeService.extractFromMember(ref);
     var qty = member.quantity || member['dseng:quantity'] || member.qty || 1;
     if (!attrs.physicalid && ref && ref.id) attrs.physicalid = ref.id;
-    if (ref && ref.name && /^prd-/i.test(String(ref.name))) attrs.sourcePhysicalId = ref.name;
+    normalizeApiDisplayAttrs(attrs, ref);
+    attrs.referencePhysicalId = attrs.physicalid;
+    attrs.bomChildrenId = attrs.referencePhysicalId;
+    if (member && member.id) {
+      attrs.physicalid = member.id;
+    } else if (attrs.referencePhysicalId) {
+      attrs.physicalid = attrs.referencePhysicalId + '__occ_' + parentId + '_' + level + '_' + nodeCount;
+    }
     attrs.occurrenceId = member.id || '';
     attrs.occurrenceName = member.name || '';
     attrs.quantity = qty;
     return addNode(attrs, parentId, level, qty);
+  }
+
+  function normalizeApiDisplayAttrs(attrs, ref) {
+    if (!attrs) return attrs;
+    var rawName = String((ref && ref.name) || attrs.name || '').trim();
+    var rawTitle = String((ref && ref.title) || attrs.title || '').trim();
+    if (/^prd-/i.test(rawName)) {
+      attrs.sourcePhysicalId = rawName;
+      attrs.name = rawTitle || rawName;
+      attrs.title = (ref && ref.description) || attrs.description || '';
+    }
+    return attrs;
   }
 
   function parseInstance(member, parentId, level) {
@@ -147,12 +166,13 @@ var BomService = (function () {
     var allChildren = [];
     var skip = 0;
     var top = APP_CONFIG.BOM_LAZY_BATCH_SIZE;
+    var apiParentId = index[parentId].bomChildrenId || index[parentId].referencePhysicalId || parentId;
 
     function fetchPage(useEngInstance) {
       var fetcher = useEngInstance
         ? EnoviaApi.getEngInstanceChildren.bind(EnoviaApi)
         : EnoviaApi.getPhysicalProductChildren.bind(EnoviaApi);
-      return fetcher(parentId, skip, top).then(function (res) {
+      return fetcher(apiParentId, skip, top).then(function (res) {
         var members = EnoviaApi.extractMembers(res);
         var parsePage = useEngInstance
           ? Promise.all(members.map(function (m) { return resolveEngInstance(m, parentId, level); }))
@@ -406,7 +426,9 @@ var BomService = (function () {
         reset();
         rootId = physicalId;
         var member = res.member || res;
-        var attrs = AttributeService.extractFromMember(Array.isArray(member) ? member[0] : member);
+        var rootMember = Array.isArray(member) ? member[0] : member;
+        var attrs = AttributeService.extractFromMember(rootMember);
+        normalizeApiDisplayAttrs(attrs, rootMember);
         if (res.bomRootId) attrs.physicalid = res.bomRootId;
         if (!attrs.physicalid) attrs.physicalid = physicalId;
         attrs.hasPhysicalProduct = true;
@@ -455,7 +477,9 @@ var BomService = (function () {
     return EnoviaApi.getProductRoot(physicalId, null)
       .then(function (res) {
         var member = res.member || res;
-        var attrs = AttributeService.extractFromMember(Array.isArray(member) ? member[0] : member);
+        var rootMember = Array.isArray(member) ? member[0] : member;
+        var attrs = AttributeService.extractFromMember(rootMember);
+        normalizeApiDisplayAttrs(attrs, rootMember);
         if (res.bomRootId) attrs.physicalid = res.bomRootId;
         if (!attrs.physicalid) attrs.physicalid = physicalId;
         attrs.hasPhysicalProduct = true;

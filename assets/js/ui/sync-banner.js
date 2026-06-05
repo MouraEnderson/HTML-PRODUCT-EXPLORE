@@ -158,6 +158,13 @@ var SyncBanner = (function () {
     }
 
     if (partial) {
+      if (mode === 'API') {
+        el.className = 'bom-sync-banner bom-sync-info';
+        el.innerHTML =
+          '<strong>API ' + dash + '/' + explorer + '</strong>' +
+          ' — E-BOM carregada por API; o Explorer pode contar ocorrências/selecionados.';
+        return;
+      }
       el.className = 'bom-sync-banner bom-sync-warn';
       el.innerHTML =
         '<strong>Parcial ' + dash + '/' + explorer + '</strong>' +
