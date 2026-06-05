@@ -168,6 +168,7 @@ var SyncBanner = (function () {
           ' · pais consultados: ' + (diag.parentRequests || 0) +
           ' · refs: ' + (diag.resolvedReferences || 0) +
           ' · instâncias sem referência: ' + (diag.unresolvedInstances || 0) +
+          ' · ocorrências preservadas: ' + (diag.duplicateRowsPreserved || 0) +
           (diag.lastError ? ' · erro: ' + diag.lastError : '');
         el.className = 'bom-sync-banner bom-sync-info';
         el.innerHTML =

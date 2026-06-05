@@ -44,6 +44,7 @@ var BomService = (function () {
       lastParentId: '',
       lastApiParentId: '',
       lastChildTotal: 0,
+      duplicateRowsPreserved: 0,
       lastError: ''
     };
   }
@@ -60,9 +61,18 @@ var BomService = (function () {
     if (!canAddNode()) return null;
     var id = attrs.physicalid;
     if (index[id]) {
-      index[id].quantity = (index[id].quantity || 1) + (quantity || 1);
-      index[id].occurrenceCount = (index[id].occurrenceCount || 1) + 1;
-      return index[id];
+      if (APP_CONFIG.PRESERVE_OCCURRENCE_ROWS !== false && parentId) {
+        attrs.duplicateOf = id;
+        attrs.referencePhysicalId = attrs.referencePhysicalId || id;
+        attrs.bomChildrenId = attrs.bomChildrenId || attrs.referencePhysicalId;
+        attrs.physicalid = id + '__dup_' + parentId + '_' + level + '_' + nodeCount;
+        id = attrs.physicalid;
+        apiDiagnostics.duplicateRowsPreserved++;
+      } else {
+        index[id].quantity = (index[id].quantity || 1) + (quantity || 1);
+        index[id].occurrenceCount = (index[id].occurrenceCount || 1) + 1;
+        return index[id];
+      }
     }
     var node = Object.assign({}, attrs, {
       parentId: parentId,

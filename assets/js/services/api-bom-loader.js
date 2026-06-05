@@ -177,6 +177,7 @@ var ApiBomLoader = (function () {
             lastParentId: diag.lastParentId || '',
             lastApiParentId: diag.lastApiParentId || '',
             lastChildTotal: diag.lastChildTotal || 0,
+            duplicateRowsPreserved: diag.duplicateRowsPreserved || 0,
             lastError: diag.lastError || ''
           },
           message: formatMessage(meta, expected)
