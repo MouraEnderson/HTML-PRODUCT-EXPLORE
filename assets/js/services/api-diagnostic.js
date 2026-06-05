@@ -437,6 +437,78 @@ var ApiDiagnostic = (function () {
     return 'member=' + members.length + '; sample=' + jsonSnippet(members.slice(0, 2), sampleLimit);
   }
 
+  function stripOccurrenceSuffix(value) {
+    return String(value || '')
+      .replace(/<[^>]*>\s*$/g, '')
+      .replace(/\.\d+\s*$/g, '')
+      .trim();
+  }
+
+  function engItemUqlUrl(term, top) {
+    var base = modelerBaseUrl();
+    if (!base || !term) return null;
+    top = top || 20;
+    return base + '/dseng/dseng:EngItem/search?$searchStr=' + encodeURIComponent(term) + '&$top=' + top;
+  }
+
+  function probeChildResolutionByInstanceName(rows, parentId, childData) {
+    var members = extractMembers(childData);
+    if (!members.length) {
+      rows.push(log('RAW Child resolution by instance name', false, 'sem instancias para pesquisar'));
+      return Promise.resolve();
+    }
+
+    var jobs = [];
+    members.slice(0, 2).forEach(function (member) {
+      var rawName = member && member.name;
+      var baseName = stripOccurrenceSuffix(rawName);
+      if (!baseName) return;
+      jobs.push({
+        step: 'RAW Child search label ' + baseName,
+        url: engItemUqlUrl('label:"' + baseName + '"', 20),
+        terms: [baseName]
+      });
+      jobs.push({
+        step: 'RAW Child search name ' + baseName,
+        url: engItemUqlUrl('name:' + baseName, 20),
+        terms: [baseName]
+      });
+      jobs.push({
+        step: 'RAW Child search plain ' + baseName,
+        url: engItemUqlUrl(baseName, 20),
+        terms: [baseName]
+      });
+    });
+    jobs = jobs.filter(function (job) { return !!job.url; });
+
+    rows.push(log('RAW Child resolution by instance name', !!jobs.length, jobs.length + ' request(s) controladas', {
+      count: jobs.length,
+      parentId: parentId
+    }));
+
+    return jobs.reduce(function (chain, job) {
+      return chain.then(function () {
+        return rawWafCall(job.step, job.url, {
+          type: 'json',
+          headers: minimalHeaders()
+        }).then(function (result) {
+          rows.push(result.row);
+          if (result.row.ok) {
+            var exact = collectExactCandidates(result.data, job.terms);
+            rows.push(log(job.step + ' payload', true, memberSummary(result.data, 2500), {
+              url: job.url,
+              count: extractMembers(result.data).length
+            }));
+            rows.push(log(job.step + ' exact matches', !!exact.length, candidateSummary(exact), {
+              url: job.url,
+              count: exact.length
+            }));
+          }
+        });
+      });
+    }, Promise.resolve());
+  }
+
   function probeEngInstanceRelationship(rows, parentId, childData) {
     if (!EnoviaApi.engInstanceChildrenUrl || !EnoviaApi.engInstanceDetailUrl) return Promise.resolve();
     var members = extractMembers(childData);
@@ -493,7 +565,9 @@ var ApiDiagnostic = (function () {
           }
         });
       });
-    }, Promise.resolve());
+    }, Promise.resolve()).then(function () {
+      return probeChildResolutionByInstanceName(rows, parentId, childData);
+    });
   }
 
   function lc(value) {

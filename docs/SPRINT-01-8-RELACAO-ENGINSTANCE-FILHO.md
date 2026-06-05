@@ -86,3 +86,18 @@ RAW EngInstance detail expand referencedObject
 Podemos iniciar a Sprint 02 do loader API-first se uma dessas rotas revelar a referencia filha real da instancia.
 
 Se todas falharem ou continuarem sem referencia filha, ainda nao devemos alterar o loader principal. O proximo diagnostico deve investigar outro contrato REST para relacao/ocorrencia, antes de implementar a E-BOM recursiva.
+
+## Resultado no tenant real
+
+Coleta recebida para build `bom20260606o`:
+
+- `RAW Candidate EngInstance 132FB3CE26D70E006A18D1870000316D` retornou `member=5`, `total=5`.
+- `RAW EngInstance list expand dseng:EngItem` retornou os mesmos `VPMInstance`, sem referencia filha.
+- `RAW EngInstance list expand referencedObject` retornou os mesmos `VPMInstance`, sem referencia filha.
+- `RAW EngInstance detail` das duas primeiras instancias retornou apenas a instancia.
+- `RAW EngInstance detail expand dseng:EngItem` retornou apenas a instancia.
+- `RAW EngInstance detail expand referencedObject` retornou apenas a instancia.
+
+Conclusao: para este tenant/build, lista, detalhe e `$expand` testados nao revelam `VPMInstance.Reference`.
+
+Nao iniciar Sprint 02 ainda. Proxima etapa: testar resolucao controlada do filho a partir do nome da instancia, apenas como hipotese diagnostica.
