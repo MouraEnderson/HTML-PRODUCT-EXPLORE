@@ -138,6 +138,7 @@ var ApiBomLoader = (function () {
 
     var expected = (ctx && ctx.expectedCount) || options.expectedCount || 0;
     var onProgress = options.onProgress || defaultProgress;
+    var resolvedPhysicalId = '';
 
     return ensureReady()
       .then(function () {
@@ -152,6 +153,7 @@ var ApiBomLoader = (function () {
             )
           );
         }
+        resolvedPhysicalId = physicalId;
         return BomService.loadLazyFull(physicalId, {
           expectedCount: expected,
           onProgress: onProgress
@@ -168,7 +170,7 @@ var ApiBomLoader = (function () {
           meta: meta,
           partial: partial,
           diagnostic: {
-            rootPhysicalId: diag.rootPhysicalId || physicalId,
+            rootPhysicalId: diag.rootPhysicalId || resolvedPhysicalId,
             expectedCount: expected,
             itemCount: count,
             resolvedReferences: diag.resolvedReferences || 0,
