@@ -186,43 +186,12 @@ var BomOrchestrator = (function () {
   }
 
   function runManualFallbackChain(ctx, options, failedMode, firstErr) {
-    if (options && options.forceLoader === 'paste') {
-      return Promise.reject(firstErr || new Error('Nenhuma fonte de cola disponivel.'));
-    }
-    var order = [];
-    if (failedMode !== 'paste') order.push('paste');
-    if (failedMode !== 'tsv') order.push('tsv');
-    var domMax = (APP_CONFIG && APP_CONFIG.DOM_MIRROR_MANUAL_MAX_EXPECTED) || 25;
-    if (
-      APP_CONFIG.DOM_MIRROR_FALLBACK !== false &&
-      failedMode !== 'dom-fallback' &&
-      (ctx.expectedCount || 0) <= domMax
-    ) {
-      order.push('dom-fallback');
-    }
-
-    function attempt(i, lastErr) {
-      if (i >= order.length) {
-        return Promise.reject(lastErr || firstErr || new Error('Nenhuma fonte obteve a E-BOM completa.'));
-      }
-      var mode = order[i];
-      var runOpts = options;
-      if (mode === 'tsv') {
-        runOpts = {
-          source: 'manual',
-          allowAutoCopy: options.allowAutoCopy !== false,
-          allowPartial: options.allowPartial === true,
-          preferApi: false,
-          onProgress: options.onProgress
-        };
-      }
-      var run = runLoaderMode(mode, ctx, runOpts);
-      return run.catch(function (err) {
-        return attempt(i + 1, err);
-      });
-    }
-
-    return attempt(0, firstErr);
+    return Promise.reject(
+      firstErr ||
+        new Error(
+          'Fonte unica falhou. Use Explorer expandido -> Ctrl+A -> Ctrl+C, depois clique Atualizar estrutura.'
+        )
+    );
   }
 
   /** Auto-sync: cola → TSV (copy/scroll) → DOM — sem API (evita 406 e tabela vazia). */
@@ -370,14 +339,14 @@ var BomOrchestrator = (function () {
       priorIndex = BomService.createSnapshot();
     }
 
-    var mode = options.source === 'manual' ? 'tsv' : pickLoaderMode(ctx, options);
+    var mode = options.source === 'manual' ? (options.forceLoader || 'paste') : pickLoaderMode(ctx, options);
     var chain;
     var apiFlag = mode === 'api';
 
     if (apiFlag) root.__3DX_ALLOW_API__ = true;
     chain = runLoaderMode(mode, ctx, options);
 
-    if (options.source === 'manual') {
+    if (options.source === 'manual' && options.allowFallback === true) {
       chain = chain.catch(function (firstErr) {
         if (apiFlag) {
           apiFlag = false;

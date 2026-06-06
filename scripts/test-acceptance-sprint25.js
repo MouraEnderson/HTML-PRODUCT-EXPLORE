@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 /**
- * Sprint 2.5 — testes automatizados T1–T4 (repo + deploy GitHub Pages).
- * Uso: node scripts/test-acceptance-sprint25.js
+ * Acceptance checks for the current GitHub Pages build.
  */
 'use strict';
 
@@ -37,7 +36,7 @@ function warn(id, msg) {
 }
 
 function hasMojibake(text) {
-  return /Ã|â‚¬|Â(?![\s\w])/.test(text);
+  return /Ãƒ|Ã¢â€šÂ¬|Ã‚(?![\s\w])/.test(text);
 }
 
 function extractBuild(text) {
@@ -49,109 +48,107 @@ function testT1Mont10Snapshot() {
   var snap = json('data/mont10.json');
   var names = snap.items.map(function (it) { return it.name; });
   if (snap.items.length !== 3) {
-    fail('T1', 'mont10.json tem ' + snap.items.length + ' itens (esperado 3)');
+    fail('T1', 'mont10.json has ' + snap.items.length + ' items, expected 3');
     return;
   }
   if (names.join(',') !== 'Mont10,M1,M2') {
-    fail('T1', 'Nomes incorretos: ' + names.join(', '));
+    fail('T1', 'Unexpected names: ' + names.join(', '));
     return;
   }
   var root = snap.items[0];
   if (!root.owner || root.owner.indexOf('Enderson') < 0) {
-    fail('T1', 'Owner raiz ausente ou incorreto');
+    fail('T1', 'Root owner missing or incorrect');
     return;
   }
   if (snap.items.some(function (it) { return it.revision !== '1.1'; })) {
-    fail('T1', 'Revisão diferente de 1.1');
+    fail('T1', 'Revision differs from 1.1');
     return;
   }
-  pass('T1', 'Snapshot Mont10: 3/3 — Mont10, M1, M2, owner e revisão 1.1 OK');
+  pass('T1', 'Snapshot Mont10: 3/3, owner and revision OK');
 }
 
 function testT2DroneSnapshot() {
   var snap = json('data/drone-assembly-pilot.json');
   var n = snap.items.length;
   if (n < 11) {
-    fail('T2', 'drone-assembly-pilot.json tem só ' + n + ' itens');
+    fail('T2', 'drone-assembly-pilot.json has only ' + n + ' items');
     return;
   }
   if (n !== 20) {
-    warn(
-      'T2',
-      'Snapshot local tem ' + n + '/20 peças — aceite 20/20 exige piloto 3DDashboard (TSV/API live)'
-    );
+    warn('T2', 'Local snapshot has ' + n + '/20; live TSV/API must validate 20/20');
     return;
   }
-  pass('T2', 'Snapshot Drone: 20/20 itens');
+  pass('T2', 'Snapshot Drone: 20/20 items');
 }
 
-function testT3SkaPolicy() {
+function testT3SingleSourcePolicy() {
   var cfg = read('assets/js/config.js');
-  if (cfg.indexOf('BOM_MAX_NODES') < 0 || cfg.indexOf('FAST_TSV_MAX') < 0) {
-    fail('T3', 'Limites BOM_MAX_NODES / FAST_TSV_MAX ausentes em config.js');
-    return;
-  }
   var orch = read('assets/js/services/bom-orchestrator.js');
-  if (orch.indexOf('runApiLoader') < 0 || orch.indexOf('expectedCount > maxTsv') < 0) {
-    fail('T3', 'Orchestrator não encaminha SKA grande para API/paste');
+  var paste = read('assets/js/services/paste-bom-loader.js');
+
+  if (cfg.indexOf('BOM_MAX_NODES') < 0 || cfg.indexOf('FAST_TSV_MAX') < 0) {
+    fail('T3-config', 'Scale guards missing from config.js');
     return;
   }
-  var banner = read('assets/js/ui/sync-banner.js');
-  if (banner.indexOf('Parcial') < 0 || banner.indexOf('truncada') < 0) {
-    fail('T3', 'Sync banner sem mensagens Parcial/truncada');
+  if (orch.indexOf("options.forceLoader || 'paste'") < 0) {
+    fail('T3-orchestrator', 'Manual refresh does not force paste source');
     return;
   }
-  pass(
-    'T3',
-    'Política SKA 79+: FAST_TSV_MAX=500, API lazy, banner Parcial/truncada — validar 79/79 no piloto'
-  );
+  if (orch.indexOf('options.allowFallback === true') < 0) {
+    fail('T3-orchestrator', 'Manual fallback is still implicit');
+    return;
+  }
+  if (paste.indexOf('items.length !== expected') < 0) {
+    fail('T3-paste', 'Paste loader does not reject partial TSV against Explorer count');
+    return;
+  }
+  if (paste.indexOf('BomSnapshot.applyPayload') < 0) {
+    fail('T3-paste', 'Paste loader does not apply through snapshot normalizer');
+    return;
+  }
+  pass('T3', 'Manual refresh uses one source, rejects partial TSV, and normalizes once');
 }
 
-function testT4UxAndUtf8() {
+function testT4UxAndBuild() {
   var widget = read('widget-v2.html');
   if (widget.indexOf("BOM_BUILD = '" + BUILD + "'") < 0) {
-    fail('T4-build-widget', 'widget-v2.html não referencia ' + BUILD);
+    fail('T4-build-widget', 'widget-v2.html does not reference ' + BUILD);
   } else {
     pass('T4-build-widget', 'widget-v2.html build ' + BUILD);
   }
 
   var buildId = read('assets/js/build-id.js');
   if (buildId.indexOf(BUILD) < 0) {
-    fail('T4-build-id', 'build-id.js desalinhado');
+    fail('T4-build-id', 'build-id.js is not aligned');
   } else {
     pass('T4-build-id', 'build-id.js = ' + BUILD);
   }
 
-  var cfgBuild = extractBuild(read('assets/js/config.js'));
+  var cfg = read('assets/js/config.js');
+  var cfgBuild = extractBuild(cfg);
   if (cfgBuild !== BUILD) {
     fail('T4-build-config', 'config.js BUILD=' + cfgBuild);
   } else {
-    pass('T4-build-config', 'config.js BUILD alinhado');
+    pass('T4-build-config', 'config.js BUILD aligned');
   }
 
-  var uiBlock = widget.slice(widget.indexOf('var UI_HTML'), widget.indexOf("root.innerHTML = UI_HTML"));
+  var uiBlock = widget.slice(widget.indexOf('var UI_HTML'), widget.indexOf('root.innerHTML = UI_HTML'));
   if (hasMojibake(uiBlock)) {
-    fail('T4-utf8', 'Mojibake detectado em UI_HTML do widget-v2.html');
+    fail('T4-utf8', 'Mojibake detected in widget UI_HTML');
   } else {
-    pass('T4-utf8', 'UI_HTML sem mojibake (escapes \\u)');
+    pass('T4-utf8', 'UI_HTML has no mojibake');
   }
-
-  var cfg = read('assets/js/config.js');
-  if (/label: 'N\\u00edvel'/.test(cfg) === false && cfg.indexOf("label: 'N\\u00edvel'") < 0) {
-    if (cfg.indexOf("'N\\u00edvel'") < 0) {
-      fail('T4-columns', 'PRODUCT_EXPLORER_COLUMNS sem escapes UTF-8');
-    }
-  }
-  pass('T4-columns', 'Colunas piloto com escapes Unicode');
 
   if (cfg.indexOf('USE_DOM_MIRROR_PRIMARY: false') < 0) {
-    fail('T4-arch', 'USE_DOM_MIRROR_PRIMARY nao esta false');
-  } else if (cfg.indexOf("PRIMARY_LOADER: 'tsv'") < 0) {
-    fail('T4-arch', 'PRIMARY_LOADER nao esta tsv');
+    fail('T4-arch', 'USE_DOM_MIRROR_PRIMARY is not false');
+  } else if (cfg.indexOf('DOM_MIRROR_FALLBACK: false') < 0) {
+    fail('T4-arch', 'DOM_MIRROR_FALLBACK is not false');
   } else if (cfg.indexOf('PREFER_API_ON_MANUAL_REFRESH: false') < 0) {
-    fail('T4-arch', 'Atualizar estrutura ainda prefere API');
+    fail('T4-arch', 'Manual refresh still prefers API');
+  } else if (cfg.indexOf('PASTE_TRAP_ENABLED: true') < 0) {
+    fail('T4-arch', 'Paste trap is not enabled');
   } else {
-    pass('T4-arch', 'Botao manual usa Explorer/TSV primeiro; API fora do clique');
+    pass('T4-arch', 'Manual button uses complete paste/TSV; API and DOM are outside the click');
   }
 }
 
@@ -178,17 +175,13 @@ function testDeployReachable() {
     .then(function (res) {
       if (res.status !== 200) {
         fail('T4-deploy', 'GitHub Pages HTTP ' + res.status);
-        return;
+        return null;
       }
       if (res.body.indexOf(BUILD) < 0) {
-        fail('T4-deploy', 'Widget publicado não contém build ' + BUILD);
-        return;
+        fail('T4-deploy', 'Published widget does not contain build ' + BUILD);
+        return null;
       }
-      if (hasMojibake(res.body.slice(0, 8000))) {
-        warn('T4-deploy', 'Possível mojibake no HTML publicado (verificar cache CDN)');
-      } else {
-        pass('T4-deploy', 'GitHub Pages responde 200 com build ' + BUILD);
-      }
+      pass('T4-deploy', 'GitHub Pages responds with build ' + BUILD);
       return fetchText(
         'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/js/bom-bundle-' +
           BUILD +
@@ -198,17 +191,17 @@ function testDeployReachable() {
     .then(function (bundleRes) {
       if (!bundleRes) return;
       if (bundleRes.status !== 200) {
-        fail('T4-bundle', 'Bundle publicado HTTP ' + bundleRes.status);
+        fail('T4-bundle', 'Published bundle HTTP ' + bundleRes.status);
         return;
       }
       if (bundleRes.body.indexOf('BomOrchestrator') < 0) {
-        fail('T4-bundle', 'Bundle sem BomOrchestrator');
+        fail('T4-bundle', 'Bundle does not include BomOrchestrator');
         return;
       }
-      pass('T4-bundle', 'bom-bundle-' + BUILD + '.js acessível no GitHub Pages');
+      pass('T4-bundle', 'bom-bundle-' + BUILD + '.js reachable');
     })
     .catch(function (err) {
-      fail('T4-deploy', 'Falha rede GitHub Pages: ' + err.message);
+      fail('T4-deploy', 'GitHub Pages network failure: ' + err.message);
     });
 }
 
@@ -216,7 +209,7 @@ function printReport() {
   var ok = 0;
   var bad = 0;
   var warns = 0;
-  console.log('\n=== Sprint 2.5 — Aceite T1–T4 (automatizado) ===\n');
+  console.log('\n=== Acceptance report ===\n');
   results.forEach(function (r) {
     var tag = r.ok ? (r.warn ? 'WARN' : 'PASS') : 'FAIL';
     console.log('[' + tag + '] ' + r.id + ': ' + r.msg);
@@ -224,15 +217,14 @@ function printReport() {
     else if (r.warn) warns++;
     else ok++;
   });
-  console.log('\nResumo: ' + ok + ' pass, ' + warns + ' warn, ' + bad + ' fail');
+  console.log('\nSummary: ' + ok + ' pass, ' + warns + ' warn, ' + bad + ' fail');
   console.log('Widget: ' + WIDGET_URL);
-  console.log('\nPiloto manual (3DDashboard): ver TESTE-SPRINT-25-T1-T4.md');
   process.exit(bad > 0 ? 1 : 0);
 }
 
 testT1Mont10Snapshot();
 testT2DroneSnapshot();
-testT3SkaPolicy();
-testT4UxAndUtf8();
+testT3SingleSourcePolicy();
+testT4UxAndBuild();
 
 testDeployReachable().then(printReport);

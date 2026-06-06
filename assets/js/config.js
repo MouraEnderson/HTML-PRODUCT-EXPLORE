@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260606zf',
+    BUILD: 'bom20260606zg',
     /** Product Explorer conta ocorrencias; nao consolidar linhas repetidas por ID. */
     PRESERVE_OCCURRENCE_ROWS: true,
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
@@ -61,9 +61,9 @@
     SCROLL_HARVEST_STEP_MS: 80,
     /** TSV: espelho Explorer antes de cola (Mont10/Drone sem Ctrl+C) */
     SKIP_MIRROR_ON_TSV: false,
-    /** clipboard.readText trava em iframe GitHub no 3DDashboard */
-    SKIP_CLIPBOARD_READ: true,
-    PASTE_TRAP_ENABLED: false,
+    /** Atualizar estrutura e acionado pelo usuario; tentar clipboard no clique e cair para Ctrl+V explicito. */
+    SKIP_CLIPBOARD_READ: false,
+    PASTE_TRAP_ENABLED: true,
     EXPLORER_AUTO_COPY_ENABLED: false,
     /** Fallback DOM manual só até N peças */
     DOM_MIRROR_MANUAL_MAX_EXPECTED: 12,
@@ -109,8 +109,8 @@
     PREFER_API_ON_MANUAL_REFRESH: false,
     /** Sprint 2.5 item 6: espelho DOM/innerText nunca como primary */
     USE_DOM_MIRROR_PRIMARY: false,
-    /** Fallback DOM só após API/TSV/cola falharem — banner amarelo */
-    DOM_MIRROR_FALLBACK: true,
+    /** Fallback DOM reprovado como fonte de produto: iframe/grid virtualizada geram parciais. */
+    DOM_MIRROR_FALLBACK: false,
     PILOT_API_TREE_DEPTH: 1,
     STRUCTURE_SYNC_DEBOUNCE_MS: 2200,
     AUTO_SYNC_TIMEOUT_MS: 24000,

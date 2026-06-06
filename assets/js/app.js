@@ -941,9 +941,11 @@ var App = (function () {
       }
       return BomOrchestrator.refreshStructure({
         source: 'manual',
-        allowAutoCopy: true,
+        forceLoader: 'paste',
+        allowAutoCopy: false,
         preferApi: false,
-        allowPartial: true
+        allowPartial: false,
+        allowFallback: false
       });
     }
     function primePasteBuffer() {
