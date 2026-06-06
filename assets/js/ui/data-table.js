@@ -12,6 +12,7 @@ var DataTable = (function () {
   var scrollContainer;
   var columns = [];
   var rowSelectHandler = null;
+  var rowExpandHandler = null;
   var selectedIndex = -1;
   var MAX_ROWS = 8000;
 
@@ -51,6 +52,10 @@ var DataTable = (function () {
 
   function onRowSelect(handler) {
     rowSelectHandler = handler;
+  }
+
+  function onRowExpand(handler) {
+    rowExpandHandler = handler;
   }
 
   function highlightRow(index) {
@@ -94,6 +99,20 @@ var DataTable = (function () {
   function handleRowPointer(ev) {
     if (!ev || !ev.target || !ev.target.closest) return;
     if (!syncTableRefs()) return;
+    var expandBtn = ev.target.closest('[data-bom-expand]');
+    if (expandBtn && tbody && tbody.contains(expandBtn)) {
+      if (ev.preventDefault) ev.preventDefault();
+      if (ev.stopPropagation) ev.stopPropagation();
+      if (expandBtn.disabled) return;
+      var nodeId = expandBtn.getAttribute('data-bom-expand');
+      if (nodeId && rowExpandHandler) {
+        expandBtn.disabled = true;
+        rowExpandHandler(nodeId).finally(function () {
+          expandBtn.disabled = false;
+        });
+      }
+      return;
+    }
     var tr = ev.target.closest('tr.bom-table-row[data-row-index]');
     if (!tr || !tbody || !tbody.contains(tr)) return;
     var idx = parseInt(tr.getAttribute('data-row-index'), 10);
@@ -151,8 +170,17 @@ var DataTable = (function () {
 
   function formatCell(n, col) {
     if (col.format === 'thumb' || col.key === '_thumb') {
-      if (typeof PartImage !== 'undefined') return PartImage.thumbHtml(n, 'bom-thumb-md');
-      return '<span class="bom-thumb-wrap bom-thumb-md"><span class="bom-thumb-fallback">?</span></span>';
+      var thumb = typeof PartImage !== 'undefined'
+        ? PartImage.thumbHtml(n, 'bom-thumb-md')
+        : '<span class="bom-thumb-wrap bom-thumb-md"><span class="bom-thumb-fallback">?</span></span>';
+      var canExpand = n && n.isAssembly && !n.expanded;
+      if (!canExpand) return thumb;
+      return (
+        '<button type="button" class="bom-row-expand" data-bom-expand="' +
+        escapeAttr(n.physicalid) +
+        '" title="Carregar filhos deste subconjunto" aria-label="Carregar filhos deste subconjunto">+</button>' +
+        thumb
+      );
     }
     var v = n[col.key];
     if (col.format === 'bool') return v ? 'Sim' : 'Não';
@@ -274,6 +302,7 @@ var DataTable = (function () {
     init: init,
     setData: setData,
     onRowSelect: onRowSelect,
+    onRowExpand: onRowExpand,
     selectRow: selectRow,
     selectFirst: selectFirst,
     getSelectedIndex: function () { return selectedIndex; },

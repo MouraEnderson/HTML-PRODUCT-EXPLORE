@@ -2226,6 +2226,24 @@ body.ui-clean .main-clean {
   vertical-align: middle;
 }
 
+.bom-row-expand {
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  border: 1px solid #9db5d6;
+  border-radius: 4px;
+  background: #eef5ff;
+  color: #1f5fbf;
+  font-weight: 700;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.bom-row-expand:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .bom-thumb-wrap {
   display: inline-flex;
   align-items: center;

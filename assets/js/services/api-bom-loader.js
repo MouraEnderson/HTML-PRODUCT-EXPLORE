@@ -85,10 +85,12 @@ var ApiBomLoader = (function () {
   function formatMessage(meta, expected) {
     var count = meta.itemCount || 0;
     var name = meta.productName || 'E-BOM';
-    var msg = 'API ' + count;
+    var msg = meta && meta.scopeMode === 'initial-scope' ? 'API escopo inicial ' + count : 'API ' + count;
     if (expected > 0) msg += '/' + expected;
     msg += ' — ' + name;
-    if (expected > 0 && count < expected - 1) {
+    if (meta && meta.scopeMode === 'initial-scope') {
+      msg += ' (raiz + filhos diretos; expanda o subconjunto na tabela)';
+    } else if (expected > 0 && count < expected - 1) {
       msg += ' (E-BOM unica; Explorer pode contar ocorrencias/selecionados)';
     }
     if (meta.truncated) {
@@ -101,7 +103,7 @@ var ApiBomLoader = (function () {
     if (!p) return;
     var msg;
     if (p.phase === 'connect') msg = 'Conectando API ENOVIA…';
-    else if (p.phase === 'root') msg = 'Raiz carregada — expandindo estrutura…';
+    else if (p.phase === 'root') msg = 'Raiz carregada — carregando filhos diretos…';
     else {
       msg = 'API';
       if (p.expected > 0) msg += ' ' + p.loaded + '/' + p.expected;
@@ -132,8 +134,8 @@ var ApiBomLoader = (function () {
         new Error('WAFData indisponível — abra no 3DDashboard (Additional App).')
       );
     }
-    if (typeof BomService === 'undefined' || !BomService.loadLazyFull) {
-      return Promise.reject(new Error('BomService.loadLazyFull indisponível.'));
+    if (typeof BomService === 'undefined' || !BomService.loadInitialScope) {
+      return Promise.reject(new Error('BomService.loadInitialScope indisponível.'));
     }
 
     var expected = (ctx && ctx.expectedCount) || options.expectedCount || 0;
@@ -154,19 +156,20 @@ var ApiBomLoader = (function () {
           );
         }
         resolvedPhysicalId = physicalId;
-        return BomService.loadLazyFull(physicalId, {
+        return BomService.loadInitialScope(physicalId, {
           expectedCount: expected,
           onProgress: onProgress
         });
       })
       .then(function (meta) {
         var count = meta && meta.itemCount ? meta.itemCount : 0;
-        var partial = expected > 0 && count < expected - 1;
+        var partial = false;
         var diag = (meta && meta.apiDiagnostics) || {};
         return {
           ok: true,
           mode: 'api',
           loaderMode: 'api',
+          scopeMode: (meta && meta.scopeMode) || 'initial-scope',
           meta: meta,
           partial: partial,
           diagnostic: {

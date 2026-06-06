@@ -140,16 +140,20 @@ function testT4UxAndBuild() {
     pass('T4-utf8', 'UI_HTML has no mojibake');
   }
 
-  if (cfg.indexOf('USE_DOM_MIRROR_PRIMARY: true') < 0) {
-    fail('T4-arch', 'USE_DOM_MIRROR_PRIMARY is not true for manual Explorer scan');
-  } else if (cfg.indexOf('DOM_MIRROR_FALLBACK: true') < 0) {
-    fail('T4-arch', 'DOM_MIRROR_FALLBACK is not true for manual Explorer scan');
-  } else if (cfg.indexOf('PREFER_API_ON_MANUAL_REFRESH: false') < 0) {
-    fail('T4-arch', 'Manual refresh still prefers API');
+  var apiLoader = read('assets/js/services/api-bom-loader.js');
+  var bomService = read('assets/js/services/bom-service.js');
+  if (cfg.indexOf("PRIMARY_LOADER: 'api'") < 0) {
+    fail('T4-arch', 'Manual refresh must use API as primary loader');
+  } else if (cfg.indexOf('PREFER_API_ON_MANUAL_REFRESH: true') < 0) {
+    fail('T4-arch', 'Manual refresh must prefer API');
+  } else if (apiLoader.indexOf('BomService.loadInitialScope') < 0) {
+    fail('T4-arch', 'API loader must use initial-scope loading');
+  } else if (bomService.indexOf('function loadInitialScope') < 0) {
+    fail('T4-arch', 'BomService.loadInitialScope is missing');
   } else if (cfg.indexOf('PASTE_TRAP_ENABLED: false') < 0) {
     fail('T4-arch', 'Paste trap is still enabled');
   } else {
-    pass('T4-arch', 'Manual button uses Explorer scan with paste disabled');
+    pass('T4-arch', 'Manual button uses API initial scope with paste disabled');
   }
 }
 

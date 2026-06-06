@@ -470,6 +470,83 @@ var BomService = (function () {
     };
   }
 
+  function loadRootMember(physicalId) {
+    return EnoviaApi.getProductRoot(physicalId, null)
+      .then(function (res) {
+        var member = res.member || res;
+        var rootMember = Array.isArray(member) ? member[0] : member;
+        var attrs = AttributeService.extractFromMember(rootMember);
+        normalizeApiDisplayAttrs(attrs, rootMember);
+        if (res.bomRootId) attrs.physicalid = res.bomRootId;
+        if (!attrs.physicalid) attrs.physicalid = physicalId;
+        attrs.hasPhysicalProduct = true;
+        attrs.displayType = attrs.displayType || 'Physical Product';
+        return attrs;
+      });
+  }
+
+  function loadInitialScope(physicalId, options) {
+    options = options || {};
+    var onProgress = options.onProgress || function () {};
+    var expected = options.expectedCount || 0;
+
+    function report(phase) {
+      onProgress({
+        phase: phase || 'scope',
+        loaded: nodeCount,
+        expected: expected || nodeCount
+      });
+    }
+
+    physicalId = normalizePid(physicalId);
+    var prior = createSnapshot();
+    resetApiDiagnostics(physicalId, expected);
+
+    if (APP_CONFIG.DEMO_MODE) {
+      reset();
+      rootId = physicalId;
+      return loadDemoTree(physicalId).then(function () {
+        report('done');
+        var demoMeta = buildMetaFromIndex();
+        demoMeta.scopeMode = 'initial-scope';
+        return demoMeta;
+      });
+    }
+
+    return loadRootMember(physicalId)
+      .then(function (attrs) {
+        reset();
+        rootId = attrs.physicalid;
+        addNode(attrs, null, 0, 1);
+        if (index[rootId]) {
+          index[rootId].loaded = false;
+          index[rootId].expanded = true;
+          index[rootId].isAssembly = true;
+        }
+        report('root');
+        return loadChildren(rootId, 1);
+      })
+      .then(function (children) {
+        children.forEach(function (child) {
+          if (child) child.expanded = false;
+        });
+        if (index[rootId]) {
+          index[rootId].loaded = true;
+          index[rootId].expanded = true;
+        }
+        report('done');
+        var meta = buildMetaFromIndex();
+        meta.scopeMode = 'initial-scope';
+        meta.directChildren = children.length;
+        meta.explorerExpectedCount = expected;
+        return meta;
+      })
+      .catch(function (err) {
+        restoreSnapshot(prior);
+        throw err;
+      });
+  }
+
   function expandBfs(startId, reportFn) {
     var queue = [startId];
     var seen = {};
@@ -542,16 +619,9 @@ var BomService = (function () {
       });
     }
 
-    return EnoviaApi.getProductRoot(physicalId, null)
-      .then(function (res) {
+    return loadRootMember(physicalId)
+      .then(function (attrs) {
         reset();
-        rootId = physicalId;
-        var member = res.member || res;
-        var rootMember = Array.isArray(member) ? member[0] : member;
-        var attrs = AttributeService.extractFromMember(rootMember);
-        normalizeApiDisplayAttrs(attrs, rootMember);
-        if (res.bomRootId) attrs.physicalid = res.bomRootId;
-        if (!attrs.physicalid) attrs.physicalid = physicalId;
         attrs.hasPhysicalProduct = true;
         attrs.displayType = attrs.displayType || 'Physical Product';
         addNode(attrs, null, 0, 1);
@@ -595,14 +665,8 @@ var BomService = (function () {
       return loadDemoTree(physicalId);
     }
 
-    return EnoviaApi.getProductRoot(physicalId, null)
-      .then(function (res) {
-        var member = res.member || res;
-        var rootMember = Array.isArray(member) ? member[0] : member;
-        var attrs = AttributeService.extractFromMember(rootMember);
-        normalizeApiDisplayAttrs(attrs, rootMember);
-        if (res.bomRootId) attrs.physicalid = res.bomRootId;
-        if (!attrs.physicalid) attrs.physicalid = physicalId;
+    return loadRootMember(physicalId)
+      .then(function (attrs) {
         attrs.hasPhysicalProduct = true;
         attrs.displayType = attrs.displayType || 'Physical Product';
         addNode(attrs, null, 0, 1);
@@ -697,6 +761,7 @@ var BomService = (function () {
     createSnapshot: createSnapshot,
     restoreSnapshot: restoreSnapshot,
     loadRoot: loadRoot,
+    loadInitialScope: loadInitialScope,
     loadLazyFull: loadLazyFull,
     loadRootFromSelection: loadRootFromSelection,
     loadFrom3DXProduct: loadFrom3DXProduct,

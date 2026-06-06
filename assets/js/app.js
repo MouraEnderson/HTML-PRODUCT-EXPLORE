@@ -201,6 +201,19 @@ var App = (function () {
     DataTable.onRowSelect(function (node) {
       if (typeof PartPreview !== 'undefined') PartPreview.show(node);
     });
+    if (typeof DataTable.onRowExpand === 'function') {
+      DataTable.onRowExpand(function (id) {
+        setStatus('Carregando subconjunto...', 'info');
+        return BomService.expandNode(id)
+          .then(function () {
+            refreshUI();
+            setStatus('Subconjunto carregado.', 'ok');
+          })
+          .catch(function (err) {
+            setStatus('Subconjunto: ' + ((err && err.message) || err), 'error');
+          });
+      });
+    }
     if (filtered.length) {
       var si = typeof DataTable.getSelectedIndex === 'function' ? DataTable.getSelectedIndex() : -1;
       if (si >= 0 && si < filtered.length && typeof DataTable.selectRow === 'function') {
@@ -938,9 +951,10 @@ var App = (function () {
       .then(function () {
         return BomOrchestrator.refreshStructure({
           source: 'manual',
-          allowAutoCopy: true,
+          allowAutoCopy: false,
           allowPartial: false,
-          allowFallback: true
+          allowFallback: false,
+          preferApi: true
         });
       })
       .then(function (res) {
@@ -1007,6 +1021,19 @@ var App = (function () {
     DataTable.onRowSelect(function (node) {
       if (typeof PartPreview !== 'undefined') PartPreview.show(node);
     });
+    if (typeof DataTable.onRowExpand === 'function') {
+      DataTable.onRowExpand(function (id) {
+        setStatus('Carregando subconjunto...', 'info');
+        return BomService.expandNode(id)
+          .then(function () {
+            refreshUI();
+            setStatus('Subconjunto carregado.', 'ok');
+          })
+          .catch(function (err) {
+            setStatus('Subconjunto: ' + ((err && err.message) || err), 'error');
+          });
+      });
+    }
     var treeEl = byId('bomTree');
     if (treeEl && APP_CONFIG.SHOW_TREE !== false && typeof BomTree !== 'undefined') {
       BomTree.init('#bomTree', function (id) {
