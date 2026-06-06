@@ -670,6 +670,21 @@ var ApiDiagnostic = (function () {
 
     var jobs = [
       {
+        step: 'RAW EngItem expand all levels ' + parentId,
+        url: EnoviaApi.engItemExpandUrl ? EnoviaApi.engItemExpandUrl(parentId) : '',
+        method: 'POST',
+        body: EnoviaApi.engItemExpandBody ? EnoviaApi.engItemExpandBody({ expandDepth: -1 }) : {
+          expandDepth: -1,
+          withPath: true,
+          type_filter_bo: ['VPMReference', 'VPMRepReference'],
+          type_filter_rel: ['VPMInstance', 'VPMRepInstance']
+        }
+      },
+      {
+        step: 'RAW EngInstance list mask details ' + parentId,
+        url: EnoviaApi.engInstanceChildrenUrl(parentId, 0, 5)
+      },
+      {
         step: 'RAW EngInstance list expand dseng:EngItem ' + parentId,
         url: EnoviaApi.engInstanceChildrenUrl(parentId, 0, 5, 'dseng:EngItem')
       },
@@ -702,9 +717,16 @@ var ApiDiagnostic = (function () {
 
     return jobs.reduce(function (chain, job) {
       return chain.then(function () {
+        if (!job.url) return null;
+        var headers = minimalHeaders();
+        if (job.method === 'POST') {
+          headers['Content-Type'] = 'application/json';
+        }
         return rawWafCall(job.step, job.url, {
+          method: job.method || 'GET',
           type: 'json',
-          headers: minimalHeaders()
+          headers: headers,
+          data: job.body ? JSON.stringify(job.body) : undefined
         }).then(function (result) {
           rows.push(result.row);
           if (result.row.ok) {

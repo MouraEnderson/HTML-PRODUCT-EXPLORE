@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260606zj',
+    BUILD: 'bom20260606zk',
     /** Product Explorer conta ocorrencias; nao consolidar linhas repetidas por ID. */
     PRESERVE_OCCURRENCE_ROWS: true,
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
@@ -192,6 +192,13 @@
       ENG_INSTANCE: 'dseng:EngInstance',
       PHYSICAL_PRODUCT: 'dspfl',
       PHYS_PRODUCT_TYPE: 'dspfl:PhysicalProduct'
+    },
+
+    /** Contrato oficial dseng para obter EngInstance com objeto referenciado. */
+    DSENG: {
+      ENG_INSTANCE_MASK: 'dsmveng:EngInstanceMask.Details',
+      ENG_INSTANCE_FIELDS: 'dsmvcfg:attribute.hasConfiguredInstance',
+      EXPAND_DEPTH: -1
     },
 
     /** RelaÃƒÂ§ÃƒÂµes expand REST */

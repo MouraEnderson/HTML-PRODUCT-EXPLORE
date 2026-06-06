@@ -56,28 +56,93 @@ var EnoviaApi = (function () {
     return restBase + '/' + m.ENG_ITEM + '/' + m.ENG_ITEM_TYPE + '/' + encodeURIComponent(apiId(physicalId));
   }
 
-  function engInstanceChildrenUrl(parentPhysicalId, skip, top, expand) {
+  function dsengCfg() {
+    return (APP_CONFIG && APP_CONFIG.DSENG) || {};
+  }
+
+  function normalizeEngInstanceOptions(options) {
+    if (typeof options === 'string') return { expand: options };
+    return options || {};
+  }
+
+  function appendParam(params, key, value) {
+    if (value === undefined || value === null || value === '') return;
+    params.push(key + '=' + encodeURIComponent(value));
+  }
+
+  function engInstanceChildrenUrl(parentPhysicalId, skip, top, options) {
     ensureRestBase();
+    options = normalizeEngInstanceOptions(options);
     skip = skip || 0;
     top = top || APP_CONFIG.BOM_LAZY_BATCH_SIZE;
     var m = APP_CONFIG.MODELERS;
-    var url = (
+    var cfg = dsengCfg();
+    var params = [];
+    appendParam(params, '$mva', 'true');
+    appendParam(params, '$skip', skip);
+    appendParam(params, '$top', top);
+    if (options.mask !== false) {
+      appendParam(params, '$mask', options.mask || cfg.ENG_INSTANCE_MASK || 'dsmveng:EngInstanceMask.Details');
+    }
+    if (options.fields !== false) {
+      appendParam(params, '$fields', options.fields || cfg.ENG_INSTANCE_FIELDS || 'dsmvcfg:attribute.hasConfiguredInstance');
+    }
+    if (options.expand) appendParam(params, '$expand', options.expand);
+    return (
       restBase + '/' + m.ENG_ITEM + '/' + m.ENG_ITEM_TYPE + '/' + encodeURIComponent(apiId(parentPhysicalId)) +
-      '/dseng:EngInstance?$skip=' + skip + '&$top=' + top
+      '/dseng:EngInstance?' + params.join('&')
     );
-    if (expand) url += '&$expand=' + encodeURIComponent(expand);
-    return url;
   }
 
-  function engInstanceDetailUrl(parentPhysicalId, instanceId, expand) {
+  function engInstanceDetailUrl(parentPhysicalId, instanceId, options) {
     ensureRestBase();
+    options = normalizeEngInstanceOptions(options);
     var m = APP_CONFIG.MODELERS;
+    var cfg = dsengCfg();
+    var params = [];
+    appendParam(params, '$mva', 'true');
+    if (options.mask !== false) {
+      appendParam(params, '$mask', options.mask || cfg.ENG_INSTANCE_MASK || 'dsmveng:EngInstanceMask.Details');
+    }
+    if (options.fields !== false) {
+      appendParam(params, '$fields', options.fields || cfg.ENG_INSTANCE_FIELDS || 'dsmvcfg:attribute.hasConfiguredInstance');
+    }
+    if (options.expand) appendParam(params, '$expand', options.expand);
     var url = (
       restBase + '/' + m.ENG_ITEM + '/' + m.ENG_ITEM_TYPE + '/' + encodeURIComponent(apiId(parentPhysicalId)) +
       '/dseng:EngInstance/' + encodeURIComponent(apiId(instanceId))
     );
-    if (expand) url += '?$expand=' + encodeURIComponent(expand);
+    if (params.length) url += '?' + params.join('&');
     return url;
+  }
+
+  function engItemExpandUrl(physicalId) {
+    ensureRestBase();
+    var m = APP_CONFIG.MODELERS;
+    return (
+      restBase + '/' + m.ENG_ITEM + '/' + m.ENG_ITEM_TYPE + '/' + encodeURIComponent(apiId(physicalId)) +
+      '/expand'
+    );
+  }
+
+  function engItemExpandBody(options) {
+    options = options || {};
+    var cfg = dsengCfg();
+    var body = {
+      expandDepth: options.expandDepth == null ? (cfg.EXPAND_DEPTH == null ? -1 : cfg.EXPAND_DEPTH) : options.expandDepth,
+      withPath: options.withPath !== false,
+      type_filter_bo: options.type_filter_bo || options.typeFilterBo || ['VPMReference', 'VPMRepReference'],
+      type_filter_rel: options.type_filter_rel || options.typeFilterRel || ['VPMInstance', 'VPMRepInstance']
+    };
+    if (options.filter) body.filter = options.filter;
+    return body;
+  }
+
+  function expandEngItem(physicalId, options) {
+    return WafClient.post(engItemExpandUrl(physicalId), JSON.stringify(engItemExpandBody(options)), {
+      Accept: 'application/json',
+      'Content-Type': 'application/json'
+    });
   }
 
   function engItemSearchUrl(term, top) {
@@ -485,11 +550,14 @@ var EnoviaApi = (function () {
     engItemUrl: engItemUrl,
     engInstanceChildrenUrl: engInstanceChildrenUrl,
     engInstanceDetailUrl: engInstanceDetailUrl,
+    engItemExpandUrl: engItemExpandUrl,
+    engItemExpandBody: engItemExpandBody,
     physicalProductUrl: physicalProductUrl,
     extractEngItemIdFromResponse: extractEngItemIdFromResponse,
     preferEngBomApi: preferEngBomApi,
     preferEngChildrenForParent: preferEngChildrenForParent,
     isCloudPrdId: isCloudPrdId,
+    expandEngItem: expandEngItem,
     getEngItemBomExpand: getEngItemBomExpand,
     getEngInstanceChildren: getEngInstanceChildren,
     getPhysicalProductChildren: getPhysicalProductChildren,

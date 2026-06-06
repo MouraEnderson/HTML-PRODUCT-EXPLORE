@@ -9,12 +9,14 @@ var BomService = (function () {
   var rootId = null;
   var nodeCount = 0;
   var apiDiagnostics = {};
+  var referenceDetailCache = {};
 
   function reset() {
     index = {};
     rootId = null;
     nodeCount = 0;
     apiDiagnostics = {};
+    referenceDetailCache = {};
     PhysicalProductService.clearCache();
   }
 
@@ -128,8 +130,10 @@ var BomService = (function () {
     var attrs = AttributeService.extractFromMember(ref);
     var qty = member.quantity || member['dseng:quantity'] || member.qty || 1;
     var unresolved = isUnresolvedInstance(ref, member);
-    if (!attrs.physicalid && ref && ref.id) attrs.physicalid = ref.id;
+    if (!attrs.physicalid && ref) attrs.physicalid = refIdentifier(ref) || ref.id || ref.physicalid;
     normalizeApiDisplayAttrs(attrs, ref);
+    if (!attrs.name) attrs.name = stripOccurrenceSuffix(member && member.name) || attrs.physicalid || '';
+    if (!attrs.title) attrs.title = member.description || attrs.description || '';
     if (unresolved) {
       attrs.name = stripOccurrenceSuffix(member && member.name) || attrs.name || 'InstÃ¢ncia sem referÃªncia';
       attrs.title = member.description || '';
@@ -173,6 +177,54 @@ var BomService = (function () {
     return attrs;
   }
 
+  function refIdentifier(ref) {
+    if (!ref) return '';
+    var id =
+      ref.physicalid ||
+      ref.id ||
+      ref.identifier ||
+      ref.Identifier ||
+      '';
+    if (!id && ref.relativePath) {
+      var m = String(ref.relativePath).match(/\/([^/?#]+)(?:[?#].*)?$/);
+      if (m) id = m[1];
+    }
+    return String(id || '').trim();
+  }
+
+  function needsReferenceDetails(ref) {
+    if (!ref || typeof ref !== 'object') return false;
+    if (!refIdentifier(ref)) return false;
+    if (ref.name || ref.title || ref.revision || ref.owner || ref.state || ref.maturity) return false;
+    return !!(ref.identifier || ref.relativePath || ref.source || ref.type);
+  }
+
+  function mergeReferenceDetails(ref, details) {
+    if (!details || typeof details !== 'object') return ref;
+    var enriched = Object.assign({}, ref, details);
+    if (!enriched.physicalid) enriched.physicalid = details.physicalid || details.id || refIdentifier(ref);
+    if (!enriched.id) enriched.id = details.id || details.physicalid || refIdentifier(ref);
+    return enriched;
+  }
+
+  function loadReferenceDetails(ref) {
+    if (!needsReferenceDetails(ref) || !EnoviaApi.getEngItem) return Promise.resolve(ref);
+    var id = refIdentifier(ref);
+    if (!id) return Promise.resolve(ref);
+    if (!referenceDetailCache[id]) {
+      referenceDetailCache[id] = EnoviaApi.getEngItem(id)
+        .then(function (res) {
+          var members = EnoviaApi.extractMembers ? EnoviaApi.extractMembers(res) : [];
+          var detail = members[0] || res;
+          return mergeReferenceDetails(ref, detail);
+        })
+        .catch(function () {
+          return ref;
+        });
+    }
+    return referenceDetailCache[id];
+  }
+
   function parseInstance(member, parentId, level) {
     return addInstanceNode(getEmbeddedReference(member), member, parentId, level);
   }
@@ -180,7 +232,9 @@ var BomService = (function () {
   function resolveEngInstance(member, parentId, level) {
     var ref = getEmbeddedReference(member);
     if (ref && ref !== member) {
-      return Promise.resolve(addInstanceNode(ref, member, parentId, level));
+      return loadReferenceDetails(ref).then(function (detail) {
+        return addInstanceNode(detail, member, parentId, level);
+      });
     }
 
     var baseName = stripOccurrenceSuffix(member && member.name);
