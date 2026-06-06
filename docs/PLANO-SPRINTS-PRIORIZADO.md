@@ -59,6 +59,10 @@ Problema que resolve:
 
 Hoje os erros 404/406 ficam misturados com fallback TSV, paste, DOM, miniatura e 3DPlay. Precisamos provar quais endpoints funcionam no tenant real antes de reescrever a carga automatica.
 
+Atualizacao 2026-06-06:
+
+O diagnostico deve provar contrato relacional, nao apenas status HTTP. As coletas dos casos 50 e 79 provaram que `WAFData`, `3DSpace`, `CSRF` e busca UQL funcionam, mas `dseng:EngInstance` nao entregou o filho referenciado no payload atual. Portanto, esta prioridade so avanca se encontrar endpoint, mask ou include que entregue a relacao pai -> instancia -> filho real.
+
 Etapas:
 
 1. Criar ou ajustar diagnostico isolado de plataforma.
@@ -67,8 +71,9 @@ Etapas:
 4. Testar CSRF via `WAFData`.
 5. Testar raiz por `dseng:EngItem`.
 6. Testar filhos por `dseng:EngInstance` com `$skip` e `$top`.
-7. Registrar payloads reais ou formato resumido seguro, sem credenciais.
-8. Separar erros de estrutura de erros de thumbnail/getpicture.
+7. Testar variantes documentadas de mask/include/expand para obter o filho referenciado real.
+8. Registrar payloads reais ou formato resumido seguro, sem credenciais.
+9. Separar erros de estrutura de erros de thumbnail/getpicture.
 
 Teste para avancar:
 
@@ -81,12 +86,17 @@ Teste para avancar:
   - se existe proxima pagina.
 - Network filtrado por `dseng` deve mostrar chamadas reais ou erro unico explicavel.
 - Nao pode haver cascata de endpoints incompatíveis tentando esconder falha.
+- Deve existir evidencia de campo ou endpoint que identifique o filho real de cada `EngInstance`. Sem isso, API-first deve ser reprovado para arvore completa neste tenant/build.
 
 ## Prioridade 2 - Carga E-BOM API-first
 
 Problema que resolve:
 
 O app precisa ler automaticamente a estrutura aberta, sem depender de Ctrl+A/Ctrl+C. O fluxo principal deve carregar E-BOM por API com pais e filhos.
+
+Status 2026-06-06:
+
+Suspensa ate a Prioridade 1 provar o contrato relacional. Implementar mais heuristica por label, DOM ou fallback em cascata esta proibido como caminho de produto.
 
 Etapas:
 

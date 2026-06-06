@@ -22,11 +22,13 @@ Atualizacao em 2026-06-03: IFWE deixou de ser tratado como base REST 3DSpace. A 
 
 ## DEC-003 - Carga E-BOM
 
-Decisao: a carga principal deve ser API-first por 3DSpace REST/dseng.
+Decisao original: a carga principal deve ser API-first por 3DSpace REST/dseng.
 
 Motivo: Ctrl+A/Ctrl+C funciona como contingencia, mas nao e fluxo confiavel nem escalavel para qualquer projeto.
 
 Consequencia: fallback manual permanece como resgate, mas nao deve determinar arquitetura do produto.
+
+Atualizacao em 2026-06-06: API-first por `dseng:EngInstance` fica suspenso como decisao de produto ate existir evidencia de endpoint/mask/include que entregue o filho referenciado real. As coletas dos casos 50 e 79 provaram que o payload atual retorna `VPMInstance` sem `referencedObject`; resolver filhos por label e ambiguo e nao escalavel.
 
 ## DEC-004 - Web Page Reader
 
@@ -80,11 +82,13 @@ Consequencia: clipboard, TSV, DOM mirror e snapshot nao podem ser arquitetura pr
 
 ## DEC-010 - Carga automatica como fluxo de produto
 
-Decisao: o app deve ler automaticamente a estrutura aberta no Product Structure Explorer.
+Decisao original: o app deve ler automaticamente a estrutura aberta no Product Structure Explorer.
 
 Motivo: `Ctrl+A`, `Ctrl+C`, `Ctrl+V` e botao manual sao paliativos de teste, nao experiencia final aceitavel.
 
 Consequencia: a auditoria deve identificar todos os caminhos que dependem de clipboard/cola como primary flow e rebaixar esses caminhos para contingencia isolada. O fluxo principal deve usar contexto do dashboard + 3DSpace REST.
+
+Atualizacao em 2026-06-06: leitura automatica por DOM/iframe nao deve ser assumida como possivel no runtime GitHub Pages + 3DDashboard. O widget nao pode depender de acessar livremente outro widget/iframe nem de grid virtualizada. O fluxo automatico so volta a ser produto quando houver contrato oficial de API, selecao ou mensagem do dashboard/Explorer.
 
 ## DEC-011 - 3DView proprio vinculado a E-BOM
 
@@ -101,3 +105,15 @@ Decisao: a estrutura normalizada da E-BOM deve ser criada por um unico pipeline 
 Motivo: o codigo atual tem multiplos caminhos capazes de alterar raiz, metadados e contagem, o que gera comportamento inconsistente entre teste local e dashboard real.
 
 Consequencia: a auditoria deve mapear e reduzir os fluxos concorrentes. API-first deve ser o pipeline principal. Fallback manual deve alimentar o mesmo normalizador, sem regras paralelas para raiz/metadados.
+
+Atualizacao em 2026-06-06: enquanto o contrato API nao estiver provado, o pipeline principal fica conceitualmente congelado. Nenhum loader deve alterar a estrutura por fallback em cascata sem mostrar sua origem e sem passar pelos testes 20/50/79.
+
+## DEC-013 - Contrato de dados antes de implementacao
+
+Decisao: nenhuma mudanca de loader E-BOM deve ser implementada antes de provar o contrato da fonte de dados.
+
+Motivo: as tentativas anteriores misturaram API, TSV, paste, DOM mirror e heuristicas de label. Isso gerou parciais, metadados errados e perda de confianca no resultado.
+
+Consequencia: cada sprint de carga deve comecar por diagnostico isolado e terminar com evidencia objetiva. Caminhos que nao entregam pai, filho real, revisao, proprietario, maturidade e ID estavel devem ser reprovados ou mantidos apenas como contingencia explicita.
+
+Referencia: `docs/ANALISE-CONTRATO-EBOM-2026-06-06.md`.
