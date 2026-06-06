@@ -954,7 +954,8 @@ var App = (function () {
           allowAutoCopy: false,
           allowPartial: false,
           allowFallback: false,
-          preferApi: true
+          preferApi: false,
+          forceLoader: 'tsv'
         });
       })
       .then(function (res) {

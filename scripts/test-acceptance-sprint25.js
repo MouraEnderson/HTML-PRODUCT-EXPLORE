@@ -140,20 +140,20 @@ function testT4UxAndBuild() {
     pass('T4-utf8', 'UI_HTML has no mojibake');
   }
 
-  var apiLoader = read('assets/js/services/api-bom-loader.js');
-  var bomService = read('assets/js/services/bom-service.js');
-  if (cfg.indexOf("PRIMARY_LOADER: 'api'") < 0) {
-    fail('T4-arch', 'Manual refresh must use API as primary loader');
-  } else if (cfg.indexOf('PREFER_API_ON_MANUAL_REFRESH: true') < 0) {
-    fail('T4-arch', 'Manual refresh must prefer API');
-  } else if (apiLoader.indexOf('BomService.loadInitialScope') < 0) {
-    fail('T4-arch', 'API loader must use initial-scope loading');
-  } else if (bomService.indexOf('function loadInitialScope') < 0) {
-    fail('T4-arch', 'BomService.loadInitialScope is missing');
+  var app = read('assets/js/app.js');
+  var tsv = read('assets/js/services/tsv-bom-loader.js');
+  if (cfg.indexOf("PRIMARY_LOADER: 'tsv'") < 0) {
+    fail('T4-arch', 'Manual refresh must use Explorer as primary loader');
+  } else if (cfg.indexOf('PREFER_API_ON_MANUAL_REFRESH: false') < 0) {
+    fail('T4-arch', 'Manual refresh must not prefer API over Explorer');
+  } else if (app.indexOf("forceLoader: 'tsv'") < 0) {
+    fail('T4-arch', 'Manual button must force Explorer loader');
+  } else if (tsv.indexOf('expected > max') < 0) {
+    fail('T4-arch', 'Explorer scroll harvest must respect FAST_TSV_MAX instead of 40');
   } else if (cfg.indexOf('PASTE_TRAP_ENABLED: false') < 0) {
     fail('T4-arch', 'Paste trap is still enabled');
   } else {
-    pass('T4-arch', 'Manual button uses API initial scope with paste disabled');
+    pass('T4-arch', 'Manual button uses current Explorer state with paste disabled');
   }
 }
 

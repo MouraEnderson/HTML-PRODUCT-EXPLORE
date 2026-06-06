@@ -183,7 +183,8 @@ var TsvBomLoader = (function () {
 
   function tryScrollHarvest(term, partialPayload, expected) {
     if (!needsMore(partialPayload, expected)) return Promise.resolve(partialPayload);
-    if (expected > 40) return Promise.resolve(partialPayload);
+    var max = (APP_CONFIG && APP_CONFIG.FAST_TSV_MAX) || 500;
+    if (expected > max) return Promise.resolve(partialPayload);
     if (
       typeof ProductExplorerBridge === 'undefined' ||
       !ProductExplorerBridge.tryExplorerScrollHarvestAsync
