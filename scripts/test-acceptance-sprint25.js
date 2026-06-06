@@ -84,29 +84,30 @@ function testT2DroneSnapshot() {
 function testT3SingleSourcePolicy() {
   var cfg = read('assets/js/config.js');
   var orch = read('assets/js/services/bom-orchestrator.js');
-  var paste = read('assets/js/services/paste-bom-loader.js');
+  var app = read('assets/js/app.js');
+  var tsv = read('assets/js/services/tsv-bom-loader.js');
 
   if (cfg.indexOf('BOM_MAX_NODES') < 0 || cfg.indexOf('FAST_TSV_MAX') < 0) {
     fail('T3-config', 'Scale guards missing from config.js');
     return;
   }
-  if (orch.indexOf("options.forceLoader || 'paste'") < 0) {
-    fail('T3-orchestrator', 'Manual refresh does not force paste source');
+  if (cfg.indexOf('ALLOW_PASTE_FALLBACK: false') < 0) {
+    fail('T3-config', 'Paste fallback must be disabled for product flow');
     return;
   }
-  if (orch.indexOf('options.allowFallback === true') < 0) {
-    fail('T3-orchestrator', 'Manual fallback is still implicit');
+  if (cfg.indexOf('PASTE_TRAP_ENABLED: false') < 0) {
+    fail('T3-config', 'Paste trap must be disabled for product flow');
     return;
   }
-  if (paste.indexOf('items.length !== expected') < 0) {
-    fail('T3-paste', 'Paste loader does not reject partial TSV against Explorer count');
+  if (app.indexOf("forceLoader: 'paste'") >= 0 || orch.indexOf("options.forceLoader || 'paste'") >= 0) {
+    fail('T3-flow', 'Main refresh still forces paste');
     return;
   }
-  if (paste.indexOf('BomSnapshot.applyPayload') < 0) {
-    fail('T3-paste', 'Paste loader does not apply through snapshot normalizer');
+  if (tsv.indexOf('runCopyScrollFinish(mirrorPayload)') < 0) {
+    fail('T3-loader', 'Explorer loader does not continue from mirror to scroll harvest');
     return;
   }
-  pass('T3', 'Manual refresh uses one source, rejects partial TSV, and normalizes once');
+  pass('T3', 'Main refresh uses Explorer/API flow; paste is disabled as product path');
 }
 
 function testT4UxAndBuild() {
@@ -139,16 +140,16 @@ function testT4UxAndBuild() {
     pass('T4-utf8', 'UI_HTML has no mojibake');
   }
 
-  if (cfg.indexOf('USE_DOM_MIRROR_PRIMARY: false') < 0) {
-    fail('T4-arch', 'USE_DOM_MIRROR_PRIMARY is not false');
-  } else if (cfg.indexOf('DOM_MIRROR_FALLBACK: false') < 0) {
-    fail('T4-arch', 'DOM_MIRROR_FALLBACK is not false');
+  if (cfg.indexOf('USE_DOM_MIRROR_PRIMARY: true') < 0) {
+    fail('T4-arch', 'USE_DOM_MIRROR_PRIMARY is not true for manual Explorer scan');
+  } else if (cfg.indexOf('DOM_MIRROR_FALLBACK: true') < 0) {
+    fail('T4-arch', 'DOM_MIRROR_FALLBACK is not true for manual Explorer scan');
   } else if (cfg.indexOf('PREFER_API_ON_MANUAL_REFRESH: false') < 0) {
     fail('T4-arch', 'Manual refresh still prefers API');
-  } else if (cfg.indexOf('PASTE_TRAP_ENABLED: true') < 0) {
-    fail('T4-arch', 'Paste trap is not enabled');
+  } else if (cfg.indexOf('PASTE_TRAP_ENABLED: false') < 0) {
+    fail('T4-arch', 'Paste trap is still enabled');
   } else {
-    pass('T4-arch', 'Manual button uses complete paste/TSV; API and DOM are outside the click');
+    pass('T4-arch', 'Manual button uses Explorer scan with paste disabled');
   }
 }
 

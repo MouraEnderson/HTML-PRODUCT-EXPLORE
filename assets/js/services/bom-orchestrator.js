@@ -49,12 +49,8 @@ var BomOrchestrator = (function () {
 
     if (options.source === 'auto') {
       if (ctx.canUseApi && options.preferApi !== false) return 'api';
-      if (hasExplorerPasteBuffer()) return 'paste';
+      if (APP_CONFIG.ALLOW_PASTE_FALLBACK === true && hasExplorerPasteBuffer()) return 'paste';
       return 'tsv';
-    }
-
-    if (options.source === 'manual' && options.forceLoader === 'paste' && hasExplorerPasteBuffer()) {
-      return 'paste';
     }
 
     var preferApiManual =
@@ -68,7 +64,7 @@ var BomOrchestrator = (function () {
       return 'tsv';
     }
     if (options.source === 'manual' && expected > maxTsv && !preferApiManual && options.preferApi === false) {
-      return 'paste';
+      return ctx.canUseApi ? 'api' : 'tsv';
     }
 
     if (ctx.canUseApi) {
@@ -89,7 +85,7 @@ var BomOrchestrator = (function () {
     if (typeof ExplorerContext !== 'undefined' && ExplorerContext.suggestLoaderMode) {
       return ExplorerContext.suggestLoaderMode();
     }
-    if (expected > maxTsv) return 'paste';
+    if (expected > maxTsv) return ctx.canUseApi ? 'api' : 'tsv';
     return 'tsv';
   }
 
@@ -180,7 +176,8 @@ var BomOrchestrator = (function () {
 
   function runLoaderMode(mode, ctx, options) {
     if (mode === 'api') return runApiLoader(ctx, options);
-    if (mode === 'paste') return runPasteLoader(ctx, options);
+    if (mode === 'paste' && APP_CONFIG.ALLOW_PASTE_FALLBACK === true) return runPasteLoader(ctx, options);
+    if (mode === 'paste') return runTsvLoader(ctx, options);
     if (mode === 'dom-fallback') return runDomFallbackLoader(ctx);
     return runTsvLoader(ctx, options);
   }
@@ -189,7 +186,7 @@ var BomOrchestrator = (function () {
     return Promise.reject(
       firstErr ||
         new Error(
-          'Fonte unica falhou. Use Explorer expandido -> Ctrl+A -> Ctrl+C, depois clique Atualizar estrutura.'
+          'Leitura automatica falhou. Expanda a estrutura no Explorer e clique Atualizar estrutura novamente.'
         )
     );
   }
@@ -198,7 +195,7 @@ var BomOrchestrator = (function () {
   function runAutoFallbackChain(ctx, options, failedMode, firstErr) {
     var maxTsv = (APP_CONFIG && APP_CONFIG.FAST_TSV_MAX) || 500;
     var order = [];
-    if (failedMode !== 'paste') order.push('paste');
+    if (APP_CONFIG.ALLOW_PASTE_FALLBACK === true && failedMode !== 'paste') order.push('paste');
     if (failedMode !== 'tsv' && ctx.expectedCount <= maxTsv) order.push('tsv');
     var domMax = (APP_CONFIG && APP_CONFIG.DOM_MIRROR_MANUAL_MAX_EXPECTED) || 25;
     if (
@@ -291,15 +288,14 @@ var BomOrchestrator = (function () {
 
   function formatFailureMessage(err, ctx) {
     var msg = (err && err.message) ? err.message : String(err || 'Falha na importação.');
-    if (/Ctrl\+A|Ctrl\+C|Atualizar estrutura/i.test(msg)) return msg;
     if (/406|API parcial|TSV parcial|DOM espelho incompleto|incompleto|parcial/i.test(msg)) {
       return (
         msg +
-        ' — No Explorer: expanda todos os níveis → Ctrl+A → Ctrl+C → Atualizar estrutura.'
+        ' - expanda todos os niveis no Explorer e clique Atualizar estrutura novamente.'
       );
     }
     if (ctx && ctx.expectedCount > 20) {
-      return msg + ' — Alternativa: Ctrl+A → Ctrl+C na grade → Atualizar estrutura.';
+      return msg + ' - estrutura grande exige Explorer expandido ou contrato API completo.';
     }
     return msg;
   }
@@ -339,7 +335,7 @@ var BomOrchestrator = (function () {
       priorIndex = BomService.createSnapshot();
     }
 
-    var mode = options.source === 'manual' ? (options.forceLoader || 'paste') : pickLoaderMode(ctx, options);
+    var mode = pickLoaderMode(ctx, options);
     var chain;
     var apiFlag = mode === 'api';
 

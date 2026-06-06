@@ -125,8 +125,8 @@ var TsvBomLoader = (function () {
     if (expected > 0 && itemN < expected - slack && options.allowPartial !== true) {
       return Promise.reject(
         new Error(
-          'TSV parcial ' + itemN + '/' + expected +
-          ' — expanda todos os níveis no Explorer, Ctrl+A+Ctrl+C, ou aguarde API lazy.'
+          'Explorer parcial ' + itemN + '/' + expected +
+          ' - expanda todos os niveis no Explorer e clique Atualizar estrutura novamente.'
         )
       );
     }
@@ -141,7 +141,7 @@ var TsvBomLoader = (function () {
     if (!payloadRootMatches(pl, term)) {
       return Promise.reject(
         new Error(
-          'TSV não corresponde à estrutura aberta no Explorer — Atualizar estrutura de novo.'
+          'Leitura nao corresponde a estrutura aberta no Explorer - Atualizar estrutura de novo.'
         )
       );
     }
@@ -153,8 +153,8 @@ var TsvBomLoader = (function () {
       if (expected > 0 && count < expected - 1 && options.allowPartial !== true) {
         return Promise.reject(
           new Error(
-            'TSV parcial ' + count + '/' + expected +
-            ' — expanda todos os níveis no Explorer, Ctrl+A+Ctrl+C, ou aguarde API lazy.'
+            'Explorer parcial ' + count + '/' + expected +
+            ' - expanda todos os niveis no Explorer e clique Atualizar estrutura novamente.'
           )
         );
       }
@@ -177,7 +177,7 @@ var TsvBomLoader = (function () {
       if (it.level === 0) name = it.title || it.name || name;
     });
     var payload = BomSnapshot.buildFromImported(items, name);
-    if (payload) payload.scrapeSource = 'tsv-clipboard';
+    if (payload) payload.scrapeSource = 'explorer-automatic';
     return payload;
   }
 
@@ -226,7 +226,7 @@ var TsvBomLoader = (function () {
     if (typeof ProductExplorerBridge === 'undefined' || !ProductExplorerBridge.tryExplorerAutoCopyParse) {
       return Promise.resolve(null);
     }
-    setStatus('Lendo TSV do Explorer (Ctrl+A+copy)…');
+    setStatus('Lendo grade do Explorer...');
     return ProductExplorerBridge.tryExplorerAutoCopyParse(term);
   }
 
@@ -258,7 +258,10 @@ var TsvBomLoader = (function () {
   }
 
   function tryClipboardTsv(term) {
-    setStatus('Lendo TSV da área de transferência…');
+    if (!(APP_CONFIG && APP_CONFIG.ALLOW_PASTE_FALLBACK === true)) {
+      return Promise.resolve(null);
+    }
+    setStatus('Lendo contingencia de clipboard...');
     return readPasteText().then(function (text) {
       text = String(text || '').trim();
       if (!text || text.indexOf('\t') < 0) return null;
@@ -303,12 +306,12 @@ var TsvBomLoader = (function () {
       if (options.allowPartial === true) {
         if (!payload || !payload.items || payload.items.length < 1) {
           return Promise.reject(
-            new Error('TSV indisponível. No Explorer: expanda a estrutura e clique Atualizar estrutura.')
+            new Error('Explorer indisponivel. Expanda a estrutura ao lado do widget e clique Atualizar estrutura.')
           );
         }
         if (!payloadRootMatches(payload, term)) {
           return Promise.reject(
-            new Error('TSV não corresponde à estrutura aberta no Explorer — clique Atualizar estrutura de novo.')
+            new Error('Leitura nao corresponde a estrutura aberta no Explorer - clique Atualizar estrutura de novo.')
           );
         }
         return applyPayload(payload, term, expected, options);
@@ -316,18 +319,18 @@ var TsvBomLoader = (function () {
       if (!payloadInSync(payload, term, expected)) {
         return Promise.reject(
           new Error(
-            'TSV não bate com Explorer (' +
+            'Leitura nao bate com Explorer (' +
               (payload && payload.items ? payload.items.length : 0) +
               '/' +
               expected +
-              '). Clique na raiz no Explorer → Atualizar estrutura.'
+              '). Clique na raiz no Explorer e Atualizar estrutura.'
           )
         );
       }
       if (!payload || !payload.items || payload.items.length < 1) {
         return Promise.reject(
           new Error(
-            'TSV indisponível. No Explorer: expanda a estrutura → Ctrl+A na grade → Ctrl+C → Atualizar estrutura.'
+            'Explorer nao entregou linhas suficientes. Expanda a estrutura e clique Atualizar estrutura.'
           )
         );
       }
@@ -354,6 +357,9 @@ var TsvBomLoader = (function () {
     }
 
     function tryPasteBufferFirst() {
+      if (!(APP_CONFIG && APP_CONFIG.ALLOW_PASTE_FALLBACK === true)) {
+        return Promise.resolve(null);
+      }
       return readPasteText().then(function (text) {
         text = String(text || '').trim();
         if (!text || text.indexOf('\t') < 0) return null;
@@ -391,11 +397,11 @@ var TsvBomLoader = (function () {
                 0;
               return Promise.reject(
                 new Error(
-                  'TSV incompleto ' +
+                  'Explorer incompleto ' +
                     n +
                     '/' +
                     expected +
-                    ' — expanda todos os níveis no Explorer → Ctrl+A → Ctrl+C → Atualizar estrutura.'
+                    ' - expanda todos os niveis no Explorer e clique Atualizar estrutura novamente.'
                 )
               );
             }
@@ -406,8 +412,9 @@ var TsvBomLoader = (function () {
 
     function runHarvestChain() {
       var pasteFirst =
-        options.pasteFirst === true ||
-        (options.source === 'auto' && APP_CONFIG.AUTO_SYNC_PREFER_PASTE !== false);
+        APP_CONFIG.ALLOW_PASTE_FALLBACK === true &&
+        (options.pasteFirst === true ||
+          (options.source === 'auto' && APP_CONFIG.AUTO_SYNC_PREFER_PASTE !== false));
 
       function afterPaste(pastePayload) {
         if (pastePayload && payloadInSync(pastePayload, term, expected)) {
@@ -424,7 +431,7 @@ var TsvBomLoader = (function () {
         if (mirrorPayload && payloadInSync(mirrorPayload, term, expected)) {
           return finish(mirrorPayload);
         }
-        return tryPasteBufferFirst().then(afterPaste);
+        return runCopyScrollFinish(mirrorPayload);
       });
     }
 

@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260606zg',
+    BUILD: 'bom20260606zh',
     /** Product Explorer conta ocorrencias; nao consolidar linhas repetidas por ID. */
     PRESERVE_OCCURRENCE_ROWS: true,
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
@@ -45,7 +45,7 @@
     /** Piloto: grade Explorer primeiro; API sÃƒÂ³ com ?api=1 ou apÃƒÂ³s falha da grade */
     USE_API_SCAN_FIRST: false,
     /** 3DDashboard: Ctrl+C / ÃƒÂ¡rea de cola como fonte principal (qualquer projeto) */
-    ALLOW_PASTE_FALLBACK: true,
+    ALLOW_PASTE_FALLBACK: false,
     /** Snapshot Mont10/Drone sÃƒÂ³ se grade e cola falharem */
     PILOT_BUILTIN_LAST: true,
     SCAN_TIMEOUT_MS: 90000,
@@ -62,11 +62,11 @@
     /** TSV: espelho Explorer antes de cola (Mont10/Drone sem Ctrl+C) */
     SKIP_MIRROR_ON_TSV: false,
     /** Atualizar estrutura e acionado pelo usuario; tentar clipboard no clique e cair para Ctrl+V explicito. */
-    SKIP_CLIPBOARD_READ: false,
-    PASTE_TRAP_ENABLED: true,
+    SKIP_CLIPBOARD_READ: true,
+    PASTE_TRAP_ENABLED: false,
     EXPLORER_AUTO_COPY_ENABLED: false,
     /** Fallback DOM manual só até N peças */
-    DOM_MIRROR_MANUAL_MAX_EXPECTED: 12,
+    DOM_MIRROR_MANUAL_MAX_EXPECTED: 1000,
     AUTO_SCAN_ON_SELECTION: false,
     CAN_USE_ENOVIA_API: true,
 
@@ -108,9 +108,9 @@
     /** Additional App trusted: tentar API antes de TSV no Atualizar */
     PREFER_API_ON_MANUAL_REFRESH: false,
     /** Sprint 2.5 item 6: espelho DOM/innerText nunca como primary */
-    USE_DOM_MIRROR_PRIMARY: false,
+    USE_DOM_MIRROR_PRIMARY: true,
     /** Fallback DOM reprovado como fonte de produto: iframe/grid virtualizada geram parciais. */
-    DOM_MIRROR_FALLBACK: false,
+    DOM_MIRROR_FALLBACK: true,
     PILOT_API_TREE_DEPTH: 1,
     STRUCTURE_SYNC_DEBOUNCE_MS: 2200,
     AUTO_SYNC_TIMEOUT_MS: 24000,

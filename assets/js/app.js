@@ -909,12 +909,12 @@ var App = (function () {
 
   function runImportFromClipboard(btnEl) {
     if (typeof BomOrchestrator === 'undefined' || !BomOrchestrator.refreshStructure) {
-      setStatus('Importação indisponível.', 'error');
+      setStatus('Atualizacao indisponivel.', 'error');
       return;
     }
     if (loading) return;
     setLoading(true);
-    setStatus('Lendo Explorer…', 'info');
+    setStatus('Lendo estrutura aberta no Explorer...', 'info');
     root.__3DX_BLOCK_AUTO_SYNC__ = true;
     root.__3DX_ALLOW_API__ = false;
     lastSyncedStructure = null;
@@ -932,47 +932,17 @@ var App = (function () {
     }
     if (btnEl) {
       btnEl.disabled = true;
-      btnEl.textContent = 'Atualizando…';
-    }
-    function startRefresh() {
-      var expected = 0;
-      if (typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh) {
-        expected = ExplorerContext.refresh(true).expectedCount || 0;
-      }
-      return BomOrchestrator.refreshStructure({
-        source: 'manual',
-        forceLoader: 'paste',
-        allowAutoCopy: false,
-        preferApi: false,
-        allowPartial: false,
-        allowFallback: false
-      });
-    }
-    function primePasteBuffer() {
-      if (APP_CONFIG && APP_CONFIG.PASTE_TRAP_ENABLED !== true) {
-        return Promise.resolve();
-      }
-      if (
-        typeof ProductExplorerBridge === 'undefined' ||
-        !ProductExplorerBridge.tryReadClipboardViaPasteTrap
-      ) {
-        return Promise.resolve();
-      }
-      return ProductExplorerBridge.tryReadClipboardViaPasteTrap().then(function (text) {
-        text = String(text || '').trim();
-        if (text && typeof ExplorerScanner !== 'undefined' && ExplorerScanner.setPasteBuffer) {
-          ExplorerScanner.setPasteBuffer(text);
-        }
-        var area = byId('pasteArea');
-        if (text && area) area.value = text;
-      });
+      btnEl.textContent = 'Atualizando...';
     }
     Promise.resolve()
       .then(function () {
-        return primePasteBuffer();
-      })
-      .then(function () {
-        return startRefresh();
+        return BomOrchestrator.refreshStructure({
+          source: 'manual',
+          allowAutoCopy: false,
+          preferApi: false,
+          allowPartial: false,
+          allowFallback: false
+        });
       })
       .then(function (res) {
         applyOrchestratorResult(res, { updateClock: true, layoutFit: true });
@@ -980,21 +950,14 @@ var App = (function () {
           typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh
             ? ExplorerContext.refresh(true).syncKey
             : null;
-        setStatus(res.message || 'Importação concluída.', res.partial || res.domFallback ? 'warn' : 'ok');
+        setStatus(res.message || 'Atualizacao concluida.', res.partial || res.domFallback ? 'warn' : 'ok');
       })
       .catch(function (err) {
         if (typeof SyncBanner !== 'undefined' && SyncBanner.clearLoad) SyncBanner.clearLoad();
         if (typeof BomService !== 'undefined' && BomService.getNodeCount() > 0) {
           refreshUI();
         }
-        setStatus('Importação: ' + (err.message || err), 'error');
-        var area = byId('pasteArea');
-        var details = document.querySelector('.bom-topbar-more') || document.querySelector('.bom-sidebar-more');
-        if (details && !details.open) details.open = true;
-        if (area) {
-          area.focus();
-          area.placeholder = 'Cole aqui com Ctrl+V (Explorer → Ctrl+A → Ctrl+C) e clique Importar de novo';
-        }
+        setStatus('Atualizacao: ' + (err.message || err), 'error');
       })
       .finally(function () {
         root.__3DX_ALLOW_API__ = false;

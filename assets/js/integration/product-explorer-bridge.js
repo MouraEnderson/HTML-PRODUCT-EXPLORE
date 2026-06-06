@@ -781,13 +781,23 @@ var ProductExplorerBridge = (function () {
         return resolve(buildMirrorPayloadFromItems(items, rootName, 'explorer-scroll', expected));
       }
 
-      var scrollers = doc.querySelectorAll('.wux-scroller');
+      var scrollers = doc.querySelectorAll(
+        '.wux-scroller, [class*="scroller"], [class*="Scroller"], [role="grid"]'
+      );
       var scroller = null;
       var si;
       for (si = 0; si < scrollers.length; si++) {
-        if (scrollers[si].scrollHeight > scrollers[si].clientHeight + 20) {
-          scroller = scrollers[si];
-          break;
+        var candidate = scrollers[si];
+        if (candidate.scrollHeight <= candidate.clientHeight + 20) continue;
+        var text = '';
+        try {
+          text = String(candidate.innerText || candidate.textContent || '');
+        } catch (eText) { /* */ }
+        var score = candidate.scrollHeight - candidate.clientHeight;
+        if (/t[ií]tulo|revis|propriet|em\s*trabalh|aprovado|in\s*work/i.test(text)) score += 5000;
+        if (!scroller || score > scroller.__bomScore) {
+          try { candidate.__bomScore = score; } catch (eScore) { /* */ }
+          scroller = candidate;
         }
       }
 
@@ -797,9 +807,9 @@ var ProductExplorerBridge = (function () {
       }
 
       var initialScroll = scroller.scrollTop;
-      var stepPx = Math.max(80, Math.floor(scroller.clientHeight * 0.55));
+      var stepPx = Math.max(80, Math.floor(scroller.clientHeight * 0.45));
       var step = 0;
-      var maxSteps = Math.min(maxStepsCfg, expected > 0 ? Math.max(24, Math.ceil(expected / 3)) : maxStepsCfg);
+      var maxSteps = Math.min(maxStepsCfg, expected > 0 ? Math.max(36, Math.ceil(expected / 2)) : maxStepsCfg);
       var stale = 0;
       var lastLen = items.length;
       var deadline = Date.now() + ((APP_CONFIG && APP_CONFIG.MANUAL_REFRESH_TIMEOUT_MS) || 28000) - 2000;
@@ -817,7 +827,7 @@ var ProductExplorerBridge = (function () {
           try { scroller.scrollTop = initialScroll; } catch (eR) { /* */ }
           return finish();
         }
-        if (step >= maxSteps || stale >= 4) {
+        if (step >= maxSteps || stale >= 10) {
           try { scroller.scrollTop = initialScroll; } catch (eR2) { /* */ }
           return finish();
         }
@@ -1383,13 +1393,24 @@ var ProductExplorerBridge = (function () {
 
   function scrapeMirrorRowsFromExplorerDomScroll(doc, rootName, seen, items, rootMeta) {
     if (!doc || !doc.body) return 0;
-    var scrollers = doc.querySelectorAll('.wux-scroller');
+    var expected = getExplorerObjectCount();
+    var scrollers = doc.querySelectorAll(
+      '.wux-scroller, [class*="scroller"], [class*="Scroller"], [role="grid"]'
+    );
     var scroller = null;
     var si;
     for (si = 0; si < scrollers.length; si++) {
-      if (scrollers[si].scrollHeight > scrollers[si].clientHeight + 20) {
-        scroller = scrollers[si];
-        break;
+      var candidate = scrollers[si];
+      if (candidate.scrollHeight <= candidate.clientHeight + 20) continue;
+      var text = '';
+      try {
+        text = String(candidate.innerText || candidate.textContent || '');
+      } catch (eText) { /* */ }
+      var score = candidate.scrollHeight - candidate.clientHeight;
+      if (/t[ií]tulo|revis|propriet|em\s*trabalh|aprovado|in\s*work/i.test(text)) score += 5000;
+      if (!scroller || score > scroller.__bomScore) {
+        try { candidate.__bomScore = score; } catch (eScore) { /* */ }
+        scroller = candidate;
       }
     }
     if (!scroller) {
@@ -1399,12 +1420,11 @@ var ProductExplorerBridge = (function () {
     var totalAdded = 0;
     var maxSteps = Math.min(
       (APP_CONFIG && APP_CONFIG.SCROLL_HARVEST_MAX_STEPS) || 24,
-      expected > 40 ? 28 : 24
+      expected > 40 ? 48 : 36
     );
-    var step = Math.max(100, Math.floor(scroller.clientHeight * 0.7));
+    var step = Math.max(100, Math.floor(scroller.clientHeight * 0.45));
     var stale = 0;
     var lastLen = items.length;
-    var expected = getExplorerObjectCount();
     var s;
     for (s = 0; s < maxSteps; s++) {
       totalAdded += extractRowsFromExplorerDom(doc, rootMeta, seen, items, rootName);
@@ -1412,7 +1432,7 @@ var ProductExplorerBridge = (function () {
       else stale++;
       lastLen = items.length;
       if (expected > 0 && items.length >= expected) break;
-      if (stale >= 4) break;
+      if (stale >= 10) break;
       var nextTop = scroller.scrollTop + step;
       if (nextTop >= scroller.scrollHeight - 5) {
         extractRowsFromExplorerDom(doc, rootMeta, seen, items, rootName);
