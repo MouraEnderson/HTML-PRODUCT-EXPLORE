@@ -361,8 +361,8 @@ var App = (function () {
     var gridFirst = APP_CONFIG.PILOT_GRID_FIRST && APP_CONFIG.CAN_USE_ENOVIA_API;
     setStatus(
       gridFirst
-        ? 'Lendo Explorer ou Ctrl+C (qualquer projeto)…'
-        : 'Conectando API (ifwe)…',
+        ? 'Lendo estrutura aberta no Explorer...'
+        : 'Conectando API (3DSpace)...',
       'info'
     );
     var scanChain = ExplorerScanner.scan();
@@ -703,7 +703,7 @@ var App = (function () {
       if (skipAutoLarge) {
         if (reason === 'context' || structureChanged) {
           setStatus(
-            'Drone/SKA: expanda a árvore no Explorer → Ctrl+A → Ctrl+C → Atualizar estrutura.',
+            'Abra a estrutura no Explorer, expanda os niveis necessarios e clique Atualizar estrutura.',
             'info'
           );
         }
@@ -761,7 +761,7 @@ var App = (function () {
           }
           if (!isManual && /Ctrl\+C|cola|clipboard|TSV|grade|parcial/i.test(msg)) {
             setStatus(
-              'Sync automático incompleto — expanda a árvore, Ctrl+C na grade, depois Atualizar estrutura.',
+              'Sync automatico incompleto - use somente o botao Atualizar estrutura depois que o Explorer terminar de carregar.',
               'warn'
             );
             return;
@@ -938,10 +938,9 @@ var App = (function () {
       .then(function () {
         return BomOrchestrator.refreshStructure({
           source: 'manual',
-          allowAutoCopy: false,
-          preferApi: false,
+          allowAutoCopy: true,
           allowPartial: false,
-          allowFallback: false
+          allowFallback: true
         });
       })
       .then(function (res) {
@@ -992,7 +991,9 @@ var App = (function () {
       }
       var area = byId('pasteArea');
       if (area) area.value = text;
-      setStatus('Dados colados — clique Atualizar estrutura para carregar.', 'info');
+      if (APP_CONFIG && APP_CONFIG.ALLOW_PASTE_FALLBACK === true) {
+        setStatus('Dados recebidos - clique Atualizar estrutura para carregar.', 'info');
+      }
     });
   }
 
@@ -1136,7 +1137,7 @@ var App = (function () {
     if (btnSync) {
       btnSync.addEventListener('click', function () {
         setStatus(
-          'Sincronizar não lê a árvore no GitHub. Grade Explorer → Ctrl+C → cole abaixo → Importar.',
+          'Sincronizar legado desativado. Use Atualizar estrutura com o Product Structure Explorer aberto.',
           'warn'
         );
         var area = byId('pasteArea');
@@ -1325,7 +1326,7 @@ var App = (function () {
     var problems = [];
     if (typeof Chart === 'undefined') problems.push('Chart.js não carregou (gráficos desativados)');
     if (problems.length) {
-      setStatus('Atenção: ' + problems.join('; ') + '. Colar do Explorer (Ctrl+C) continua funcionando.', 'warn');
+      setStatus('Atencao: ' + problems.join('; ') + '.', 'warn');
       return true;
     }
     return true;
@@ -1401,7 +1402,7 @@ var App = (function () {
       return;
     }
     setStatus(
-      'Cole a estrutura do Explorer abaixo ou use collect.html → ?snapshot=data/arquivo.json',
+      'Abra uma estrutura no Product Structure Explorer e clique Atualizar estrutura.',
       'warn'
     );
   }

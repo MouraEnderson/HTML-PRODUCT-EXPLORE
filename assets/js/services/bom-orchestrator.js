@@ -142,7 +142,10 @@ var BomOrchestrator = (function () {
           options.allowAutoCopy !== false);
       return TsvBomLoader.load(ctx, {
         allowAutoCopy: allowAutoCopy,
-        expectedCount: ctx.expectedCount
+        expectedCount: ctx.expectedCount,
+        allowPartial: options.allowPartial === true,
+        source: options.source || 'manual',
+        pasteFirst: options.pasteFirst === true
       });
     }
     if (typeof ExplorerScanner === 'undefined' || !ExplorerScanner.scanViaExplorerGrid) {
@@ -164,7 +167,7 @@ var BomOrchestrator = (function () {
     if (ExplorerScanner.scanViaClipboardOrPaste) {
       return ExplorerScanner.scanViaClipboardOrPaste();
     }
-    return Promise.reject(new Error('Nenhuma fonte de cola disponível.'));
+    return Promise.reject(new Error('Nenhuma fonte de contingencia disponivel.'));
   }
 
   function runDomFallbackLoader(ctx) {
@@ -183,6 +186,28 @@ var BomOrchestrator = (function () {
   }
 
   function runManualFallbackChain(ctx, options, failedMode, firstErr) {
+    options = options || {};
+    if (
+      failedMode !== 'api' &&
+      ctx &&
+      ctx.canUseApi &&
+      ctx.hasValidPhysicalId &&
+      options.preferApi !== false
+    ) {
+      return runApiLoader(ctx, options).then(function (res) {
+        var count = resultCount(res);
+        if (ctx.expectedCount > 0 && count < ctx.expectedCount - 1) {
+          return Promise.reject(
+            new Error(
+              'API retornou parcial ' + count + '/' + ctx.expectedCount +
+              '. A leitura do Explorer tambem falhou: ' +
+              ((firstErr && firstErr.message) || firstErr || 'sem detalhes')
+            )
+          );
+        }
+        return res;
+      });
+    }
     return Promise.reject(
       firstErr ||
         new Error(
@@ -191,7 +216,7 @@ var BomOrchestrator = (function () {
     );
   }
 
-  /** Auto-sync: cola → TSV (copy/scroll) → DOM — sem API (evita 406 e tabela vazia). */
+  /** Auto-sync: fluxo legado mantido desligado no produto. */
   function runAutoFallbackChain(ctx, options, failedMode, firstErr) {
     var maxTsv = (APP_CONFIG && APP_CONFIG.FAST_TSV_MAX) || 500;
     var order = [];
@@ -288,7 +313,7 @@ var BomOrchestrator = (function () {
 
   function formatFailureMessage(err, ctx) {
     var msg = (err && err.message) ? err.message : String(err || 'Falha na importação.');
-    if (/406|API parcial|TSV parcial|DOM espelho incompleto|incompleto|parcial/i.test(msg)) {
+    if (/406|API parcial|Explorer parcial|DOM espelho incompleto|incompleto|parcial/i.test(msg)) {
       return (
         msg +
         ' - expanda todos os niveis no Explorer e clique Atualizar estrutura novamente.'

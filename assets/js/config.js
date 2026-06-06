@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260606zh',
+    BUILD: 'bom20260606zi',
     /** Product Explorer conta ocorrencias; nao consolidar linhas repetidas por ID. */
     PRESERVE_OCCURRENCE_ROWS: true,
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
@@ -61,10 +61,10 @@
     SCROLL_HARVEST_STEP_MS: 80,
     /** TSV: espelho Explorer antes de cola (Mont10/Drone sem Ctrl+C) */
     SKIP_MIRROR_ON_TSV: false,
-    /** Atualizar estrutura e acionado pelo usuario; tentar clipboard no clique e cair para Ctrl+V explicito. */
+    /** Atualizar estrutura e acionado pelo usuario; o botao pode acionar copia interna do Explorer. */
     SKIP_CLIPBOARD_READ: true,
     PASTE_TRAP_ENABLED: false,
-    EXPLORER_AUTO_COPY_ENABLED: false,
+    EXPLORER_AUTO_COPY_ENABLED: true,
     /** Fallback DOM manual só até N peças */
     DOM_MIRROR_MANUAL_MAX_EXPECTED: 1000,
     AUTO_SCAN_ON_SELECTION: false,

@@ -148,7 +148,7 @@ var ApiBomLoader = (function () {
         if (!physicalId) {
           return Promise.reject(
             new Error(
-              'Raiz sem physicalId para API — selecione a raiz no Explorer ou use Ctrl+A+Ctrl+C.'
+              'Raiz sem physicalId para API - selecione a raiz no Explorer e clique Atualizar estrutura.'
             )
           );
         }

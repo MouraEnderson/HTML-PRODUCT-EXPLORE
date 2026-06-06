@@ -52,7 +52,7 @@ var TsvBomLoader = (function () {
   }
 
   function formatMessage(meta, count, expected, term, partial) {
-    var msg = 'TSV ' + count;
+    var msg = 'Explorer ' + count;
     if (expected > 0) msg += '/' + expected;
     msg += ' — ' + (meta.productName || term || 'E-BOM');
     if (partial) msg += ' - parcial (expanda mais no Explorer e clique Atualizar estrutura)';
@@ -133,7 +133,7 @@ var TsvBomLoader = (function () {
     if (expected > 0 && itemN > expected + 1) {
       return Promise.reject(
         new Error(
-          'TSV de estrutura antiga ' + itemN + '/' + expected +
+          'Leitura de estrutura antiga ' + itemN + '/' + expected +
           ' — clique na raiz no Explorer e Atualizar estrutura (limpa clipboard SKA/Drone).'
         )
       );
@@ -261,7 +261,7 @@ var TsvBomLoader = (function () {
     if (!(APP_CONFIG && APP_CONFIG.ALLOW_PASTE_FALLBACK === true)) {
       return Promise.resolve(null);
     }
-    setStatus('Lendo contingencia de clipboard...');
+    setStatus('Lendo contingencia manual...');
     return readPasteText().then(function (text) {
       text = String(text || '').trim();
       if (!text || text.indexOf('\t') < 0) return null;
@@ -293,7 +293,7 @@ var TsvBomLoader = (function () {
     var expected = options.expectedCount || resolveExpected(ctx);
     if (expected > maxTsv) {
       return Promise.reject(
-        new Error('Estrutura com ' + expected + ' peças — use API lazy (limite TSV ' + maxTsv + ').')
+        new Error('Estrutura com ' + expected + ' peças — use API lazy (limite de leitura Explorer ' + maxTsv + ').')
       );
     }
 

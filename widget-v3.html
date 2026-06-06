@@ -118,7 +118,7 @@
     var CANON_BUILD =
       window.__BOM_BUILD_ID__ && /^bom20/.test(String(window.__BOM_BUILD_ID__))
         ? String(window.__BOM_BUILD_ID__)
-        : 'bom20260606zc';
+        : 'bom20260606zi';
     var BOM_BUILD = CANON_BUILD;
     var BUNDLE;
 
@@ -179,7 +179,7 @@
       '<button type="button" id="btnLoadPhysicalId" class="bom-btn bom-btn-secondary">Varrer por ID</button>' +
       '<button type="button" id="btnApiDiagnostic" class="bom-btn bom-btn-secondary">Diagnosticar API</button>' +
       '<textarea id="apiDiagReport" class="bom-input bom-hidden" rows="6" readonly="readonly" placeholder="Relat\u00f3rio API\u2026"></textarea>' +
-      '<textarea id="pasteArea" class="bom-paste" placeholder="Colar grade Explorer (Ctrl+V)"></textarea>' +
+      '<textarea id="pasteArea" class="bom-paste bom-hidden" placeholder="Contingencia manual desativada"></textarea>' +
       '</details>' +
       '</div></header>' +
       '<section class="bom-quad bom-zone-2" aria-label="Filtros e estat\u00edsticas">' +
