@@ -21,6 +21,7 @@ Esta pasta concentra o direcionamento tecnico atual do projeto.
 15. [Sprint 08 - Priorizar referencia prd-R na resolucao dseng](SPRINT-08-PRIORIZAR-PRD-REFERENCE.md)
 16. [Analise docs dseng x caso 50 itens](ANALISE-DOCS-DSENG-CASO-50.md)
 17. [Levantamento atual 3DX](levantamento/LEVANTAMENTO-ATUAL-3DX.md)
+18. [Auditoria arquitetura plataforma 404/406](AUDITORIA-ARQUITETURA-PLATAFORMA-404-406.md)
 
 ## Historico
 
