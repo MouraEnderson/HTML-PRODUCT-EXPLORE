@@ -85,10 +85,16 @@ var ApiBomLoader = (function () {
   function formatMessage(meta, expected) {
     var count = meta.itemCount || 0;
     var name = meta.productName || 'E-BOM';
-    var msg = meta && meta.scopeMode === 'initial-scope' ? 'API escopo inicial ' + count : 'API ' + count;
+    var scope = meta && meta.scopeMode;
+    var msg =
+      scope === 'initial-scope'
+        ? 'API escopo inicial ' + count
+        : scope === 'lazy-full'
+          ? 'API lazy ' + count
+          : 'API ' + count;
     if (expected > 0) msg += '/' + expected;
     msg += ' — ' + name;
-    if (meta && meta.scopeMode === 'initial-scope') {
+    if (scope === 'initial-scope') {
       msg += ' (raiz + filhos diretos; expanda o subconjunto na tabela)';
     } else if (expected > 0 && count < expected - 1) {
       msg += ' (E-BOM unica; Explorer pode contar ocorrencias/selecionados)';
@@ -134,13 +140,17 @@ var ApiBomLoader = (function () {
         new Error('WAFData indisponível — abra no 3DDashboard (Additional App).')
       );
     }
-    if (typeof BomService === 'undefined' || !BomService.loadInitialScope) {
-      return Promise.reject(new Error('BomService.loadInitialScope indisponível.'));
+    if (typeof BomService === 'undefined' || !BomService.loadLazyFull) {
+      return Promise.reject(new Error('BomService.loadLazyFull indisponível.'));
     }
 
     var expected = (ctx && ctx.expectedCount) || options.expectedCount || 0;
     var onProgress = options.onProgress || defaultProgress;
     var resolvedPhysicalId = '';
+    var titleHint =
+      (ctx && (ctx.rootName || ctx.productName)) ||
+      (sel && (sel.displayName || sel.name)) ||
+      '';
 
     return ensureReady()
       .then(function () {
@@ -156,20 +166,30 @@ var ApiBomLoader = (function () {
           );
         }
         resolvedPhysicalId = physicalId;
-        return BomService.loadInitialScope(physicalId, {
+        var useLazyFull =
+          APP_CONFIG.API_USE_LAZY_FULL !== false ||
+          expected > (APP_CONFIG.API_PREFER_ABOVE || 20) ||
+          expected > 5;
+        var loadFn =
+          !useLazyFull && BomService.loadInitialScope
+            ? BomService.loadInitialScope
+            : BomService.loadLazyFull;
+        return loadFn(physicalId, {
           expectedCount: expected,
+          titleHint: titleHint,
+          productName: titleHint,
           onProgress: onProgress
         });
       })
       .then(function (meta) {
         var count = meta && meta.itemCount ? meta.itemCount : 0;
-        var partial = false;
+        var partial = expected > 0 && count < expected - 1;
         var diag = (meta && meta.apiDiagnostics) || {};
         return {
           ok: true,
           mode: 'api',
           loaderMode: 'api',
-          scopeMode: (meta && meta.scopeMode) || 'initial-scope',
+          scopeMode: (meta && meta.scopeMode) || 'lazy-full',
           meta: meta,
           partial: partial,
           diagnostic: {

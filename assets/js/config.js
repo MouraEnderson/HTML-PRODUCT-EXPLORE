@@ -8,9 +8,11 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260607a',
+    BUILD: 'bom20260607b',
     /** Product Explorer conta ocorrencias; nao consolidar linhas repetidas por ID. */
     PRESERVE_OCCURRENCE_ROWS: true,
+    /** Additional App: API lazy BFS para estruturas com expectedCount > 5 */
+    API_USE_LAZY_FULL: true,
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
     API_PREFER_ABOVE: 20,
     /** Cloud FD02: dseng EngItem/EngInstance antes de dspfl/boM (evita 406) */

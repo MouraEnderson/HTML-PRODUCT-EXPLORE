@@ -236,6 +236,8 @@ var EnoviaApi = (function () {
     hints = hints || {};
     var score = 0;
     var exp = lowerText(expected);
+    var expectedName = lowerText(hints.expectedName);
+    var titleHint = lowerText(hints.titleHint);
     var id = textOf(item, 'id');
     var physical = textOf(item, 'physicalid');
     var name = textOf(item, 'name');
@@ -246,6 +248,8 @@ var EnoviaApi = (function () {
     var descLow = lowerText(desc);
 
     if (id === expected || physical === expected || name === expected || title === expected) score += 1000;
+    if (expectedName && nameLow === expectedName) score += 850;
+    if (titleHint && titleLow === titleHint) score += 920;
     if (exp && titleLow === exp) score += 220;
     if (exp && nameLow === exp) score += 180;
     if (exp && descLow === exp) score += 80;
@@ -255,7 +259,17 @@ var EnoviaApi = (function () {
      * label, prefer the candidate whose name is the actual cloud physical id.
      */
     if (/^prd-/i.test(name)) score += 180;
+    if (expectedName && /^prd-/i.test(expectedName) && nameLow === expectedName) score += 420;
     if (/^\d{6,}$/i.test(name)) score -= 20;
+    if (
+      titleHint &&
+      titleLow !== titleHint &&
+      (titleLow.indexOf('sellable') >= 0 ||
+        titleLow.indexOf('edition') >= 0 ||
+        titleLow.indexOf('fog') >= 0)
+    ) {
+      score -= 160;
+    }
 
     var hintOwner = lowerText(hints.owner);
     var hintCollab = lowerText(hints.collabspace || hints.collabSpace);
@@ -346,29 +360,96 @@ var EnoviaApi = (function () {
     titleHint = String(titleHint || '').trim();
     if (!input && !titleHint) return Promise.reject(new Error('Raiz vazia para resolver EngItem.'));
 
+    function pickFromUql(query, expected) {
+      return getEngItemUqlSearch(query, 20).then(function (res) {
+        var exact = chooseExactEngItem(res, expected || input, { expectedName: input, titleHint: titleHint });
+        if (exact) return exact;
+        throw new Error('Sem match UQL: ' + query);
+      });
+    }
+
+    function byPrdName() {
+      if (!input || !/^prd-/i.test(input)) {
+        return Promise.reject(new Error('Sem physicalId prd- para UQL name.'));
+      }
+      return pickFromUql('name:' + input, input);
+    }
+
     function byInput() {
       if (!input) return Promise.reject(new Error('Sem physicalId para busca UQL.'));
-      return getEngItemUqlSearch('name:' + input, 20)
-        .then(function (res) {
-          var exact = chooseExactEngItem(res, input);
-          if (exact) return exact;
-          throw new Error('Sem match exato por name.');
-        })
-        .catch(function () {
-          return getEngItemUqlSearch(input, 20).then(function (res) {
-            var exact = chooseExactEngItem(res, input);
-            if (exact) return exact;
-            throw new Error('Sem match exato por physicalId.');
-          });
-        });
+      if (/^prd-/i.test(input)) return byPrdName();
+      return pickFromUql('name:' + input, input).catch(function () {
+        return pickFromUql(input, input);
+      });
     }
 
     function byTitle() {
       if (!titleHint) return Promise.reject(new Error('Sem titulo para busca UQL.'));
-      return findEngItemByLabel(titleHint, 20);
+      return findEngItemByLabel(titleHint, 20, { expectedName: input, titleHint: titleHint });
     }
 
+    if (/^prd-/i.test(input) && titleHint) {
+      return byTitle().catch(byPrdName).catch(byInput);
+    }
+    if (/^prd-/i.test(input)) {
+      return byPrdName().catch(byInput).catch(byTitle);
+    }
     return byInput().catch(byTitle);
+  }
+
+  function resolveEngItemBomParentId(idOrMember) {
+    var id =
+      typeof idOrMember === 'object'
+        ? apiId(idOrMember.id || idOrMember.physicalid || idOrMember.identifier)
+        : apiId(idOrMember);
+    if (!id) return Promise.resolve('');
+
+    function pickCanonicalFromPrdName(prdName) {
+      prdName = String(prdName || '').trim();
+      if (!/^prd-/i.test(prdName)) return Promise.resolve(id);
+      return getEngItemUqlSearch('name:' + prdName, 10)
+        .then(function (res) {
+          var exact = chooseExactEngItem(res, prdName, { expectedName: prdName });
+          if (exact && (exact.id || exact.physicalid)) {
+            return apiId(exact.id || exact.physicalid);
+          }
+          return id;
+        })
+        .catch(function () {
+          return id;
+        });
+    }
+
+    function probeEngInstance(parentId) {
+      return getEngInstanceChildren(parentId, 0, 1).then(function (res) {
+        var total =
+          res && typeof res.totalItems === 'number'
+            ? res.totalItems
+            : extractMembers(res).length;
+        if (total > 0) return parentId;
+        return getEngItem(parentId)
+          .then(function (itemRes) {
+            var member = extractMembers(itemRes)[0] || itemRes;
+            return pickCanonicalFromPrdName(member && member.name);
+          })
+          .catch(function () {
+            return id;
+          });
+      });
+    }
+
+    return probeEngInstance(id).catch(function () {
+      return getEngItem(id)
+        .then(function (itemRes) {
+          var member = extractMembers(itemRes)[0] || itemRes;
+          var prdName = member && member.name;
+          if (/^prd-/i.test(prdName)) return pickCanonicalFromPrdName(prdName);
+          return id;
+        })
+        .catch(function () {
+          return id;
+        });
+    });
   }
 
   function candidateRootIds(physicalId) {
@@ -404,7 +485,8 @@ var EnoviaApi = (function () {
   }
 
   /** Cloud FD02 — dseng EngItem primeiro; Physical Product só para resolver bomRootId. */
-  function getProductRoot(physicalId, expand) {
+  function getProductRoot(physicalId, expand, titleHint) {
+    titleHint = String(titleHint || '').trim();
     var ids = candidateRootIds(physicalId);
 
     function pack(res, bomRootId) {
@@ -421,7 +503,7 @@ var EnoviaApi = (function () {
 
     function tryResolved(i) {
       if (i >= ids.length) return Promise.reject(new Error('Raiz nao resolvida por UQL.'));
-      return resolveEngItemMember(ids[i], null)
+      return resolveEngItemMember(ids[i], titleHint || null)
         .then(packResolved)
         .catch(function () {
           return tryResolved(i + 1);
@@ -546,6 +628,8 @@ var EnoviaApi = (function () {
     getEngItem: getEngItem,
     getVpmReference: getVpmReference,
     getPhysicalProduct: getPhysicalProduct,
+    resolveEngItemMember: resolveEngItemMember,
+    resolveEngItemBomParentId: resolveEngItemBomParentId,
     getProductRoot: getProductRoot,
     engItemUrl: engItemUrl,
     engInstanceChildrenUrl: engInstanceChildrenUrl,
@@ -566,7 +650,6 @@ var EnoviaApi = (function () {
     engItemSearchUrl: engItemSearchUrl,
     engItemUqlSearchUrl: engItemUqlSearchUrl,
     getEngItemUqlSearch: getEngItemUqlSearch,
-    findEngItemByLabel: findEngItemByLabel,
-    resolveEngItemMember: resolveEngItemMember
+    findEngItemByLabel: findEngItemByLabel
   };
 })();

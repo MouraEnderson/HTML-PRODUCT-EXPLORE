@@ -151,7 +151,8 @@ var BomService = (function () {
     }
     attrs.referencePhysicalId = unresolved ? '' : attrs.physicalid;
     attrs.referenceId = attrs.referencePhysicalId;
-    attrs.bomChildrenId = attrs.referencePhysicalId;
+    attrs.bomChildrenId =
+      (ref && ref.bomChildrenId) || attrs.referencePhysicalId;
     if (member && member.id) {
       attrs.physicalid = member.id;
     } else if (attrs.referencePhysicalId) {
@@ -207,19 +208,33 @@ var BomService = (function () {
     return enriched;
   }
 
+  function attachBomParentId(detail) {
+    if (!detail || !EnoviaApi.resolveEngItemBomParentId) {
+      return Promise.resolve(detail);
+    }
+    return EnoviaApi.resolveEngItemBomParentId(detail).then(function (bomId) {
+      if (bomId) detail.bomChildrenId = bomId;
+      return detail;
+    });
+  }
+
   function loadReferenceDetails(ref) {
-    if (!needsReferenceDetails(ref) || !EnoviaApi.getEngItem) return Promise.resolve(ref);
     var id = refIdentifier(ref);
-    if (!id) return Promise.resolve(ref);
+    if (!id || !EnoviaApi.getEngItem) {
+      return attachBomParentId(ref);
+    }
+    if (!needsReferenceDetails(ref)) {
+      return attachBomParentId(ref);
+    }
     if (!referenceDetailCache[id]) {
       referenceDetailCache[id] = EnoviaApi.getEngItem(id)
         .then(function (res) {
           var members = EnoviaApi.extractMembers ? EnoviaApi.extractMembers(res) : [];
-          var detail = members[0] || res;
-          return mergeReferenceDetails(ref, detail);
+          var detail = mergeReferenceDetails(ref, members[0] || res);
+          return attachBomParentId(detail);
         })
         .catch(function () {
-          return ref;
+          return attachBomParentId(ref);
         });
     }
     return referenceDetailCache[id];
@@ -255,7 +270,9 @@ var BomService = (function () {
 
     return EnoviaApi.findEngItemByLabel(baseName, 20, hints)
       .then(function (resolved) {
-        return addInstanceNode(resolved, member, parentId, level);
+        return attachBomParentId(resolved).then(function (detail) {
+          return addInstanceNode(detail, member, parentId, level);
+        });
       })
       .catch(function (err) {
         var node = parseInstance(member, parentId, level);
@@ -470,18 +487,28 @@ var BomService = (function () {
     };
   }
 
-  function loadRootMember(physicalId) {
-    return EnoviaApi.getProductRoot(physicalId, null)
+  function loadRootMember(physicalId, options) {
+    options = options || {};
+    var titleHint = options.titleHint || options.productName || '';
+    return EnoviaApi.getProductRoot(physicalId, null, titleHint)
       .then(function (res) {
         var member = res.member || res;
         var rootMember = Array.isArray(member) ? member[0] : member;
         var attrs = AttributeService.extractFromMember(rootMember);
         normalizeApiDisplayAttrs(attrs, rootMember);
-        if (res.bomRootId) attrs.physicalid = res.bomRootId;
+        var engId = res.bomRootId || attrs.physicalid || physicalId;
+        attrs.physicalid = engId;
+        attrs.referencePhysicalId = engId;
         if (!attrs.physicalid) attrs.physicalid = physicalId;
         attrs.hasPhysicalProduct = true;
         attrs.displayType = attrs.displayType || 'Physical Product';
-        return attrs;
+        return attachBomParentId(attrs).then(function (enriched) {
+          if (enriched.bomChildrenId) {
+            enriched.physicalid = enriched.bomChildrenId;
+            enriched.referencePhysicalId = enriched.bomChildrenId;
+          }
+          return enriched;
+        });
       });
   }
 
@@ -513,12 +540,16 @@ var BomService = (function () {
       });
     }
 
-    return loadRootMember(physicalId)
+    return loadRootMember(physicalId, {
+      titleHint: options.titleHint || options.productName || '',
+      productName: options.productName || options.titleHint || ''
+    })
       .then(function (attrs) {
         reset();
         rootId = attrs.physicalid;
         addNode(attrs, null, 0, 1);
         if (index[rootId]) {
+          index[rootId].bomChildrenId = attrs.bomChildrenId || attrs.physicalid;
           index[rootId].loaded = false;
           index[rootId].expanded = true;
           index[rootId].isAssembly = true;
@@ -567,7 +598,12 @@ var BomService = (function () {
           }
           if (typeof reportFn === 'function') reportFn('loading');
           children.forEach(function (child) {
-            if (child && child.isAssembly && child.physicalid && !seen[child.physicalid]) {
+            if (
+              child &&
+              child.physicalid &&
+              !seen[child.physicalid] &&
+              !child.isUnresolvedInstance
+            ) {
               queue.push(child.physicalid);
             }
           });
@@ -619,21 +655,30 @@ var BomService = (function () {
       });
     }
 
-    return loadRootMember(physicalId)
+    return loadRootMember(physicalId, {
+      titleHint: options.titleHint || options.productName || '',
+      productName: options.productName || options.titleHint || ''
+    })
       .then(function (attrs) {
         reset();
         attrs.hasPhysicalProduct = true;
         attrs.displayType = attrs.displayType || 'Physical Product';
         addNode(attrs, null, 0, 1);
-        var bomParentId = attrs.physicalid;
-        rootId = bomParentId;
-        index[bomParentId].loaded = false;
+        var bomParentId = attrs.bomChildrenId || attrs.physicalid;
+        rootId = attrs.physicalid;
+        if (index[rootId]) {
+          index[rootId].bomChildrenId = bomParentId;
+          index[rootId].loaded = false;
+          index[rootId].isAssembly = true;
+        }
         report('root');
-        return expandBfs(bomParentId, report);
+        return expandBfs(rootId, report);
       })
       .then(function () {
         report('done');
-        return buildMetaFromIndex();
+        var meta = buildMetaFromIndex();
+        meta.scopeMode = 'lazy-full';
+        return meta;
       })
       .catch(function (err) {
         restoreSnapshot(prior);
