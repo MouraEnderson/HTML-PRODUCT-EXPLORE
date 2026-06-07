@@ -146,8 +146,10 @@ function testT4UxAndBuild() {
     fail('T4-arch', 'Manual refresh must use Explorer as primary loader');
   } else if (cfg.indexOf('PREFER_API_ON_MANUAL_REFRESH: false') < 0) {
     fail('T4-arch', 'Manual refresh must not prefer API over Explorer');
-  } else if (app.indexOf("forceLoader: 'tsv'") < 0) {
-    fail('T4-arch', 'Manual button must force Explorer loader');
+  } else if (app.indexOf('allowFallback: true') < 0) {
+    fail('T4-arch', 'Manual refresh must allow API fallback after Explorer failure');
+  } else if (cfg.indexOf('MANUAL_API_FALLBACK: true') < 0) {
+    fail('T4-arch', 'Manual API fallback must be enabled for 3DDashboard');
   } else if (tsv.indexOf('expected > max') < 0) {
     fail('T4-arch', 'Explorer scroll harvest must respect FAST_TSV_MAX instead of 40');
   } else if (cfg.indexOf('PASTE_TRAP_ENABLED: false') < 0) {

@@ -187,13 +187,18 @@ var BomOrchestrator = (function () {
 
   function runManualFallbackChain(ctx, options, failedMode, firstErr) {
     options = options || {};
+    var apiFallbackAllowed =
+      options.allowApiFallback !== false &&
+      APP_CONFIG &&
+      APP_CONFIG.MANUAL_API_FALLBACK !== false;
     if (
       failedMode !== 'api' &&
       ctx &&
       ctx.canUseApi &&
-      ctx.hasValidPhysicalId &&
-      options.preferApi !== false
+      (ctx.hasValidPhysicalId || ctx.rootName) &&
+      (options.preferApi !== false || apiFallbackAllowed)
     ) {
+      root.__3DX_ALLOW_API__ = true;
       return runApiLoader(ctx, options).then(function (res) {
         var count = resultCount(res);
         if (ctx.expectedCount > 0 && count < ctx.expectedCount - 1) {
@@ -206,6 +211,8 @@ var BomOrchestrator = (function () {
           );
         }
         return res;
+      }).finally(function () {
+        root.__3DX_ALLOW_API__ = false;
       });
     }
     return Promise.reject(

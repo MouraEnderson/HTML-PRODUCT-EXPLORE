@@ -929,7 +929,6 @@ var App = (function () {
     setLoading(true);
     setStatus('Lendo estrutura aberta no Explorer...', 'info');
     root.__3DX_BLOCK_AUTO_SYNC__ = true;
-    root.__3DX_ALLOW_API__ = false;
     lastSyncedStructure = null;
     lastFailedSyncKey = null;
     if (typeof SyncBanner !== 'undefined' && SyncBanner.clearLoad) SyncBanner.clearLoad();
@@ -951,9 +950,9 @@ var App = (function () {
       .then(function () {
         return BomOrchestrator.refreshStructure({
           source: 'manual',
-          allowAutoCopy: false,
           allowPartial: false,
-          allowFallback: false,
+          allowFallback: true,
+          allowApiFallback: true,
           preferApi: false,
           forceLoader: 'tsv'
         });
