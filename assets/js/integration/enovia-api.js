@@ -130,13 +130,13 @@ var EnoviaApi = (function () {
     var cfg = dsengCfg();
     var body = {
       expandDepth: options.expandDepth == null ? (cfg.EXPAND_DEPTH == null ? -1 : cfg.EXPAND_DEPTH) : options.expandDepth,
-      withPath: options.withPath !== false,
-      type_filter_bo: options.type_filter_bo || options.typeFilterBo || ['VPMReference', 'VPMRepReference'],
-      type_filter_rel: options.type_filter_rel || options.typeFilterRel || ['VPMInstance', 'VPMRepInstance']
+      withPath: true, // Força o parâmetro como true de forma estrita
+      type_filter_bo: ['VPMReference', 'VPMRepReference'], // Usa de forma estrita, ignorando as options
+      type_filter_rel: ['VPMInstance', 'VPMRepInstance'] // Usa de forma estrita, ignorando as options
     };
     if (options.filter) body.filter = options.filter;
     return body;
-  }
+}
 
   function expandEngItem(physicalId, options) {
     return WafClient.post(engItemExpandUrl(physicalId), JSON.stringify(engItemExpandBody(options)), {
