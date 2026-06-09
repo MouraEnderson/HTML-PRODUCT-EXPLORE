@@ -1,8 +1,8 @@
-/* BOM visual cap hotfix - 20260608o */
+/* BOM strict visual cap hotfix - 20260608p */
 (function(w){
   try{
     if(typeof APP_CONFIG!=='undefined'){
-      APP_CONFIG.BUILD='bom20260608o';
+      APP_CONFIG.BUILD='bom20260608p';
       APP_CONFIG.CAN_USE_ENOVIA_API=true;
       APP_CONFIG.PILOT_GRID_FIRST=true;
       APP_CONFIG.MANUAL_API_FALLBACK=true;
@@ -11,17 +11,13 @@
       APP_CONFIG.BOM_INITIAL_DEPTH=1;
       APP_CONFIG.PILOT_API_TREE_DEPTH=1;
       APP_CONFIG.PRESERVE_OCCURRENCE_ROWS=true;
-      APP_CONFIG.BOM_VISUAL_CAP_TOLERANCE=5;
     }
     function expected(){
       try{if(typeof ProductExplorerBridge!=='undefined'&&ProductExplorerBridge.getExplorerObjectCount)return ProductExplorerBridge.getExplorerObjectCount()||0;}catch(e){}
       try{if(typeof ExplorerContext!=='undefined'&&ExplorerContext.refresh){var c=ExplorerContext.refresh(true);return c&&c.expectedCount||0;}}catch(e2){}
       return 0;
     }
-    function shouldCap(actual,limit){
-      var tol=(typeof APP_CONFIG!=='undefined'&&APP_CONFIG.BOM_VISUAL_CAP_TOLERANCE)||5;
-      return limit>0&&actual>limit&&(actual-limit)<=tol;
-    }
+    function shouldCap(actual,limit){return limit>0&&actual>limit;}
     function rawCount(){try{return BomService&&BomService.__BOM_RAW_GET_NODE_COUNT__?BomService.__BOM_RAW_GET_NODE_COUNT__():BomService.getNodeCount();}catch(e){return 0;}}
     function count(){var n=rawCount(),e=expected();return shouldCap(n,e)?e:n;}
     function index(){try{return BomService&&BomService.getIndex?BomService.getIndex():{};}catch(e){return {};}}
@@ -47,13 +43,14 @@
       }
       return step();
     }
-    if(typeof BomService!=='undefined'&&BomService.getNodeCount&&!BomService.__BOM20260608O_COUNT_PATCHED__){
-      BomService.__BOM_RAW_GET_NODE_COUNT__=BomService.getNodeCount.bind(BomService);
+    if(typeof BomService!=='undefined'&&BomService.getNodeCount&&!BomService.__BOM20260608P_COUNT_PATCHED__){
+      BomService.__BOM_RAW_GET_NODE_COUNT__=BomService.__BOM_RAW_GET_NODE_COUNT__||BomService.getNodeCount.bind(BomService);
       BomService.getNodeCount=function(){return count();};
-      BomService.__BOM20260608O_COUNT_PATCHED__=true;
+      BomService.__BOM20260608P_COUNT_PATCHED__=true;
     }
-    if(typeof BomNormalizer!=='undefined'&&BomNormalizer.toFlatList&&!BomNormalizer.__BOM20260608O_FLAT_PATCHED__){
-      var rawFlat=BomNormalizer.toFlatList.bind(BomNormalizer);
+    if(typeof BomNormalizer!=='undefined'&&BomNormalizer.toFlatList&&!BomNormalizer.__BOM20260608P_FLAT_PATCHED__){
+      var rawFlat=BomNormalizer.__BOM_RAW_TO_FLAT_LIST__||BomNormalizer.toFlatList.bind(BomNormalizer);
+      BomNormalizer.__BOM_RAW_TO_FLAT_LIST__=rawFlat;
       BomNormalizer.toFlatList=function(idx,rootId){
         var flat=rawFlat(idx,rootId)||[];
         var e=expected();
@@ -63,25 +60,26 @@
         }
         return flat;
       };
-      BomNormalizer.__BOM20260608O_FLAT_PATCHED__=true;
+      BomNormalizer.__BOM20260608P_FLAT_PATCHED__=true;
     }
-    if(typeof BomService!=='undefined'&&BomService.loadInitialScope&&!BomService.__BOM20260608O_SCOPE_PATCHED__){
-      var initial=BomService.loadInitialScope.bind(BomService);
+    if(typeof BomService!=='undefined'&&BomService.loadInitialScope&&!BomService.__BOM20260608P_SCOPE_PATCHED__){
+      var initial=BomService.__BOM_RAW_LOAD_INITIAL_SCOPE__||BomService.loadInitialScope.bind(BomService);
+      BomService.__BOM_RAW_LOAD_INITIAL_SCOPE__=initial;
       BomService.loadInitialScope=function(pid,opt){
         opt=opt||{};var exp=opt.expectedCount||expected();
         return initial(pid,opt).then(function(meta){
           if(exp&&count()<exp){
             if(typeof App!=='undefined'&&App.setStatus)App.setStatus('API limitada '+count()+'/'+exp+'…','info');
             return boundedExpand(exp).then(function(){
-              meta.itemCount=count();meta.explorerExpectedCount=exp;meta.scopeMode='bounded-api-visual-cap';return meta;
+              meta.itemCount=count();meta.explorerExpectedCount=exp;meta.scopeMode='bounded-api-strict-visual-cap';return meta;
             });
           }
           meta.itemCount=count();return meta;
         });
       };
-      BomService.__BOM20260608O_SCOPE_PATCHED__=true;
+      BomService.__BOM20260608P_SCOPE_PATCHED__=true;
     }
-    w.__BOM_BUILD_ID__='bom20260608o';
-    w.__BOM_HOTFIX_MODE__='bounded-api-visual-cap';
+    w.__BOM_BUILD_ID__='bom20260608p';
+    w.__BOM_HOTFIX_MODE__='bounded-api-strict-visual-cap';
   }catch(e){w.__BOM_HOTFIX_ERROR__=e&&e.message?e.message:String(e);}
 })(typeof window!=='undefined'?window:this);
