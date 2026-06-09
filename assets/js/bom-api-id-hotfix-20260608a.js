@@ -1,8 +1,8 @@
-/* BOM browser-auth bridge hotfix - 20260608u */
+/* BOM browser-auth bridge hotfix - 20260608v */
 (function(w){
   try{
     if(typeof APP_CONFIG!=='undefined'){
-      APP_CONFIG.BUILD='bom20260608u';
+      APP_CONFIG.BUILD='bom20260608v';
       APP_CONFIG.BOM_BACKEND_URL='https://bom-resolver.onrender.com';
       APP_CONFIG.CAN_USE_ENOVIA_API=true;
       APP_CONFIG.PILOT_GRID_FIRST=true;
@@ -14,90 +14,37 @@
       APP_CONFIG.ALLOW_PHYSICAL_BOM_FALLBACK=false;
       APP_CONFIG.PRESERVE_OCCURRENCE_ROWS=true;
     }
-    function expected(){
-      try{if(typeof ProductExplorerBridge!=='undefined'&&ProductExplorerBridge.getExplorerObjectCount)return ProductExplorerBridge.getExplorerObjectCount()||0;}catch(e){}
-      try{if(typeof ExplorerContext!=='undefined'&&ExplorerContext.refresh){var c=ExplorerContext.refresh(true);return c&&c.expectedCount||0;}}catch(e2){}
-      return 0;
-    }
+    function expected(){try{if(typeof ProductExplorerBridge!=='undefined'&&ProductExplorerBridge.getExplorerObjectCount)return ProductExplorerBridge.getExplorerObjectCount()||0;}catch(e){}try{if(typeof ExplorerContext!=='undefined'&&ExplorerContext.refresh){var c=ExplorerContext.refresh(true);return c&&c.expectedCount||0;}}catch(e2){}return 0;}
     function ctx(){try{return typeof ExplorerContext!=='undefined'&&ExplorerContext.refresh?ExplorerContext.refresh(true):{};}catch(e){return {};}}
     function rootName(){var c=ctx();return c.rootName||c.productName||'';}
     function physicalId(){var c=ctx();return c.physicalId||c.physicalid||'';}
     function spaceUrl(){try{if(typeof CompassServices!=='undefined'&&CompassServices.getVerifiedSpaceUrl)return CompassServices.getVerifiedSpaceUrl();}catch(e){}try{if(typeof EnoviaApi!=='undefined'&&EnoviaApi.baseUrl)return EnoviaApi.baseUrl;}catch(e2){}return 'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia';}
-    function diagText(){
-      var j=w.__BOM_BROWSER_JOB_LAST__||{};
-      var b=w.__BOM_BACKEND_LAST__||{};
-      var err=w.__BOM_BACKEND_ERROR__||'';
-      return 'build bom20260608u | bridge '+(j.status||j.phase||'idle')+' | '+(j.actualCount||b.actualCount||0)+'/'+(j.expectedCount||b.expectedCount||expected()||0)+(err?' | erro: '+String(err).slice(0,90):'');
-    }
     function diag(type,msg){
-      w.__BOM_DIAG_LAST__={type:type||'info',message:msg||diagText(),time:new Date().toISOString()};
-      try{if(typeof App!=='undefined'&&App.setStatus)App.setStatus(msg||diagText(),type==='error'?'warning':'info');}catch(e){}
-      try{
-        var id='bomBridgeDiag';
-        var el=document.getElementById(id);
-        if(!el){
-          el=document.createElement('div');el.id=id;
-          el.style.cssText='position:fixed;right:12px;bottom:12px;z-index:999999;background:#102a43;color:#fff;padding:8px 10px;border-radius:8px;font:12px Arial;box-shadow:0 2px 12px rgba(0,0,0,.25);max-width:520px;line-height:1.35';
-          document.body.appendChild(el);
-        }
-        el.textContent=msg||diagText();
-        el.style.background=type==='error'?'#7f1d1d':(type==='ok'?'#14532d':'#102a43');
-      }catch(e2){}
+      w.__BOM_DIAG_LAST__={type:type||'info',message:msg,time:new Date().toISOString()};
+      try{if(typeof App!=='undefined'&&App.setStatus)App.setStatus(msg,type==='error'?'warning':'info');}catch(e){}
+      try{var el=document.getElementById('bomBridgeDiag');if(!el){el=document.createElement('div');el.id='bomBridgeDiag';el.style.cssText='position:fixed;right:12px;bottom:12px;z-index:999999;background:#102a43;color:#fff;padding:8px 10px;border-radius:8px;font:12px Arial;box-shadow:0 2px 12px rgba(0,0,0,.25);max-width:560px;line-height:1.35';document.body.appendChild(el);}el.textContent=msg;el.style.background=type==='error'?'#7f1d1d':(type==='ok'?'#14532d':'#102a43');}catch(e2){}
     }
-    function wafGet(path){
-      var base=spaceUrl().replace(/\/$/,'');
-      var url=path.indexOf('http')===0?path:base+path;
-      return new Promise(function(resolve){
-        if(!w.WAFData||!WAFData.authenticatedRequest){resolve({ok:false,status:0,error:'WAFData indisponivel',body:null});return;}
-        WAFData.authenticatedRequest(url,{method:'GET',type:'json',onComplete:function(data){resolve({ok:true,status:200,body:data});},onFailure:function(err){resolve({ok:false,status:(err&&err.status)||0,error:(err&&err.message)||String(err||'WAF error'),body:err});}});
-      });
+    function wafGet(path){var base=spaceUrl().replace(/\/$/,'');var url=path.indexOf('http')===0?path:base+path;return new Promise(function(resolve){if(!w.WAFData||!WAFData.authenticatedRequest){resolve({ok:false,status:0,error:'WAFData indisponivel',body:null});return;}WAFData.authenticatedRequest(url,{method:'GET',type:'json',onComplete:function(data){resolve({ok:true,status:200,body:data});},onFailure:function(err){resolve({ok:false,status:(err&&err.status)||0,error:(err&&err.message)||String(err||'WAF error'),body:err});}});});}
+    function backendPost(path,body){var base=APP_CONFIG&&APP_CONFIG.BOM_BACKEND_URL;if(!base||!w.fetch)return Promise.reject(new Error('Backend BOM Resolver indisponível.'));return fetch(base.replace(/\/$/,'')+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})}).then(function(res){return res.json().then(function(json){json.httpStatus=res.status;return json;});});}
+    function applyBackendResult(json){w.__BOM_BACKEND_LAST__=json;diag(json&&json.status==='complete'?'ok':'info','Bridge resultado '+((json&&json.actualCount)||0)+'/'+((json&&json.expectedCount)||expected())+' status '+((json&&json.status)||'sem-status'));if(!json||!Array.isArray(json.items)||!json.items.length)throw new Error((json&&json.error)||(json&&json.message)||'Backend sem itens.');if(typeof BomSnapshot==='undefined'||!BomSnapshot.applyPayload)throw new Error('BomSnapshot indisponível para backend.');var payload={productName:(json.root&&json.root.title)||rootName()||'E-BOM',rootPhysicalId:(json.root&&json.root.resolvedId)||physicalId(),items:json.items.map(function(it){return{level:it.level||0,title:it.title||'',name:it.title||'',description:it.description||'',revision:it.revision||'',owner:it.owner||'',maturity:it.maturity||'',state:it.maturity||'',type:it.type||'',physicalid:it.resolvedId||it.physicalId||it.referencedObjectId||'',occurrenceId:it.occurrenceId||'',parentRowId:it.parentRowId||''};})};return BomSnapshot.applyPayload(payload).then(function(meta){return{ok:json.ok===true,mode:'browser-backend',loaderMode:'browser-backend',meta:meta,partial:json.status!=='complete',backend:json,message:'Browser bridge '+(json.actualCount||meta.itemCount)+'/'+(json.expectedCount||expected())+' — '+(payload.productName||'E-BOM')};});}
+    function runBrowserBridge(){if(!physicalId()&&!rootName())return Promise.reject(new Error('Sem seleção para backend.'));diag('info','Bridge iniciado | expected '+expected()+' | '+(rootName()||physicalId()));return backendPost('/api/bom/browser/start',{physicalId:physicalId(),rootName:rootName(),expectedCount:expected(),maxItems:20000,maxDepth:40}).then(function(job){function loop(state){w.__BOM_BROWSER_JOB_LAST__=state;diag('info','Bridge '+(state.phase||state.status)+' '+(state.actualCount||0)+'/'+(state.expectedCount||expected())+' tarefas '+((state.tasks||[]).length));if(state.status&&state.status!=='running')return applyBackendResult(state);var tasks=state.tasks||[];if(!tasks.length)return applyBackendResult(state);return Promise.all(tasks.map(function(t){return wafGet(t.path).then(function(r){return{taskId:t.taskId,candidateId:t.candidateId,parent:t.parent,ok:r.ok,status:r.status,error:r.error,body:r.body};});})).then(function(results){var fails=results.filter(function(r){return !r.ok;}).length;if(fails)diag('error','Bridge tarefas com falha '+fails+'/'+results.length+' | fase '+(state.phase||state.status));return backendPost('/api/bom/browser/continue',{jobId:state.jobId,results:results});}).then(loop);}return loop(job);});}
+    function localPreview(err){w.__BOM_BACKEND_ERROR__=err&&err.message?err.message:String(err||'');diag('error','Bridge falhou: '+w.__BOM_BACKEND_ERROR__.slice(0,140)+' | usando prévia local');if(w.ExplorerScanner&&ExplorerScanner.scanViaApi&&ExplorerScanner.resolveSelection){return ExplorerScanner.resolveSelection().then(function(sel){return ExplorerScanner.scanViaApi(sel).then(function(r){r.loaderMode='api-preview';r.mode='api-preview';r.partial=expected()>0&&((r.meta&&r.meta.itemCount)||0)!==expected();r.message='Prévia API local — bridge pendente';return r;});});}return Promise.reject(err||new Error('Sem fallback API local.'));}
+    function patchScanner(){
+      try{if(typeof ExplorerContext!=='undefined')ExplorerContext.suggestLoaderMode=function(){return 'browser-backend';};}catch(e){}
+      if(!w.ExplorerScanner||!ExplorerScanner.scan)return false;
+      if(ExplorerScanner.__BOM20260608V_SCAN_PATCHED__)return true;
+      var original=ExplorerScanner.scan.bind(ExplorerScanner);
+      ExplorerScanner.__BOM_ORIGINAL_SCAN__=ExplorerScanner.__BOM_ORIGINAL_SCAN__||original;
+      ExplorerScanner.scan=function(){return runBrowserBridge().catch(function(e){return localPreview(e).catch(function(){return ExplorerScanner.__BOM_ORIGINAL_SCAN__();});});};
+      ExplorerScanner.__BOM20260608V_SCAN_PATCHED__=true;
+      diag('ok','Hotfix ativo: bom20260608v | Scanner interceptado | browser-auth bridge');
+      return true;
     }
-    function backendPost(path,body){
-      var base=APP_CONFIG&&APP_CONFIG.BOM_BACKEND_URL;
-      if(!base||!w.fetch)return Promise.reject(new Error('Backend BOM Resolver indisponível.'));
-      return fetch(base.replace(/\/$/,'')+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})}).then(function(res){return res.json().then(function(json){json.httpStatus=res.status;return json;});});
-    }
-    function applyBackendResult(json){
-      w.__BOM_BACKEND_LAST__=json;
-      diag(json&&json.status==='complete'?'ok':'info','Bridge resultado '+((json&&json.actualCount)||0)+'/'+((json&&json.expectedCount)||expected())+' status '+((json&&json.status)||'sem-status'));
-      if(!json||!Array.isArray(json.items)||!json.items.length)throw new Error((json&&json.error)||(json&&json.message)||'Backend sem itens.');
-      if(typeof BomSnapshot==='undefined'||!BomSnapshot.applyPayload)throw new Error('BomSnapshot indisponível para backend.');
-      var payload={productName:(json.root&&json.root.title)||rootName()||'E-BOM',rootPhysicalId:(json.root&&json.root.resolvedId)||physicalId(),items:json.items.map(function(it){return{level:it.level||0,title:it.title||'',name:it.title||'',description:it.description||'',revision:it.revision||'',owner:it.owner||'',maturity:it.maturity||'',state:it.maturity||'',type:it.type||'',physicalid:it.resolvedId||it.physicalId||it.referencedObjectId||'',occurrenceId:it.occurrenceId||'',parentRowId:it.parentRowId||''};})};
-      return BomSnapshot.applyPayload(payload).then(function(meta){return{ok:json.ok===true,mode:'browser-backend',loaderMode:'browser-backend',meta:meta,partial:json.status!=='complete',backend:json,message:'Browser bridge '+(json.actualCount||meta.itemCount)+'/'+(json.expectedCount||expected())+' — '+(payload.productName||'E-BOM')};});
-    }
-    function runBrowserBridge(){
-      if(!physicalId()&&!rootName())return Promise.reject(new Error('Sem seleção para backend.'));
-      diag('info','Bridge iniciado | expected '+expected()+' | '+(rootName()||physicalId()));
-      return backendPost('/api/bom/browser/start',{physicalId:physicalId(),rootName:rootName(),expectedCount:expected(),maxItems:20000,maxDepth:40}).then(function(job){
-        function loop(state){
-          w.__BOM_BROWSER_JOB_LAST__=state;
-          diag('info','Bridge '+(state.phase||state.status)+' '+(state.actualCount||0)+'/'+(state.expectedCount||expected())+' tarefas '+((state.tasks||[]).length));
-          if(state.status&&state.status!=='running')return applyBackendResult(state);
-          var tasks=state.tasks||[];
-          if(!tasks.length)return applyBackendResult(state);
-          return Promise.all(tasks.map(function(t){return wafGet(t.path).then(function(r){return{taskId:t.taskId,candidateId:t.candidateId,parent:t.parent,ok:r.ok,status:r.status,error:r.error,body:r.body};});})).then(function(results){
-            var fails=results.filter(function(r){return !r.ok;}).length;
-            if(fails)diag('error','Bridge tarefas com falha '+fails+'/'+results.length+' | fase '+(state.phase||state.status));
-            return backendPost('/api/bom/browser/continue',{jobId:state.jobId,results:results});
-          }).then(loop);
-        }
-        return loop(job);
-      });
-    }
-    function localPreview(err){
-      w.__BOM_BACKEND_ERROR__=err&&err.message?err.message:String(err||'');
-      diag('error','Bridge falhou: '+w.__BOM_BACKEND_ERROR__.slice(0,140)+' | usando prévia local');
-      if(ExplorerScanner&&ExplorerScanner.scanViaApi&&ExplorerScanner.resolveSelection){return ExplorerScanner.resolveSelection().then(function(sel){return ExplorerScanner.scanViaApi(sel).then(function(r){r.loaderMode='api-preview';r.mode='api-preview';r.partial=expected()>0&&((r.meta&&r.meta.itemCount)||0)!==expected();r.message='Prévia API local — bridge pendente';return r;});});}
-      return Promise.reject(err||new Error('Sem fallback API local.'));
-    }
-    if(typeof ExplorerContext!=='undefined')ExplorerContext.suggestLoaderMode=function(){return 'browser-backend';};
-    if(typeof ExplorerScanner!=='undefined'&&!ExplorerScanner.__BOM20260608U_SCAN_PATCHED__){
-      var original=ExplorerScanner.scan&&ExplorerScanner.scan.bind(ExplorerScanner);
-      ExplorerScanner.scan=function(){return runBrowserBridge().catch(function(e){return localPreview(e).catch(function(){return original?original():Promise.reject(e);});});};
-      ExplorerScanner.__BOM20260608U_SCAN_PATCHED__=true;
-    }
-    w.__BOM_BUILD_ID__='bom20260608u';
-    w.__BOM_HOTFIX_MODE__='browser-auth-backend-bridge-ui-diagnostics';
-    setTimeout(function(){diag('info','Hotfix ativo: bom20260608u | browser-auth bridge');},800);
+    w.__BOM_BUILD_ID__='bom20260608v';
+    w.__BOM_HOTFIX_MODE__='browser-auth-backend-bridge-late-patch';
+    diag('info','Hotfix carregado: bom20260608v | aguardando Scanner...');
+    var tries=0;
+    var timer=setInterval(function(){tries++;if(patchScanner()||tries>80){clearInterval(timer);if(tries>80)diag('error','Hotfix bom20260608v carregou, mas ExplorerScanner não apareceu para interceptar.');}},250);
+    setTimeout(patchScanner,1200);
   }catch(e){w.__BOM_HOTFIX_ERROR__=e&&e.message?e.message:String(e);}
 })(typeof window!=='undefined'?window:this);
