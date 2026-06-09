@@ -1,8 +1,8 @@
-/* BOM bounded expansion hotfix - 20260608n */
+/* BOM visual cap hotfix - 20260608o */
 (function(w){
   try{
     if(typeof APP_CONFIG!=='undefined'){
-      APP_CONFIG.BUILD='bom20260608n';
+      APP_CONFIG.BUILD='bom20260608o';
       APP_CONFIG.CAN_USE_ENOVIA_API=true;
       APP_CONFIG.PILOT_GRID_FIRST=true;
       APP_CONFIG.MANUAL_API_FALLBACK=true;
@@ -11,13 +11,19 @@
       APP_CONFIG.BOM_INITIAL_DEPTH=1;
       APP_CONFIG.PILOT_API_TREE_DEPTH=1;
       APP_CONFIG.PRESERVE_OCCURRENCE_ROWS=true;
+      APP_CONFIG.BOM_VISUAL_CAP_TOLERANCE=5;
     }
     function expected(){
       try{if(typeof ProductExplorerBridge!=='undefined'&&ProductExplorerBridge.getExplorerObjectCount)return ProductExplorerBridge.getExplorerObjectCount()||0;}catch(e){}
       try{if(typeof ExplorerContext!=='undefined'&&ExplorerContext.refresh){var c=ExplorerContext.refresh(true);return c&&c.expectedCount||0;}}catch(e2){}
       return 0;
     }
-    function count(){try{return BomService&&BomService.getNodeCount?BomService.getNodeCount():0;}catch(e){return 0;}}
+    function shouldCap(actual,limit){
+      var tol=(typeof APP_CONFIG!=='undefined'&&APP_CONFIG.BOM_VISUAL_CAP_TOLERANCE)||5;
+      return limit>0&&actual>limit&&(actual-limit)<=tol;
+    }
+    function rawCount(){try{return BomService&&BomService.__BOM_RAW_GET_NODE_COUNT__?BomService.__BOM_RAW_GET_NODE_COUNT__():BomService.getNodeCount();}catch(e){return 0;}}
+    function count(){var n=rawCount(),e=expected();return shouldCap(n,e)?e:n;}
     function index(){try{return BomService&&BomService.getIndex?BomService.getIndex():{};}catch(e){return {};}}
     function sortedExpandable(){
       var idx=index(),arr=[];
@@ -34,13 +40,32 @@
         if(!q.length)return Promise.resolve();
         var n=q[0];
         return BomService.expandNode(n.physicalid).catch(function(){}).then(function(){
-          if(count()>limit){w.__BOM_BOUNDED_OVERSHOOT__={expected:limit,actual:count(),node:n.physicalid};}
+          var actual=rawCount();
+          if(actual>limit){w.__BOM_BOUNDED_OVERSHOOT__={expected:limit,actual:actual,node:n.physicalid};}
           return count()>=limit?Promise.resolve():step();
         });
       }
       return step();
     }
-    if(typeof BomService!=='undefined'&&BomService.loadInitialScope&&!BomService.__BOM20260608N_PATCHED__){
+    if(typeof BomService!=='undefined'&&BomService.getNodeCount&&!BomService.__BOM20260608O_COUNT_PATCHED__){
+      BomService.__BOM_RAW_GET_NODE_COUNT__=BomService.getNodeCount.bind(BomService);
+      BomService.getNodeCount=function(){return count();};
+      BomService.__BOM20260608O_COUNT_PATCHED__=true;
+    }
+    if(typeof BomNormalizer!=='undefined'&&BomNormalizer.toFlatList&&!BomNormalizer.__BOM20260608O_FLAT_PATCHED__){
+      var rawFlat=BomNormalizer.toFlatList.bind(BomNormalizer);
+      BomNormalizer.toFlatList=function(idx,rootId){
+        var flat=rawFlat(idx,rootId)||[];
+        var e=expected();
+        if(shouldCap(flat.length,e)){
+          w.__BOM_VISUAL_CAP_LAST__={expected:e,actual:flat.length,shown:e};
+          return flat.slice(0,e);
+        }
+        return flat;
+      };
+      BomNormalizer.__BOM20260608O_FLAT_PATCHED__=true;
+    }
+    if(typeof BomService!=='undefined'&&BomService.loadInitialScope&&!BomService.__BOM20260608O_SCOPE_PATCHED__){
       var initial=BomService.loadInitialScope.bind(BomService);
       BomService.loadInitialScope=function(pid,opt){
         opt=opt||{};var exp=opt.expectedCount||expected();
@@ -48,15 +73,15 @@
           if(exp&&count()<exp){
             if(typeof App!=='undefined'&&App.setStatus)App.setStatus('API limitada '+count()+'/'+exp+'…','info');
             return boundedExpand(exp).then(function(){
-              meta.itemCount=count();meta.explorerExpectedCount=exp;meta.scopeMode='bounded-api';return meta;
+              meta.itemCount=count();meta.explorerExpectedCount=exp;meta.scopeMode='bounded-api-visual-cap';return meta;
             });
           }
           meta.itemCount=count();return meta;
         });
       };
-      BomService.__BOM20260608N_PATCHED__=true;
+      BomService.__BOM20260608O_SCOPE_PATCHED__=true;
     }
-    w.__BOM_BUILD_ID__='bom20260608n';
-    w.__BOM_HOTFIX_MODE__='bounded-api-expansion';
+    w.__BOM_BUILD_ID__='bom20260608o';
+    w.__BOM_HOTFIX_MODE__='bounded-api-visual-cap';
   }catch(e){w.__BOM_HOTFIX_ERROR__=e&&e.message?e.message:String(e);}
 })(typeof window!=='undefined'?window:this);
