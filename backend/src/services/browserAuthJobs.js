@@ -1,15 +1,18 @@
 import crypto from 'node:crypto';
 
+const JOB_TTL_MS = 15 * 60 * 1000;
 const jobs = new Map();
-const TTL = 15 * 60 * 1000;
 
-function clean(v) { return String(v || '').trim(); }
-function members(body) {
-  if (!body) return [];
-  if (Array.isArray(body.member)) return body.member;
-  if (Array.isArray(body.members)) return body.members;
-  if (Array.isArray(body.data)) return body.data;
-  if (Array.isArray(body)) return body;
-  return [];
-}
-function idOf(o) { return clean(o && (o.id || o.physical
+export function startBrowserBomJob(input = {}) {
+  cleanupJobs();
+  const jobId = crypto.randomUUID();
+  const job = {
+    id: jobId,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    phase: 'root-search',
+    rootName: clean(input.rootName),
+    physicalId: clean(input.physicalId),
+    expectedCount: Number(input.expectedCount || 0),
+    maxItems: Number(input.maxItems || process.env.BOM_MAX_ITEMS || 20000),
+   
