@@ -1,15 +1,23 @@
-/* BOM strict visual cap hotfix - 20260608p */
+/* BOM EBOM source-of-truth hotfix - 20260608q */
 (function(w){
   try{
     if(typeof APP_CONFIG!=='undefined'){
-      APP_CONFIG.BUILD='bom20260608p';
-      APP_CONFIG.CAN_USE_ENOVIA_API=true;
+      APP_CONFIG.BUILD='bom20260608q';
+      APP_CONFIG.PRIMARY_LOADER='tsv';
       APP_CONFIG.PILOT_GRID_FIRST=true;
-      APP_CONFIG.MANUAL_API_FALLBACK=true;
+      APP_CONFIG.FAST_TSV_MAX=1000000;
+      APP_CONFIG.PREFER_API_ON_MANUAL_REFRESH=false;
+      APP_CONFIG.USE_API_SCAN_FIRST=false;
+      APP_CONFIG.AUTO_SYNC_PREFER_API=false;
       APP_CONFIG.API_ENG_BOM_FIRST=true;
+      APP_CONFIG.CAN_USE_ENOVIA_API=true;
       APP_CONFIG.ALLOW_PHYSICAL_BOM_FALLBACK=false;
-      APP_CONFIG.BOM_INITIAL_DEPTH=1;
-      APP_CONFIG.PILOT_API_TREE_DEPTH=1;
+      APP_CONFIG.MANUAL_API_FALLBACK=false;
+      APP_CONFIG.ALLOW_PASTE_FALLBACK=true;
+      APP_CONFIG.SKIP_CLIPBOARD_READ=false;
+      APP_CONFIG.EXPLORER_AUTO_COPY_ENABLED=true;
+      APP_CONFIG.USE_DOM_MIRROR_PRIMARY=true;
+      APP_CONFIG.DOM_MIRROR_FALLBACK=true;
       APP_CONFIG.PRESERVE_OCCURRENCE_ROWS=true;
     }
     function expected(){
@@ -17,69 +25,55 @@
       try{if(typeof ExplorerContext!=='undefined'&&ExplorerContext.refresh){var c=ExplorerContext.refresh(true);return c&&c.expectedCount||0;}}catch(e2){}
       return 0;
     }
-    function shouldCap(actual,limit){return limit>0&&actual>limit;}
-    function rawCount(){try{return BomService&&BomService.__BOM_RAW_GET_NODE_COUNT__?BomService.__BOM_RAW_GET_NODE_COUNT__():BomService.getNodeCount();}catch(e){return 0;}}
-    function count(){var n=rawCount(),e=expected();return shouldCap(n,e)?e:n;}
-    function index(){try{return BomService&&BomService.getIndex?BomService.getIndex():{};}catch(e){return {};}}
-    function sortedExpandable(){
-      var idx=index(),arr=[];
-      Object.keys(idx).forEach(function(k){var n=idx[k];if(n&&!n.loaded&&n.isAssembly!==false)arr.push(n);});
-      arr.sort(function(a,b){return (a.level||0)-(b.level||0);});
-      return arr;
+    function resultCount(r){
+      if(!r)return 0;
+      if(r.meta&&r.meta.itemCount)return r.meta.itemCount||0;
+      try{return BomService&&BomService.getNodeCount?BomService.getNodeCount():0;}catch(e){return 0;}
     }
-    function boundedExpand(limit){
-      limit=limit||expected();
-      if(!limit||!BomService||!BomService.expandNode)return Promise.resolve();
-      function step(){
-        if(count()>=limit)return Promise.resolve();
-        var q=sortedExpandable();
-        if(!q.length)return Promise.resolve();
-        var n=q[0];
-        return BomService.expandNode(n.physicalid).catch(function(){}).then(function(){
-          var actual=rawCount();
-          if(actual>limit){w.__BOM_BOUNDED_OVERSHOOT__={expected:limit,actual:actual,node:n.physicalid};}
-          return count()>=limit?Promise.resolve():step();
-        });
-      }
-      return step();
+    function mark(res,src){if(res){res.loaderMode=src;res.mode=res.mode||src;}return res;}
+    function exact(res){var e=expected(),n=resultCount(res);return !e||(n===e);}
+    function strictExplorerError(n,e){
+      return new Error('E-BOM parcial '+n+'/'+e+'. A E-BOM deve ser fiel ao Product Explorer. Expanda/carregue a grade no Explorer, clique na tabela, use Ctrl+A > Ctrl+C e Atualizar estrutura.');
     }
-    if(typeof BomService!=='undefined'&&BomService.getNodeCount&&!BomService.__BOM20260608P_COUNT_PATCHED__){
-      BomService.__BOM_RAW_GET_NODE_COUNT__=BomService.__BOM_RAW_GET_NODE_COUNT__||BomService.getNodeCount.bind(BomService);
-      BomService.getNodeCount=function(){return count();};
-      BomService.__BOM20260608P_COUNT_PATCHED__=true;
+    if(typeof ExplorerContext!=='undefined'){
+      ExplorerContext.suggestLoaderMode=function(){return 'tsv';};
     }
-    if(typeof BomNormalizer!=='undefined'&&BomNormalizer.toFlatList&&!BomNormalizer.__BOM20260608P_FLAT_PATCHED__){
-      var rawFlat=BomNormalizer.__BOM_RAW_TO_FLAT_LIST__||BomNormalizer.toFlatList.bind(BomNormalizer);
-      BomNormalizer.__BOM_RAW_TO_FLAT_LIST__=rawFlat;
-      BomNormalizer.toFlatList=function(idx,rootId){
-        var flat=rawFlat(idx,rootId)||[];
+    if(typeof ExplorerScanner!=='undefined'&&!ExplorerScanner.__BOM20260608Q_SCAN_PATCHED__){
+      var originalScan=ExplorerScanner.scan&&ExplorerScanner.scan.bind(ExplorerScanner);
+      ExplorerScanner.scan=function(){
         var e=expected();
-        if(shouldCap(flat.length,e)){
-          w.__BOM_VISUAL_CAP_LAST__={expected:e,actual:flat.length,shown:e};
-          return flat.slice(0,e);
-        }
-        return flat;
-      };
-      BomNormalizer.__BOM20260608P_FLAT_PATCHED__=true;
-    }
-    if(typeof BomService!=='undefined'&&BomService.loadInitialScope&&!BomService.__BOM20260608P_SCOPE_PATCHED__){
-      var initial=BomService.__BOM_RAW_LOAD_INITIAL_SCOPE__||BomService.loadInitialScope.bind(BomService);
-      BomService.__BOM_RAW_LOAD_INITIAL_SCOPE__=initial;
-      BomService.loadInitialScope=function(pid,opt){
-        opt=opt||{};var exp=opt.expectedCount||expected();
-        return initial(pid,opt).then(function(meta){
-          if(exp&&count()<exp){
-            if(typeof App!=='undefined'&&App.setStatus)App.setStatus('API limitada '+count()+'/'+exp+'…','info');
-            return boundedExpand(exp).then(function(){
-              meta.itemCount=count();meta.explorerExpectedCount=exp;meta.scopeMode='bounded-api-strict-visual-cap';return meta;
-            });
+        function tryGrid(){
+          if(ExplorerScanner.scanViaExplorerGrid){
+            return ExplorerScanner.scanViaExplorerGrid({allowAutoCopy:true,preferApi:false,source:'manual'}).then(function(r){return mark(r,'explorer-grid');});
           }
-          meta.itemCount=count();return meta;
+          return Promise.reject(new Error('Explorer grid indisponivel.'));
+        }
+        function tryPaste(){
+          if(ExplorerScanner.scanViaClipboardOrPaste){
+            return ExplorerScanner.scanViaClipboardOrPaste().then(function(r){return mark(r,'paste');});
+          }
+          return Promise.reject(new Error('Paste indisponivel.'));
+        }
+        return tryGrid().then(function(r){
+          if(exact(r))return r;
+          return tryPaste().then(function(p){
+            if(exact(p))return p;
+            var n=resultCount(p)||resultCount(r);
+            throw strictExplorerError(n,e);
+          });
+        }).catch(function(){
+          return tryPaste().then(function(p){
+            if(exact(p))return p;
+            var n=resultCount(p);
+            if(e>0)throw strictExplorerError(n,e);
+            if(originalScan)return originalScan();
+            return p;
+          });
         });
       };
-      BomService.__BOM20260608P_SCOPE_PATCHED__=true;
+      ExplorerScanner.__BOM20260608Q_SCAN_PATCHED__=true;
     }
-    w.__BOM_BUILD_ID__='bom20260608p';
-    w.__BOM_HOTFIX_MODE__='bounded-api-strict-visual-cap';
+    w.__BOM_BUILD_ID__='bom20260608q';
+    w.__BOM_HOTFIX_MODE__='ebom-explorer-tsv-source-of-truth';
   }catch(e){w.__BOM_HOTFIX_ERROR__=e&&e.message?e.message:String(e);}
 })(typeof window!=='undefined'?window:this);
