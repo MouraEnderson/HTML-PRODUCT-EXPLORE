@@ -1,0 +1,20 @@
+{
+  "name": "html-product-explore-bom-resolver",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Backend resolver for 3DEXPERIENCE Product Explorer E-BOM structures.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}
