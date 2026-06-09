@@ -1,16 +1,9 @@
-/* BOM hybrid hotfix - 20260608j
- * Caminho de produção:
- * 1) tenta ler grade atual do Product Explorer;
- * 2) se a grade não entregar linhas úteis, usa API ENOVIA controlada;
- * 3) preserva dashboard/HTML existente.
- */
+/* BOM hybrid hotfix - 20260608k */
 (function (global) {
   'use strict';
   try {
     if (typeof APP_CONFIG !== 'undefined') {
-      APP_CONFIG.BUILD = 'bom20260608j';
-
-      /* Explorer continua sendo a primeira tentativa. */
+      APP_CONFIG.BUILD = 'bom20260608k';
       APP_CONFIG.PRIMARY_LOADER = 'tsv';
       APP_CONFIG.PILOT_GRID_FIRST = true;
       APP_CONFIG.EXPLORER_ONLY = true;
@@ -18,19 +11,16 @@
       APP_CONFIG.USE_DOM_MIRROR_PRIMARY = true;
       APP_CONFIG.DOM_MIRROR_FALLBACK = true;
       APP_CONFIG.SKIP_MIRROR_ON_TSV = false;
-
-      /* API volta como fallback controlado, não como chute visual. */
       APP_CONFIG.CAN_USE_ENOVIA_API = true;
       APP_CONFIG.USE_API_SCAN_FIRST = false;
       APP_CONFIG.PREFER_API_ON_MANUAL_REFRESH = false;
       APP_CONFIG.MANUAL_API_FALLBACK = true;
       APP_CONFIG.API_ENG_BOM_FIRST = true;
       APP_CONFIG.ALLOW_PHYSICAL_BOM_FALLBACK = false;
-      APP_CONFIG.PILOT_API_TREE_DEPTH = 2;
-      APP_CONFIG.BOM_INITIAL_DEPTH = 2;
-      APP_CONFIG.BOM_FAST_DEPTH = 2;
+      APP_CONFIG.PILOT_API_TREE_DEPTH = 4;
+      APP_CONFIG.BOM_INITIAL_DEPTH = 4;
+      APP_CONFIG.BOM_FAST_DEPTH = 4;
       APP_CONFIG.SKIP_PP_ENRICH = true;
-
       APP_CONFIG.PRESERVE_OCCURRENCE_ROWS = true;
       APP_CONFIG.BOM_MAX_NODES = Math.max(APP_CONFIG.BOM_MAX_NODES || 0, 1000000);
       APP_CONFIG.DOM_MIRROR_MANUAL_MAX_EXPECTED = Math.max(APP_CONFIG.DOM_MIRROR_MANUAL_MAX_EXPECTED || 0, 1000000);
@@ -39,11 +29,98 @@
       APP_CONFIG.SCAN_TIMEOUT_MS = Math.max(APP_CONFIG.SCAN_TIMEOUT_MS || 0, 120000);
     }
 
+    function members(res) {
+      try {
+        if (typeof EnoviaApi !== 'undefined' && EnoviaApi.extractMembers) return EnoviaApi.extractMembers(res) || [];
+      } catch (e) { /* noop */ }
+      if (!res) return [];
+      if (Array.isArray(res.member)) return res.member;
+      if (Array.isArray(res.members)) return res.members;
+      if (Array.isArray(res.data)) return res.data;
+      return [];
+    }
+
+    function cloneEmpty(res) {
+      if (!res || typeof res !== 'object') return { totalItems: 0, member: [] };
+      var out = Object.assign({}, res);
+      out.totalItems = 0;
+      out.member = [];
+      return out;
+    }
+
+    function cleanLabel(s) {
+      return String(s || '')
+        .replace(/<[^>]*>/g, '')
+        .replace(/\.\d+\s*$/g, '')
+        .replace(/^prd-R\d+-[A-Za-z0-9._-]+$/i, '')
+        .trim();
+    }
+
+    function firstMember(res) {
+      var list = members(res);
+      return list && list.length ? list[0] : null;
+    }
+
+    function engItemLabel(id) {
+      if (!id || !EnoviaApi || !EnoviaApi.getEngItem) return Promise.resolve('');
+      return EnoviaApi.getEngItem(id).then(function (res) {
+        var m = firstMember(res) || {};
+        return cleanLabel(m.title || m.name || m.description || '');
+      }).catch(function () { return ''; });
+    }
+
+    function childrenCount(id) {
+      if (!id || !EnoviaApi || !EnoviaApi.getEngInstanceChildren) return Promise.resolve(0);
+      return EnoviaApi.getEngInstanceChildren(id, 0, 5).then(function (res) {
+        return members(res).length || res.totalItems || 0;
+      }).catch(function () { return 0; });
+    }
+
+    function pickNavigableByLabel(label) {
+      label = cleanLabel(label);
+      if (!label || !EnoviaApi || !EnoviaApi.findEngItemByLabel) return Promise.resolve(null);
+      return EnoviaApi.findEngItemByLabel(label, 20).then(function (candidate) {
+        if (!candidate || !candidate.id) return null;
+        return childrenCount(candidate.id).then(function (cnt) {
+          if (cnt > 0) return candidate.id;
+          return null;
+        });
+      }).catch(function () { return null; });
+    }
+
+    function patchEnoviaChildrenResolver() {
+      if (typeof EnoviaApi === 'undefined' || !EnoviaApi.getEngInstanceChildren) return;
+      if (EnoviaApi.__BOM20260608K_CHILD_LABEL_PATCHED__) return;
+      var originalGetChildren = EnoviaApi.getEngInstanceChildren.bind(EnoviaApi);
+      var aliasCache = {};
+      EnoviaApi.getEngInstanceChildren = function (parentId, skip, top) {
+        parentId = String(parentId || '');
+        var alias = aliasCache[parentId];
+        if (alias) return originalGetChildren(alias, skip, top);
+        return originalGetChildren(parentId, skip, top).then(function (res) {
+          if ((skip || 0) > 0) return res;
+          var list = members(res);
+          if (list.length || (res && res.totalItems > 0)) return res;
+          return engItemLabel(parentId).then(function (label) {
+            if (!label) return res;
+            return pickNavigableByLabel(label).then(function (navId) {
+              if (!navId || navId === parentId) return res;
+              aliasCache[parentId] = navId;
+              return originalGetChildren(navId, skip, top).then(function (retry) {
+                var retryList = members(retry);
+                if (retryList.length || (retry && retry.totalItems > 0)) return retry;
+                return res;
+              }).catch(function () { return res; });
+            });
+          });
+        });
+      };
+      EnoviaApi.__BOM20260608K_CHILD_LABEL_PATCHED__ = true;
+    }
+
     function expectedExplorerCount() {
       try {
-        if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getExplorerObjectCount) {
-          return ProductExplorerBridge.getExplorerObjectCount() || 0;
-        }
+        if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getExplorerObjectCount) return ProductExplorerBridge.getExplorerObjectCount() || 0;
       } catch (e) { /* noop */ }
       try {
         if (typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh) {
@@ -70,12 +147,9 @@
     }
 
     function scanByApiFallback(reason) {
-      if (!ExplorerScanner || !ExplorerScanner.resolveSelection || !ExplorerScanner.scanViaApi) {
-        return Promise.reject(new Error('Fallback API indisponivel.'));
-      }
-      if (typeof App !== 'undefined' && App.setStatus) {
-        App.setStatus('Explorer não entregou linhas; usando API ENOVIA controlada…', 'info');
-      }
+      patchEnoviaChildrenResolver();
+      if (!ExplorerScanner || !ExplorerScanner.resolveSelection || !ExplorerScanner.scanViaApi) return Promise.reject(new Error('Fallback API indisponivel.'));
+      if (typeof App !== 'undefined' && App.setStatus) App.setStatus('Explorer não entregou linhas; usando API ENOVIA controlada…', 'info');
       return ExplorerScanner.resolveSelection().then(function (sel) {
         return ExplorerScanner.scanViaApi(sel).then(function (apiResult) {
           if (apiResult) {
@@ -88,21 +162,16 @@
       });
     }
 
-    if (typeof ExplorerContext !== 'undefined') {
-      ExplorerContext.suggestLoaderMode = function () { return 'tsv'; };
-    }
+    if (typeof ExplorerContext !== 'undefined') ExplorerContext.suggestLoaderMode = function () { return 'tsv'; };
+    patchEnoviaChildrenResolver();
 
-    if (typeof ExplorerScanner !== 'undefined' && !ExplorerScanner.__BOM20260608J_PATCHED__) {
+    if (typeof ExplorerScanner !== 'undefined' && !ExplorerScanner.__BOM20260608K_PATCHED__) {
       ExplorerScanner.scan = function () {
+        patchEnoviaChildrenResolver();
         var primary;
-        if (ExplorerScanner.scanViaExplorerGrid) {
-          primary = ExplorerScanner.scanViaExplorerGrid({ allowAutoCopy: true });
-        } else if (ExplorerScanner.scanViaPilotGeneric) {
-          primary = ExplorerScanner.scanViaPilotGeneric();
-        } else {
-          primary = Promise.reject(new Error('Scanner do Product Explorer indisponivel.'));
-        }
-
+        if (ExplorerScanner.scanViaExplorerGrid) primary = ExplorerScanner.scanViaExplorerGrid({ allowAutoCopy: true });
+        else if (ExplorerScanner.scanViaPilotGeneric) primary = ExplorerScanner.scanViaPilotGeneric();
+        else primary = Promise.reject(new Error('Scanner do Product Explorer indisponivel.'));
         return Promise.resolve(primary).then(function (result) {
           if (isUsefulExplorerResult(result)) {
             result.mode = result.mode || 'explorer-current';
@@ -114,11 +183,11 @@
           return scanByApiFallback(err && err.message ? err.message : 'explorer-scan-error');
         });
       };
-      ExplorerScanner.__BOM20260608J_PATCHED__ = true;
+      ExplorerScanner.__BOM20260608K_PATCHED__ = true;
     }
 
-    global.__BOM_BUILD_ID__ = 'bom20260608j';
-    global.__BOM_HOTFIX_MODE__ = 'hybrid-explorer-first-api-fallback';
+    global.__BOM_BUILD_ID__ = 'bom20260608k';
+    global.__BOM_HOTFIX_MODE__ = 'api-child-label-resolution-fallback';
   } catch (e) {
     global.__BOM_HOTFIX_ERROR__ = e && e.message ? e.message : String(e);
   }
