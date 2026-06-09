@@ -1,9 +1,9 @@
-/* BOM hybrid hotfix - 20260608k */
+/* BOM hybrid hotfix - 20260608l */
 (function (global) {
   'use strict';
   try {
     if (typeof APP_CONFIG !== 'undefined') {
-      APP_CONFIG.BUILD = 'bom20260608k';
+      APP_CONFIG.BUILD = 'bom20260608l';
       APP_CONFIG.PRIMARY_LOADER = 'tsv';
       APP_CONFIG.PILOT_GRID_FIRST = true;
       APP_CONFIG.EXPLORER_ONLY = true;
@@ -30,9 +30,7 @@
     }
 
     function members(res) {
-      try {
-        if (typeof EnoviaApi !== 'undefined' && EnoviaApi.extractMembers) return EnoviaApi.extractMembers(res) || [];
-      } catch (e) { /* noop */ }
+      try { if (typeof EnoviaApi !== 'undefined' && EnoviaApi.extractMembers) return EnoviaApi.extractMembers(res) || []; } catch (e) { }
       if (!res) return [];
       if (Array.isArray(res.member)) return res.member;
       if (Array.isArray(res.members)) return res.members;
@@ -40,20 +38,8 @@
       return [];
     }
 
-    function cloneEmpty(res) {
-      if (!res || typeof res !== 'object') return { totalItems: 0, member: [] };
-      var out = Object.assign({}, res);
-      out.totalItems = 0;
-      out.member = [];
-      return out;
-    }
-
     function cleanLabel(s) {
-      return String(s || '')
-        .replace(/<[^>]*>/g, '')
-        .replace(/\.\d+\s*$/g, '')
-        .replace(/^prd-R\d+-[A-Za-z0-9._-]+$/i, '')
-        .trim();
+      return String(s || '').replace(/<[^>]*>/g, '').replace(/\.\d+\s*$/g, '').replace(/^prd-R\d+-[A-Za-z0-9._-]+$/i, '').trim();
     }
 
     function firstMember(res) {
@@ -69,65 +55,90 @@
       }).catch(function () { return ''; });
     }
 
-    function childrenCount(id) {
-      if (!id || !EnoviaApi || !EnoviaApi.getEngInstanceChildren) return Promise.resolve(0);
-      return EnoviaApi.getEngInstanceChildren(id, 0, 5).then(function (res) {
+    function childCountWithOriginal(originalGetChildren, id) {
+      if (!id) return Promise.resolve(0);
+      return originalGetChildren(id, 0, 5).then(function (res) {
         return members(res).length || res.totalItems || 0;
       }).catch(function () { return 0; });
     }
 
-    function pickNavigableByLabel(label) {
+    function idOf(obj) {
+      return String((obj && (obj.id || obj.physicalid || obj.physicalId || obj.identifier)) || '').trim();
+    }
+
+    function searchCandidatesByLabel(label) {
       label = cleanLabel(label);
-      if (!label || !EnoviaApi || !EnoviaApi.findEngItemByLabel) return Promise.resolve(null);
-      return EnoviaApi.findEngItemByLabel(label, 20).then(function (candidate) {
-        if (!candidate || !candidate.id) return null;
-        return childrenCount(candidate.id).then(function (cnt) {
-          if (cnt > 0) return candidate.id;
-          return null;
+      if (!label || !EnoviaApi) return Promise.resolve([]);
+      if (EnoviaApi.findEngItemByLabel) {
+        return EnoviaApi.findEngItemByLabel(label, 20).then(function (candidate) {
+          return candidate ? [candidate] : [];
+        }).catch(function () { return []; });
+      }
+      return Promise.resolve([]);
+    }
+
+    function pickNavigableByLabel(label, originalGetChildren, currentId) {
+      return searchCandidatesByLabel(label).then(function (cands) {
+        if (!cands || !cands.length) return null;
+        var best = null;
+        var bestCount = 0;
+        return cands.reduce(function (chain, cand) {
+          return chain.then(function () {
+            var cid = idOf(cand);
+            if (!cid || cid === currentId) return null;
+            return childCountWithOriginal(originalGetChildren, cid).then(function (cnt) {
+              if (cnt > bestCount) {
+                bestCount = cnt;
+                best = cid;
+              }
+            });
+          });
+        }, Promise.resolve()).then(function () {
+          return bestCount > 0 ? best : null;
         });
-      }).catch(function () { return null; });
+      });
     }
 
     function patchEnoviaChildrenResolver() {
       if (typeof EnoviaApi === 'undefined' || !EnoviaApi.getEngInstanceChildren) return;
-      if (EnoviaApi.__BOM20260608K_CHILD_LABEL_PATCHED__) return;
+      if (EnoviaApi.__BOM20260608L_CHILD_LABEL_PATCHED__) return;
       var originalGetChildren = EnoviaApi.getEngInstanceChildren.bind(EnoviaApi);
       var aliasCache = {};
+
+      function retryByLabel(parentId, skip, top, originalResult) {
+        if ((skip || 0) > 0) return Promise.resolve(originalResult || { totalItems: 0, member: [] });
+        return engItemLabel(parentId).then(function (label) {
+          if (!label) return originalResult || { totalItems: 0, member: [] };
+          return pickNavigableByLabel(label, originalGetChildren, parentId).then(function (navId) {
+            if (!navId || navId === parentId) return originalResult || { totalItems: 0, member: [] };
+            aliasCache[parentId] = navId;
+            return originalGetChildren(navId, skip, top).then(function (retry) {
+              var list = members(retry);
+              if (list.length || (retry && retry.totalItems > 0)) return retry;
+              return originalResult || retry;
+            }).catch(function () { return originalResult || { totalItems: 0, member: [] }; });
+          });
+        });
+      }
+
       EnoviaApi.getEngInstanceChildren = function (parentId, skip, top) {
         parentId = String(parentId || '');
         var alias = aliasCache[parentId];
         if (alias) return originalGetChildren(alias, skip, top);
         return originalGetChildren(parentId, skip, top).then(function (res) {
-          if ((skip || 0) > 0) return res;
           var list = members(res);
-          if (list.length || (res && res.totalItems > 0)) return res;
-          return engItemLabel(parentId).then(function (label) {
-            if (!label) return res;
-            return pickNavigableByLabel(label).then(function (navId) {
-              if (!navId || navId === parentId) return res;
-              aliasCache[parentId] = navId;
-              return originalGetChildren(navId, skip, top).then(function (retry) {
-                var retryList = members(retry);
-                if (retryList.length || (retry && retry.totalItems > 0)) return retry;
-                return res;
-              }).catch(function () { return res; });
-            });
-          });
+          if ((skip || 0) > 0 || list.length || (res && res.totalItems > 0)) return res;
+          return retryByLabel(parentId, skip, top, res);
+        }).catch(function () {
+          return retryByLabel(parentId, skip, top, { totalItems: 0, member: [] });
         });
       };
-      EnoviaApi.__BOM20260608K_CHILD_LABEL_PATCHED__ = true;
+      EnoviaApi.__BOM20260608L_CHILD_LABEL_PATCHED__ = true;
     }
 
     function expectedExplorerCount() {
-      try {
-        if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getExplorerObjectCount) return ProductExplorerBridge.getExplorerObjectCount() || 0;
-      } catch (e) { /* noop */ }
-      try {
-        if (typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh) {
-          var ctx = ExplorerContext.refresh(true);
-          return (ctx && ctx.expectedCount) || 0;
-        }
-      } catch (e2) { /* noop */ }
+      try { if (typeof ProductExplorerBridge !== 'undefined' && ProductExplorerBridge.getExplorerObjectCount) return ProductExplorerBridge.getExplorerObjectCount() || 0; } catch (e) { }
+      try { if (typeof ExplorerContext !== 'undefined' && ExplorerContext.refresh) { var ctx = ExplorerContext.refresh(true); return (ctx && ctx.expectedCount) || 0; } } catch (e2) { }
       return 0;
     }
 
@@ -165,7 +176,7 @@
     if (typeof ExplorerContext !== 'undefined') ExplorerContext.suggestLoaderMode = function () { return 'tsv'; };
     patchEnoviaChildrenResolver();
 
-    if (typeof ExplorerScanner !== 'undefined' && !ExplorerScanner.__BOM20260608K_PATCHED__) {
+    if (typeof ExplorerScanner !== 'undefined' && !ExplorerScanner.__BOM20260608L_PATCHED__) {
       ExplorerScanner.scan = function () {
         patchEnoviaChildrenResolver();
         var primary;
@@ -183,11 +194,11 @@
           return scanByApiFallback(err && err.message ? err.message : 'explorer-scan-error');
         });
       };
-      ExplorerScanner.__BOM20260608K_PATCHED__ = true;
+      ExplorerScanner.__BOM20260608L_PATCHED__ = true;
     }
 
-    global.__BOM_BUILD_ID__ = 'bom20260608k';
-    global.__BOM_HOTFIX_MODE__ = 'api-child-label-resolution-fallback';
+    global.__BOM_BUILD_ID__ = 'bom20260608l';
+    global.__BOM_HOTFIX_MODE__ = 'api-label-retry-on-empty-or-error';
   } catch (e) {
     global.__BOM_HOTFIX_ERROR__ = e && e.message ? e.message : String(e);
   }
