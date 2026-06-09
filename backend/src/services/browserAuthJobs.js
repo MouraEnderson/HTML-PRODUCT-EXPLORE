@@ -1,17 +1,14 @@
 import crypto from 'node:crypto';
 
-const JOB_TTL_MS = 15 * 60 * 1000;
 const jobs = new Map();
+const TTL = 15 * 60 * 1000;
 
 export function startBrowserBomJob(input = {}) {
-  cleanupJobs();
-  const jobId = crypto.randomUUID();
+  cleanup();
   const job = {
-    id: jobId,
-    createdAt: Date.now(),
+    id: crypto.randomUUID(),
     updatedAt: Date.now(),
     phase: 'root-search',
-    rootName: clean(input.rootName),
-    physicalId: clean(input.physicalId),
+    physicalId: txt(input.physicalId),
+    rootName: txt(input.rootName),
     expectedCount: Number(input.expectedCount || 0),
-    maxItems: Number(input.max
