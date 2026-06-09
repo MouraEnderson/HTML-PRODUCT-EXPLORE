@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:widget="http://www.netvibes.com/ns/">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>BOM Analytics Latest</title>
+  <script>
+    (function () {
+      var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
+      var build = 'bom20260608g';
+      var source = GH + 'widget-v3-08d.html?latest=' + Date.now();
+      fetch(source, { cache: 'no-store' })
+        .then(function (r) { return r.text(); })
+        .then(function (html) {
+          html = html
+            .replace(/BOM Analytics 08d/g, 'BOM Analytics Latest')
+            .replace(/bom20260608d/g, build)
+            .replace(/Build 08d/g, 'Build latest')
+            .replace(/patch 08d/g, 'patch latest')
+            .replace(/build 08d/g, 'build latest')
+            .replace(/Carregando build 08d/g, 'Carregando build latest');
+          document.open();
+          document.write(html);
+          document.close();
+        })
+        .catch(function (err) {
+          document.body.innerHTML = '<div style="font-family:Segoe UI,Arial;padding:16px;color:#b42318">Erro ao carregar BOM Analytics Latest: ' + (err && err.message ? err.message : err) + '</div>';
+        });
+    })();
+  </script>
+</head>
+<body>
+  <div style="font-family:Segoe UI,Arial;padding:16px">Carregando BOM Analytics Latest...</div>
+</body>
+</html>
