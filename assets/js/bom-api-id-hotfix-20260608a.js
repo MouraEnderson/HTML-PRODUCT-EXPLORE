@@ -1,9 +1,9 @@
-/* BOM API safe hotfix - 20260608d */
+/* BOM API safe hotfix - 20260608e */
 (function (global) {
   'use strict';
   try {
     if (typeof APP_CONFIG !== 'undefined') {
-      APP_CONFIG.BUILD = 'bom20260608d';
+      APP_CONFIG.BUILD = 'bom20260608e';
       APP_CONFIG.API_ENG_BOM_FIRST = true;
       APP_CONFIG.ALLOW_PHYSICAL_BOM_FALLBACK = false;
       APP_CONFIG.PRIMARY_LOADER = 'api';
@@ -13,19 +13,45 @@
       APP_CONFIG.BOM_INITIAL_DEPTH = Math.max(APP_CONFIG.BOM_INITIAL_DEPTH || 0, 10);
       APP_CONFIG.BOM_MAX_NODES = Math.max(APP_CONFIG.BOM_MAX_NODES || 0, 500);
     }
-    if (typeof AttributeService !== 'undefined' && !AttributeService.__BOM20260608D_PATCHED__) {
+
+    function isAssemblyLike(type) {
+      var t = String(type || '').trim().toLowerCase();
+      if (t === 'dsxcad:product' || t === 'product' || t === 'physical product' || t === 'vpmreference') return true;
+      if (t.indexOf('assembly') >= 0 || t.indexOf('montagem') >= 0) return true;
+      return false;
+    }
+
+    if (typeof AttributeService !== 'undefined' && !AttributeService.__BOM20260608E_PATCHED__) {
       var oldAssemblyCheck = AttributeService.isAssemblyType;
       AttributeService.isAssemblyType = function (type) {
-        var t = String(type || '').trim().toLowerCase();
-        if (t === 'dsxcad:product' || t === 'product' || t === 'physical product' || t === 'vpmreference') return true;
-        if (t.indexOf('assembly') >= 0 || t.indexOf('montagem') >= 0) return true;
+        if (isAssemblyLike(type)) return true;
         if (typeof oldAssemblyCheck === 'function') return oldAssemblyCheck.apply(this, arguments);
         return false;
       };
-      AttributeService.__BOM20260608D_PATCHED__ = true;
+      AttributeService.__BOM20260608E_PATCHED__ = true;
     }
+
+    if (typeof EnoviaApi !== 'undefined' && !EnoviaApi.__BOM20260608E_PATCHED__) {
+      var oldPrefer = EnoviaApi.preferEngChildrenForParent;
+      EnoviaApi.preferEngChildrenForParent = function (parentId) {
+        try {
+          if (typeof BomService !== 'undefined' && BomService.getNode) {
+            var n = BomService.getNode(parentId);
+            if (n) {
+              if (n.bomChildrenId || n.referencePhysicalId || n.referenceId) return true;
+              if (isAssemblyLike(n.type) || isAssemblyLike(n.displayType)) return true;
+            }
+          }
+        } catch (e) {}
+        if (typeof oldPrefer === 'function') return oldPrefer.apply(this, arguments);
+        return true;
+      };
+      EnoviaApi.__BOM20260608E_PATCHED__ = true;
+    }
+
     global.__BOM_HOTFIX_20260608A__ = true;
-    global.__BOM_HOTFIX_MODE__ = 'product-recursion';
+    global.__BOM_HOTFIX_MODE__ = 'force-enginstance-recursion';
+    global.__BOM_BUILD_ID__ = 'bom20260608e';
   } catch (e) {
     global.__BOM_HOTFIX_ERROR__ = e && e.message ? e.message : String(e);
   }
