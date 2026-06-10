@@ -55,7 +55,6 @@ try {
   el.style.background = type === 'error' ? '#7f1d1d' : type === 'warn' ? '#92400e' : '#166534';
   el.style.color = '#fff';
 } catch (e) {}
-```
 
 }
 
@@ -71,7 +70,7 @@ return;
 }
 } catch (e) {}
 
-```
+
   try {
     if (w.compass && w.compass.getServiceUrl) {
       w.compass.getServiceUrl({
@@ -104,7 +103,6 @@ return;
 
   resolve('');
 });
-```
 
 }
 
@@ -124,7 +122,6 @@ return '';
 function getRootName() {
 var values = [];
 
-```
 try {
   values.push(w.__BOM_ROOT_NAME__);
   values.push(w.__CURRENT_ROOT_NAME__);
@@ -157,14 +154,12 @@ for (var i = 0; i < values.length; i++) {
 }
 
 return 'CJ MESA 4BCS VP TOP 3DX';
-```
 
 }
 
 function getPhysicalId() {
 var values = [];
 
-```
 try {
   values.push(w.__BOM_PHYSICAL_ID__);
   values.push(w.__CURRENT_PHYSICAL_ID__);
@@ -183,7 +178,6 @@ for (var i = 0; i < values.length; i++) {
 }
 
 return '';
-```
 
 }
 
@@ -194,13 +188,11 @@ var m = String(txt || '').match(/(\d+)\s+objetos/i);
 if (m) return Number(m[1]);
 } catch (e) {}
 
-```
 try {
   if (w.__BOM_EXPECTED_COUNT__) return Number(w.__BOM_EXPECTED_COUNT__);
 } catch (e) {}
 
 return 0;
-```
 
 }
 
@@ -222,7 +214,6 @@ data = txt ? JSON.parse(txt) : {};
 data = { raw: txt };
 }
 
-```
     if (!res.ok) {
       var err = new Error(data.error || data.message || ('Backend HTTP ' + res.status));
       err.response = data;
@@ -232,7 +223,6 @@ data = { raw: txt };
     return data;
   });
 });
-```
 
 }
 
@@ -248,7 +238,6 @@ status: 0
 return;
 }
 
-```
     w.WAFData.authenticatedRequest(url, {
       method: 'GET',
       type: 'json',
@@ -277,7 +266,6 @@ return;
     });
   }
 });
-```
 
 }
 
@@ -295,8 +283,6 @@ error: 'task sem url'
 });
 return acc;
 }
-
-```
     return wafGet(t.url).then(function (r) {
       acc.push({
         id: t.id,
@@ -312,14 +298,12 @@ return acc;
   });
 });
 return chain;
-```
 
 }
 
 function normalizeBackendResult(data) {
 data = data || {};
 
-```
 var rows = data.rows || data.items || data.bom || [];
 if (!Array.isArray(rows)) rows = [];
 
@@ -336,7 +320,6 @@ return {
   diagnostics: data.diagnostics || [],
   message: data.message || ''
 };
-```
 
 }
 
@@ -345,7 +328,6 @@ var jobId = startPayload.jobId;
 var current = startPayload;
 var rounds = 0;
 
-```
 function step() {
   rounds += 1;
 
@@ -382,7 +364,6 @@ function step() {
 }
 
 return step();
-```
 
 }
 
@@ -394,7 +375,6 @@ return getCompassSpaceUrl();
 .then(function (spaceUrl) {
 spaceUrl = cleanUrl(spaceUrl || guessSpaceUrlFromLocation());
 
-```
     var rootName = getRootName();
     var physicalId = getPhysicalId();
     var expectedCount = getExpectedCount();
@@ -411,14 +391,12 @@ spaceUrl = cleanUrl(spaceUrl || guessSpaceUrlFromLocation());
   .then(function (start) {
     return bridgeLoop(start);
   });
-```
 
 }
 
 function localFallback(reason) {
 diag('warn', 'BOM bridge fallback local: ' + (reason && reason.message ? reason.message : reason));
 
-```
 var rows = [];
 try {
   var names = ['CJ MESA 4BCS VP TOP 3DX', 'Queimador', 'Tempre', 'Manípulo', 'Tampo'];
@@ -448,7 +426,6 @@ return {
   diagnostics: ['fallback-local'],
   message: 'Fallback local: bridge nao concluiu'
 };
-```
 
 }
 
@@ -461,7 +438,6 @@ return 'browser-backend';
 }
 } catch (e) {}
 
-```
 if (!w.ExplorerScanner || !w.ExplorerScanner.scan) return false;
 
 if (w.ExplorerScanner.__BOM_20260610D_PATCHED__) return true;
