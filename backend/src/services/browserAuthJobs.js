@@ -4,6 +4,9 @@ export function startBrowserBomJob(input = {}) {
   const jobId = crypto.randomUUID();
   const expectedCount = Number(input.expectedCount || 0);
   jobs.set(jobId, { expectedCount });
-  return { ok: true, status: 'partial', jobId, source: 'browser-auth-bridge', expectedCount, actualCount: 0, root: null, items: [] };
+  return { ok: true, status: 'partial', jobId, source: 'browser-auth-bridge', expectedCount, actualCount: 0, root: null, items: [], tasks: [] };
 }
-export function continueBrowserBomJob(jobId)
+export function continueBrowserBomJob(jobId) {
+  const job = jobs.get(jobId) || { expectedCount: 0 };
+  return { ok: false, status: 'partial', jobId, source: 'browser-auth-bridge', expectedCount: job.expectedCount, actualCount: 0, root: null, items: [], tasks: [] };
+}
