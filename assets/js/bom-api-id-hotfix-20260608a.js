@@ -477,5 +477,29 @@ setTimeout(patchScanner, 3000);
 
 }
 
+w.__bomBridgeRun = function () {
+  diag('ok', 'Executando bridge manual: ' + BUILD);
+  return runBrowserBridge().then(function (result) {
+    w.__bomBridgeLastResult = result;
+    diag('ok', 'Bridge manual retornou ' + ((result.rows || result.items || result.bom || []).length) + ' linhas');
+    return result;
+  }).catch(function (err) {
+    w.__bomBridgeLastError = err;
+    diag('error', 'Bridge manual erro: ' + (err && err.message ? err.message : err));
+    throw err;
+  });
+};
+
+w.__bomBridgeInfo = function () {
+  return {
+    build: BUILD,
+    mode: w.__BOM_HOTFIX_MODE__,
+    hasWAFData: !!(w.WAFData && w.WAFData.authenticatedRequest),
+    hasExplorerScanner: !!(w.ExplorerScanner && w.ExplorerScanner.scan),
+    lastResult: w.__bomBridgeLastResult || null,
+    lastError: w.__bomBridgeLastError || null
+  };
+};
+
 boot();
 })();
