@@ -480,14 +480,12 @@ w.ExplorerScanner.__BOM_20260610D_PATCHED__ = true;
 
 diag('ok', 'Hotfix ativo: ' + BUILD + ' | Scanner interceptado | browser-auth BFS bridge');
 return true;
-```
 
 }
 
 function boot() {
 diag('ok', 'Hotfix carregado: ' + BUILD + ' | aguardando Scanner...');
 
-```
 var tries = 0;
 var timer = setInterval(function () {
   tries += 1;
@@ -501,7 +499,6 @@ var timer = setInterval(function () {
 
 setTimeout(patchScanner, 1000);
 setTimeout(patchScanner, 3000);
-```
 
 }
 
