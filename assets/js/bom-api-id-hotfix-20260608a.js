@@ -6,7 +6,7 @@ var w = window;
 var BUILD = 'bom20260610d';
 var BACKEND = 'https://bom-resolver.onrender.com';
 
-w.**BOM_BUILD_ID** = BUILD;
+w.BOM_BUILD_ID = BUILD;
 w.__BOM_HOTFIX_MODE__ = 'browser-auth-bfs-bridge';
 
 function s(v) {
