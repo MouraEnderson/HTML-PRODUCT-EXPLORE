@@ -1,15 +1,17 @@
 import crypto from 'node:crypto';
 
-const JOB_TTL_MS = 15 * 60 * 1000;
 const jobs = new Map();
 
 export function startBrowserBomJob(input = {}) {
-  cleanupJobs();
   const jobId = crypto.randomUUID();
-  const job = {
-    id: jobId,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    phase: 'root-search',
-    rootName: clean(input.rootName),
-    physicalId: clean(input
+  const expectedCount = Number(input.expectedCount || 0);
+  jobs.set(jobId, { expectedCount, createdAt: Date.now() });
+  return {
+    ok: true,
+    status: 'partial',
+    jobId,
+    source: 'browser-auth-bridge',
+    expectedCount,
+    actualCount: 0,
+    root: null,
+    diagnostics
