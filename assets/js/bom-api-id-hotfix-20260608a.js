@@ -7,7 +7,7 @@ var BUILD = 'bom20260610d';
 var BACKEND = 'https://bom-resolver.onrender.com';
 
 w.**BOM_BUILD_ID** = BUILD;
-w.**BOM_HOTFIX_MODE** = 'browser-auth-bfs-bridge';
+w.__BOM_HOTFIX_MODE__ = 'browser-auth-bfs-bridge';
 
 function s(v) {
 return String(v || '').trim();
@@ -24,7 +24,7 @@ setTimeout(resolve, ms);
 }
 
 function cleanUrl(v) {
-return s(v).replace(//+$/, '');
+return s(v).replace(/\/+$/, '');
 }
 
 function diag(type, msg) {
@@ -32,7 +32,6 @@ try {
 console.log('[BOM ' + BUILD + ']', type, msg);
 } catch (e) {}
 
-```
 try {
   var id = 'bom-hotfix-toast';
   var el = document.getElementById(id);
