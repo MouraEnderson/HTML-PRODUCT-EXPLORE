@@ -13,4 +13,5 @@ export function startBrowserBomJob(input = {}) {
     phase: 'root-search',
     rootName: clean(input.rootName),
     physicalId: clean(input.physicalId),
-   
+    expectedCount: Number(input.expectedCount || 0),
+    maxItems: Number
