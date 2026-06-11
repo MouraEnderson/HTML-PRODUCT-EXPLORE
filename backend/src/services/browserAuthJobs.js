@@ -147,7 +147,7 @@ function addUniqueCandidate(job, item, source) {
   job.seenCandidateIds.add(id);
 }
 
-function addRow(job, parentRowId, depth, inst, ref, navId) {
+function addRow(job, parentRowId, depth, inst, ref, navId, meta = {}) {
   if (job.rows.length >= MAX_ROWS) return null;
 
   const instanceId = safeId(inst && inst.id);
@@ -166,16 +166,42 @@ function addRow(job, parentRowId, depth, inst, ref, navId) {
     title: safeId(ref && ref.title) || safeId(inst && inst.name),
     type: safeId(ref && ref.type) || safeId(inst && inst.type),
     physicalId: safeId(ref && ref.id),
+    referenceId: safeId(ref && ref.id),
     navId: safeId(navId || (ref && ref.id)),
     maturity: safeId(inst && (inst.state || inst.maturity || inst.current)),
+    state: safeId(inst && (inst.state || inst.maturity || inst.current)),
+    owner: safeId(inst && inst.reservedby),
     reservedBy: safeId(inst && inst.reservedby),
+    revision: safeId(ref && ref.revision) || safeId(inst && inst.revision),
     hasConfiguredInstance: safeId(inst && inst.hasConfiguredInstance),
     quantity: 1,
-    source: 'browser-auth',
+    source: meta.source || 'engInstance',
+    root: !!meta.root,
+    treeOrigin: safeId(meta.treeOrigin || 'engInstance'),
   };
 
   job.rows.push(row);
   return row;
+}
+
+function ensureRootRow(job) {
+  if (job.rootRowAdded || !job.rootNavId) return;
+  job.rootRowAdded = true;
+  const candidate = job.candidates.get(job.rootNavId);
+  const item = candidate && candidate.item;
+  addRow(
+    job,
+    null,
+    0,
+    { id: job.rootNavId, name: job.rootName },
+    {
+      id: job.rootNavId,
+      title: titleFromItem(item) || job.rootName,
+      type: safeId(item && item.type) || 'VPMReference',
+    },
+    job.rootNavId,
+    { source: 'root', root: true, treeOrigin: 'root-crawl' }
+  );
 }
 
 function queueProbe(job, navId, meta = {}) {
@@ -335,11 +361,20 @@ function processCandidateProbe(job, result, candidateId) {
 function scheduleRootCrawl(job) {
   if (!job.rootNavId || job.rootCrawlQueued) return;
   job.rootCrawlQueued = true;
+  ensureRootRow(job);
+  var rootRow = null;
+  for (var i = job.rows.length - 1; i >= 0; i -= 1) {
+    if (job.rows[i] && job.rows[i].root) {
+      rootRow = job.rows[i];
+      break;
+    }
+  }
   job.pending.push(task(`crawl:${job.rootNavId}`, engInstUrl(job.baseUrl, job.rootNavId, 500), {
     phase: 'crawl',
     navId: job.rootNavId,
-    parentRowId: null,
+    parentRowId: rootRow ? rootRow.id : null,
     depth: 1,
+    treeOrigin: 'root-crawl',
   }));
 }
 
@@ -354,7 +389,11 @@ function processCrawl(job, result, meta) {
 
   for (const inst of members) {
     const ref = refFromInstance(inst) || { id: '', type: '', title: '' };
-    const row = addRow(job, parentRowId, depth, inst, ref, null);
+    const treeOrigin = safeId(meta.treeOrigin) || (parentRowId ? 'probe-crawl' : 'root-crawl');
+    const row = addRow(job, parentRowId, depth, inst, ref, null, {
+      source: 'engInstance',
+      treeOrigin,
+    });
 
     const refId = safeId(ref.id);
     const refType = normalizeText(ref.type);
@@ -366,8 +405,8 @@ function processCrawl(job, result, meta) {
         depth: depth + 1,
         refId,
         instName: row.instanceName || row.name,
+        treeOrigin: 'probe-crawl',
       });
-      queueSearchesForChild(job, refId, row.instanceName || row.name, row.id, depth + 1);
     }
   }
 }
@@ -387,6 +426,7 @@ function processProbe(job, result, meta) {
       navId,
       parentRowId,
       depth,
+      treeOrigin: 'probe-crawl',
     }));
   }
 }
@@ -446,6 +486,7 @@ export async function startBrowserBomJob(req, res) {
       diagnostics: [],
       rootNavId: '',
       rootCrawlQueued: false,
+      rootRowAdded: false,
     };
 
     job.diagnostics.push(`start rootName=${rootName}; physicalId=${physicalId}; expected=${expectedCount}`);

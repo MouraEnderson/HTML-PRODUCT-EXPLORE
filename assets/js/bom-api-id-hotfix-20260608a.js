@@ -1,9 +1,9 @@
-/* BOM browser-auth bridge hotfix - 20260612a */
+/* BOM browser-auth bridge hotfix - 20260612b */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260612a';
+var BUILD = 'bom20260612b';
 var BACKEND = 'https://bom-resolver.onrender.com';
 
 w.BOM_BUILD_ID = BUILD;
@@ -398,26 +398,133 @@ function bridgeLog(label, value) {
   } catch (e) {}
 }
 
+function isRealTreeRow(row) {
+  row = row || {};
+  if (row.root === true || s(row.source) === 'root') return true;
+  var src = s(row.source);
+  if (src === 'engInstance' || src === 'browser-auth') {
+    return !!s(row.instanceId);
+  }
+  return false;
+}
+
+function filterRealTreeRows(rows) {
+  rows = Array.isArray(rows) ? rows : [];
+  var kept = [];
+  var discarded = [];
+  rows.forEach(function (row) {
+    if (isRealTreeRow(row)) {
+      kept.push(row);
+    } else {
+      discarded.push({
+        id: s(row.id),
+        title: s(row.title || row.name || row.instanceName),
+        source: s(row.source),
+        reason: 'nao root/engInstance com instanceId'
+      });
+    }
+  });
+  return { rows: kept, discarded: discarded };
+}
+
 function dedupeKey(row) {
   row = row || {};
   var instanceId = s(row.instanceId);
   if (instanceId) return 'inst:' + instanceId;
   var parentId = s(row.parentId || 'ROOT');
-  var refId = s(row.physicalId || row.referenceId || row.navId || row.objectId || row.id);
+  var refId = s(row.referenceId || row.physicalId || row.navId || row.objectId || row.id);
   var instName = s(row.instanceName || row.name || row.title);
-  return 'combo:' + parentId + '|' + refId + '|' + instName;
+  if (refId && instName) return 'combo:' + parentId + '|' + refId + '|' + instName;
+  return 'combo:' + parentId + '|' + refId;
 }
 
 function rowScore(row) {
   row = row || {};
   var score = 0;
-  if (s(row.source) === 'browser-auth') score += 100;
+  if (row.root === true || s(row.source) === 'root') score += 500;
+  if (s(row.source) === 'engInstance') score += 200;
+  if (s(row.source) === 'browser-auth') score += 120;
+  if (s(row.treeOrigin) === 'root-crawl') score += 80;
+  if (s(row.treeOrigin) === 'probe-crawl') score += 40;
   if (s(row.instanceId)) score += 60;
-  if (n(row.level) === 1) score += 20;
   if (s(row.parentId)) score += 10;
-  if (s(row.physicalId || row.navId)) score += 8;
-  if (s(row.instanceName || row.name)) score += 4;
+  score -= n(row.level) * 3;
   return score;
+}
+
+function dedupeByInstanceId(rows) {
+  rows = Array.isArray(rows) ? rows : [];
+  var byInst = {};
+  var removed = 0;
+  var out = [];
+
+  rows.forEach(function (row) {
+    var iid = s(row.instanceId);
+    if (!iid) return;
+    if (!byInst[iid] || rowScore(row) > rowScore(byInst[iid])) {
+      if (byInst[iid]) removed += 1;
+      byInst[iid] = row;
+    } else {
+      removed += 1;
+    }
+  });
+
+  Object.keys(byInst).forEach(function (k) {
+    out.push(byInst[k]);
+  });
+
+  rows.forEach(function (row) {
+    if (!s(row.instanceId) && (row.root === true || s(row.source) === 'root')) {
+      out.push(row);
+    }
+  });
+
+  return { rows: out, removed: removed };
+}
+
+function filterConnectedTree(rows, rootName) {
+  rows = Array.isArray(rows) ? rows : [];
+  if (!rows.length) return [];
+
+  var byId = {};
+  rows.forEach(function (row) {
+    byId[s(row.id)] = row;
+  });
+
+  var startIds = [];
+  rows.forEach(function (row) {
+    if (row.root === true || s(row.source) === 'root') {
+      startIds.push(s(row.id));
+    }
+  });
+
+  if (!startIds.length) {
+    rows.forEach(function (row) {
+      var parentId = s(row.parentId);
+      if (!parentId || !byId[parentId]) {
+        startIds.push(s(row.id));
+      }
+    });
+  }
+
+  if (!startIds.length) startIds.push(s(rows[0].id));
+
+  var connected = {};
+  function walk(id) {
+    if (!id || connected[id] || !byId[id]) return;
+    connected[id] = byId[id];
+    rows.forEach(function (row) {
+      if (s(row.parentId) === id) walk(s(row.id));
+    });
+  }
+
+  startIds.forEach(function (id) {
+    walk(id);
+  });
+
+  return Object.keys(connected).map(function (k) {
+    return connected[k];
+  });
 }
 
 function dedupeBridgeRows(rows) {
@@ -441,36 +548,28 @@ function dedupeBridgeRows(rows) {
   };
 }
 
-function trimToExpected(rows, expected) {
-  rows = Array.isArray(rows) ? rows : [];
-  expected = n(expected);
-  if (!expected || rows.length <= expected + 1) return rows;
-
-  var byId = {};
-  rows.forEach(function (row) {
-    byId[s(row.id)] = row;
+function logExtraRows(finalRows, expected, rawRows) {
+  if (!expected || finalRows.length <= expected) return;
+  var rawByInst = {};
+  (rawRows || []).forEach(function (row) {
+    var iid = s(row.instanceId);
+    if (iid) rawByInst[iid] = row;
   });
-
-  var scored = rows.slice().sort(function (a, b) {
-    return rowScore(b) - rowScore(a);
+  var extras = finalRows.slice(expected).map(function (row) {
+    return {
+      id: s(row.id),
+      title: s(row.title || row.name || row.instanceName),
+      source: s(row.source),
+      treeOrigin: s(row.treeOrigin),
+      reason: 'acima do expectedCount do Explorer'
+    };
   });
+  bridgeLog('extra rows', extras);
+}
 
-  var keep = {};
-  var keptCount = 0;
-  scored.forEach(function (row) {
-    if (keptCount >= expected) return;
-    keep[s(row.id)] = row;
-    keptCount += 1;
-    var parentId = s(row.parentId);
-    while (parentId && byId[parentId] && !keep[parentId]) {
-      keep[parentId] = byId[parentId];
-      parentId = s(byId[parentId].parentId);
-    }
-  });
-
-  return rows.filter(function (row) {
-    return !!keep[s(row.id)];
-  });
+function logDiscardedRows(discarded) {
+  if (!discarded || !discarded.length) return;
+  bridgeLog('discarded rows sample', discarded.slice(0, 12));
 }
 
 function sortRowsTreeOrder(rows) {
@@ -559,23 +658,30 @@ function processBridgeResult(raw) {
   var expected = n(raw.expectedCount) || getExpectedCount();
   var rootName = getRootName();
 
-  bridgeLog('raw rows', rawRows.length);
-  bridgeLog('expected', expected);
-  bridgeLog('root', rootName);
+  bridgeLog('explorer expected', expected);
+  bridgeLog('raw backend rows', rawRows.length);
 
-  var deduped = dedupeBridgeRows(rawRows);
-  bridgeLog('dedup rows', deduped.rows.length);
-  bridgeLog('ids duplicados removidos', deduped.removed);
+  var real = filterRealTreeRows(rawRows);
+  bridgeLog('real tree rows', real.rows.length);
+  bridgeLog('search/probe rows discarded', real.discarded.length);
+  logDiscardedRows(real.discarded);
 
-  var trimmed = trimToExpected(deduped.rows, expected);
-  if (expected > 0 && trimmed.length > expected) {
-    trimmed = sortRowsTreeOrder(trimmed).slice(0, expected);
-    bridgeLog('trim tree rows', trimmed.length);
+  var instDedup = dedupeByInstanceId(real.rows);
+  var connected = filterConnectedTree(instDedup.rows, rootName);
+  var deduped = dedupeBridgeRows(connected);
+  var finalRows = deduped.rows;
+
+  bridgeLog('final dashboard rows', finalRows.length);
+  bridgeLog('duplicate rows removed', instDedup.removed + deduped.removed);
+
+  if (expected > 0 && finalRows.length !== expected) {
+    bridgeLog('count mismatch explorer=' + expected + ' dashboard=' + finalRows.length);
+    logExtraRows(finalRows, expected, rawRows);
   }
-  var items = mapRowsToImportItems(trimmed, rootName);
+
+  var items = mapRowsToImportItems(finalRows, rootName);
   var mappedCount = items.length;
 
-  bridgeLog('mapped rows', mappedCount);
   if (items.length) bridgeLog('first row', items[0]);
 
   var partial = expected > 0 && mappedCount < expected - 1;
@@ -588,14 +694,17 @@ function processBridgeResult(raw) {
 
   return {
     rawCount: rawRows.length,
-    dedupCount: deduped.rows.length,
+    realTreeCount: real.rows.length,
+    discardedCount: real.discarded.length,
+    dedupCount: finalRows.length,
     mappedCount: mappedCount,
     expectedCount: expected,
     rootName: rootName,
     items: items,
     partial: partial,
     message: message,
-    removedDuplicates: deduped.removed
+    removedDuplicates: instDedup.removed + deduped.removed,
+    discardedRows: real.discarded
   };
 }
 
@@ -687,7 +796,9 @@ function finalizeBridgeResult(raw) {
     diag(
       'ok',
       'Bridge OK: ' + (loaded.count || processed.mappedCount) +
-        ' linhas (raw ' + processed.rawCount + ', dedup ' + processed.dedupCount + ')'
+        ' linhas (raw ' + processed.rawCount +
+        ', arvore ' + processed.realTreeCount +
+        ', final ' + processed.dedupCount + ')'
     );
     updateBuildPill();
     return out;
