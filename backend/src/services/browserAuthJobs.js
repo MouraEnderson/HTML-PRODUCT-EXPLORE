@@ -151,20 +151,6 @@ function expectedLimit(job) {
   return Number(job.expectedCount || 0);
 }
 
-function expectedReached(job) {
-  const expected = expectedLimit(job);
-  return expected > 0 && job.rows.length >= expected;
-}
-
-function stopTraversal(job) {
-  if (job.traversalStoppedByExpected) return;
-  job.traversalStoppedByExpected = true;
-  job.pending = [];
-  job.diagnostics.push(
-    `traversal stopped by expectedCount=${expectedLimit(job)} rows=${job.rows.length}`
-  );
-}
-
 function sortRowsBfs(rows) {
   if (!rows.length) return [];
   const byId = {};
@@ -193,37 +179,54 @@ function sortRowsBfs(rows) {
   return out;
 }
 
-function trimRowsToExpected(job) {
-  const expected = expectedLimit(job);
-  if (!expected || job.rows.length <= expected) return job.rows;
-  return sortRowsBfs(job.rows).slice(0, expected);
+function mergeTreeRow(existing, inst, ref) {
+  if (!existing) return existing;
+  if (!existing.owner) existing.owner = safeId(inst && inst.reservedby);
+  if (!existing.reservedBy) existing.reservedBy = safeId(inst && inst.reservedby);
+  if (!existing.revision) existing.revision = safeId(ref && ref.revision) || safeId(inst && inst.revision);
+  if (!existing.maturity) existing.maturity = safeId(inst && (inst.state || inst.maturity || inst.current));
+  if (!existing.state) existing.state = existing.maturity;
+  if (!existing.title) existing.title = safeId(ref && ref.title) || safeId(inst && inst.name);
+  if (!existing.name) existing.name = safeId(inst && inst.name) || existing.title;
+  return existing;
 }
 
 function addRow(job, parentRowId, depth, inst, ref, navId, meta = {}) {
-  if (expectedReached(job)) {
-    stopTraversal(job);
+  if (job.treeRows.length >= MAX_ROWS) return null;
+
+  const isRoot = !!meta.root || meta.source === 'root';
+  const instanceId = safeId(inst && inst.id);
+
+  if (!isRoot && !instanceId) {
+    job.stats.navigationOnly += 1;
+    job.diagnostics.push(`skip sem instanceId parent=${parentRowId || 'ROOT'}`);
     return null;
   }
-  if (job.rows.length >= MAX_ROWS) return null;
 
-  const instanceId = safeId(inst && inst.id);
-  const rowKey = `${parentRowId || 'ROOT'}|${instanceId || ref.id || navId || job.rows.length}`;
+  if (instanceId && job.instanceIndex.has(instanceId)) {
+    job.stats.detailMerged += 1;
+    return mergeTreeRow(job.instanceIndex.get(instanceId), inst, ref);
+  }
 
-  if (job.rowKeys.has(rowKey)) return null;
-  job.rowKeys.add(rowKey);
+  const rowId = isRoot
+    ? `root:${safeId(job.rootNavId || navId || 'ROOT')}`
+    : `inst:${instanceId}`;
+  if (job.rowKeys.has(rowId)) return null;
+  job.rowKeys.add(rowId);
 
   const row = {
-    id: rowKey,
+    id: rowId,
     parentId: parentRowId || null,
     level: depth,
-    instanceId,
+    instanceId: isRoot ? '' : instanceId,
     instanceName: safeId(inst && inst.name),
     name: safeId(inst && inst.name) || safeId(ref && ref.title) || safeId(ref && ref.id),
     title: safeId(ref && ref.title) || safeId(inst && inst.name),
     type: safeId(ref && ref.type) || safeId(inst && inst.type),
     physicalId: safeId(ref && ref.id),
     referenceId: safeId(ref && ref.id),
-    navId: safeId(navId || (ref && ref.id)),
+    navigableId: safeId(navId || (ref && ref.id) || (isRoot ? job.rootNavId : '')),
+    navId: safeId(navId || (ref && ref.id) || (isRoot ? job.rootNavId : '')),
     maturity: safeId(inst && (inst.state || inst.maturity || inst.current)),
     state: safeId(inst && (inst.state || inst.maturity || inst.current)),
     owner: safeId(inst && inst.reservedby),
@@ -231,13 +234,15 @@ function addRow(job, parentRowId, depth, inst, ref, navId, meta = {}) {
     revision: safeId(ref && ref.revision) || safeId(inst && inst.revision),
     hasConfiguredInstance: safeId(inst && inst.hasConfiguredInstance),
     quantity: 1,
-    source: meta.source || 'engInstance',
-    root: !!meta.root,
-    treeOrigin: safeId(meta.treeOrigin || 'engInstance'),
+    source: isRoot ? 'root' : 'engInstance',
+    root: isRoot,
+    treeOrigin: safeId(meta.treeOrigin || (isRoot ? 'root-crawl' : 'engInstance')),
   };
 
-  job.rows.push(row);
-  if (expectedReached(job)) stopTraversal(job);
+  job.treeRows.push(row);
+  if (instanceId) job.instanceIndex.set(instanceId, row);
+  if (isRoot) job.stats.rootRows += 1;
+  else job.stats.engInstanceRows += 1;
   return row;
 }
 
@@ -262,10 +267,10 @@ function ensureRootRow(job) {
 }
 
 function queueProbe(job, navId, meta = {}) {
-  if (expectedReached(job)) return;
   navId = safeId(navId);
   if (!navId || job.probedNav.has(navId)) return;
   job.probedNav.add(navId);
+  job.stats.probeTasks += 1;
   job.pending.push(task(`probe:${navId}`, engInstUrl(job.baseUrl, navId), { phase: 'probe', navId, ...meta }));
 }
 
@@ -305,31 +310,33 @@ function queueSearchesForChild(job, refId, instName, parentRowId, depth) {
 
 function makeSummary(job, status, message) {
   const expected = expectedLimit(job);
-  const rows = trimRowsToExpected(job);
-  job.rows = rows;
+  const rows = sortRowsBfs(job.treeRows);
+  job.treeRows = rows;
   const actual = rows.length;
   return {
     status,
     message,
     jobId: job.id,
-    build: 'browser-auth-bfs-20260612c',
+    build: 'browser-auth-bfs-20260612d',
     expectedCount: expected,
     actualCount: actual,
-    partial: expected ? actual < expected : false,
-    stoppedByExpected: !!job.traversalStoppedByExpected,
+    partial: expected ? actual < expected - 1 : false,
     rows,
     items: rows,
     bom: rows,
+    treeRows: rows,
+    stats: job.stats,
+    validation: {
+      expectedCount: expected,
+      actualCount: actual,
+      delta: expected ? actual - expected : 0,
+    },
     diagnostics: job.diagnostics.slice(-200),
     done: status === 'done' || status === 'partial' || status === 'error',
   };
 }
 
 function nextTasks(job) {
-  if (expectedReached(job)) {
-    stopTraversal(job);
-    return [];
-  }
   const out = job.pending.splice(0, MAX_TASKS_PER_ROUND);
   return out;
 }
@@ -370,6 +377,7 @@ function indexResults(results) {
 }
 
 function processSearchPayload(job, payload, source) {
+  job.stats.searchTasks += arr(payload).length;
   for (const item of arr(payload)) {
     addUniqueCandidate(job, item, source);
   }
@@ -392,9 +400,11 @@ function scheduleRoot(job) {
 }
 
 function scheduleCandidateProbes(job) {
+  if (job.rootNavId) return;
   for (const [id] of job.candidates) {
     if (!job.candidateProbeQueued.has(id)) {
       job.candidateProbeQueued.add(id);
+      job.stats.probeTasks += 2;
       job.pending.push(task(`candidate-inst:${id}`, engInstUrl(job.baseUrl, id, 25), { phase: 'candidateProbe', candidateId: id }));
       job.pending.push(task(`candidate-item:${id}`, engItemUrl(job.baseUrl, id), { phase: 'candidateItem', candidateId: id }));
     }
@@ -423,14 +433,24 @@ function processCandidateProbe(job, result, candidateId) {
   if (c) c.childCount = members.length;
 }
 
+function processCandidateItem(job, result, candidateId) {
+  const payload = getPayload(result);
+  const item = firstMember(payload) || payload;
+  const c = job.candidates.get(candidateId);
+  if (c && item && typeof item === 'object') {
+    c.item = Object.assign({}, c.item || {}, item);
+    job.stats.detailMerged += 1;
+  }
+}
+
 function scheduleRootCrawl(job) {
   if (!job.rootNavId || job.rootCrawlQueued) return;
   job.rootCrawlQueued = true;
   ensureRootRow(job);
   var rootRow = null;
-  for (var i = job.rows.length - 1; i >= 0; i -= 1) {
-    if (job.rows[i] && job.rows[i].root) {
-      rootRow = job.rows[i];
+  for (var i = job.treeRows.length - 1; i >= 0; i -= 1) {
+    if (job.treeRows[i] && job.treeRows[i].root) {
+      rootRow = job.treeRows[i];
       break;
     }
   }
@@ -453,10 +473,6 @@ function processCrawl(job, result, meta) {
   job.diagnostics.push(`crawl nav=${navId}; depth=${depth}; children=${members.length}`);
 
   for (const inst of members) {
-    if (expectedReached(job)) {
-      stopTraversal(job);
-      break;
-    }
     const ref = refFromInstance(inst) || { id: '', type: '', title: '' };
     const treeOrigin = safeId(meta.treeOrigin) || (parentRowId ? 'probe-crawl' : 'root-crawl');
     const row = addRow(job, parentRowId, depth, inst, ref, null, {
@@ -468,7 +484,7 @@ function processCrawl(job, result, meta) {
     const refType = normalizeText(ref.type);
     const isAssemblyCandidate = refId && depth < MAX_DEPTH && refType.includes('product');
 
-    if (row && isAssemblyCandidate && !expectedReached(job)) {
+    if (row && isAssemblyCandidate) {
       queueProbe(job, refId, {
         parentRowId: row.id,
         depth: depth + 1,
@@ -477,16 +493,30 @@ function processCrawl(job, result, meta) {
         treeOrigin: 'probe-crawl',
       });
     }
-
-    if (expectedReached(job)) {
-      stopTraversal(job);
-      break;
-    }
   }
 }
 
+function scheduleCrawl(job, navId, meta = {}) {
+  navId = safeId(navId);
+  const parentRowId = safeId(meta.parentRowId);
+  const depth = Number(meta.depth || 1);
+  if (!navId || !parentRowId) return false;
+
+  const crawlKey = `${parentRowId}|${navId}`;
+  if (job.crawlKeys.has(crawlKey)) return false;
+  job.crawlKeys.add(crawlKey);
+
+  job.pending.push(task(`crawl:${navId}:${parentRowId}`, engInstUrl(job.baseUrl, navId, 500), {
+    phase: 'crawl',
+    navId,
+    parentRowId,
+    depth,
+    treeOrigin: safeId(meta.treeOrigin) || 'probe-crawl',
+  }));
+  return true;
+}
+
 function processProbe(job, result, meta) {
-  if (expectedReached(job)) return;
   const payload = getPayload(result);
   const members = arr(payload);
   const navId = safeId(meta.navId);
@@ -496,13 +526,16 @@ function processProbe(job, result, meta) {
   job.diagnostics.push(`probe nav=${navId}; children=${members.length}`);
 
   if (members.length > 0 && parentRowId) {
-    job.pending.push(task(`crawl:${navId}:${parentRowId}`, engInstUrl(job.baseUrl, navId, 500), {
-      phase: 'crawl',
-      navId,
+    scheduleCrawl(job, navId, {
       parentRowId,
       depth,
-      treeOrigin: 'probe-crawl',
-    }));
+      treeOrigin: meta.treeOrigin || 'probe-crawl',
+    });
+    return;
+  }
+
+  if (meta.refId && parentRowId) {
+    queueSearchesForChild(job, meta.refId, meta.instName, parentRowId, depth);
   }
 }
 
@@ -520,12 +553,15 @@ function processChildSearch(job, result, meta) {
   }
 
   if (!best) return;
+  job.stats.searchTasks += candidates.length;
   job.diagnostics.push(`childSearch ref=${meta.refId}; best=${best.id}; score=${best.score}`);
+  if (safeId(best.id) === safeId(meta.refId)) return;
   queueProbe(job, best.id, {
     parentRowId: meta.parentRowId,
     depth: meta.depth,
     refId: meta.refId,
     instName: meta.instName,
+    treeOrigin: 'probe-crawl',
   });
 }
 
@@ -554,15 +590,24 @@ export async function startBrowserBomJob(req, res) {
       seenCandidateIds: new Set(),
       candidateProbeQueued: new Set(),
       pending: [],
-      rows: [],
+      treeRows: [],
+      instanceIndex: new Map(),
       rowKeys: new Set(),
       probedNav: new Set(),
+      crawlKeys: new Set(),
       childSearchKeys: new Set(),
       diagnostics: [],
+      stats: {
+        rootRows: 0,
+        engInstanceRows: 0,
+        searchTasks: 0,
+        probeTasks: 0,
+        detailMerged: 0,
+        navigationOnly: 0,
+      },
       rootNavId: '',
       rootCrawlQueued: false,
       rootRowAdded: false,
-      traversalStoppedByExpected: false,
     };
 
     job.diagnostics.push(`start rootName=${rootName}; physicalId=${physicalId}; expected=${expectedCount}`);
@@ -604,6 +649,11 @@ export async function continueBrowserBomJob(req, res) {
         processCandidateProbe(job, r, candidateId);
       }
 
+      if (meta.phase === 'candidateItem' || id.startsWith('candidate-item:')) {
+        const candidateId = safeId(meta.candidateId || id.replace('candidate-item:', ''));
+        processCandidateItem(job, r, candidateId);
+      }
+
       if (meta.phase === 'crawl' || id.startsWith('crawl:')) {
         processCrawl(job, r, meta);
       }
@@ -627,31 +677,27 @@ export async function continueBrowserBomJob(req, res) {
     }
 
     const expected = expectedLimit(job);
-    if (expectedReached(job)) {
-      stopTraversal(job);
-      return res.json(makeSummary(job, 'done', `BOM Explorer: ${job.rows.length}/${expected}`));
-    }
-
     const tasks = nextTasks(job);
     if (tasks.length) {
       return res.json({
         ok: true,
         jobId: job.id,
         status: 'running',
-        message: `BOM em processamento: ${job.rows.length}${expected ? '/' + expected : ''}`,
+        message: `BOM em processamento: ${job.treeRows.length}${expected ? '/' + expected : ''}`,
         tasks,
-        actualCount: job.rows.length,
+        actualCount: job.treeRows.length,
         expectedCount: expected,
+        stats: job.stats,
         diagnostics: job.diagnostics.slice(-120),
         done: false,
       });
     }
 
-    const status = expected && job.rows.length < expected ? 'partial' : 'done';
+    const status = expected && job.treeRows.length < expected - 1 ? 'partial' : 'done';
     return res.json(makeSummary(
       job,
       status,
-      expected ? `BOM parcial: ${job.rows.length}/${expected}` : `BOM processada: ${job.rows.length}`
+      expected ? `BOM real: ${job.treeRows.length}/${expected}` : `BOM processada: ${job.treeRows.length}`
     ));
   } catch (err) {
     return res.status(500).json({ ok: false, error: err && err.message ? err.message : String(err) });

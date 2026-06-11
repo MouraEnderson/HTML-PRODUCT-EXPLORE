@@ -1,9 +1,9 @@
-/* BOM browser-auth bridge hotfix - 20260612c */
+/* BOM browser-auth bridge hotfix - 20260612d */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260612c';
+var BUILD = 'bom20260612d';
 var BACKEND = 'https://bom-resolver.onrender.com';
 
 w.BOM_BUILD_ID = BUILD;
@@ -549,48 +549,119 @@ function dedupeBridgeRows(rows) {
   };
 }
 
-function logExtraRows(finalRows, expected, rawRows) {
-  if (!expected || finalRows.length <= expected) return;
-  var rawByInst = {};
-  (rawRows || []).forEach(function (row) {
-    var iid = s(row.instanceId);
-    if (iid) rawByInst[iid] = row;
+function classifyBridgeRows(rows) {
+  rows = Array.isArray(rows) ? rows : [];
+  var candidateRows = [];
+  var probeRows = [];
+  var navigationRows = [];
+  var treeRows = [];
+  var discarded = [];
+
+  rows.forEach(function (row) {
+    row = row || {};
+    var src = s(row.source);
+    var meta = {
+      id: s(row.id),
+      title: s(row.title || row.name || row.instanceName),
+      source: src,
+      parentId: s(row.parentId),
+      instanceId: s(row.instanceId),
+      referenceId: s(row.referenceId || row.physicalId || row.navId),
+      navigableId: s(row.navigableId || row.navId),
+      name: s(row.name || row.instanceName),
+      type: s(row.type || row.objectType),
+      treeOrigin: s(row.treeOrigin)
+    };
+
+    if (row.root === true || src === 'root') {
+      treeRows.push(Object.assign({}, row, { source: 'root' }));
+      return;
+    }
+
+    if ((src === 'engInstance' || src === 'browser-auth') && meta.instanceId) {
+      treeRows.push(Object.assign({}, row, { source: 'engInstance' }));
+      return;
+    }
+
+    if (
+      src === 'search' ||
+      src === 'candidate' ||
+      src === 'rootSearch' ||
+      src === 'childSearch' ||
+      meta.treeOrigin.indexOf('search') >= 0
+    ) {
+      candidateRows.push(row);
+      discarded.push(Object.assign({}, meta, { reason: 'candidato search — nao entra na E-BOM' }));
+      return;
+    }
+
+    if (src === 'probe' || (meta.treeOrigin.indexOf('probe') === 0 && !meta.instanceId)) {
+      probeRows.push(row);
+      discarded.push(Object.assign({}, meta, { reason: 'probe de navegacao — nao entra na E-BOM' }));
+      return;
+    }
+
+    if (src === 'detail' || src === 'navigation' || src === 'reference') {
+      navigationRows.push(row);
+      discarded.push(Object.assign({}, meta, { reason: 'detail/navigation — nao entra na E-BOM' }));
+      return;
+    }
+
+    discarded.push(Object.assign({}, meta, { reason: 'linha auxiliar sem instanceId valido' }));
   });
-  var extras = finalRows.slice(expected).map(function (row) {
+
+  return {
+    candidateRows: candidateRows,
+    probeRows: probeRows,
+    navigationRows: navigationRows,
+    treeRows: treeRows,
+    discarded: discarded
+  };
+}
+
+function buildFinalTreeRows(classified) {
+  classified = classified || {};
+  var treeRows = classified.treeRows || [];
+
+  var instDedup = dedupeByInstanceId(treeRows);
+  var connected = filterConnectedTree(instDedup.rows);
+  var deduped = dedupeBridgeRows(connected);
+
+  var finalRows = deduped.rows.filter(function (row) {
+    var src = s(row.source);
+    return src === 'root' || (src === 'engInstance' && !!s(row.instanceId));
+  });
+
+  finalRows = sortRowsTreeOrder(finalRows);
+
+  return {
+    finalRows: finalRows,
+    instDedupRemoved: instDedup.removed,
+    bridgeDedupRemoved: deduped.removed,
+    detailMerged: 0
+  };
+}
+
+function logExtraRowsVsExplorer(finalRows, expected) {
+  if (!expected || finalRows.length <= expected) return;
+  var ordered = sortRowsTreeOrder(finalRows);
+  var extras = ordered.slice(expected).map(function (row) {
     return {
       id: s(row.id),
       title: s(row.title || row.name || row.instanceName),
       source: s(row.source),
-      treeOrigin: s(row.treeOrigin),
-      reason: 'acima do expectedCount do Explorer'
+      parentId: s(row.parentId),
+      instanceId: s(row.instanceId),
+      referenceId: s(row.referenceId || row.physicalId || row.navId),
+      reason: 'linha real acima do expectedCount do Explorer (diagnostico BFS)'
     };
   });
-  bridgeLog('extra rows', extras);
+  bridgeLog('extra rows vs explorer', extras);
 }
 
 function logDiscardedRows(discarded) {
   if (!discarded || !discarded.length) return;
   bridgeLog('discarded rows sample', discarded.slice(0, 12));
-}
-
-function clampRowsToExpectedBfs(rows, expected) {
-  rows = Array.isArray(rows) ? rows : [];
-  expected = n(expected);
-  var ordered = sortRowsTreeOrder(rows);
-  if (!expected || ordered.length <= expected) {
-    return { rows: ordered, discarded: [], stoppedByClamp: false };
-  }
-  var kept = ordered.slice(0, expected);
-  var discarded = ordered.slice(expected).map(function (row) {
-    return {
-      id: s(row.id),
-      title: s(row.title || row.name || row.instanceName),
-      source: s(row.source),
-      instanceId: s(row.instanceId),
-      reason: 'excedente acima do expectedCount do Explorer'
-    };
-  });
-  return { rows: kept, discarded: discarded, stoppedByClamp: true };
 }
 
 function sortRowsTreeOrder(rows) {
@@ -673,41 +744,50 @@ function mapRowsToImportItems(rows, rootName) {
 
 function processBridgeResult(raw) {
   raw = raw || {};
-  var rawRows = raw.rows || raw.items || raw.bom || [];
+  var rawRows = raw.rows || raw.items || raw.bom || raw.treeRows || [];
   if (!Array.isArray(rawRows)) rawRows = [];
 
   var expected = n(raw.expectedCount) || getExpectedCount();
   var rootName = getRootName();
-  var stoppedByExpected = !!(raw.stoppedByExpected || raw.traversalStoppedByExpected);
+  var backendStats = raw.stats || {};
 
-  bridgeLog('expected', expected);
-  bridgeLog('raw', rawRows.length);
+  bridgeLog('expected explorer', expected);
+  bridgeLog('raw received', rawRows.length);
 
-  var real = filterRealTreeRows(rawRows);
-  bridgeLog('real tree rows', real.rows.length);
-  bridgeLog('search/probe rows discarded', real.discarded.length);
-  logDiscardedRows(real.discarded);
+  var classified = classifyBridgeRows(rawRows);
+  var built = buildFinalTreeRows(classified);
+  var finalRows = built.finalRows;
 
-  var instDedup = dedupeByInstanceId(real.rows);
-  var connected = filterConnectedTree(instDedup.rows, rootName);
-  var deduped = dedupeBridgeRows(connected);
-  var beforeClamp = deduped.rows.length;
+  var rootCount = finalRows.filter(function (row) {
+    return row.root === true || s(row.source) === 'root';
+  }).length;
+  var engCount = finalRows.filter(function (row) {
+    return s(row.source) === 'engInstance';
+  }).length;
+  var searchDiscarded = classified.candidateRows.length + classified.discarded.filter(function (d) {
+    return String(d.reason || '').indexOf('search') >= 0;
+  }).length;
+  var probeDiscarded = classified.probeRows.length;
+  var detailMerged = n(backendStats.detailMerged) || 0;
+  var duplicatesRemoved = built.instDedupRemoved + built.bridgeDedupRemoved;
+  var discardedTotal = classified.discarded.length;
 
-  bridgeLog('final before clamp', beforeClamp);
-  bridgeLog('duplicate rows removed', instDedup.removed + deduped.removed);
+  bridgeLog('root rows', rootCount);
+  bridgeLog('engInstance rows', engCount);
+  bridgeLog('search rows discarded', searchDiscarded);
+  bridgeLog('probe rows discarded', probeDiscarded);
+  bridgeLog('detail rows merged', detailMerged);
+  bridgeLog('duplicates removed', duplicatesRemoved);
+  bridgeLog('final real tree rows', finalRows.length);
 
-  var clamped = clampRowsToExpectedBfs(deduped.rows, expected);
-  var finalRows = clamped.rows;
-
-  bridgeLog('final after clamp', finalRows.length);
-  bridgeLog('traversal stopped by expectedCount', stoppedByExpected || clamped.stoppedByClamp);
-
-  if (clamped.discarded.length) {
-    bridgeLog('extra rows discarded', clamped.discarded);
-  }
+  logDiscardedRows(classified.discarded);
 
   if (expected > 0 && finalRows.length !== expected) {
     bridgeLog('count mismatch explorer=' + expected + ' dashboard=' + finalRows.length);
+  }
+
+  if (expected > 0 && finalRows.length > expected) {
+    logExtraRowsVsExplorer(finalRows, expected);
   }
 
   var items = mapRowsToImportItems(finalRows, rootName);
@@ -725,9 +805,8 @@ function processBridgeResult(raw) {
 
   return {
     rawCount: rawRows.length,
-    realTreeCount: real.rows.length,
-    discardedCount: real.discarded.length,
-    beforeClampCount: beforeClamp,
+    realTreeCount: finalRows.length,
+    discardedCount: discardedTotal,
     dedupCount: finalRows.length,
     mappedCount: mappedCount,
     expectedCount: expected,
@@ -735,9 +814,16 @@ function processBridgeResult(raw) {
     items: items,
     partial: partial,
     message: message,
-    removedDuplicates: instDedup.removed + deduped.removed,
-    discardedRows: real.discarded.concat(clamped.discarded),
-    stoppedByExpected: stoppedByExpected || clamped.stoppedByClamp
+    removedDuplicates: duplicatesRemoved,
+    discardedRows: classified.discarded,
+    stats: {
+      rootRows: rootCount,
+      engInstanceRows: engCount,
+      searchDiscarded: searchDiscarded,
+      probeDiscarded: probeDiscarded,
+      detailMerged: detailMerged,
+      duplicatesRemoved: duplicatesRemoved
+    }
   };
 }
 
@@ -826,10 +912,13 @@ function finalizeBridgeResult(raw) {
     w.__bomBridgeLastResult = processed;
     w.__bomBridgeLastError = null;
     var out = buildOrchestratorResult(processed, loaded);
+    var real = n(processed.dedupCount);
+    var raw = n(processed.rawCount);
+    var discarded = n(processed.discardedCount) + n(processed.removedDuplicates);
     diag(
       'ok',
-      'Bridge OK: ' + (loaded.count || processed.mappedCount) + ' linhas' +
-        ' (raw ' + processed.rawCount + ', final ' + processed.dedupCount + ')'
+      'Bridge OK: ' + (loaded.count || real) + ' linhas' +
+        ' (raw ' + raw + ', real ' + real + ', descartadas ' + discarded + ')'
     );
     updateBuildPill();
     return out;
