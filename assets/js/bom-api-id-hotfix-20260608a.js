@@ -764,9 +764,7 @@ function processBridgeResult(raw) {
   var engCount = finalRows.filter(function (row) {
     return s(row.source) === 'engInstance';
   }).length;
-  var searchDiscarded = classified.candidateRows.length + classified.discarded.filter(function (d) {
-    return String(d.reason || '').indexOf('search') >= 0;
-  }).length;
+  var searchDiscarded = classified.candidateRows.length;
   var probeDiscarded = classified.probeRows.length;
   var detailMerged = n(backendStats.detailMerged) || 0;
   var duplicatesRemoved = built.instDedupRemoved + built.bridgeDedupRemoved;
