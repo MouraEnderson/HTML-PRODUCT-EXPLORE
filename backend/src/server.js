@@ -33,22 +33,9 @@ app.post('/api/bom/resolve', async (req, res) => {
   }
 });
 
-app.post('/api/bom/browser/start', (req, res) => {
-  try {
-    res.json(startBrowserBomJob(req.body || {}));
-  } catch (error) {
-    res.status(500).json({ ok: false, status: 'error', error: error?.message || String(error) });
-  }
-});
+app.post('/api/bom/browser/start', startBrowserBomJob);
 
-app.post('/api/bom/browser/continue', (req, res) => {
-  try {
-    const { jobId, results } = req.body || {};
-    res.json(continueBrowserBomJob(jobId, results || []));
-  } catch (error) {
-    res.status(500).json({ ok: false, status: 'error', error: error?.message || String(error) });
-  }
-});
+app.post('/api/bom/browser/continue', continueBrowserBomJob);
 
 app.listen(port, () => {
   console.log(`BOM Resolver listening on :${port}`);

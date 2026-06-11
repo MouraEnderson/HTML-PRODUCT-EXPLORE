@@ -1,9 +1,9 @@
-/* BOM browser-auth bridge hotfix - 20260610d */
+/* BOM browser-auth bridge hotfix - 20260611a */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260610d';
+var BUILD = 'bom20260611a';
 var BACKEND = 'https://bom-resolver.onrender.com';
 
 w.BOM_BUILD_ID = BUILD;
@@ -380,6 +380,12 @@ spaceUrl = cleanUrl(spaceUrl || guessSpaceUrlFromLocation());
     var expectedCount = getExpectedCount();
 
     diag('ok', 'Hotfix ativo: ' + BUILD + ' | browser-auth BFS bridge');
+    console.log('[BOM bridge]', BUILD, 'POST', BACKEND + '/api/bom/browser/start', {
+      spaceUrl: spaceUrl,
+      rootName: rootName,
+      physicalId: physicalId,
+      expectedCount: expectedCount
+    });
 
     return backendPost('/api/bom/browser/start', {
       spaceUrl: spaceUrl,
@@ -394,39 +400,63 @@ spaceUrl = cleanUrl(spaceUrl || guessSpaceUrlFromLocation());
 
 }
 
-function localFallback(reason) {
-diag('warn', 'BOM bridge fallback local: ' + (reason && reason.message ? reason.message : reason));
+function bridgeFailure(err, context) {
+  w.__bomBridgeLastError = err;
+  var msg = err && err.message ? err.message : String(err || 'Bridge falhou');
+  diag('error', (context || 'Bridge') + ' erro: ' + msg + ' (sem fallback legado)');
+  throw err;
+}
 
-var rows = [];
-try {
-  var names = ['CJ MESA 4BCS VP TOP 3DX', 'Queimador', 'Tempre', 'Manípulo', 'Tampo'];
-  for (var i = 0; i < names.length; i++) {
-    rows.push({
-      id: 'fallback-' + i,
-      parentId: i === 0 ? null : 'fallback-0',
-      level: i === 0 ? 0 : 1,
-      name: names[i],
-      title: names[i],
-      type: i === 0 ? 'Root' : 'Product',
-      source: 'fallback-local'
-    });
-  }
-} catch (e) {}
+function bridgeResultToOrchestrator(result) {
+  result = result || {};
+  var rows = result.rows || result.items || result.bom || [];
+  if (!Array.isArray(rows)) rows = [];
+  return {
+    loaderMode: 'browser-backend',
+    mode: 'browser-backend',
+    partial: !!result.partial,
+    message: result.message || ('Bridge ' + BUILD + ': ' + rows.length + ' linhas'),
+    meta: {
+      itemCount: result.actualCount || rows.length,
+      rootPhysicalId: getPhysicalId(),
+      productName: getRootName()
+    },
+    bridgeResult: result
+  };
+}
 
-return {
-  source: 'fallback-local',
-  build: BUILD,
-  status: 'partial',
-  partial: true,
-  expectedCount: getExpectedCount(),
-  actualCount: rows.length,
-  rows: rows,
-  items: rows,
-  bom: rows,
-  diagnostics: ['fallback-local'],
-  message: 'Fallback local: bridge nao concluiu'
-};
+function patchOrchestrator() {
+  if (!w.BomOrchestrator || !w.BomOrchestrator.refreshStructure) return false;
+  if (w.BomOrchestrator.__BOM_BRIDGE_PATCHED__) return true;
 
+  var original = w.BomOrchestrator.refreshStructure.bind(w.BomOrchestrator);
+  w.BomOrchestrator.__BOM_ORIGINAL_REFRESH__ = w.BomOrchestrator.__BOM_ORIGINAL_REFRESH__ || original;
+
+  w.BomOrchestrator.refreshStructure = function (options) {
+    options = options || {};
+    if (options.source !== 'manual') {
+      return original(options);
+    }
+
+    diag('ok', BUILD + ' | Atualizar estrutura -> POST /api/bom/browser/start');
+    console.log('[BOM bridge]', BUILD, 'Atualizar estrutura interceptado (refreshStructure manual)');
+
+    return runBrowserBridge()
+      .then(function (result) {
+        w.__bomBridgeLastResult = result;
+        w.__bomBridgeLastError = null;
+        var out = bridgeResultToOrchestrator(result);
+        diag('ok', 'Bridge OK: ' + ((result.rows || result.items || result.bom || []).length) + ' linhas');
+        return out;
+      })
+      .catch(function (err) {
+        return bridgeFailure(err, 'Atualizar estrutura');
+      });
+  };
+
+  w.BomOrchestrator.__BOM_BRIDGE_PATCHED__ = true;
+  diag('ok', 'Hotfix ativo: ' + BUILD + ' | BomOrchestrator.refreshStructure interceptado');
+  return true;
 }
 
 function patchScanner() {
@@ -446,9 +476,15 @@ var original = w.ExplorerScanner.scan.bind(w.ExplorerScanner);
 w.ExplorerScanner.__BOM_ORIGINAL_SCAN__ = w.ExplorerScanner.__BOM_ORIGINAL_SCAN__ || original;
 
 w.ExplorerScanner.scan = function () {
-  return runBrowserBridge().catch(function (err) {
-    return localFallback(err).catch ? localFallback(err) : localFallback(err);
-  });
+  return runBrowserBridge()
+    .then(function (result) {
+      w.__bomBridgeLastResult = result;
+      w.__bomBridgeLastError = null;
+      return result;
+    })
+    .catch(function (err) {
+      return bridgeFailure(err, 'ExplorerScanner.scan');
+    });
 };
 
 w.ExplorerScanner.__BOM_20260610D_PATCHED__ = true;
@@ -459,23 +495,39 @@ return true;
 }
 
 function boot() {
-diag('ok', 'Hotfix carregado: ' + BUILD + ' | aguardando Scanner...');
+diag('ok', 'Hotfix carregado: ' + BUILD + ' | instalando bridge...');
+
+patchOrchestrator();
+patchScanner();
 
 var tries = 0;
 var timer = setInterval(function () {
   tries += 1;
-  if (patchScanner() || tries > 100) {
+  var okOrchestrator = patchOrchestrator();
+  var okScanner = patchScanner();
+  if ((okOrchestrator && okScanner) || tries > 100) {
     clearInterval(timer);
-    if (tries > 100) {
-      diag('error', 'Hotfix ' + BUILD + ' carregou, mas ExplorerScanner nao apareceu.');
+    if (!okOrchestrator) {
+      diag('error', 'Hotfix ' + BUILD + ': BomOrchestrator.refreshStructure nao encontrado.');
+    }
+    if (!okScanner) {
+      diag('error', 'Hotfix ' + BUILD + ': ExplorerScanner.scan nao encontrado.');
     }
   }
 }, 250);
 
-setTimeout(patchScanner, 1000);
-setTimeout(patchScanner, 3000);
+setTimeout(function () {
+  patchOrchestrator();
+  patchScanner();
+}, 1000);
 
 }
+
+w.__bomBridgeInstall = function () {
+  patchOrchestrator();
+  patchScanner();
+  return w.__bomBridgeInfo();
+};
 
 w.__bomBridgeRun = function () {
   diag('ok', 'Executando bridge manual: ' + BUILD);
@@ -494,12 +546,18 @@ w.__bomBridgeInfo = function () {
   return {
     build: BUILD,
     mode: w.__BOM_HOTFIX_MODE__,
+    backend: BACKEND,
     hasWAFData: !!(w.WAFData && w.WAFData.authenticatedRequest),
     hasExplorerScanner: !!(w.ExplorerScanner && w.ExplorerScanner.scan),
+    orchestratorPatched: !!(w.BomOrchestrator && w.BomOrchestrator.__BOM_BRIDGE_PATCHED__),
+    scannerPatched: !!(w.ExplorerScanner && w.ExplorerScanner.__BOM_20260610D_PATCHED__),
     lastResult: w.__bomBridgeLastResult || null,
     lastError: w.__bomBridgeLastError || null
   };
 };
+
+w.__bomBridgeLastResult = w.__bomBridgeLastResult || null;
+w.__bomBridgeLastError = w.__bomBridgeLastError || null;
 
 boot();
 })();
