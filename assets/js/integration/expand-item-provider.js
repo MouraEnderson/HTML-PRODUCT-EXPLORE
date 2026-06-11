@@ -8,6 +8,8 @@
   var w = global;
 
   var LOG = '[ExpandItemProvider]';
+  var BUILD = s(w.__BOM_BUILD_ID__ || (w.APP_CONFIG && w.APP_CONFIG.BUILD) || 'bom20260614d');
+  var FORBIDDEN_HEADER_RE = /csrf|x-csrf-token/i;
   /** Fallback temporário de teste — último recurso após contexto/UQL/EnoviaApi */
   var KNOWN_ROOT_BY_PRD = {
     'prd-R1132100929518-01103695': '63FC553465A62400699E0792000086AB'
@@ -43,22 +45,222 @@
 
   var lastTransportStats = {};
 
-  /** Headers mínimos — NUNCA PlatformContext.getHeaders() (injeta x-csrf-token → CORS preflight). */
+  /** Headers GET — sem Content-Type, sem CSRF. */
   function getMinimalWafHeaders() {
     var h = { Accept: 'application/json' };
+    var sc = getSecurityContextValue();
+    if (sc) h.SecurityContext = sc;
+    return h;
+  }
+
+  function getSecurityContextValue() {
     try {
       var st =
         typeof w.PlatformContext !== 'undefined' &&
         w.PlatformContext.getState &&
         w.PlatformContext.getState();
-      if (st && st.securityContext) h.SecurityContext = st.securityContext;
+      if (st && st.securityContext) return s(st.securityContext);
     } catch (e) {}
     try {
-      if (w.widget && w.widget.wafSecurityContext) {
-        h.SecurityContext = w.widget.wafSecurityContext;
-      }
+      if (w.widget && w.widget.wafSecurityContext) return s(w.widget.wafSecurityContext);
     } catch (e) {}
-    return h;
+    return '';
+  }
+
+  /** Headers POST oficial dseng_v1 — nunca PlatformContext.getHeaders(). */
+  function getOfficialPostHeaders(includeContentType) {
+    var headers = { Accept: 'application/json' };
+    if (includeContentType !== false) {
+      headers['Content-Type'] = 'application/json';
+    }
+    var sc = getSecurityContextValue();
+    if (sc) headers.SecurityContext = sc;
+    return headers;
+  }
+
+  function forbiddenHeadersPresent(headers) {
+    headers = headers || {};
+    return Object.keys(headers).some(function (k) {
+      return FORBIDDEN_HEADER_RE.test(k) || FORBIDDEN_HEADER_RE.test(s(headers[k]));
+    });
+  }
+
+  function parseWafStatus(err, msg) {
+    var status = n(err && (err.status || err.statusCode || err.responseCode));
+    msg = s(msg);
+    if (!status && msg) {
+      var m = msg.match(/ResponseCode[^0-9]*(\d{3})/i) || msg.match(/\bHTTP\s*(\d{3})\b/i);
+      if (m) status = n(m[1]);
+    }
+    return status;
+  }
+
+  function extractResponseText(err, msg) {
+    if (err) {
+      if (typeof err === 'string') return err;
+      if (err.responseText) return s(err.responseText);
+      if (err.body) return typeof err.body === 'string' ? err.body : JSON.stringify(err.body);
+      if (err.response) return typeof err.response === 'string' ? err.response : JSON.stringify(err.response);
+      if (err.data) return typeof err.data === 'string' ? err.data : JSON.stringify(err.data);
+    }
+    return s(msg);
+  }
+
+  function responseKeys(data) {
+    if (!data || typeof data !== 'object') return '(not an object)';
+    return Object.keys(data).join(', ');
+  }
+
+  function logExpandPostAttempt(url, headers, contentTypeOption, bodyString, formLabel) {
+    log('build:', BUILD);
+    log('method: POST');
+    log('url:', url);
+    log('request headers planned:', JSON.stringify(headers));
+    log('request contentType option:', contentTypeOption || '(none)');
+    log('forbidden headers present:', forbiddenHeadersPresent(headers));
+    log('request body string:', bodyString);
+    log('serialization form:', formLabel);
+  }
+
+  function logExpandPostResult(res) {
+    log('status:', res.status);
+    if (res.status === 415) {
+      log('415 Content-Type header:', (res.headers && res.headers['Content-Type']) || '(missing)');
+      log('415 contentType option:', res.contentTypeOption || '(none)');
+      log('415 body empty:', !res.bodyString || res.bodyString.length === 0);
+      log('415 responseText:', res.responseText || '(n/a)');
+    }
+    if (res.status === 400) {
+      log('400 responseText:', res.responseText || '(n/a)');
+    }
+    if (res.ok && res.data) {
+      log('response keys:', responseKeys(res.data));
+      log('response raw:', res.data);
+    } else if (!res.ok) {
+      log('response raw:', res.responseText || res.error || '(n/a)');
+    }
+  }
+
+  /**
+   * Forma A: Content-Type no header + data JSON.stringify + type json
+   * Forma B: contentType option + data JSON.stringify (sem Content-Type no header)
+   */
+  function runExpandPostForm(url, bodyString, formLabel, useContentTypeOption) {
+    formLabel = formLabel || 'A';
+    var headers = getOfficialPostHeaders(!useContentTypeOption);
+    var contentTypeOption = useContentTypeOption ? 'application/json' : '(header Content-Type only)';
+
+    logExpandPostAttempt(url, headers, contentTypeOption, bodyString, formLabel);
+
+    return new Promise(function (resolve) {
+      var WAF = getWafData();
+      if (!WAF) {
+        resolve({
+          ok: false,
+          status: 0,
+          error: 'WAFData indisponível',
+          form: formLabel,
+          headers: headers,
+          contentTypeOption: contentTypeOption,
+          bodyString: bodyString
+        });
+        return;
+      }
+
+      var opts = {
+        method: 'POST',
+        headers: headers,
+        data: bodyString,
+        timeout: n(w.APP_CONFIG && w.APP_CONFIG.WAF_REQUEST_TIMEOUT_MS) || 60000,
+        onComplete: function (data) {
+          resolve({
+            ok: true,
+            status: 200,
+            data: data,
+            form: formLabel,
+            headers: headers,
+            contentTypeOption: contentTypeOption,
+            bodyString: bodyString
+          });
+        },
+        onFailure: function (err) {
+          var msg = (err && (err.message || err.error || err.statusText)) || 'WAF request failed';
+          resolve({
+            ok: false,
+            status: parseWafStatus(err, msg),
+            error: msg,
+            responseText: extractResponseText(err, msg),
+            err: err,
+            form: formLabel,
+            headers: headers,
+            contentTypeOption: contentTypeOption,
+            bodyString: bodyString
+          });
+        }
+      };
+
+      if (useContentTypeOption) {
+        opts.contentType = 'application/json';
+      } else {
+        opts.type = 'json';
+      }
+
+      try {
+        WAF.authenticatedRequest(url, opts);
+      } catch (e) {
+        resolve({
+          ok: false,
+          status: 0,
+          error: e && e.message ? e.message : String(e),
+          form: formLabel,
+          headers: headers,
+          contentTypeOption: contentTypeOption,
+          bodyString: bodyString
+        });
+      }
+    });
+  }
+
+  function expandPostError(res) {
+    logExpandPostResult(res);
+    var msg =
+      res.error ||
+      'Expand Item POST falhou (HTTP ' + (res.status || '?') + ', form ' + (res.form || '?') + ')';
+    if (res.status === 415) {
+      msg +=
+        ' | Content-Type=' +
+        ((res.headers && res.headers['Content-Type']) || 'missing') +
+        ' | contentTypeOption=' +
+        (res.contentTypeOption || 'none') +
+        ' | bodyLen=' +
+        (res.bodyString ? res.bodyString.length : 0);
+    }
+    if (res.status === 400 && res.responseText) {
+      msg += ' | responseText=' + res.responseText;
+    }
+    var err = new Error(msg);
+    err.status = res.status;
+    err.expandPostResult = res;
+    return err;
+  }
+
+  function finishExpandSuccess(res, url, bodyObj) {
+    logExpandPostResult(res);
+    lastTransportStats = {
+      build: BUILD,
+      transport: 'direct-wafdata',
+      method: 'POST',
+      url: url,
+      form: res.form,
+      requestHeaders: res.headers,
+      contentTypeOption: res.contentTypeOption,
+      forbiddenHeaders: forbiddenHeadersPresent(res.headers),
+      bodyString: res.bodyString,
+      status: res.status,
+      expandDepth: bodyObj.expandDepth
+    };
+    w.__lastExpandItemStats = lastTransportStats;
+    return res.data;
   }
 
   function headerKeysList(headers) {
@@ -389,33 +591,35 @@
     log('levels:', levels);
     return ensureSpaceUrl().then(function () {
       var url = expandUrl(rootId);
-      var body = expandBody(levels);
-      var headers = getMinimalWafHeaders();
+      var bodyObj = expandBody(levels);
+      var bodyString = JSON.stringify(bodyObj);
       log('transport: direct-wafdata');
-      log('method: POST');
-      log('url:', url);
-      log('custom headers:', headerKeysList(headers));
-      return cleanWafRequest('POST', url, body, 'direct-wafdata').then(function (res) {
-        log('status:', res.status);
-        lastTransportStats = {
-          transport: 'direct-wafdata',
-          method: 'POST',
-          url: url,
-          customHeaders: res.customHeaders || headerKeysList(headers),
-          status: res.status,
-          expandDepth: body.expandDepth,
-          contentType: 'application/json'
-        };
-        w.__lastExpandItemStats = lastTransportStats;
-        if (!res.ok) {
-          var err = new Error(res.error || 'Expand Item POST falhou (HTTP ' + res.status + ')');
-          err.status = res.status;
-          throw err;
+      return runExpandPostForm(url, bodyString, 'A', false).then(function (resA) {
+        if (resA.ok && hasExpandMemberPayload(resA.data)) {
+          return finishExpandSuccess(resA, url, bodyObj);
         }
-        if (!hasExpandMemberPayload(res.data)) {
-          throw new Error('Expand Item POST retornou member vazio');
+        if (resA.status === 415) {
+          log('Form A retornou 415 — tentando Form B (contentType option)');
+          return runExpandPostForm(url, bodyString, 'B', true).then(function (resB) {
+            if (resB.ok && hasExpandMemberPayload(resB.data)) {
+              return finishExpandSuccess(resB, url, bodyObj);
+            }
+            throw expandPostError(resB.ok ? { status: 200, error: 'member vazio', form: 'B', data: resB.data, headers: resB.headers, contentTypeOption: resB.contentTypeOption, bodyString: bodyString } : resB);
+          });
         }
-        return res.data;
+        if (resA.ok && !hasExpandMemberPayload(resA.data)) {
+          throw expandPostError({
+            ok: false,
+            status: 200,
+            error: 'Expand Item POST retornou member vazio',
+            form: 'A',
+            headers: resA.headers,
+            contentTypeOption: resA.contentTypeOption,
+            bodyString: bodyString,
+            data: resA.data
+          });
+        }
+        throw expandPostError(resA);
       });
     });
   }
@@ -634,13 +838,24 @@
 
   function expandItemProbe(levels) {
     levels = n(levels) || 2;
-    return loadCurrentStructure(levels).then(function (result) {
-      w.__lastExpandItemPayload = result.payload;
-      w.__lastExpandItemRows = result.normalized;
-      w.__lastExpandItemStats = result.transportStats || w.__lastExpandItemStats;
-      log('probe saved __lastExpandItemPayload / __lastExpandItemRows / __lastExpandItemStats');
-      return result;
-    });
+    log('build:', BUILD);
+    return loadCurrentStructure(levels)
+      .then(function (result) {
+        w.__lastExpandItemPayload = result.payload;
+        w.__lastExpandItemRows = result.normalized;
+        w.__lastExpandItemStats = result.transportStats || w.__lastExpandItemStats;
+        log('path count:', (result.normalized && result.normalized.stats && result.normalized.stats.pathCount) || 0);
+        log('normalized rows:', (result.normalized && result.normalized.rows && result.normalized.rows.length) || 0);
+        log('probe saved __lastExpandItemPayload / __lastExpandItemRows / __lastExpandItemStats');
+        return result;
+      })
+      .catch(function (err) {
+        log('probe failed:', err && err.message ? err.message : err);
+        if (err && err.expandPostResult) {
+          logExpandPostResult(err.expandPostResult);
+        }
+        throw err;
+      });
   }
 
   w.normalizeExpandItemPayload = normalizeExpandItemPayload;

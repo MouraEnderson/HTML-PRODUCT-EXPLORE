@@ -1,9 +1,9 @@
-/* BOM hotfix - 20260614b — DEC-015 Expand Item transport fix (CORS/CSRF) + Full BOM API alternativo */
+/* BOM hotfix - 20260614d — DEC-015 Expand Item POST Content-Type fix (415) */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260614c';
+var BUILD = 'bom20260614d';
 var BACKEND = 'https://bom-resolver.onrender.com';
 var DATA_SOURCE = 'expand-item';
 var EXPAND_ITEM_LEVELS = 2;

@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260614c',
+    BUILD: 'bom20260614d',
     /** DEC-015: expand-item (principal) | full-bom-api (alternativo) */
     DATA_SOURCE: 'expand-item',
     EXPAND_ITEM_LEVELS: 2,
