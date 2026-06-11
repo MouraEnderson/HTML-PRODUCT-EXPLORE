@@ -1,9 +1,9 @@
-/* BOM browser-auth bridge hotfix - 20260612f */
+/* BOM browser-auth bridge hotfix - 20260612g */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260612f';
+var BUILD = 'bom20260612g';
 var BACKEND = 'https://bom-resolver.onrender.com';
 var MIRROR_EXPLORER_MODE = true;
 
@@ -376,7 +376,7 @@ function applyExplorerPayload(snapshot, payload, mode) {
 function finalizeExplorerSnapshot(snapshot) {
   var expected = n(snapshot.explorerLoadedCount);
   var unique = (snapshot.rows || []).length;
-  mirrorLog('unique rows', unique);
+  mirrorLog('final unique rows', unique);
   if (expected > 0) mirrorLog('missing rows', Math.max(0, expected - unique));
   if (snapshot.rows && snapshot.rows.length) {
     mirrorLog('first 5 rows', snapshot.rows.slice(0, 5).map(function (row) {
@@ -396,8 +396,13 @@ function finalizeExplorerSnapshot(snapshot) {
   } else if (expected > 0 && unique < expected) {
     snapshot.status = 'incomplete';
     snapshot.error = 'extractor-incompleto:' + unique + '/' + expected;
-    if (unique <= 1 && expected > 1) {
-      if (snapshot.domAccess && snapshot.domAccess.crossOriginBlocked) {
+    if (!snapshot.errorReason) {
+      if (snapshot.captureDiag && snapshot.captureDiag.readExplorerIframeDocument === 'fail' &&
+          snapshot.captureDiag.readExplorerHost === 'fail') {
+        snapshot.errorReason = 'Nao foi possivel acessar a grade do Product Explorer por restrição de iframe/cross-origin';
+      } else if (snapshot.captureDiag && snapshot.captureDiag.readExplorerIframeDocument === 'fail') {
+        snapshot.errorReason = 'iframe Explorer inacessivel; scroll/dashboard-host nao atingiu ' + expected + ' linhas';
+      } else if (snapshot.domAccess && snapshot.domAccess.crossOriginBlocked) {
         snapshot.errorReason = 'cross-origin blocked';
         mirrorLog('parent DOM not accessible due cross-origin', snapshot.domAccess.reason);
       } else if (snapshot.domAccess && !snapshot.domAccess.iframeDoc) {
@@ -405,8 +410,8 @@ function finalizeExplorerSnapshot(snapshot) {
       } else {
         snapshot.errorReason = 'virtualized grid not fully scanned or selectors failed';
       }
-      mirrorLog('failure reason', snapshot.errorReason);
     }
+    mirrorLog('failure reason', snapshot.errorReason);
   } else if (unique > 0) {
     snapshot.status = 'complete';
     if (!expected) snapshot.explorerLoadedCount = unique;
@@ -452,17 +457,23 @@ function extractExplorerSnapshotAsync() {
 
   snapshot.explorerLoadedCount = getExplorerLoadedCount();
   snapshot.domAccess = probeExplorerDomAccess();
-  mirrorLog('explorerCount from footer', snapshot.explorerLoadedCount);
+  mirrorLog('expected/count from Explorer', snapshot.explorerLoadedCount);
   if (snapshot.domAccess.crossOriginBlocked) {
     mirrorLog('parent DOM not accessible due cross-origin', snapshot.domAccess.reason);
   }
 
   var rootName = snapshot.rootName || getRootName();
   var expected = n(snapshot.explorerLoadedCount);
+  var captureProbe = null;
+
+  if (PEB.probeExplorerMirrorCapture) {
+    captureProbe = PEB.probeExplorerMirrorCapture(rootName, { log: mirrorLog });
+    snapshot.captureDiag = captureProbe.host && captureProbe.host.diag;
+  }
 
   var syncPayload = PEB.scrapeExplorerMirror ? PEB.scrapeExplorerMirror(rootName) : null;
   var syncCount = syncPayload && syncPayload.items ? syncPayload.items.length : 0;
-  mirrorLog('DOM rows found', syncCount);
+  mirrorLog('DOM direct rows', syncCount);
   applyExplorerPayload(snapshot, syncPayload, 'dom');
 
   if (expected > 0 && snapshot.rows.length >= expected) {
@@ -498,20 +509,39 @@ function extractExplorerSnapshotAsync() {
 
     return PEB.tryExplorerAutoCopyParse(rootName).then(function (tsvPayload) {
       var tsvCount = tsvPayload && tsvPayload.items ? tsvPayload.items.length : 0;
-      mirrorLog('rows after TSV copy', tsvCount);
+      var tsvChars = 0;
+      try {
+        if (tsvPayload && tsvPayload.items && tsvPayload.items.length) {
+          tsvChars = JSON.stringify(tsvPayload.items).length;
+        }
+      } catch (e) {}
+      mirrorLog('TSV/copy chars', tsvChars);
+      mirrorLog('TSV parsed rows', tsvCount);
       if (tsvPayload && tsvPayload.items && tsvPayload.items.length) {
         applyExplorerPayload(snapshot, tsvPayload, 'tsv');
       } else if (expected > 0 && snapshot.rows.length < expected) {
-        snapshot.errorReason = snapshot.errorReason || 'fallback TSV missing';
+        snapshot.errorReason = snapshot.errorReason || 'fallback TSV missing — use Ctrl+A/Ctrl+C no Explorer e importe TSV';
         mirrorLog('failure reason', snapshot.errorReason);
       }
+      mirrorLog('final unique rows', (snapshot.rows || []).length);
       return finalizeExplorerSnapshot(snapshot);
     });
   }
 
   if (PEB.tryExplorerScrollHarvestAsync) {
-    var maxSteps = Math.max(48, Math.ceil((expected || 40) / 2));
-    return PEB.tryExplorerScrollHarvestAsync(rootName, { maxSteps: maxSteps }).then(afterScroll);
+    var maxSteps = Math.max(60, Math.ceil((expected || 40) * 1.5));
+    return PEB.tryExplorerScrollHarvestAsync(rootName, {
+      maxSteps: maxSteps,
+      stepMs: 120,
+      onStep: function (stepN, rowCount) {
+        mirrorLog('scroll step ' + stepN + ': rows collected', rowCount);
+      }
+    }).then(function (scrollPayload) {
+      if (scrollPayload && scrollPayload.captureDiag) {
+        snapshot.captureDiag = scrollPayload.captureDiag;
+      }
+      return afterScroll(scrollPayload);
+    });
   }
 
   return afterScroll(null);
@@ -541,7 +571,7 @@ function snapshotIncompleteMessage(snapshot) {
   snapshot = snapshot || {};
   var got = (snapshot.rows || []).length;
   var expected = n(snapshot.explorerLoadedCount) || '?';
-  var reason = snapshot.errorReason ? ' (' + snapshot.errorReason + ')' : '';
+  var reason = snapshot.errorReason ? ' — ' + snapshot.errorReason : '';
   return 'Extractor incompleto: ' + got + '/' + expected + ' linhas capturadas do Explorer' + reason;
 }
 

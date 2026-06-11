@@ -741,17 +741,181 @@ var ProductExplorerBridge = (function () {
     };
   }
 
+  function isInExplorerPanel(el) {
+    if (!el) return false;
+    var p = el;
+    var hop = 0;
+    while (p && hop < 16) {
+      var label = String(p.innerText || p.textContent || '').slice(0, 2500);
+      if (label.indexOf('BOM Analytics') >= 0) return false;
+      if (/Product Structure Explorer|Structure Explorer/i.test(label)) return true;
+      p = p.parentElement;
+      hop++;
+    }
+    return false;
+  }
+
+  function resolveExplorerCaptureHost() {
+    var diag = {
+      readExplorerIframeDocument: 'fail',
+      readExplorerIframeReason: '',
+      readExplorerHost: 'fail',
+      readExplorerHostReason: '',
+      source: 'none'
+    };
+    var iframeDoc = null;
+    try {
+      iframeDoc = readExplorerIframeDocument();
+      if (iframeDoc && iframeDoc.body) {
+        diag.readExplorerIframeDocument = 'success';
+        var frame = readExplorerIframeElement();
+        return {
+          diag: diag,
+          doc: iframeDoc,
+          win: iframeDoc.defaultView,
+          frame: frame,
+          grid: focusExplorerGrid(iframeDoc, iframeDoc.defaultView),
+          source: 'iframe'
+        };
+      }
+      diag.readExplorerIframeReason = 'iframe not found or cross-origin blocked';
+    } catch (e) {
+      diag.readExplorerIframeReason = e && e.message ? e.message : String(e);
+    }
+
+    try {
+      var host = readExplorerHost();
+      if (host && host.doc) {
+        diag.readExplorerHost = 'success';
+        return {
+          diag: diag,
+          doc: host.doc,
+          win: host.win || (typeof window.top !== 'undefined' ? window.top : window),
+          frame: host.frame || null,
+          grid: host.grid || focusExplorerGrid(host.doc, host.win),
+          source: 'dashboard-host'
+        };
+      }
+      diag.readExplorerHostReason = 'no Explorer grid in top/parent document';
+    } catch (e2) {
+      diag.readExplorerHostReason = e2 && e2.message ? e2.message : String(e2);
+    }
+
+    return { diag: diag, doc: null, win: null, frame: null, grid: null, source: 'none' };
+  }
+
+  function findExplorerScroller(doc, gridRoot) {
+    if (!doc || !doc.body) return { scroller: null, candidates: 0, meta: 'none' };
+    var scope = gridRoot || doc.body;
+    var scrollers = scope.querySelectorAll(
+      '.wux-scroller, [class*="scroller"], [class*="Scroller"], [role="grid"], [role="tree"]'
+    );
+    var ranked = [];
+    var si;
+    for (si = 0; si < scrollers.length; si++) {
+      var candidate = scrollers[si];
+      if (!isInExplorerPanel(candidate)) continue;
+      var sh = candidate.scrollHeight || 0;
+      var ch = candidate.clientHeight || 0;
+      var rowCount = candidate.querySelectorAll('[role="row"], [role="treeitem"]').length;
+      if (sh <= ch + 5 && rowCount < 2) continue;
+      var text = '';
+      try {
+        text = String(candidate.innerText || candidate.textContent || '');
+      } catch (eText) { /* */ }
+      var score = sh - ch;
+      if (/t[ií]tulo|revis|propriet|em\s*trabalh|aprovado|in\s*work/i.test(text)) score += 5000;
+      if (rowCount > 0) score += rowCount * 10;
+      ranked.push({
+        el: candidate,
+        score: score,
+        sh: sh,
+        ch: ch,
+        cls: String(candidate.className || candidate.getAttribute('role') || 'node')
+      });
+    }
+    ranked.sort(function (a, b) { return b.score - a.score; });
+    var best = ranked.length ? ranked[0] : null;
+    return {
+      scroller: best ? best.el : null,
+      candidates: ranked.length,
+      meta: best
+        ? best.cls + ' scrollHeight=' + best.sh + ' clientHeight=' + best.ch
+        : 'none'
+    };
+  }
+
+  function collectMirrorRowsFromDoc(doc, rootName, seen, items, rootMeta) {
+    if (!doc || !doc.body) return 0;
+    var before = items.length;
+    extractRowsFromExplorerDom(doc, rootMeta, seen, items, rootName);
+    scrapeMirrorRowsFromDom(doc, rootName, seen, items);
+    scrapeExplorerTreeItems(doc, rootName, items, seen, rootMeta);
+    return items.length - before;
+  }
+
+  function probeExplorerMirrorCapture(rootName, options) {
+    options = options || {};
+    var log = options.log || function () {};
+    var expected = getExplorerObjectCount();
+    log('expected/count from Explorer', expected);
+
+    var host = resolveExplorerCaptureHost();
+    log(
+      'readExplorerIframeDocument',
+      host.diag.readExplorerIframeDocument +
+        (host.diag.readExplorerIframeReason ? ' reason=' + host.diag.readExplorerIframeReason : '')
+    );
+    log(
+      'readExplorerHost',
+      host.diag.readExplorerHost +
+        (host.diag.readExplorerHostReason ? ' reason=' + host.diag.readExplorerHostReason : '')
+    );
+
+    var text = harvestExplorerWidgetTextFromDashboard() || harvestExplorerTextOnly() || '';
+    log('text harvest chars', text.length);
+
+    var domRows = 0;
+    var gridRows = 0;
+    if (host.doc) {
+      var probeItems = [];
+      var probeSeen = {};
+      var rootMeta = parseExplorerRootMetaFromText(text);
+      collectMirrorRowsFromDoc(host.doc, rootName, probeSeen, probeItems, rootMeta);
+      domRows = probeItems.length;
+      gridRows = getExplorerDataRows(host.doc).length;
+    }
+    log('DOM direct rows', domRows);
+    log('grid rows found', gridRows);
+
+    var scrollerInfo = host.doc ? findExplorerScroller(host.doc, host.grid) : { candidates: 0, meta: 'none' };
+    log('scroller candidates', scrollerInfo.candidates);
+    log('selected scroller', scrollerInfo.meta);
+
+    return {
+      host: host,
+      expected: expected,
+      textLength: text.length,
+      domRows: domRows,
+      gridRows: gridRows,
+      scrollerInfo: scrollerInfo
+    };
+  }
+
   function tryExplorerScrollHarvestAsync(rootName, options) {
     options = options || {};
     return new Promise(function (resolve) {
-      var doc = readExplorerIframeDocument();
+      var onStep = options.onStep;
+      var host = resolveExplorerCaptureHost();
+      var doc = host.doc;
       var expected = Math.max(
         getExplorerObjectCount() || 0,
         getExplorerSelectionCount() || 0
       );
       var maxStepsCfg = options.maxSteps || (APP_CONFIG && APP_CONFIG.SCROLL_HARVEST_MAX_STEPS) || 36;
-      var stepMs = (APP_CONFIG && APP_CONFIG.SCROLL_HARVEST_STEP_MS) || 80;
-      var rootMeta = parseExplorerRootMetaFromText(harvestExplorerTextOnly());
+      var stepMs = options.stepMs || (APP_CONFIG && APP_CONFIG.SCROLL_HARVEST_STEP_MS) || 120;
+      var panelText = harvestExplorerWidgetTextFromDashboard() || harvestExplorerTextOnly();
+      var rootMeta = parseExplorerRootMetaFromText(panelText);
       rootName = String(rootName || structureNameHint || '').trim();
       var items = [];
       var seen = {};
@@ -768,48 +932,42 @@ var ProductExplorerBridge = (function () {
       }
 
       function finish() {
+        if (panelText && (items.length < 2 || (expected > 0 && items.length < expected))) {
+          scrapeMirrorRowsFromNameRevisionPairs(panelText, rootName, seen, items, rootMeta);
+        }
         scrapeMirrorSupplementFromDashboard(rootName, items, seen, rootMeta, expected);
         var payload = buildMirrorPayloadFromItems(items, rootName, 'explorer-scroll', expected);
         if (!payload) return resolve(null);
+        payload.captureSource = host.source;
+        payload.captureDiag = host.diag;
+        if (expected > 0 && payload.items.length >= expected) return resolve(payload);
         if (expected > 0 && payload.items.length >= expected - 1) return resolve(payload);
-        if (payload.items.length >= 3 && payload.mirrorQuality && payload.mirrorQuality.ok) return resolve(payload);
-        resolve(payload.items.length > 1 ? payload : null);
+        resolve(payload);
       }
 
       if (!doc || !doc.body) {
+        if (panelText) {
+          scrapeMirrorRowsFromNameRevisionPairs(panelText, rootName, seen, items, rootMeta);
+        }
         scrapeMirrorSupplementFromDashboard(rootName, items, seen, rootMeta, expected);
         return resolve(buildMirrorPayloadFromItems(items, rootName, 'explorer-scroll', expected));
       }
 
-      var scrollers = doc.querySelectorAll(
-        '.wux-scroller, [class*="scroller"], [class*="Scroller"], [role="grid"]'
-      );
-      var scroller = null;
-      var si;
-      for (si = 0; si < scrollers.length; si++) {
-        var candidate = scrollers[si];
-        if (candidate.scrollHeight <= candidate.clientHeight + 20) continue;
-        var text = '';
-        try {
-          text = String(candidate.innerText || candidate.textContent || '');
-        } catch (eText) { /* */ }
-        var score = candidate.scrollHeight - candidate.clientHeight;
-        if (/t[ií]tulo|revis|propriet|em\s*trabalh|aprovado|in\s*work/i.test(text)) score += 5000;
-        if (!scroller || score > scroller.__bomScore) {
-          try { candidate.__bomScore = score; } catch (eScore) { /* */ }
-          scroller = candidate;
-        }
-      }
+      collectMirrorRowsFromDoc(doc, rootName, seen, items, rootMeta);
+      var scrollerInfo = findExplorerScroller(doc, host.grid);
+      var scroller = scrollerInfo.scroller;
 
       if (!scroller) {
-        extractRowsFromExplorerDom(doc, rootMeta, seen, items, rootName);
         return finish();
       }
 
       var initialScroll = scroller.scrollTop;
-      var stepPx = Math.max(80, Math.floor(scroller.clientHeight * 0.45));
+      var stepPx = Math.max(80, Math.floor(scroller.clientHeight * 0.4));
       var step = 0;
-      var maxSteps = Math.min(maxStepsCfg, expected > 0 ? Math.max(36, Math.ceil(expected / 2)) : maxStepsCfg);
+      var maxSteps = Math.min(
+        maxStepsCfg,
+        expected > 0 ? Math.max(60, Math.ceil(expected * 1.5)) : maxStepsCfg
+      );
       var stale = 0;
       var lastLen = items.length;
       var deadline = Date.now() + ((APP_CONFIG && APP_CONFIG.MANUAL_REFRESH_TIMEOUT_MS) || 28000) - 2000;
@@ -819,7 +977,8 @@ var ProductExplorerBridge = (function () {
           try { scroller.scrollTop = initialScroll; } catch (eDl) { /* */ }
           return finish();
         }
-        extractRowsFromExplorerDom(doc, rootMeta, seen, items, rootName);
+        collectMirrorRowsFromDoc(doc, rootName, seen, items, rootMeta);
+        if (onStep) onStep(step, items.length);
         if (items.length > lastLen) stale = 0;
         else stale++;
         lastLen = items.length;
@@ -827,7 +986,7 @@ var ProductExplorerBridge = (function () {
           try { scroller.scrollTop = initialScroll; } catch (eR) { /* */ }
           return finish();
         }
-        if (step >= maxSteps || stale >= 10) {
+        if (step >= maxSteps || stale >= 12) {
           try { scroller.scrollTop = initialScroll; } catch (eR2) { /* */ }
           return finish();
         }
@@ -836,8 +995,8 @@ var ProductExplorerBridge = (function () {
         window.setTimeout(tick, stepMs);
       }
 
-      scroller.scrollTop = 0;
-      window.setTimeout(tick, 60);
+      try { scroller.scrollTop = 0; } catch (e0) { /* */ }
+      window.setTimeout(tick, stepMs);
     });
   }
 
@@ -1661,6 +1820,7 @@ var ProductExplorerBridge = (function () {
     var ri;
     for (ri = 0; ri < rows.length; ri++) {
       var row = rows[ri];
+      if (!isInExplorerPanel(row)) continue;
       if (row.querySelector('[role="columnheader"]')) continue;
       var cells = getRowCells(row);
       if (cells.length < 2) continue;
@@ -1769,7 +1929,11 @@ var ProductExplorerBridge = (function () {
     pollDashboardExplorerChrome();
     pollStructureHint();
     var doc = readExplorerIframeDocument();
-    var text = harvestExplorerTextOnly();
+    if (!doc) {
+      var captureHost = resolveExplorerCaptureHost();
+      if (captureHost && captureHost.doc) doc = captureHost.doc;
+    }
+    var text = harvestExplorerWidgetTextFromDashboard() || harvestExplorerTextOnly();
     var fromTitle = extractRootNameFromExplorerText(text) || extractRootNameFromExplorerText(harvestAllExplorerText());
     rootName = String(rootName || fromTitle || structureNameHint || '').trim();
     var items = [];
@@ -1791,6 +1955,9 @@ var ProductExplorerBridge = (function () {
 
     if (doc) {
       scrapeMirrorRowsFromExplorerDomScroll(doc, rootName, seen, items, rootMeta);
+      if (items.length < 2 || (expected > 0 && items.length < expected)) {
+        collectMirrorRowsFromDoc(doc, rootName, seen, items, rootMeta);
+      }
     }
     if (text && (items.length < 2 || (expected > 0 && items.length < expected))) {
       scrapeMirrorRowsFromNameRevisionPairs(text, rootName, seen, items, rootMeta);
@@ -2651,6 +2818,8 @@ var ProductExplorerBridge = (function () {
     assessDashboardMirrorQuality: assessDashboardMirrorQuality,
     tryExplorerAutoCopyParse: tryExplorerAutoCopyParse,
     tryExplorerScrollHarvestAsync: tryExplorerScrollHarvestAsync,
-    tryReadClipboardViaPasteTrap: tryReadClipboardViaPasteTrap
+    tryReadClipboardViaPasteTrap: tryReadClipboardViaPasteTrap,
+    probeExplorerMirrorCapture: probeExplorerMirrorCapture,
+    resolveExplorerCaptureHost: resolveExplorerCaptureHost
   };
 })();
