@@ -1,7 +1,7 @@
 # Relatório de entrega — Full BOM API (DEC-014)
 
 **Data:** 2026-06-13  
-**Build entregue:** `bom20260613b`  
+**Build entregue:** `bom20260613c`  
 **Widget:** `widget-v3-08i.html`  
 **Hotfix:** `assets/js/bom-api-id-hotfix-20260608a.js`  
 **DEC-014:** `docs/DECISOES-TECNICAS.md`
@@ -141,5 +141,39 @@ Relatório técnico mirror: `docs/RELATORIO-MIRROR-EXPLORER-2026-06-12.md`.
 
 ## URLs
 
-- GitHub Pages: `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260613b`
+- GitHub Pages: `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260613c`
 - Dashboard piloto: tenant `R1132100929518`, lista PRODUCTEXPLORE / BOM Analytics
+
+---
+
+## Release hardening `bom20260613c`
+
+### Problema
+
+O build `bom20260613b` classificava corretamente probes técnicos na UI, mas o botão **Diagnosticar API** executava o diagnóstico **profundo** (`ApiDiagnostic.run` completo), gerando dezenas de chamadas WAF conhecidas (404/403) e poluindo o Console do navegador.
+
+### Correção
+
+| Fluxo | Comportamento |
+|-------|----------------|
+| **Atualizar estrutura** | Somente Full BOM API (`/start` + `/continue` + tarefas BFS necessárias). Sem probes RAW automáticos. |
+| **Diagnosticar API** (padrão) | Diagnóstico **rápido**: WAFData, SecurityContext, 3DSpace, CSRF, `Backend /health`, último resultado Full BOM. |
+| **Diagnóstico profundo** (Avançado) | Clique explícito + aviso. Executa probes de contrato (404/403 esperados). |
+
+### Console limpo — critério de aceite
+
+Após **Ctrl+F5** + **Atualizar estrutura**:
+
+- [ ] Pill `bom20260613c`
+- [ ] Tabela/KPI inalterados (ex.: 50 linhas)
+- [ ] Banner neutro: `Explorer carregado: N | Full BOM API: M linhas | modo API ENOVIA`
+- [ ] Status: `Full BOM API: M linhas · API concluída sem falhas operacionais`
+- [ ] Console **sem** novos 404/403 de probes RAW (`EngItem/prd-R`, `/expand`, search genérico, etc.)
+- [ ] **Diagnosticar API** (rápido) não gera erro vermelho de probes conhecidos
+- [ ] **Diagnóstico profundo** só no Avançado, com aviso, pode gerar 404/403 esperados
+
+### DEC-014 inalterada
+
+- Full BOM API permanece modo oficial
+- Mirror Explorer permanece reprovado
+- Sem DOM mirror / TSV / clipboard no fluxo principal

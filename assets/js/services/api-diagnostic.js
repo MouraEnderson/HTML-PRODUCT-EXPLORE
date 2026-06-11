@@ -1049,11 +1049,124 @@ var ApiDiagnostic = (function () {
     return Promise.resolve(null);
   }
 
+  function backendHealthUrl() {
+    try {
+      if (typeof window !== 'undefined' && window.__BOM_BACKEND_URL__) {
+        return String(window.__BOM_BACKEND_URL__).replace(/\/+$/, '') + '/health';
+      }
+    } catch (e) { /* */ }
+    return 'https://bom-resolver.onrender.com/health';
+  }
+
+  function probeBackendHealth(rows) {
+    var url = backendHealthUrl();
+    rows.push(log('Backend /health URL', true, url, { url: url }));
+    return fetch(url, { method: 'GET', mode: 'cors', credentials: 'omit' })
+      .then(function (res) {
+        return res.text().then(function (txt) {
+          rows.push(
+            log(
+              'Backend /health',
+              res.ok,
+              res.ok ? 'OK' : 'HTTP ' + res.status,
+              { url: url, status: res.status, sample: txt ? txt.slice(0, 120) : '' }
+            )
+          );
+        });
+      })
+      .catch(function (err) {
+        rows.push(log('Backend /health', false, err.message || String(err), { url: url }));
+      });
+  }
+
+  function probeLastFullBom(rows) {
+    var lines = 0;
+    try {
+      var last = root.__bomBridgeLastResult;
+      if (last && (last.mappedCount || last.dedupCount)) {
+        lines = Number(last.mappedCount || last.dedupCount) || 0;
+      }
+      if (!lines && typeof BomService !== 'undefined' && BomService.getNodeCount) {
+        lines = BomService.getNodeCount() || 0;
+      }
+    } catch (e) { /* */ }
+    rows.push(
+      log(
+        'Full BOM API ultimo resultado',
+        lines > 0,
+        lines > 0 ? lines + ' linhas carregadas' : 'sem carga recente',
+        { count: lines }
+      )
+    );
+    return lines;
+  }
+
   /**
-   * Executa diagnostico isolado no Additional App.
-   * @returns {Promise<{ rows: object[], summary: string, physicalId: string }>}
+   * Diagnostico rapido de producao — sem probes RAW/404/403 conhecidos.
+   * @returns {Promise<{ rows: object[], summary: string, mode: string }>}
    */
-  function run(options) {
+  function runQuick(options) {
+    options = options || {};
+    window.__3DX_API_DIAG__ = [];
+    var rows = [];
+
+    rows.push(log('WAFData', wafOk(), wafOk() ? 'authenticatedRequest disponivel' : 'WAFData ausente'));
+
+    var pCtx =
+      typeof PlatformContext !== 'undefined' && PlatformContext.init
+        ? PlatformContext.init()
+        : Promise.resolve();
+
+    return pCtx
+      .then(function () {
+        var st =
+          typeof PlatformContext !== 'undefined' &&
+          PlatformContext.getState &&
+          PlatformContext.getState();
+        rows.push(
+          log(
+            'SecurityContext',
+            !!(st && st.securityContext),
+            (st && st.securityContext) || 'sem SecurityContext'
+          )
+        );
+        return probeCompass(rows);
+      })
+      .then(function (spaceUrl) {
+        return probeCsrf(rows, spaceUrl);
+      })
+      .then(function () {
+        return probeBackendHealth(rows);
+      })
+      .then(function () {
+        probeLastFullBom(rows);
+        var ctx = ctxSnapshot();
+        if (ctx) {
+          rows.push(
+            log(
+              'Explorer referencia',
+              true,
+              (ctx.rootName || '?') +
+                ' · carregados no Explorer: ' +
+                (ctx.expectedCount || 0) +
+                ' (referencia visual)',
+              { expectedCount: ctx.expectedCount || 0 }
+            )
+          );
+        }
+      })
+      .then(function () {
+        var summary = formatReport(rows);
+        lastReport = { rows: rows, summary: summary, physicalId: '', mode: 'quick' };
+        return lastReport;
+      });
+  }
+
+  /**
+   * Diagnostico profundo — probes de contrato (404/403 esperados no Console).
+   * @returns {Promise<{ rows: object[], summary: string, physicalId: string, mode: string }>}
+   */
+  function runDeep(options) {
     options = options || {};
     window.__3DX_API_DIAG__ = [];
     var rows = [];
@@ -1158,9 +1271,19 @@ var ApiDiagnostic = (function () {
       })
       .then(function (physicalId) {
         var summary = formatReport(rows);
-        lastReport = { rows: rows, summary: summary, physicalId: physicalId || '' };
+        lastReport = { rows: rows, summary: summary, physicalId: physicalId || '', mode: 'deep' };
         return lastReport;
       });
+  }
+
+  /**
+   * Padrao de producao: diagnostico rapido (Console limpo).
+   * Use runDeep({}) apenas sob demanda explicita.
+   */
+  function run(options) {
+    options = options || {};
+    if (options.deep) return runDeep(options);
+    return runQuick(options);
   }
 
   function getLastReport() {
@@ -1169,6 +1292,8 @@ var ApiDiagnostic = (function () {
 
   return {
     run: run,
+    runQuick: runQuick,
+    runDeep: runDeep,
     getLastReport: getLastReport,
     formatReport: formatReport
   };

@@ -1,9 +1,9 @@
-/* BOM browser-auth bridge hotfix - 20260613b — DEC-014 Full BOM API + UI messaging */
+/* BOM browser-auth bridge hotfix - 20260613c — DEC-014 + release hardening (Console limpo) */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260613b';
+var BUILD = 'bom20260613c';
 var BACKEND = 'https://bom-resolver.onrender.com';
 var LOADER_MODE = 'full-bom-api';
 var MIRROR_EXPLORER_MODE = false;
@@ -17,6 +17,7 @@ var MIRROR_ROADMAP_NOTE =
 
 w.BOM_BUILD_ID = BUILD;
 w.__BOM_BUILD_ID__ = BUILD;
+w.__BOM_BACKEND_URL__ = BACKEND;
 w.__BOM_HOTFIX_MODE__ = 'full-bom-api-bridge';
 w.__BOM_LOADER_MODE__ = LOADER_MODE;
 w.__BOM_MIRROR_EXPLORER_MODE__ = MIRROR_EXPLORER_MODE;
@@ -1383,25 +1384,23 @@ function fullBomLoadSucceeded() {
   return false;
 }
 
-function formatDiagStatusMessage(classified) {
+function formatDiagStatusMessage(classified, mode) {
   classified = classified || {};
+  mode = mode || classified.mode || 'quick';
   var probes = n(classified.probeCount);
   var ops = n(classified.operationalCount);
   var success = fullBomLoadSucceeded();
 
-  if (success && ops === 0) {
-    if (probes > 0) {
-      return 'Diagnóstico: ' + probes + ' probes técnicos, 0 falhas operacionais';
-    }
-    return 'Diagnóstico API OK';
-  }
   if (ops > 0) {
     return 'Diagnóstico: ' + ops + ' falha(s) operacional(is) — veja Avançado';
   }
-  if (probes > 0) {
-    return 'Diagnóstico: API concluída com probes esperados — veja Avançado';
+  if (mode === 'deep' && probes > 0) {
+    return 'Diagnóstico: ' + probes + ' probes técnicos, 0 falhas operacionais';
   }
-  return 'Diagnóstico API OK';
+  if (success || mode === 'quick') {
+    return 'API concluída sem falhas operacionais';
+  }
+  return 'Diagnóstico: 0 falhas operacionais';
 }
 
 function renderAdvancedPanel(classified) {
@@ -1416,7 +1415,10 @@ function renderAdvancedPanel(classified) {
     if (typeof w.BomService !== 'undefined' && w.BomService.getNodeCount) {
       dash = dash || w.BomService.getNodeCount();
     }
-    var probes = classified ? n(classified.probeCount) : n(w.__bomDiagClassification && w.__bomDiagClassification.probeCount);
+    var deepRun = !!w.__bomDiagDeepRun;
+    var probes = deepRun
+      ? (classified ? n(classified.probeCount) : n(w.__bomDiagClassification && w.__bomDiagClassification.probeCount))
+      : 0;
     var ops = classified ? n(classified.operationalCount) : n(w.__bomDiagClassification && w.__bomDiagClassification.operationalCount);
 
     panel.innerHTML =
@@ -1428,11 +1430,16 @@ function renderAdvancedPanel(classified) {
       (dash > 0
         ? '<p style="margin:0 0 4px;font-size:.7rem">Full BOM API: <strong>' + dash + '</strong></p>'
         : '') +
-      '<p style="margin:0 0 4px;font-size:.7rem">Probes esperados: <strong>' + probes + '</strong></p>' +
-      '<p style="margin:0 0 6px;font-size:.7rem">Falhas operacionais: <strong>' + ops + '</strong></p>' +
+      '<p style="margin:0 0 4px;font-size:.7rem">Falhas operacionais: <strong>' + ops + '</strong></p>' +
+      (deepRun
+        ? '<p style="margin:0 0 6px;font-size:.7rem">Probes técnicos (profundo): <strong>' + probes + '</strong></p>'
+        : '<p style="margin:0 0 6px;font-size:.65rem;color:#5c6b7a">Probes de contrato só no diagnóstico profundo.</p>') +
       '<p style="margin:0 0 6px;font-size:.65rem;color:#5c6b7a">Root resolvido via EngItem/search/candidato navegável</p>' +
-      '<p style="margin:0 0 6px;font-size:.65rem;color:#92400e">' + MIRROR_UNAVAILABLE_MSG + '</p>' +
+      '<p style="margin:0 0 8px;font-size:.65rem;color:#92400e">' + MIRROR_UNAVAILABLE_MSG + '</p>' +
+      '<button type="button" id="btnApiDiagnosticDeep" class="bom-btn bom-btn-secondary" style="font-size:.7rem;margin-bottom:4px">Diagnóstico profundo</button>' +
+      '<p id="bomDiagDeepHint" style="margin:0 0 6px;font-size:.62rem;color:#92400e">Diagnóstico profundo executa probes que podem gerar 404/403 esperados no Console.</p>' +
       '<p style="margin:0;font-size:.65rem;color:#5c6b7a">' + MIRROR_ROADMAP_NOTE + '</p>';
+    wireDeepDiagnosticButton();
   } catch (e) {}
 }
 
@@ -1469,8 +1476,160 @@ function patchSyncBanner() {
   return true;
 }
 
-function runDec014ApiDiagnostic(btnEl) {
-  if (typeof w.ApiDiagnostic === 'undefined' || !w.ApiDiagnostic.run) {
+function diagRow(step, ok, detail, extra) {
+  return {
+    ts: new Date().toISOString(),
+    step: step,
+    ok: !!ok,
+    detail: String(detail || ''),
+    extra: extra || null
+  };
+}
+
+function formatDiagRows(rows) {
+  return (rows || [])
+    .map(function (r) {
+      return (r.ok ? 'OK' : 'FAIL') + '  ' + r.step + ' - ' + r.detail;
+    })
+    .join('\n');
+}
+
+/** Diagnóstico rápido local — sem probes RAW 404/403 (bundle legado não tem runQuick). */
+function runQuickDiagnosticLocal() {
+  var rows = [];
+  rows.push(diagRow('WAFData', !!getWafData(), getWafData() ? 'authenticatedRequest disponível' : 'WAFData ausente'));
+  var headers = getWafHeaders();
+  rows.push(
+    diagRow(
+      'SecurityContext',
+      !!(headers && headers.SecurityContext),
+      (headers && headers.SecurityContext) || 'sem SecurityContext'
+    )
+  );
+
+  return ensureBridgeContext()
+    .then(function () {
+      return getCompassSpaceUrl();
+    })
+    .then(function (spaceUrl) {
+      spaceUrl = cleanUrl(spaceUrl || guessSpaceUrlFromLocation());
+      rows.push(diagRow('3DSpace', !!spaceUrl, spaceUrl || 'não resolvido', { url: spaceUrl || '' }));
+      if (!spaceUrl) return null;
+      var csrfUrl = spaceUrl + '/resources/v1/application/CSRF';
+      return wafGet(csrfUrl).then(function (r) {
+        rows.push(
+          diagRow('CSRF GET', !!r.ok, r.ok ? 'OK' : (r.error || 'falhou'), {
+            url: csrfUrl,
+            status: r.status || 0
+          })
+        );
+      });
+    })
+    .then(function () {
+      return fetch(BACKEND + '/health', { method: 'GET', mode: 'cors', credentials: 'omit' })
+        .then(function (res) {
+          rows.push(
+            diagRow('Backend /health', res.ok, res.ok ? 'OK' : 'HTTP ' + res.status, {
+              status: res.status
+            })
+          );
+        })
+        .catch(function (err) {
+          rows.push(diagRow('Backend /health', false, err.message || 'CORS/rede'));
+        });
+    })
+    .then(function () {
+      var lines = 0;
+      if (fullBomLoadSucceeded()) {
+        var last = w.__bomBridgeLastResult;
+        lines = n(last && (last.mappedCount || last.dedupCount));
+        if (!lines && w.BomService && w.BomService.getNodeCount) lines = w.BomService.getNodeCount();
+      }
+      rows.push(
+        diagRow(
+          'Full BOM API último resultado',
+          lines > 0,
+          lines > 0 ? lines + ' linhas carregadas' : 'sem carga recente',
+          { count: lines }
+        )
+      );
+      var explorerRef = parseExplorerRef();
+      if (explorerRef > 0) {
+        rows.push(
+          diagRow('Explorer referência', true, explorerRef + ' objetos (visual, não valida total)', {
+            count: explorerRef
+          })
+        );
+      }
+      return {
+        rows: rows,
+        summary: formatDiagRows(rows),
+        mode: 'quick',
+        physicalId: getPhysicalId() || ''
+      };
+    });
+}
+
+function resolveApiDiagnosticRunner(deep) {
+  if (deep) {
+    if (w.ApiDiagnostic && w.ApiDiagnostic.runDeep) return w.ApiDiagnostic.runDeep.bind(w.ApiDiagnostic);
+    if (w.ApiDiagnostic && w.ApiDiagnostic.run) return w.ApiDiagnostic.run.bind(w.ApiDiagnostic);
+    return null;
+  }
+  if (w.ApiDiagnostic && w.ApiDiagnostic.runQuick) return w.ApiDiagnostic.runQuick.bind(w.ApiDiagnostic);
+  return function () {
+    return runQuickDiagnosticLocal();
+  };
+}
+
+function patchApiDiagnosticModes() {
+  if (!w.ApiDiagnostic || !w.ApiDiagnostic.run || w.ApiDiagnostic.__BOM_QUICK_DEEP_PATCH__) return false;
+  var deepRun = w.ApiDiagnostic.run.bind(w.ApiDiagnostic);
+  w.ApiDiagnostic.runDeep = deepRun;
+  w.ApiDiagnostic.runQuick = function () {
+    return runQuickDiagnosticLocal();
+  };
+  w.ApiDiagnostic.run = function (opts) {
+    opts = opts || {};
+    if (opts.deep) return w.ApiDiagnostic.runDeep(opts);
+    return w.ApiDiagnostic.runQuick(opts);
+  };
+  w.ApiDiagnostic.__BOM_QUICK_DEEP_PATCH__ = true;
+  return true;
+}
+
+function finishDiagnosticUi(report, classified, mode, btnEl, btnLabel) {
+  classified = classified || {};
+  classified.mode = mode || (report && report.mode) || 'quick';
+  w.__bomDiagClassification = classified;
+  w.__bomDiagDeepRun = mode === 'deep';
+
+  var box = byIdUi('apiDiagReport');
+  if (box) {
+    var summary = (report && report.summary) || '';
+    if (mode === 'deep') {
+      summary +=
+        '\n\n--- Probes esperados / diagnóstico de contrato ---\n' +
+        'Probes técnicos: ' + classified.probeCount + '\n' +
+        'Falhas operacionais: ' + classified.operationalCount;
+    } else {
+      summary += '\n\n(modo rápido — sem probes RAW 404/403)';
+    }
+    box.value = summary;
+    box.classList.remove('bom-hidden');
+  }
+
+  var msg = formatDiagStatusMessage(classified, mode);
+  if (w.App && w.App.setStatus) {
+    w.App.setStatus(msg, classified.operationalCount > 0 ? 'error' : 'ok');
+  }
+  renderAdvancedPanel(classified);
+  console.log('[BOM API DIAG ' + mode + ']', report, classified);
+}
+
+function runDec014ApiDiagnosticQuick(btnEl) {
+  var runner = resolveApiDiagnosticRunner(false);
+  if (!runner) {
     if (w.App && w.App.setStatus) w.App.setStatus('Diagnóstico API indisponível neste build.', 'error');
     return;
   }
@@ -1478,31 +1637,13 @@ function runDec014ApiDiagnostic(btnEl) {
     btnEl.disabled = true;
     btnEl.textContent = 'Diagnosticando…';
   }
-  if (w.App && w.App.setStatus) w.App.setStatus('Diagnóstico API ENOVIA…', 'info');
+  if (w.App && w.App.setStatus) w.App.setStatus('Diagnóstico rápido…', 'info');
 
-  w.ApiDiagnostic.run()
+  runner({})
     .then(function (report) {
       var rows = (report && report.rows) || [];
       var classified = classifyDiagnosticRows(rows);
-      w.__bomDiagClassification = classified;
-
-      var box = byIdUi('apiDiagReport');
-      if (box) {
-        var summary = (report && report.summary) || '';
-        summary +=
-          '\n\n--- Probes esperados / diagnóstico de contrato ---\n' +
-          'Probes técnicos: ' + classified.probeCount + '\n' +
-          'Falhas operacionais: ' + classified.operationalCount;
-        box.value = summary;
-        box.classList.remove('bom-hidden');
-      }
-
-      var msg = formatDiagStatusMessage(classified);
-      if (w.App && w.App.setStatus) {
-        w.App.setStatus(msg, classified.operationalCount > 0 ? 'error' : 'ok');
-      }
-      renderAdvancedPanel(classified);
-      console.log('[BOM API DIAG]', report, classified);
+      finishDiagnosticUi(report, classified, 'quick', btnEl, 'Diagnosticar API');
     })
     .catch(function (err) {
       if (w.App && w.App.setStatus) {
@@ -1517,6 +1658,51 @@ function runDec014ApiDiagnostic(btnEl) {
     });
 }
 
+function runDec014ApiDiagnosticDeep(btnEl) {
+  var runner = resolveApiDiagnosticRunner(true);
+  if (!runner) {
+    if (w.App && w.App.setStatus) w.App.setStatus('Diagnóstico profundo indisponível.', 'error');
+    return;
+  }
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.textContent = 'Probes…';
+  }
+  if (w.App && w.App.setStatus) w.App.setStatus('Diagnóstico profundo (probes de contrato)…', 'info');
+
+  runner({ deep: true })
+    .then(function (report) {
+      var rows = (report && report.rows) || [];
+      var classified = classifyDiagnosticRows(rows);
+      finishDiagnosticUi(report, classified, 'deep', btnEl, 'Diagnóstico profundo');
+    })
+    .catch(function (err) {
+      if (w.App && w.App.setStatus) {
+        w.App.setStatus('Diagnóstico: ' + (err.message || err), 'error');
+      }
+    })
+    .finally(function () {
+      if (btnEl) {
+        btnEl.disabled = false;
+        btnEl.textContent = 'Diagnóstico profundo';
+      }
+    });
+}
+
+function wireDeepDiagnosticButton() {
+  var btn = byIdUi('btnApiDiagnosticDeep');
+  if (!btn) return;
+  btn.onclick = function (ev) {
+    if (ev && ev.preventDefault) ev.preventDefault();
+    if (!isFullBomActive()) return;
+    var ok = w.confirm(
+      'Diagnóstico profundo executa probes que podem gerar 404/403 esperados no Console. Continuar?'
+    );
+    if (!ok) return;
+    runDec014ApiDiagnosticDeep(btn);
+  };
+}
+
 function patchDiagnosticButton() {
   var btn = byIdUi('btnApiDiagnostic');
   if (!btn || btn.__BOM_DEC014_DIAG_PATCH__) return false;
@@ -1527,7 +1713,7 @@ function patchDiagnosticButton() {
       if (!isFullBomActive()) return;
       ev.stopImmediatePropagation();
       ev.preventDefault();
-      runDec014ApiDiagnostic(btn);
+      runDec014ApiDiagnosticQuick(btn);
     },
     true
   );
@@ -1536,6 +1722,7 @@ function patchDiagnosticButton() {
 }
 
 function patchUiMessaging() {
+  patchApiDiagnosticModes();
   var bannerOk = patchSyncBanner();
   var diagOk = patchDiagnosticButton();
   renderAdvancedPanel(w.__bomDiagClassification || null);
@@ -1553,13 +1740,15 @@ function finalizeBridgeResult(raw, loadContext) {
   return applyBridgeItemsToUI(processed).then(function (loaded) {
     w.__bomBridgeLastResult = processed;
     w.__bomBridgeLastError = null;
+    w.__bomDiagClassification = null;
+    w.__bomDiagDeepRun = false;
     var out = buildOrchestratorResult(processed, loaded);
     var dash = n(loaded.count) || n(processed.mappedCount);
     var explorerRef = n(processed.explorerReferenceCount);
     var successMsg = 'Full BOM API: ' + dash + ' linhas';
     diag('ok', successMsg + (explorerRef > 0 ? ' (Explorer ref: ' + explorerRef + ')' : ''));
     if (w.App && w.App.setStatus) {
-      w.App.setStatus(successMsg, 'ok');
+      w.App.setStatus(successMsg + ' · API concluída sem falhas operacionais', 'ok');
     }
     bridgeLog(
       'load summary',

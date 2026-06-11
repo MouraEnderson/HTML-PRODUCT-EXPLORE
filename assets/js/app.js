@@ -882,7 +882,7 @@ var App = (function () {
   }
 
   function runApiDiagnostic(btnEl) {
-    if (typeof ApiDiagnostic === 'undefined' || !ApiDiagnostic.run) {
+    if (typeof ApiDiagnostic === 'undefined' || (!ApiDiagnostic.run && !ApiDiagnostic.runQuick)) {
       setStatus('Diagnóstico API indisponível neste build.', 'error');
       return;
     }
@@ -890,8 +890,14 @@ var App = (function () {
       btnEl.disabled = true;
       btnEl.textContent = 'Diagnosticando…';
     }
-    setStatus('Diagnóstico API ENOVIA…', 'info');
-    ApiDiagnostic.run()
+    setStatus('Diagnóstico rápido…', 'info');
+    var runFn =
+      ApiDiagnostic.runQuick
+        ? ApiDiagnostic.runQuick.bind(ApiDiagnostic)
+        : function () {
+            return ApiDiagnostic.run({ deep: false });
+          };
+    runFn()
       .then(function (report) {
         var box = byId('apiDiagReport');
         if (box) {
@@ -922,10 +928,7 @@ var App = (function () {
         var msg;
         var type;
         if (fullBomOk && operational.length === 0) {
-          msg =
-            probeCount > 0
-              ? 'Diagnóstico: ' + probeCount + ' probes técnicos, 0 falhas operacionais'
-              : 'Diagnóstico API OK';
+          msg = 'API concluída sem falhas operacionais';
           type = 'ok';
         } else if (operational.length > 0) {
           msg = 'Diagnóstico: ' + operational.length + ' falha(s) operacional(is) — veja Avançado';
