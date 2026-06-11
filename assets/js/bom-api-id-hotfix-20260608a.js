@@ -1,14 +1,16 @@
-/* BOM browser-auth bridge hotfix - 20260612d */
+/* BOM browser-auth bridge hotfix - 20260612e */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260612d';
+var BUILD = 'bom20260612e';
 var BACKEND = 'https://bom-resolver.onrender.com';
+var MIRROR_EXPLORER_MODE = true;
 
 w.BOM_BUILD_ID = BUILD;
 w.__BOM_BUILD_ID__ = BUILD;
-w.__BOM_HOTFIX_MODE__ = 'browser-auth-bfs-bridge';
+w.__BOM_HOTFIX_MODE__ = 'explorer-mirror-bridge';
+w.__BOM_MIRROR_EXPLORER_MODE__ = MIRROR_EXPLORER_MODE;
 w.__bomBridgeLastResult = null;
 w.__bomBridgeLastError = null;
 
@@ -242,20 +244,147 @@ return '';
 
 }
 
-function getExpectedCount() {
-try {
-var txt = document.body ? document.body.innerText : '';
-var m = String(txt || '').match(/(\d+)\s+objetos/i);
-if (m) return Number(m[1]);
-} catch (e) {}
+function getExplorerLoadedCount() {
+  try {
+    if (w.__BOM_EXPLORER_LOADED_COUNT__) return n(w.__BOM_EXPLORER_LOADED_COUNT__);
+  } catch (e) {}
 
-try {
-  if (w.__BOM_EXPECTED_COUNT__) return Number(w.__BOM_EXPECTED_COUNT__);
-} catch (e) {}
+  try {
+    if (typeof w.ProductExplorerBridge !== 'undefined' && w.ProductExplorerBridge.getExplorerObjectCount) {
+      if (w.ProductExplorerBridge.pollDashboardExplorerChrome) {
+        w.ProductExplorerBridge.pollDashboardExplorerChrome();
+      }
+      var nObj = n(w.ProductExplorerBridge.getExplorerObjectCount());
+      if (nObj > 0) return nObj;
+    }
+  } catch (e) {}
 
-return 0;
+  try {
+    var txt = document.body ? document.body.innerText : '';
+    var m = String(txt || '').match(/(\d+)\s+objetos/i);
+    if (m) return Number(m[1]);
+  } catch (e) {}
 
+  try {
+    if (w.__BOM_EXPECTED_COUNT__) return n(w.__BOM_EXPECTED_COUNT__);
+  } catch (e) {}
+
+  return 0;
 }
+
+function getExpectedCount() {
+  return getExplorerLoadedCount();
+}
+
+function normalizeMatchKey(v) {
+  return s(v)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\.\d+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function inferParentVisualIndices(rows) {
+  rows = Array.isArray(rows) ? rows : [];
+  var stack = [];
+  rows.forEach(function (row, idx) {
+    var level = n(row.level);
+    if (level > 0 && stack[level - 1] != null) {
+      row.parentVisualIndex = stack[level - 1];
+    } else {
+      row.parentVisualIndex = null;
+    }
+    stack[level] = idx;
+    stack.length = level + 1;
+  });
+  return rows;
+}
+
+function mirrorItemToExplorerRow(item, idx) {
+  item = item || {};
+  return {
+    visualIndex: idx,
+    level: n(item.level),
+    title: s(item.title || item.name),
+    name: s(item.name || item.title),
+    instanceName: s(item.name || item.title),
+    physicalId: s(item.sourcePhysicalId || (item.physicalid && /^prd-/i.test(item.physicalid) ? item.physicalid : '')),
+    referenceId: s(item.sourcePhysicalId),
+    revision: s(item.revision),
+    maturity: s(item.maturity || item.state),
+    state: s(item.state || item.maturity),
+    owner: s(item.owner),
+    type: s(item.type || item.displayType),
+    displayType: s(item.displayType || item.type),
+    approval: s(item.approval),
+    text: s(item.name || item.title),
+    expanded: null,
+    collapsed: null,
+    parentVisualIndex: null
+  };
+}
+
+function extractExplorerSnapshot() {
+  var snapshot = {
+    mirrorExplorerMode: MIRROR_EXPLORER_MODE,
+    explorerLoadedCount: 0,
+    rootName: getRootName(),
+    rows: [],
+    source: 'none',
+    error: null,
+    capturedAt: Date.now()
+  };
+
+  try {
+    if (typeof w.ProductExplorerBridge !== 'undefined') {
+      if (w.ProductExplorerBridge.pollDashboardExplorerChrome) {
+        w.ProductExplorerBridge.pollDashboardExplorerChrome();
+      }
+      if (typeof w.ExplorerContext !== 'undefined' && w.ExplorerContext.refresh) {
+        var ctx = w.ExplorerContext.refresh(true);
+        if (ctx && ctx.rootName) snapshot.rootName = s(ctx.rootName) || snapshot.rootName;
+      }
+
+      snapshot.explorerLoadedCount = getExplorerLoadedCount();
+      var rootName = snapshot.rootName || getRootName();
+      var payload = null;
+
+      if (w.ProductExplorerBridge.scrapeExplorerMirror) {
+        payload = w.ProductExplorerBridge.scrapeExplorerMirror(rootName);
+      }
+      if ((!payload || !payload.items || payload.items.length < 1) && w.ProductExplorerBridge.scrapeExplorerGrid) {
+        payload = w.ProductExplorerBridge.scrapeExplorerGrid(rootName);
+      }
+
+      if (payload && payload.items && payload.items.length) {
+        snapshot.source = payload.scrapeSource || 'explorer-mirror';
+        snapshot.rootName = s(payload.productName) || rootName;
+        snapshot.rows = payload.items.map(mirrorItemToExplorerRow);
+        snapshot.rows = inferParentVisualIndices(snapshot.rows);
+        if (!snapshot.explorerLoadedCount) {
+          snapshot.explorerLoadedCount = n(payload.explorerExpected) || snapshot.rows.length;
+        }
+      } else if (snapshot.explorerLoadedCount > 0) {
+        snapshot.error = 'explorer-snapshot-empty';
+      }
+    } else {
+      snapshot.error = 'ProductExplorerBridge indisponivel';
+    }
+  } catch (e) {
+    snapshot.error = e && e.message ? e.message : String(e);
+  }
+
+  if (!snapshot.explorerLoadedCount && snapshot.rows.length) {
+    snapshot.explorerLoadedCount = snapshot.rows.length;
+  }
+
+  w.__bomExplorerSnapshot = snapshot;
+  return snapshot;
+}
+
+w.__bomExtractExplorerSnapshot = extractExplorerSnapshot;
 
 function backendPost(path, payload) {
 return fetch(BACKEND + path, {
@@ -642,21 +771,175 @@ function buildFinalTreeRows(classified) {
   };
 }
 
-function logExtraRowsVsExplorer(finalRows, expected) {
-  if (!expected || finalRows.length <= expected) return;
-  var ordered = sortRowsTreeOrder(finalRows);
-  var extras = ordered.slice(expected).map(function (row) {
-    return {
-      id: s(row.id),
-      title: s(row.title || row.name || row.instanceName),
-      source: s(row.source),
-      parentId: s(row.parentId),
-      instanceId: s(row.instanceId),
-      referenceId: s(row.referenceId || row.physicalId || row.navId),
-      reason: 'linha real acima do expectedCount do Explorer (diagnostico BFS)'
-    };
+function backendRowKey(row) {
+  return s(row && (row.id || row.instanceId || row.referenceId || row.title));
+}
+
+function buildBackendMatchIndex(backendRows) {
+  backendRows = Array.isArray(backendRows) ? backendRows : [];
+  var index = {
+    byPhysicalId: {},
+    byInstanceId: {},
+    byReferenceId: {},
+    byTitle: {},
+    byInstanceName: {},
+    byParentTitleLevel: {},
+    all: backendRows.slice()
+  };
+
+  backendRows.forEach(function (row) {
+    var physicalId = s(row.physicalId || row.referenceId);
+    var instanceId = s(row.instanceId);
+    var referenceId = s(row.referenceId || row.physicalId || row.navId);
+    var title = normalizeMatchKey(row.title || row.name || row.instanceName);
+    var instanceName = normalizeMatchKey(row.instanceName || row.name || row.title);
+    var parentId = s(row.parentId);
+    var level = n(row.level);
+
+    function push(map, key) {
+      if (!key) return;
+      if (!map[key]) map[key] = [];
+      map[key].push(row);
+    }
+
+    if (physicalId && /^prd-/i.test(physicalId)) push(index.byPhysicalId, physicalId);
+    push(index.byInstanceId, instanceId);
+    push(index.byReferenceId, referenceId);
+    push(index.byTitle, title);
+    push(index.byInstanceName, instanceName);
+    if (title) push(index.byParentTitleLevel, parentId + '|' + title + '|' + level);
   });
-  bridgeLog('extra rows vs explorer', extras);
+
+  return index;
+}
+
+function pickUnusedMatch(rows, used) {
+  rows = Array.isArray(rows) ? rows : [];
+  var i;
+  for (i = 0; i < rows.length; i++) {
+    var key = backendRowKey(rows[i]);
+    if (!key || !used[key]) {
+      if (key) used[key] = true;
+      return rows[i];
+    }
+  }
+  return null;
+}
+
+function matchBackendRow(explorerRow, index, used, parentBackendId) {
+  explorerRow = explorerRow || {};
+  index = index || {};
+
+  var physicalId = s(explorerRow.physicalId || explorerRow.referenceId);
+  if (physicalId && /^prd-/i.test(physicalId)) {
+    var byPid = pickUnusedMatch(index.byPhysicalId[physicalId], used);
+    if (byPid) return byPid;
+  }
+
+  var instanceId = s(explorerRow.instanceId);
+  if (instanceId) {
+    var byInst = pickUnusedMatch(index.byInstanceId[instanceId], used);
+    if (byInst) return byInst;
+  }
+
+  var referenceId = s(explorerRow.referenceId);
+  if (referenceId) {
+    var byRef = pickUnusedMatch(index.byReferenceId[referenceId], used);
+    if (byRef) return byRef;
+  }
+
+  var title = normalizeMatchKey(explorerRow.title || explorerRow.name);
+  var level = n(explorerRow.level);
+  if (parentBackendId && title) {
+    var byPtl = pickUnusedMatch(index.byParentTitleLevel[parentBackendId + '|' + title + '|' + level], used);
+    if (byPtl) return byPtl;
+  }
+
+  var instanceName = normalizeMatchKey(explorerRow.instanceName || explorerRow.name || explorerRow.title);
+  if (instanceName) {
+    var byName = pickUnusedMatch(index.byInstanceName[instanceName], used);
+    if (byName) return byName;
+  }
+
+  if (title) {
+    var byTitle = pickUnusedMatch(index.byTitle[title], used);
+    if (byTitle) return byTitle;
+  }
+
+  return null;
+}
+
+function mergeExplorerMirror(explorerSnapshot, backendRows) {
+  explorerSnapshot = explorerSnapshot || {};
+  var explorerRows = Array.isArray(explorerSnapshot.rows) ? explorerSnapshot.rows.slice() : [];
+  var index = buildBackendMatchIndex(backendRows);
+  var used = {};
+  var finalRows = [];
+  var matched = 0;
+  var parentBackendByVisual = {};
+
+  explorerRows.forEach(function (exRow, idx) {
+    var parentVisual = exRow.parentVisualIndex;
+    var parentBackendId = parentVisual != null ? parentBackendByVisual[parentVisual] : null;
+    var backend = matchBackendRow(exRow, index, used, parentBackendId);
+    var isRoot = n(exRow.level) === 0 && idx === 0;
+
+    var merged = {
+      id: backend ? s(backend.id) : ('explorer:' + idx),
+      visualIndex: idx,
+      level: n(exRow.level),
+      parentId: backend ? s(backend.parentId) : null,
+      instanceId: backend ? s(backend.instanceId) : s(exRow.instanceId),
+      instanceName: s(exRow.instanceName || exRow.name || exRow.title),
+      name: s(exRow.name || exRow.title),
+      title: s(exRow.title || exRow.name),
+      type: s((backend && backend.type) || exRow.type) || 'VPMReference',
+      physicalId: s((backend && (backend.physicalId || backend.referenceId)) || exRow.physicalId),
+      referenceId: s((backend && (backend.referenceId || backend.physicalId)) || exRow.referenceId || exRow.physicalId),
+      navigableId: backend ? s(backend.navigableId || backend.navId) : '',
+      navId: backend ? s(backend.navId || backend.navigableId) : '',
+      maturity: s((backend && backend.maturity) || exRow.maturity || exRow.state),
+      state: s((backend && backend.state) || exRow.state || exRow.maturity),
+      owner: s((backend && backend.owner) || exRow.owner),
+      revision: s((backend && backend.revision) || exRow.revision),
+      source: isRoot ? 'root' : 'explorer-mirror',
+      root: isRoot,
+      mirrorSource: true,
+      enriched: !!backend
+    };
+
+    if (backend) matched += 1;
+    parentBackendByVisual[idx] = merged.id;
+    finalRows.push(merged);
+  });
+
+  var backendOnly = [];
+  index.all.forEach(function (row) {
+    var key = backendRowKey(row);
+    if (key && !used[key]) {
+      backendOnly.push({
+        title: s(row.title || row.name || row.instanceName),
+        id: s(row.id),
+        source: s(row.source),
+        parentId: s(row.parentId),
+        instanceId: s(row.instanceId),
+        referenceId: s(row.referenceId || row.physicalId || row.navId),
+        reason: 'backendOnly — ausente no snapshot do Explorer'
+      });
+    }
+  });
+
+  return {
+    finalRows: finalRows,
+    matched: matched,
+    backendOnly: backendOnly,
+    explorerCount: explorerRows.length
+  };
+}
+
+function logBackendOnlyRows(rows) {
+  if (!rows || !rows.length) return;
+  bridgeLog('backend-only discarded', rows);
 }
 
 function logDiscardedRows(discarded) {
@@ -710,8 +993,10 @@ function sortRowsTreeOrder(rows) {
   return out;
 }
 
-function mapRowsToImportItems(rows, rootName) {
-  rows = sortRowsTreeOrder(rows);
+function mapRowsToImportItems(rows, rootName, preserveOrder) {
+  if (!preserveOrder) {
+    rows = sortRowsTreeOrder(rows);
+  }
   return rows.map(function (row, idx) {
     var physicalid =
       s(row.instanceId) ||
@@ -742,83 +1027,115 @@ function mapRowsToImportItems(rows, rootName) {
   });
 }
 
-function processBridgeResult(raw) {
+function processBridgeResult(raw, explorerSnapshot) {
   raw = raw || {};
+  explorerSnapshot = explorerSnapshot || w.__bomExplorerSnapshot || extractExplorerSnapshot();
+
   var rawRows = raw.rows || raw.items || raw.bom || raw.treeRows || [];
   if (!Array.isArray(rawRows)) rawRows = [];
 
-  var expected = n(raw.expectedCount) || getExpectedCount();
-  var rootName = getRootName();
+  var explorerLoadedCount = n(explorerSnapshot.explorerLoadedCount) || getExplorerLoadedCount();
+  var explorerSnapshotCount = (explorerSnapshot.rows || []).length;
+  var rootName = s(explorerSnapshot.rootName) || getRootName();
   var backendStats = raw.stats || {};
 
-  bridgeLog('expected explorer', expected);
-  bridgeLog('raw received', rawRows.length);
+  if (!explorerSnapshotCount) {
+    bridgeLog('explorer snapshot rows', 0);
+    bridgeLog('explorer snapshot error', explorerSnapshot.error || 'sem linhas no DOM do Explorer');
+    return {
+      rawCount: rawRows.length,
+      realTreeCount: 0,
+      discardedCount: 0,
+      dedupCount: 0,
+      mappedCount: 0,
+      explorerLoadedCount: explorerLoadedCount,
+      explorerSnapshotCount: 0,
+      expectedCount: explorerLoadedCount,
+      rootName: rootName,
+      items: [],
+      partial: true,
+      mirrorMode: true,
+      snapshotError: explorerSnapshot.error || 'explorer-snapshot-empty',
+      message: 'Explorer mirror falhou: snapshot vazio'
+    };
+  }
+
+  bridgeLog('explorer snapshot rows', explorerSnapshotCount);
+  bridgeLog('explorer loaded count', explorerLoadedCount);
+  bridgeLog('backend raw rows', rawRows.length);
 
   var classified = classifyBridgeRows(rawRows);
   var built = buildFinalTreeRows(classified);
-  var finalRows = built.finalRows;
+  var backendTreeRows = built.finalRows;
+  var merged = mergeExplorerMirror(explorerSnapshot, backendTreeRows);
+  var finalRows = merged.finalRows;
 
-  var rootCount = finalRows.filter(function (row) {
-    return row.root === true || s(row.source) === 'root';
-  }).length;
-  var engCount = finalRows.filter(function (row) {
-    return s(row.source) === 'engInstance';
-  }).length;
-  var searchDiscarded = classified.candidateRows.length;
-  var probeDiscarded = classified.probeRows.length;
   var detailMerged = n(backendStats.detailMerged) || 0;
   var duplicatesRemoved = built.instDedupRemoved + built.bridgeDedupRemoved;
-  var discardedTotal = classified.discarded.length;
+  var backendOnlyCount = merged.backendOnly.length;
 
-  bridgeLog('root rows', rootCount);
-  bridgeLog('engInstance rows', engCount);
-  bridgeLog('search rows discarded', searchDiscarded);
-  bridgeLog('probe rows discarded', probeDiscarded);
-  bridgeLog('detail rows merged', detailMerged);
-  bridgeLog('duplicates removed', duplicatesRemoved);
-  bridgeLog('final real tree rows', finalRows.length);
+  bridgeLog('backend enriched matched rows', merged.matched);
+  bridgeLog('backend-only rows discarded', backendOnlyCount);
+  bridgeLog('final dashboard rows', finalRows.length);
 
   logDiscardedRows(classified.discarded);
+  logBackendOnlyRows(merged.backendOnly);
 
-  if (expected > 0 && finalRows.length !== expected) {
-    bridgeLog('count mismatch explorer=' + expected + ' dashboard=' + finalRows.length);
+  if (explorerLoadedCount > 0 && finalRows.length !== explorerLoadedCount) {
+    bridgeLog(
+      'count mismatch explorerLoaded=' + explorerLoadedCount +
+      ' snapshot=' + explorerSnapshotCount +
+      ' dashboard=' + finalRows.length
+    );
   }
 
-  if (expected > 0 && finalRows.length > expected) {
-    logExtraRowsVsExplorer(finalRows, expected);
+  if (explorerSnapshotCount !== finalRows.length) {
+    bridgeLog('snapshot/dashboard row count mismatch', {
+      snapshot: explorerSnapshotCount,
+      dashboard: finalRows.length
+    });
   }
 
-  var items = mapRowsToImportItems(finalRows, rootName);
+  var items = mapRowsToImportItems(finalRows, rootName, true);
   var mappedCount = items.length;
 
   if (items.length) bridgeLog('first row', items[0]);
 
-  var partial = expected > 0 && mappedCount < expected - 1;
+  var partial =
+    explorerLoadedCount > 0 && mappedCount !== explorerLoadedCount ||
+    explorerSnapshotCount !== mappedCount;
   var message =
-    expected > 0
-      ? (partial
-        ? 'Parcial ' + mappedCount + '/' + expected + ' (BROWSER-BACKEND)'
-        : 'BOM ' + mappedCount + '/' + expected + ' via bridge')
-      : ('Bridge ' + BUILD + ': ' + mappedCount + ' linhas');
+    'Bridge OK: ' + mappedCount + ' linhas (Explorer mirror)';
 
   return {
     rawCount: rawRows.length,
-    realTreeCount: finalRows.length,
-    discardedCount: discardedTotal,
-    dedupCount: finalRows.length,
+    realTreeCount: backendTreeRows.length,
+    discardedCount: classified.discarded.length + backendOnlyCount,
+    dedupCount: mappedCount,
     mappedCount: mappedCount,
-    expectedCount: expected,
+    explorerLoadedCount: explorerLoadedCount,
+    explorerSnapshotCount: explorerSnapshotCount,
+    expectedCount: explorerLoadedCount,
     rootName: rootName,
     items: items,
     partial: partial,
+    mirrorMode: true,
     message: message,
     removedDuplicates: duplicatesRemoved,
-    discardedRows: classified.discarded,
+    discardedRows: classified.discarded.concat(merged.backendOnly),
+    backendOnlyRows: merged.backendOnly,
+    backendMatched: merged.matched,
+    backendOnlyDiscarded: backendOnlyCount,
+    explorerSnapshot: explorerSnapshot,
     stats: {
-      rootRows: rootCount,
-      engInstanceRows: engCount,
-      searchDiscarded: searchDiscarded,
-      probeDiscarded: probeDiscarded,
+      explorerSnapshotRows: explorerSnapshotCount,
+      explorerLoadedCount: explorerLoadedCount,
+      backendRawRows: rawRows.length,
+      backendTreeRows: backendTreeRows.length,
+      backendMatched: merged.matched,
+      backendOnlyDiscarded: backendOnlyCount,
+      searchDiscarded: classified.candidateRows.length,
+      probeDiscarded: classified.probeRows.length,
       detailMerged: detailMerged,
       duplicatesRemoved: duplicatesRemoved
     }
@@ -841,7 +1158,9 @@ function applyBridgeItemsToUI(processed) {
 
   if (typeof w.BomSnapshot !== 'undefined' && w.BomSnapshot.buildFromImported && w.BomSnapshot.applyPayload) {
     var payload = w.BomSnapshot.buildFromImported(items, rootName);
-    if (payload) payload.scrapeSource = 'browser-auth-bridge';
+    if (payload) {
+      payload.scrapeSource = processed.mirrorMode ? 'explorer-mirror' : 'browser-auth-bridge';
+    }
     return w.BomSnapshot.applyPayload(payload).then(function (meta) {
       var count =
         typeof w.BomService !== 'undefined' && w.BomService.getNodeCount
@@ -878,46 +1197,99 @@ function buildOrchestratorResult(processed, loaded) {
   processed = processed || {};
   loaded = loaded || {};
   var count = n(loaded.count) || processed.mappedCount || 0;
-  var expected = n(processed.expectedCount);
-  var partial = expected > 0 ? count < expected - 1 : !!processed.partial;
+  var explorerLoaded = n(processed.explorerLoadedCount) || n(processed.expectedCount);
+  var partial = !!processed.partial;
 
   return {
-    loaderMode: 'browser-backend',
-    mode: 'browser-backend',
+    loaderMode: 'explorer-mirror',
+    mode: 'explorer-mirror',
     partial: partial,
-    message: processed.message || ('Bridge ' + BUILD + ': ' + count + ' linhas'),
+    message: processed.message || ('Bridge OK: ' + count + ' linhas (Explorer mirror)'),
     meta: Object.assign({}, loaded.meta || {}, {
       itemCount: count,
       rootPhysicalId: getPhysicalId(),
       productName: processed.rootName || getRootName(),
       bridgeRawCount: processed.rawCount,
       bridgeDedupCount: processed.dedupCount,
-      bridgeRemovedDuplicates: processed.removedDuplicates
+      bridgeRemovedDuplicates: processed.removedDuplicates,
+      backendMatched: n(processed.backendMatched),
+      backendOnlyDiscarded: n(processed.backendOnlyDiscarded),
+      explorerSnapshotCount: n(processed.explorerSnapshotCount),
+      explorerLoadedCount: explorerLoaded,
+      mirrorMode: true
     }),
     context: {
-      expectedCount: expected,
+      expectedCount: explorerLoaded,
+      explorerLoadedCount: explorerLoaded,
+      explorerSnapshotCount: n(processed.explorerSnapshotCount),
       productName: processed.rootName || getRootName(),
       physicalId: getPhysicalId()
+    },
+    diagnostic: {
+      explorerLoadedCount: explorerLoaded,
+      dashboardCount: count,
+      backendFound: n(processed.rawCount),
+      backendOnlyDiscarded: n(processed.backendOnlyDiscarded),
+      backendMatched: n(processed.backendMatched),
+      mirrorMode: true
     },
     refreshSource: 'manual',
     bridgeResult: processed
   };
 }
 
-function finalizeBridgeResult(raw) {
-  var processed = processBridgeResult(raw);
+function updateMirrorSyncBanner(processed, dash) {
+  processed = processed || {};
+  dash = n(dash);
+  try {
+    var root = w.__3DX_UI_ROOT__ || document;
+    var el = root.querySelector && root.querySelector('#syncBanner');
+    if (!el) return;
+    var explorerLoaded = n(processed.explorerLoadedCount);
+    var backendFound = n(processed.rawCount);
+    var extras = n(processed.backendOnlyDiscarded);
+    var inSync = explorerLoaded > 0 && dash === explorerLoaded;
+    el.className = inSync ? 'bom-sync-banner bom-sync-ok' : 'bom-sync-banner bom-sync-warn';
+    el.classList.remove('bom-hidden');
+    el.innerHTML =
+      'Explorer carregado: <strong>' + explorerLoaded + '</strong>' +
+      ' · Dashboard: <strong>' + dash + '</strong>' +
+      ' · Backend encontrados: <strong>' + backendFound + '</strong>' +
+      (extras > 0 ? ' · Extras descartados: <strong>' + extras + '</strong>' : '') +
+      (inSync ? ' — sincronizado (Explorer mirror)' : ' — diferença no mirror');
+  } catch (e) {}
+}
+
+function finalizeBridgeResult(raw, explorerSnapshot) {
+  var processed = processBridgeResult(raw, explorerSnapshot);
+  if (!processed.items || !processed.items.length) {
+    var snapErr = processed.snapshotError || 'Explorer snapshot vazio';
+    diag('error', 'Explorer mirror falhou: ' + snapErr);
+    return Promise.reject(new Error(snapErr));
+  }
   return applyBridgeItemsToUI(processed).then(function (loaded) {
     w.__bomBridgeLastResult = processed;
     w.__bomBridgeLastError = null;
     var out = buildOrchestratorResult(processed, loaded);
-    var real = n(processed.dedupCount);
-    var raw = n(processed.rawCount);
-    var discarded = n(processed.discardedCount) + n(processed.removedDuplicates);
+    var dash = n(loaded.count) || n(processed.mappedCount);
+    var explorerLoaded = n(processed.explorerLoadedCount);
+    var backendFound = n(processed.rawCount);
+    var backendOnly = n(processed.backendOnlyDiscarded);
     diag(
       'ok',
-      'Bridge OK: ' + (loaded.count || real) + ' linhas' +
-        ' (raw ' + raw + ', real ' + real + ', descartadas ' + discarded + ')'
+      'Bridge OK: ' + dash + ' linhas (Explorer mirror)'
     );
+    bridgeLog(
+      'mirror summary',
+      'Explorer carregado: ' + explorerLoaded +
+      ' | Dashboard: ' + dash +
+      ' | Backend encontrados: ' + backendFound +
+      ' | Extras descartados: ' + backendOnly
+    );
+    updateMirrorSyncBanner(processed, dash);
+    if (typeof w.SyncBanner !== 'undefined' && w.SyncBanner.setLoadResult) {
+      w.SyncBanner.setLoadResult(out);
+    }
     updateBuildPill();
     return out;
   });
@@ -970,32 +1342,50 @@ return step();
 function runBrowserBridge() {
 return ensureBridgeContext()
 .then(function () {
-return getCompassSpaceUrl();
+  var explorerSnapshot = extractExplorerSnapshot();
+  w.__bomExplorerSnapshot = explorerSnapshot;
+  bridgeLog('explorer snapshot rows', (explorerSnapshot.rows || []).length);
+  bridgeLog('explorer loaded count', explorerSnapshot.explorerLoadedCount);
+  return explorerSnapshot;
 })
-.then(function (spaceUrl) {
+.then(function (explorerSnapshot) {
+return getCompassSpaceUrl().then(function (spaceUrl) {
 spaceUrl = cleanUrl(spaceUrl || guessSpaceUrlFromLocation());
 
-    var rootName = getRootName();
+    var rootName = s(explorerSnapshot.rootName) || getRootName();
     var physicalId = getPhysicalId();
-    var expectedCount = getExpectedCount();
+    var explorerLoadedCount = n(explorerSnapshot.explorerLoadedCount) || getExplorerLoadedCount();
 
-    diag('ok', 'Hotfix ativo: ' + BUILD + ' | browser-auth BFS bridge');
+    diag('ok', 'Hotfix ativo: ' + BUILD + ' | Explorer mirror + API enrich');
     console.log('[BOM bridge]', BUILD, 'POST', BACKEND + '/api/bom/browser/start', {
       spaceUrl: spaceUrl,
       rootName: rootName,
       physicalId: physicalId,
-      expectedCount: expectedCount
+      explorerLoadedCount: explorerLoadedCount,
+      explorerSnapshotRows: (explorerSnapshot.rows || []).length,
+      mirrorExplorerMode: MIRROR_EXPLORER_MODE
     });
 
     return backendPost('/api/bom/browser/start', {
       spaceUrl: spaceUrl,
       rootName: rootName,
       physicalId: physicalId,
-      expectedCount: expectedCount
+      expectedCount: explorerLoadedCount,
+      explorerLoadedCount: explorerLoadedCount,
+      explorerSnapshotCount: (explorerSnapshot.rows || []).length,
+      explorerSnapshot: explorerSnapshot.rows || [],
+      mirrorExplorerMode: MIRROR_EXPLORER_MODE
+    }).then(function (start) {
+      start.__explorerSnapshot = explorerSnapshot;
+      return start;
     });
-  })
+  });
+})
   .then(function (start) {
-    return bridgeLoop(start);
+    return bridgeLoop(start).then(function (result) {
+      result.__explorerSnapshot = start.__explorerSnapshot;
+      return result;
+    });
   });
 
 }
@@ -1025,7 +1415,7 @@ function patchOrchestrator() {
 
     return runBrowserBridge()
       .then(function (result) {
-        return finalizeBridgeResult(result);
+        return finalizeBridgeResult(result, result && result.__explorerSnapshot);
       })
       .catch(function (err) {
         return bridgeFailure(err, 'Atualizar estrutura');
@@ -1056,7 +1446,7 @@ w.ExplorerScanner.__BOM_ORIGINAL_SCAN__ = w.ExplorerScanner.__BOM_ORIGINAL_SCAN_
 w.ExplorerScanner.scan = function () {
   return runBrowserBridge()
     .then(function (result) {
-      return finalizeBridgeResult(result);
+      return finalizeBridgeResult(result, result && result.__explorerSnapshot);
     })
     .catch(function (err) {
       return bridgeFailure(err, 'ExplorerScanner.scan');
@@ -1110,7 +1500,7 @@ w.__bomBridgeRun = function () {
   diag('ok', 'Executando bridge manual: ' + BUILD);
   return runBrowserBridge()
     .then(function (result) {
-      return finalizeBridgeResult(result);
+      return finalizeBridgeResult(result, result && result.__explorerSnapshot);
     })
     .catch(function (err) {
       w.__bomBridgeLastError = err;

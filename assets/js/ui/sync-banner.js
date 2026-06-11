@@ -75,6 +75,7 @@ var SyncBanner = (function () {
   function modeLabel(mode) {
     mode = String(mode || '').toLowerCase();
     if (mode === 'api') return 'API';
+    if (mode === 'explorer-mirror' || mode.indexOf('mirror') >= 0) return 'Mirror';
     if (mode === 'tsv' || mode.indexOf('explorer') >= 0 || mode === 'text') return 'TSV';
     if (mode === 'paste' || mode === 'cola' || mode.indexOf('clipboard') >= 0 || mode.indexOf('ctrl') >= 0) {
       return 'Cola';
@@ -143,6 +144,22 @@ var SyncBanner = (function () {
     var quality = dashboardQuality();
     var diff = explorer > 0 ? Math.abs(explorer - dash) : 0;
     var partial = lastLoad.partial || (explorer > 0 && dash < explorer - 1);
+
+    if (lastLoad.loaderMode === 'explorer-mirror' || (lastLoad.diagnostic && lastLoad.diagnostic.mirrorMode)) {
+      var diag = lastLoad.diagnostic || {};
+      var backendFound = diag.backendFound || 0;
+      var extras = diag.backendOnlyDiscarded || 0;
+      var explorerLoaded = diag.explorerLoadedCount || explorer || 0;
+      var inSync = explorerLoaded > 0 && dash === explorerLoaded;
+      el.className = inSync ? 'bom-sync-banner bom-sync-ok' : 'bom-sync-banner bom-sync-warn';
+      el.innerHTML =
+        'Explorer carregado: <strong>' + explorerLoaded + '</strong>' +
+        ' · Dashboard: <strong>' + dash + '</strong>' +
+        ' · Backend encontrados: <strong>' + backendFound + '</strong>' +
+        (extras > 0 ? ' · Extras descartados: <strong>' + extras + '</strong>' : '') +
+        (inSync ? ' — sincronizado (Explorer mirror)' : ' — diferença no mirror');
+      return;
+    }
 
     if (lastLoad.domFallback) {
       el.className = 'bom-sync-banner bom-sync-warn';
