@@ -117,3 +117,22 @@ Motivo: as tentativas anteriores misturaram API, TSV, paste, DOM mirror e heuris
 Consequencia: cada sprint de carga deve comecar por diagnostico isolado e terminar com evidencia objetiva. Caminhos que nao entregam pai, filho real, revisao, proprietario, maturidade e ID estavel devem ser reprovados ou mantidos apenas como contingencia explicita.
 
 Referencia: `docs/ANALISE-CONTRATO-EBOM-2026-06-06.md`.
+
+## DEC-014 - Dois modos de produto: Mirror Explorer vs Full BOM API
+
+Decisao: o produto passa a ter dois modos explicitos e incompativeis como fonte primaria de linhas.
+
+Motivo: mirror do Explorer e BOM completa via API respondem perguntas diferentes. Misturar as fontes gera contagens erradas (50 vs 79, 1 vs 21) e falsa sensacao de sucesso.
+
+Modos:
+
+1. **Mirror Explorer real** — lista, ordem e hierarquia iguais ao Product Structure Explorer expandido. Somente viavel com widget nativo mesma origem (Additional App trusted no dominio 3DDashboard) ou API/contrato oficial do Explorer que exponha nos expandidos/carregados. Reprovado para widget GitHub Pages separado por isolamento de iframe e ausencia de contrato publico de arvore expandida.
+
+2. **Full BOM via API** — estrutura carregada por `dseng`/backend/WAFData. Deve ser apresentado na UI como "BOM completa via API", nunca como espelho do Explorer. Nao usar `expectedCount` do Explorer para cortar lista (`slice`, clamp).
+
+Consequencia:
+
+- Nao implementar fallback manual (TSV, clipboard, Ctrl+C) no modo mirror.
+- Nao renderizar parcial (ex.: 1/21) como sucesso.
+- Nao mascarar full BOM como mirror.
+- Relatorio tecnico: `docs/RELATORIO-MIRROR-EXPLORER-2026-06-12.md`.
