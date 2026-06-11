@@ -13,7 +13,7 @@
   <script>
     window.__3DX_TRUSTED_WIDGET__=true;window.__3DX_BOOT_DEFER__=true;
     var GH='https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-    var BOM_BUILD='bom20260614b';var BASE_BUILD='bom20260607a';
+    var BOM_BUILD='bom20260614c';var BASE_BUILD='bom20260607a';
     function mountTarget(){return (typeof widget!=='undefined'&&widget&&widget.body)?widget.body:document.body;}
     function uiRoot(){return window.__3DX_UI_ROOT__||mountTarget();}
     function setBar(msg,kind){var el=uiRoot()&&uiRoot().querySelector('#statusBar');if(!el)return;el.textContent=msg;el.className='bom-st';if(kind==='ok')el.className+=' bom-st-ok';if(kind==='error')el.className+=' bom-st-err';}
@@ -24,7 +24,7 @@
     function loadWaf(next){if(typeof WAFData!=='undefined'&&WAFData.authenticatedRequest){next(null);return;}var req=getRequire();if(!req){next(null);return;}req(['DS/WAFData/WAFData','DS/i3DXCompassServices/i3DXCompassServices','DS/PlatformAPI/PlatformAPI'],function(WAF,Compass,PAPI){window.WAFData=WAF;window.__3DX_COMPASS__=Compass;window.__3DX_PLATFORM_API__=PAPI;next(null);},function(){next(null);});}
     function startBundle(){var v=BOM_BUILD+'-'+Date.now();loadScript(GH+'assets/vendor/chart.umd.min.js?v='+v,true,function(){loadScript(GH+'assets/js/bom-bundle-'+BASE_BUILD+'.js?v='+v,false,function(err){if(err){setBar('Erro ao carregar bundle base.','error');return;}loadScript(GH+'assets/js/integration/product-explorer-bridge.js?v='+v,true,function(){loadScript(GH+'assets/js/integration/expand-item-provider.js?v='+v,true,function(){loadScript(GH+'assets/js/bom-api-id-hotfix-20260608a.js?v='+v,false,function(err2){if(err2){setBar('Erro ao carregar patch 08i.','error');return;}try{updateBuildLabel();if(typeof detectRuntimeMode==='function')detectRuntimeMode();if(typeof window.__bomBridgeInstall==='function')window.__bomBridgeInstall();if(typeof App!=='undefined'&&App.run){App.run();if(App.rebindScanButton)App.rebindScanButton();if(App.rebindImportButton)App.rebindImportButton();if(typeof window.__bomBridgeInstall==='function')window.__bomBridgeInstall();updateBuildLabel();setBar('Build '+(window.__BOM_BUILD_ID__||BOM_BUILD)+' carregado. Clique Atualizar estrutura.','ok');}else{setBar('App não iniciou.','error');}}catch(ex){setBar('Erro: '+(ex.message||ex),'error');}});});});});});}
     function loadCss(next){var l=document.createElement('link');l.rel='stylesheet';l.href=GH+'assets/css/dashboard.css?v='+BOM_BUILD+'-'+Date.now();l.onload=function(){if(next)next();};l.onerror=function(){if(next)next();};document.getElementsByTagName('head')[0].appendChild(l);}
-    function executeInit(){paint();setBar('Carregando build 20260614b (Expand Item · DEC-015 transport fix)…','info');loadCss(function(){loadWaf(function(){startBundle();});});}
+    function executeInit(){paint();setBar('Carregando build 20260614c (Expand Item · dseng_v1 POST)…','info');loadCss(function(){loadWaf(function(){startBundle();});});}
     function boot(){if(typeof widget!=='undefined'&&widget){if(widget.addEvent)widget.addEvent('onLoad',executeInit);if(widget.addEvent)widget.addEvent('onRefresh',executeInit);if(widget.body)executeInit();else setTimeout(boot,80);}else if(document.body){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',executeInit);else executeInit();}else setTimeout(boot,80);}boot();
   </script>
 </head>

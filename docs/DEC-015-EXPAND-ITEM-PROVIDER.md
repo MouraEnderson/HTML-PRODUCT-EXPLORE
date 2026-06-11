@@ -1,8 +1,8 @@
 # DEC-015 — Expand Item Provider
 
 **Data:** 2026-06-14  
-**Build:** `bom20260614b`  
-**Arquivo:** `assets/js/integration/expand-item-provider.js`
+**Build:** `bom20260614c`  
+**Referência:** [dseng_v1](https://media.3ds.com/support/documentation/developer/Cloud/en/DSDoc.htm?show=CAAEngineeringWS/dseng_v1.htm) — validado via SDK oficial `ws3dx.dseng` (DS CPE EMED)
 
 ---
 
@@ -14,7 +14,60 @@
 
 ---
 
-## Contrato Expand Item
+## Contrato oficial Expand Item (dseng_v1)
+
+Fonte: documentação **Engineering Web Services** (`dseng_v1`) + implementação de referência `ws3dx.dseng` (`EngItemService.Expand`, `IExpand`).
+
+| Campo | Valor oficial |
+|-------|----------------|
+| **Método HTTP** | **POST** (único — não há GET documentado para `/expand`) |
+| **Endpoint** | `{3DSpace}/resources/v1/modeler/dseng/dseng:EngItem/{ID}/expand` |
+| **`{ID}`** | ID interno `dseng:EngItem` (32 hex) — **não** `name` `prd-R...` |
+| **Content-Type** | `application/json` |
+| **Headers widget** | `Accept: application/json` + `SecurityContext` via `WAFData.authenticatedRequest` |
+| **Proibido no widget** | `x-csrf-token`, `X-CSRF-Token`, `PlatformContext.getHeaders()` manual |
+| **Transporte widget** | **WAFData direto** — padrão documentado para custom widgets 3DDashboard |
+| **Backend externo** | Não exigido pelo contrato dseng; server-side SDK usa 3DPassport + `SecurityContext` |
+
+### Body POST oficial (`IExpand`)
+
+```json
+{
+  "expandDepth": 2,
+  "withPath": true,
+  "type_filter_bo": ["VPMReference", "VPMRepReference"],
+  "type_filter_rel": ["VPMInstance", "VPMRepInstance"]
+}
+```
+
+| Propriedade | Semântica (dseng_v1) |
+|-------------|----------------------|
+| `expandDepth` | `-1` = todos os níveis; `1`, `2`, `3`… = profundidade específica. **Default doc: `1`** |
+| `withPath` | `true` retorna objetos `Path` no `member` (obrigatório para normalização DEC-015) |
+| `type_filter_bo` | Default `["VPMReference"]`; autorizado: `VPMReference`, `VPMRepReference` |
+| `type_filter_rel` | Default `["VPMInstance"]`; autorizado: `VPMInstance`, `VPMRepInstance` |
+| `filter` | Opcional — filtro avançado (Public Filter Specification) |
+
+### Response (exemplo confirmado tenant + doc)
+
+```json
+{
+  "totalItems": 4,
+  "member": [
+    { "type": "VPMReference", "id": "DDED8256...", "title": "...", "name": "prd-...", "revision": "A", "state": "IN_WORK" },
+    { "type": "VPMInstance", "id": "DDED8256...", "name": "Physical Product....1" },
+    { "Path": ["DDED8256...(root)", "DDED8256...(instance)", "DDED8256...(childRef)"] }
+  ]
+}
+```
+
+- **`member`**: mix de `VPMReference`, `VPMInstance` e `{ Path: [...] }`
+- **`Path`**: cadeia `Reference → Instance → Reference → …`
+- **`totalItems` / `member.length`**: estatística API — **não** total visual da tabela
+
+---
+
+## Contrato Expand Item (implementação)
 
 Endpoint:
 
@@ -29,43 +82,26 @@ Endpoint:
 
 ---
 
-## Transporte HTTP (`bom20260614b`)
+## Transporte HTTP (`bom20260614c`)
 
-### Problema `bom20260614a`
+### Implementação
 
-Chamada direta com `PlatformContext.getHeaders()` injetava `x-csrf-token` → preflight CORS bloqueado no iframe GitHub Pages:
+**Uma única chamada POST** conforme dseng_v1 — sem cascade GET/POST especulativo, sem fallback silencioso para Full BOM API.
 
+```javascript
+WAFData.authenticatedRequest(url, {
+  method: 'POST',
+  type: 'json',
+  headers: { Accept: 'application/json', SecurityContext: '...' },
+  data: JSON.stringify({ expandDepth, withPath: true, type_filter_bo, type_filter_rel })
+});
 ```
-Request header field x-csrf-token is not allowed by Access-Control-Allow-Headers
-NetworkError ResponseCode value "0"
-```
 
-### Correção
+Logs probe: `transport: direct-wafdata`, `method: POST`, `url`, `custom headers`, `status`.
 
-1. **Headers mínimos:** apenas `Accept: application/json` + `SecurityContext` (de `PlatformContext.getState()`, nunca `getHeaders()`).
-2. **Sem** `x-csrf-token`, `X-CSRF-Token`, `Content-Type` manual em GET.
-3. **Cascade de métodos** (logs por tentativa):
+### Correção CORS (`bom20260614b`)
 
-| Id | Método | URL |
-|----|--------|-----|
-| A | GET | `/expand` |
-| B | GET | `/expand?$expandDepth={levels}&withPath=true` |
-| C | GET | `/expand?$levels={levels}` |
-| D | POST | `/expand` + body documentado |
-
-4. **Fallback backend-browser-auth** se direct-wafdata retorna status 0 / CORS:
-   - `POST /api/bom/expand-item/start` → retorna mesmas tentativas
-   - Front executa via WAFData limpo (padrão Full BOM API)
-
-Logs probe:
-
-```
-[ExpandItemProvider] transport: direct-wafdata | backend-browser-auth
-[ExpandItemProvider] method: GET | POST
-[ExpandItemProvider] url: ...
-[ExpandItemProvider] custom headers: Accept, SecurityContext
-[ExpandItemProvider] status: 200
-```
+Removido `PlatformContext.getHeaders()` que injetava `x-csrf-token` → preflight bloqueado no iframe GitHub Pages.
 
 ---
 
@@ -164,16 +200,15 @@ await window.__expandItemProbe(99);
 
 ---
 
-## Validação bom20260614b
+## Validação bom20260614c
 
-| Item | Status |
-|------|--------|
-| Método final usado | _pendente tenant_ (A/B/C/D — ver logs `method:`) |
-| Transporte | direct-wafdata → backend-browser-auth se CORS |
-| Payload real com Path | _pendente tenant_ |
-| pathCount / normalizedRows | _pendente tenant_ |
-| Full BOM API | modo alternativo apenas |
-| DOM/TSV/clipboard | reprovados |
+| Item | Valor |
+|------|-------|
+| Método | POST (dseng_v1) |
+| Transporte | direct-wafdata |
+| Body | `expandDepth` + `withPath: true` + type_filter_* |
+| Headers | Accept + SecurityContext (sem CSRF manual) |
+| Validação tenant | _pendente_ — `__expandItemProbe(2)` |
 
 ---
 

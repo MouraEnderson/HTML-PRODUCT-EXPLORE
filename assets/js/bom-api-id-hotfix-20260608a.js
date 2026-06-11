@@ -3,7 +3,7 @@
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260614b';
+var BUILD = 'bom20260614c';
 var BACKEND = 'https://bom-resolver.onrender.com';
 var DATA_SOURCE = 'expand-item';
 var EXPAND_ITEM_LEVELS = 2;

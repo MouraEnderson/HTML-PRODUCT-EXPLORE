@@ -1,6 +1,6 @@
 /**
- * Expand Item browser-auth — retorna tentativas de chamada para o front executar via WAFData limpo.
- * Não mistura Full BOM API; não inventa estrutura.
+ * Expand Item — contrato dseng_v1 (POST oficial).
+ * Retorna uma única tentativa POST para execução via WAFData no widget.
  */
 
 function cleanBaseUrl(v) {
@@ -19,50 +19,15 @@ function expandUrl(base, rootId) {
   return `${base}/resources/v1/modeler/dseng/dseng:EngItem/${enc(rootId)}/expand`;
 }
 
+/** Body oficial IExpand (dseng_v1 / ws3dx.dseng) */
 function expandBody(levels) {
   const lv = Number(levels);
   return {
-    expandDepth: lv > 0 ? lv : 2,
+    expandDepth: lv === 0 ? 1 : lv,
     withPath: true,
     type_filter_bo: ['VPMReference', 'VPMRepReference'],
     type_filter_rel: ['VPMInstance', 'VPMRepInstance'],
   };
-}
-
-function buildAttempts(baseUrl, rootId, levels) {
-  const url = expandUrl(baseUrl, rootId);
-  const body = expandBody(levels);
-  return [
-    {
-      id: 'expand-get-a',
-      method: 'GET',
-      url,
-      phase: 'expand-get',
-      note: 'GET /expand sem body',
-    },
-    {
-      id: 'expand-get-b',
-      method: 'GET',
-      url: `${url}?$expandDepth=${levels}&withPath=true`,
-      phase: 'expand-get-expandDepth',
-      note: 'GET /expand?$expandDepth',
-    },
-    {
-      id: 'expand-get-c',
-      method: 'GET',
-      url: `${url}?$levels=${levels}`,
-      phase: 'expand-get-levels',
-      note: 'GET /expand?$levels',
-    },
-    {
-      id: 'expand-post-d',
-      method: 'POST',
-      url,
-      body,
-      phase: 'expand-post',
-      note: 'POST /expand documentado dseng (sem CSRF manual no front)',
-    },
-  ];
 }
 
 export async function startExpandItemJob(req, res) {
@@ -70,7 +35,8 @@ export async function startExpandItemJob(req, res) {
     const body = req.body || {};
     const baseUrl = cleanBaseUrl(body.spaceUrl || body.baseUrl || body.enoviaUrl);
     const rootId = safeId(body.rootId);
-    const levels = Number(body.levels) > 0 ? Number(body.levels) : 2;
+    const levels = Number(body.levels);
+    const expandDepth = levels === 0 ? 1 : levels || 1;
 
     if (!baseUrl) {
       return res.status(400).json({ ok: false, error: 'missing-space-url' });
@@ -79,17 +45,19 @@ export async function startExpandItemJob(req, res) {
       return res.status(400).json({ ok: false, error: 'missing-root-id' });
     }
 
-    const attempts = buildAttempts(baseUrl, rootId, levels);
+    const url = expandUrl(baseUrl, rootId);
+    const payload = expandBody(expandDepth);
 
     return res.json({
       ok: true,
-      build: 'expand-item-browser-auth-20260614b',
-      transport: 'backend-browser-auth',
+      build: 'expand-item-dseng-v1-post',
+      transport: 'direct-wafdata',
+      method: 'POST',
       rootId,
-      levels,
-      securityContext: safeId(body.securityContext) || null,
-      attempts,
-      message: 'Execute attempts via WAFData (headers mínimos, sem x-csrf-token)',
+      expandDepth,
+      url,
+      body: payload,
+      message: 'Execute POST via WAFData.authenticatedRequest (sem CSRF manual)',
     });
   } catch (err) {
     return res.status(500).json({
@@ -99,4 +67,4 @@ export async function startExpandItemJob(req, res) {
   }
 }
 
-export { buildAttempts, expandUrl, expandBody };
+export { expandUrl, expandBody };

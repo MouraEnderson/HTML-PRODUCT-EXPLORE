@@ -43,10 +43,6 @@
 
   var lastTransportStats = {};
 
-  function getBackendUrl() {
-    return s(w.__BOM_BACKEND_URL__) || 'https://bom-resolver.onrender.com';
-  }
-
   /** Headers mínimos — NUNCA PlatformContext.getHeaders() (injeta x-csrf-token → CORS preflight). */
   function getMinimalWafHeaders() {
     var h = { Accept: 'application/json' };
@@ -72,14 +68,6 @@
         return headers[k] != null && headers[k] !== '';
       })
       .join(', ');
-  }
-
-  function isCorsOrNetworkError(errMsg, status) {
-    errMsg = s(errMsg);
-    if (n(status) === 0) return true;
-    return /NetworkError|ResponseCode.*["']?0|CORS|preflight|x-csrf-token|not allowed by Access-Control/i.test(
-      errMsg
-    );
   }
 
   function hasExpandMemberPayload(data) {
@@ -170,52 +158,6 @@
           customHeaders: headerKeysList(headers)
         });
       }
-    });
-  }
-
-  function backendPost(path, payload) {
-    return fetch(getBackendUrl() + path, {
-      method: 'POST',
-      mode: 'cors',
-      credentials: 'omit',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload || {})
-    }).then(function (res) {
-      return res.text().then(function (txt) {
-        var data = {};
-        try {
-          data = txt ? JSON.parse(txt) : {};
-        } catch (e) {
-          data = { raw: txt };
-        }
-        if (!res.ok) {
-          throw new Error(data.error || data.message || 'Backend HTTP ' + res.status);
-        }
-        return data;
-      });
-    });
-  }
-
-  function getSpaceUrlAndSecurityContext() {
-    return ensureSpaceUrl().then(function () {
-      var spaceUrl = '';
-      try {
-        if (w.CompassServices && w.CompassServices.getVerifiedSpaceUrl) {
-          spaceUrl = s(w.CompassServices.getVerifiedSpaceUrl());
-        }
-      } catch (e) {}
-      if (!spaceUrl && w.APP_CONFIG && w.APP_CONFIG.TENANT_DEFAULTS && w.APP_CONFIG.TENANT_DEFAULTS.spaceHost) {
-        spaceUrl = 'https://' + w.APP_CONFIG.TENANT_DEFAULTS.spaceHost + '/enovia';
-      }
-      var securityContext = '';
-      try {
-        var st =
-          typeof w.PlatformContext !== 'undefined' &&
-          w.PlatformContext.getState &&
-          w.PlatformContext.getState();
-        if (st && st.securityContext) securityContext = s(st.securityContext);
-      } catch (e) {}
-      return { spaceUrl: spaceUrl.replace(/\/+$/, ''), securityContext: securityContext };
     });
   }
 
@@ -426,10 +368,8 @@
 
   function expandBody(levels) {
     levels = n(levels);
-    if (levels < 1) levels = 2;
-    if (typeof w.EnoviaApi !== 'undefined' && w.EnoviaApi.engItemExpandBody) {
-      return w.EnoviaApi.engItemExpandBody({ expandDepth: levels, withPath: true });
-    }
+    if (levels === 0) levels = n(w.EXPAND_ITEM_LEVELS) || 1;
+    /** dseng_v1 / ws3dx.dseng IExpand — POST body oficial */
     return {
       expandDepth: levels,
       withPath: true,
@@ -438,110 +378,45 @@
     };
   }
 
-  function buildExpandAttempts(rootId, levels) {
-    var url = expandUrl(rootId);
-    var body = expandBody(levels);
-    return [
-      { id: 'A', method: 'GET', url: url, phase: 'expand-get' },
-      {
-        id: 'B',
-        method: 'GET',
-        url: url + '?$expandDepth=' + levels + '&withPath=true',
-        phase: 'expand-get-expandDepth'
-      },
-      { id: 'C', method: 'GET', url: url + '?$levels=' + levels, phase: 'expand-get-levels' },
-      { id: 'D', method: 'POST', url: url, body: body, phase: 'expand-post' }
-    ];
-  }
-
-  function logTransportAttempt(attempt, res) {
-    log('transport:', res.transport || 'direct-wafdata');
-    log('method:', res.method || attempt.method);
-    log('url:', res.url || attempt.url);
-    log('custom headers:', res.customHeaders || headerKeysList(getMinimalWafHeaders()));
-    log('status:', res.status);
-    if (!res.ok) log('attempt error:', res.error || '(unknown)');
-  }
-
-  function tryExpandAttempts(attempts, transportLabel) {
-    attempts = Array.isArray(attempts) ? attempts : [];
-    var lastError = '';
-    var lastStatus = 0;
-    var chain = Promise.resolve(null);
-
-    attempts.forEach(function (attempt) {
-      chain = chain.then(function (hit) {
-        if (hit) return hit;
-        return cleanWafRequest(attempt.method, attempt.url, attempt.body, transportLabel).then(
-          function (res) {
-            logTransportAttempt(attempt, res);
-            lastStatus = res.status;
-            if (res.ok && hasExpandMemberPayload(res.data)) {
-              lastTransportStats = {
-                transport: transportLabel,
-                method: res.method,
-                url: res.url,
-                customHeaders: res.customHeaders,
-                status: res.status,
-                phase: attempt.phase || attempt.id,
-                attemptId: attempt.id
-              };
-              return { payload: res.data, stats: lastTransportStats };
-            }
-            if (res.error) lastError = res.error;
-            if (isCorsOrNetworkError(res.error, res.status)) {
-              log('CORS/network na tentativa', attempt.id, '— próxima');
-            }
-            return null;
-          }
-        );
-      });
-    });
-
-    return chain.then(function (hit) {
-      if (hit) return hit;
-      var err = new Error(lastError || 'Expand Item falhou em todas tentativas (status ' + lastStatus + ')');
-      err.status = lastStatus;
-      err.corsOrNetwork = isCorsOrNetworkError(lastError, lastStatus);
-      throw err;
-    });
-  }
-
-  function expandViaBackend(rootId, levels) {
-    return getSpaceUrlAndSecurityContext().then(function (ctx) {
-      log('transport: backend-browser-auth (fallback após direct-wafdata)');
-      return backendPost('/api/bom/expand-item/start', {
-        rootId: rootId,
-        levels: levels,
-        spaceUrl: ctx.spaceUrl,
-        securityContext: ctx.securityContext
-      });
-    }).then(function (job) {
-      var attempts = job.attempts || buildExpandAttempts(rootId, levels);
-      return tryExpandAttempts(attempts, 'backend-browser-auth');
-    });
-  }
-
   function expand(rootId, levels) {
     rootId = s(rootId);
-    levels = n(levels) || 2;
+    levels = n(levels);
+    if (levels === 0) levels = n(w.EXPAND_ITEM_LEVELS) || 1;
     if (!isInternalVpmId(rootId)) {
       return Promise.reject(new Error('rootId deve ser id interno VPMReference (32 hex), não prd-R...'));
     }
     log('rootId:', rootId);
     log('levels:', levels);
     return ensureSpaceUrl().then(function () {
-      var attempts = buildExpandAttempts(rootId, levels);
-      return tryExpandAttempts(attempts, 'direct-wafdata').catch(function (directErr) {
-        if (!directErr.corsOrNetwork && directErr.status && directErr.status !== 0) {
-          throw directErr;
+      var url = expandUrl(rootId);
+      var body = expandBody(levels);
+      var headers = getMinimalWafHeaders();
+      log('transport: direct-wafdata');
+      log('method: POST');
+      log('url:', url);
+      log('custom headers:', headerKeysList(headers));
+      return cleanWafRequest('POST', url, body, 'direct-wafdata').then(function (res) {
+        log('status:', res.status);
+        lastTransportStats = {
+          transport: 'direct-wafdata',
+          method: 'POST',
+          url: url,
+          customHeaders: res.customHeaders || headerKeysList(headers),
+          status: res.status,
+          expandDepth: body.expandDepth,
+          contentType: 'application/json'
+        };
+        w.__lastExpandItemStats = lastTransportStats;
+        if (!res.ok) {
+          var err = new Error(res.error || 'Expand Item POST falhou (HTTP ' + res.status + ')');
+          err.status = res.status;
+          throw err;
         }
-        log('direct-wafdata falhou — tentando backend-browser-auth');
-        return expandViaBackend(rootId, levels);
+        if (!hasExpandMemberPayload(res.data)) {
+          throw new Error('Expand Item POST retornou member vazio');
+        }
+        return res.data;
       });
-    }).then(function (result) {
-      w.__lastExpandItemStats = result.stats || lastTransportStats;
-      return result.payload || result;
     });
   }
 
