@@ -1,9 +1,9 @@
-/* BOM browser-auth bridge hotfix - 20260612g */
+/* BOM browser-auth bridge hotfix - 20260612h */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260612g';
+var BUILD = 'bom20260612h';
 var BACKEND = 'https://bom-resolver.onrender.com';
 var MIRROR_EXPLORER_MODE = true;
 
@@ -373,9 +373,29 @@ function applyExplorerPayload(snapshot, payload, mode) {
   return true;
 }
 
+function logExplorerBridgeProbe(probe) {
+  if (!probe) return;
+  try {
+    console.log('[Explorer bridge] mode:', probe.mode || 'automatic');
+    console.log('[Explorer bridge] widget context available:', !!probe.widgetContextAvailable);
+    console.log('[Explorer bridge] inter-widget API found:', !!probe.interWidgetApiFound);
+    console.log('[Explorer bridge] explorer events found:', probe.explorerEventsFound || []);
+    console.log('[Explorer bridge] sibling iframe access:', probe.siblingIframeAccess || 'blocked');
+    console.log('[Explorer bridge] DOM rows found:', n(probe.domRowsFound));
+    console.log('[Explorer bridge] virtual scroll rows found:', n(probe.virtualScrollRowsFound));
+    console.log('[Explorer bridge] explorer counter:', n(probe.explorerCounter));
+    console.log('[Explorer bridge] final mirror rows:', n(probe.finalMirrorRows));
+    if (probe.blockingReason) {
+      console.log('[Explorer bridge] blocking reason:', probe.blockingReason);
+    }
+  } catch (e) { /* */ }
+}
+
 function finalizeExplorerSnapshot(snapshot) {
   var expected = n(snapshot.explorerLoadedCount);
   var unique = (snapshot.rows || []).length;
+  var autoProbe = snapshot.automaticProbe || null;
+
   mirrorLog('final unique rows', unique);
   if (expected > 0) mirrorLog('missing rows', Math.max(0, expected - unique));
   if (snapshot.rows && snapshot.rows.length) {
@@ -390,6 +410,19 @@ function finalizeExplorerSnapshot(snapshot) {
   }
   mirrorLog('extraction mode', snapshot.extractionMode || 'failed');
 
+  if (autoProbe) {
+    autoProbe.finalMirrorRows = unique;
+    if (expected > 0 && unique < expected) {
+      autoProbe.blockingReason =
+        autoProbe.blockingReason ||
+        snapshot.errorReason ||
+        'captura automatica incompleta';
+    } else {
+      autoProbe.blockingReason = '';
+    }
+    logExplorerBridgeProbe(autoProbe);
+  }
+
   if (expected > 0 && unique === expected) {
     snapshot.status = 'complete';
     snapshot.error = null;
@@ -397,9 +430,16 @@ function finalizeExplorerSnapshot(snapshot) {
     snapshot.status = 'incomplete';
     snapshot.error = 'extractor-incompleto:' + unique + '/' + expected;
     if (!snapshot.errorReason) {
-      if (snapshot.captureDiag && snapshot.captureDiag.readExplorerIframeDocument === 'fail' &&
+      if (autoProbe && autoProbe.blockingReason) {
+        snapshot.errorReason = autoProbe.blockingReason;
+      } else if (snapshot.captureDiag && snapshot.captureDiag.siblingIframeAccess === 'blocked') {
+        snapshot.errorReason =
+          'Nao e possivel espelhar automaticamente o Product Structure Explorer a partir de um widget ' +
+          'GitHub Pages separado devido a isolamento de iframe/cross-origin e ausencia de API publica ' +
+          'de estado expandido.';
+      } else if (snapshot.captureDiag && snapshot.captureDiag.readExplorerIframeDocument === 'fail' &&
           snapshot.captureDiag.readExplorerHost === 'fail') {
-        snapshot.errorReason = 'Nao foi possivel acessar a grade do Product Explorer por restrição de iframe/cross-origin';
+        snapshot.errorReason = 'Nao foi possivel acessar a grade do Product Explorer por restricao de iframe/cross-origin';
       } else if (snapshot.captureDiag && snapshot.captureDiag.readExplorerIframeDocument === 'fail') {
         snapshot.errorReason = 'iframe Explorer inacessivel; scroll/dashboard-host nao atingiu ' + expected + ' linhas';
       } else if (snapshot.domAccess && snapshot.domAccess.crossOriginBlocked) {
@@ -418,7 +458,10 @@ function finalizeExplorerSnapshot(snapshot) {
   } else {
     snapshot.status = 'failed';
     snapshot.error = snapshot.error || 'explorer-snapshot-empty';
-    snapshot.errorReason = snapshot.errorReason || 'selectors failed';
+    snapshot.errorReason =
+      snapshot.errorReason ||
+      (autoProbe && autoProbe.blockingReason) ||
+      'captura automatica falhou — sem linhas do Explorer';
   }
 
   w.__bomExplorerSnapshot = snapshot;
@@ -437,6 +480,7 @@ function extractExplorerSnapshotAsync() {
     error: null,
     errorReason: null,
     domAccess: null,
+    automaticProbe: null,
     capturedAt: Date.now()
   };
 
@@ -464,23 +508,26 @@ function extractExplorerSnapshotAsync() {
 
   var rootName = snapshot.rootName || getRootName();
   var expected = n(snapshot.explorerLoadedCount);
-  var captureProbe = null;
 
-  if (PEB.probeExplorerMirrorCapture) {
-    captureProbe = PEB.probeExplorerMirrorCapture(rootName, { log: mirrorLog });
+  if (PEB.probeAutomaticExplorerCapture) {
+    snapshot.automaticProbe = PEB.probeAutomaticExplorerCapture(rootName, { log: mirrorLog });
+    snapshot.captureDiag = snapshot.automaticProbe;
+    if (snapshot.automaticProbe.host && snapshot.automaticProbe.host.diag) {
+      snapshot.captureDiag = Object.assign(
+        {},
+        snapshot.automaticProbe.host.diag,
+        snapshot.automaticProbe
+      );
+    }
+    if (snapshot.automaticProbe.blockingReason && expected > 0) {
+      snapshot.errorReason = snapshot.automaticProbe.blockingReason;
+    }
+  } else if (PEB.probeExplorerMirrorCapture) {
+    var captureProbe = PEB.probeExplorerMirrorCapture(rootName, { log: mirrorLog });
     snapshot.captureDiag = captureProbe.host && captureProbe.host.diag;
   }
 
-  var syncPayload = PEB.scrapeExplorerMirror ? PEB.scrapeExplorerMirror(rootName) : null;
-  var syncCount = syncPayload && syncPayload.items ? syncPayload.items.length : 0;
-  mirrorLog('DOM direct rows', syncCount);
-  applyExplorerPayload(snapshot, syncPayload, 'dom');
-
-  if (expected > 0 && snapshot.rows.length >= expected) {
-    return Promise.resolve(finalizeExplorerSnapshot(snapshot));
-  }
-
-  function afterScroll(scrollPayload) {
+  function afterDomAndScroll(scrollPayload) {
     var scrollCount = scrollPayload && scrollPayload.items ? scrollPayload.items.length : 0;
     mirrorLog('rows after scroll scan', scrollCount);
     applyExplorerPayload(snapshot, scrollPayload, 'virtual-scroll');
@@ -496,39 +543,31 @@ function extractExplorerSnapshotAsync() {
       applyExplorerPayload(snapshot, gridPayload, 'dom');
     }
 
-    if (expected > 0 && snapshot.rows.length >= expected) {
-      return finalizeExplorerSnapshot(snapshot);
+    if (!snapshot.errorReason && snapshot.automaticProbe && snapshot.automaticProbe.blockingReason) {
+      snapshot.errorReason = snapshot.automaticProbe.blockingReason;
+    } else if (expected > 0 && snapshot.rows.length < expected && !snapshot.errorReason) {
+      snapshot.errorReason =
+        'Nao e possivel espelhar automaticamente o Product Structure Explorer a partir de um widget ' +
+        'GitHub Pages separado devido a isolamento de iframe/cross-origin e ausencia de API publica ' +
+        'de estado expandido.';
     }
-
-    if (typeof w.APP_CONFIG === 'undefined') w.APP_CONFIG = {};
-    w.APP_CONFIG.EXPLORER_AUTO_COPY_ENABLED = true;
-
-    if (!PEB.tryExplorerAutoCopyParse) {
-      return finalizeExplorerSnapshot(snapshot);
-    }
-
-    return PEB.tryExplorerAutoCopyParse(rootName).then(function (tsvPayload) {
-      var tsvCount = tsvPayload && tsvPayload.items ? tsvPayload.items.length : 0;
-      var tsvChars = 0;
-      try {
-        if (tsvPayload && tsvPayload.items && tsvPayload.items.length) {
-          tsvChars = JSON.stringify(tsvPayload.items).length;
-        }
-      } catch (e) {}
-      mirrorLog('TSV/copy chars', tsvChars);
-      mirrorLog('TSV parsed rows', tsvCount);
-      if (tsvPayload && tsvPayload.items && tsvPayload.items.length) {
-        applyExplorerPayload(snapshot, tsvPayload, 'tsv');
-      } else if (expected > 0 && snapshot.rows.length < expected) {
-        snapshot.errorReason = snapshot.errorReason || 'fallback TSV missing — use Ctrl+A/Ctrl+C no Explorer e importe TSV';
-        mirrorLog('failure reason', snapshot.errorReason);
-      }
-      mirrorLog('final unique rows', (snapshot.rows || []).length);
-      return finalizeExplorerSnapshot(snapshot);
-    });
   }
 
-  if (PEB.tryExplorerScrollHarvestAsync) {
+  function runDomScrollPipeline() {
+    var syncPayload = PEB.scrapeExplorerMirror ? PEB.scrapeExplorerMirror(rootName) : null;
+    var syncCount = syncPayload && syncPayload.items ? syncPayload.items.length : 0;
+    mirrorLog('DOM direct rows', syncCount);
+    applyExplorerPayload(snapshot, syncPayload, 'dom');
+
+    if (expected > 0 && snapshot.rows.length >= expected) {
+      return Promise.resolve(finalizeExplorerSnapshot(snapshot));
+    }
+
+    if (!PEB.tryExplorerScrollHarvestAsync) {
+      afterDomAndScroll(null);
+      return Promise.resolve(finalizeExplorerSnapshot(snapshot));
+    }
+
     var maxSteps = Math.max(60, Math.ceil((expected || 40) * 1.5));
     return PEB.tryExplorerScrollHarvestAsync(rootName, {
       maxSteps: maxSteps,
@@ -538,13 +577,29 @@ function extractExplorerSnapshotAsync() {
       }
     }).then(function (scrollPayload) {
       if (scrollPayload && scrollPayload.captureDiag) {
-        snapshot.captureDiag = scrollPayload.captureDiag;
+        snapshot.captureDiag = Object.assign({}, snapshot.captureDiag || {}, scrollPayload.captureDiag);
       }
-      return afterScroll(scrollPayload);
+      afterDomAndScroll(scrollPayload);
+      return finalizeExplorerSnapshot(snapshot);
     });
   }
 
-  return afterScroll(null);
+  if (PEB.tryInterWidgetMirrorCaptureAsync) {
+    return PEB.tryInterWidgetMirrorCaptureAsync(rootName, expected, { timeoutMs: 2800 }).then(function (iwPayload) {
+      if (iwPayload && iwPayload.items && iwPayload.items.length) {
+        mirrorLog('inter-widget rows', iwPayload.items.length);
+        applyExplorerPayload(snapshot, iwPayload, 'inter-widget');
+        if (expected > 0 && snapshot.rows.length >= expected) {
+          return finalizeExplorerSnapshot(snapshot);
+        }
+      } else {
+        mirrorLog('inter-widget rows', 0);
+      }
+      return runDomScrollPipeline();
+    });
+  }
+
+  return runDomScrollPipeline();
 }
 
 function extractExplorerSnapshot() {

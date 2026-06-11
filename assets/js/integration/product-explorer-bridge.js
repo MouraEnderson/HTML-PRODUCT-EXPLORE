@@ -9,6 +9,25 @@ var ProductExplorerBridge = (function () {
   var structureListeners = [];
   var currentSelection = null;
   var structureNameHint = null;
+  var interWidgetState = {
+    explorerEventsSeen: {},
+    cachedStructurePayload: null,
+    cachedStructureAt: 0,
+    lastProbe: null
+  };
+
+  var STRUCTURE_MESSAGE_TYPES = [
+    '3DX_STRUCTURE',
+    '3DX_STRUCTURE_RESPONSE',
+    'structureRoot',
+    'getStructureRoot',
+    'structureChanged',
+    'productexplorer.structure',
+    'ENOPSTR_structure',
+    'explorerStructure',
+    'treeUpdated',
+    'expandedTree'
+  ];
 
   var MESSAGE_TYPES = [
     '3DX_SELECTION',
@@ -26,7 +45,24 @@ var ProductExplorerBridge = (function () {
     '3DX_STRUCTURE',
     'structureRoot',
     'getStructureRoot'
-  ];
+  ].concat(STRUCTURE_MESSAGE_TYPES);
+
+  function bridgeLog(label, value) {
+    try {
+      if (value !== undefined) console.log('[Explorer bridge]', label + ':', value);
+      else console.log('[Explorer bridge]', label);
+    } catch (e) { /* */ }
+  }
+
+  function recordExplorerEvent(type) {
+    type = String(type || '').trim();
+    if (!type) return;
+    interWidgetState.explorerEventsSeen[type] = Date.now();
+  }
+
+  function listExplorerEventsSeen() {
+    return Object.keys(interWidgetState.explorerEventsSeen);
+  }
 
   function normalizeId(id) {
     if (typeof ThreeDXContentParser !== 'undefined' && ThreeDXContentParser.normalizePhysicalId) {
@@ -2248,6 +2284,11 @@ var ProductExplorerBridge = (function () {
     if (!okOrigin) return;
 
     var data = event.data;
+    var earlyType = '';
+    if (data && typeof data === 'object') {
+      earlyType = String(data.type || data.event || data.name || data.messageName || '').trim();
+      if (earlyType) recordExplorerEvent(earlyType);
+    }
     if (typeof data === 'string') {
       if (typeof ThreeDXContentParser !== 'undefined') {
         var loose = ThreeDXContentParser.parseJsonText(data);
@@ -2259,9 +2300,19 @@ var ProductExplorerBridge = (function () {
       try { data = JSON.parse(data); } catch (e) { return; }
     }
 
+    if (storeStructureFromMessage(data, earlyType || 'postMessage')) {
+      var structName =
+        data.structureName || data.rootName ||
+        (data.structure && (data.structure.name || data.structure.title)) ||
+        data.productName;
+      if (structName) setStructureNameHint(structName);
+    }
+
     if (data.protocol === '3DXContent' && data.data && data.data.items) {
-      var sel3dx = ThreeDXContentParser.toSelection(data);
-      if (sel3dx) setSelection(sel3dx);
+      if (!storeStructureFromMessage(data.data, '3DXContent')) {
+        var sel3dx = ThreeDXContentParser.toSelection(data);
+        if (sel3dx) setSelection(sel3dx);
+      }
       return;
     }
 
@@ -2300,6 +2351,11 @@ var ProductExplorerBridge = (function () {
       return;
     }
     var type = data.type || data.event || data.name || data.messageName;
+    if (type) recordExplorerEvent(type);
+    if (isStructureTreePayload(data)) {
+      storeStructureFromMessage(data, type || 'structure');
+      return;
+    }
     if (MESSAGE_TYPES.indexOf(type) === -1 && !data.physicalid && !data.object && !data.objectId) return;
     var sel = normalizeSelection(data);
     if (sel) setSelection(sel);
@@ -2732,6 +2788,373 @@ var ProductExplorerBridge = (function () {
     return 0;
   }
 
+  function probeWidgetContextAvailable() {
+    try {
+      if (typeof widget !== 'undefined' && widget) return true;
+    } catch (e0) { /* */ }
+    try {
+      if (window.parent && window.parent.widget) return true;
+    } catch (e1) { /* */ }
+    return false;
+  }
+
+  function probeInterWidgetApis() {
+    var apis = [];
+    try {
+      if (typeof widget !== 'undefined' && widget) apis.push('widget');
+    } catch (e0) { /* */ }
+    try {
+      if (typeof UWA !== 'undefined') apis.push('UWA');
+    } catch (e1) { /* */ }
+    try {
+      if (typeof PlatformBridge !== 'undefined') apis.push('PlatformBridge');
+    } catch (e2) { /* */ }
+    try {
+      if (typeof require !== 'undefined') apis.push('require');
+    } catch (e3) { /* */ }
+    try {
+      if (typeof WAFData !== 'undefined') apis.push('WAFData');
+    } catch (e4) { /* */ }
+    try {
+      if (typeof compass !== 'undefined') apis.push('compass');
+    } catch (e5) { /* */ }
+    var req = null;
+    try {
+      if (typeof PlatformBridge !== 'undefined' && PlatformBridge.safeGetRequire) {
+        req = PlatformBridge.safeGetRequire();
+      }
+    } catch (e6) { /* */ }
+    if (!req) {
+      try {
+        if (typeof require !== 'undefined') req = require;
+      } catch (e7) { /* */ }
+    }
+    return {
+      found: apis.length > 0 || !!req,
+      apis: apis,
+      require: !!req
+    };
+  }
+
+  function probeSiblingIframeAccess() {
+    var frame = readExplorerIframeElement();
+    if (!frame) {
+      return { access: 'blocked', reason: 'explorer iframe not found in dashboard DOM' };
+    }
+    try {
+      var doc = frame.contentDocument;
+      if (doc && doc.body) return { access: 'ok', reason: '' };
+      return { access: 'blocked', reason: 'contentDocument unavailable (likely cross-origin)' };
+    } catch (e) {
+      return {
+        access: 'blocked',
+        reason: 'cross-origin: ' + (e && e.message ? e.message : String(e))
+      };
+    }
+  }
+
+  function isStructureTreePayload(data) {
+    if (!data || typeof data !== 'object') return false;
+    var type = String(data.type || data.event || data.name || data.messageName || '').trim();
+    if (STRUCTURE_MESSAGE_TYPES.indexOf(type) >= 0) return true;
+    if (data.structure && (Array.isArray(data.structure.children) || Array.isArray(data.structure.items))) {
+      return true;
+    }
+    if (Array.isArray(data.rows) && data.rows.length >= 2) return true;
+    if (Array.isArray(data.tree) && data.tree.length >= 1) return true;
+    if (Array.isArray(data.children) && data.children.length >= 1) return true;
+    if (data.data && (data.data.structure || (Array.isArray(data.data.rows) && data.data.rows.length >= 2))) {
+      return true;
+    }
+    if (Array.isArray(data.items) && data.items.length >= 2) {
+      var hasTreeShape = data.items.some(function (it) {
+        return it && (it.level !== undefined || it.children || it.parentId || it.instanceId);
+      });
+      if (hasTreeShape) return true;
+    }
+    return false;
+  }
+
+  function mirrorRowFromStructureNode(node, level, idx) {
+    if (!node) return null;
+    var name =
+      labelText(node.name) ||
+      labelText(node.title) ||
+      labelText(node.displayName) ||
+      labelText(node.label) ||
+      '';
+    if (!name || !isValidMirrorPartName(name)) return null;
+    var revision = labelText(node.revision) || labelText(node.rev) || '—';
+    var maturity =
+      labelText(node.maturity) ||
+      labelText(node.state) ||
+      labelText(node.lifecycle) ||
+      '—';
+    var owner =
+      labelText(node.owner) ||
+      labelText(node.reservedBy) ||
+      ownerFromExplorerCell(node.owner) ||
+      '';
+    var physicalid =
+      normalizeId(node.physicalid || node.physicalId || node.objectId || node.id || '');
+    var row = buildMirrorRow(name, level, idx, {
+      title: name,
+      revision: revision,
+      maturity: maturity,
+      owner: owner,
+      type: labelText(node.type) || 'Physical Product',
+      approved: /aprovado|released|frozen/i.test(maturity)
+    });
+    if (physicalid && isValidId(physicalid)) {
+      row.physicalid = physicalid;
+      row.sourcePhysicalId = physicalid;
+    }
+    return row;
+  }
+
+  function flattenStructureNodes(nodes, level, out, seen) {
+    if (!nodes || !nodes.length) return;
+    var i;
+    for (i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      if (!node) continue;
+      var row = mirrorRowFromStructureNode(node, level, out.length);
+      if (row) {
+        var key = normalizePartKey(row.name) + '|' + row.level;
+        if (!seen[key]) {
+          seen[key] = true;
+          out.push(row);
+        }
+      }
+      var kids = node.children || node.childNodes || node.items;
+      if (Array.isArray(kids) && kids.length) {
+        flattenStructureNodes(kids, level + 1, out, seen);
+      }
+    }
+  }
+
+  function extractStructureItemsFromPayload(data) {
+    if (!data) return [];
+    var items = [];
+    var seen = {};
+    if (Array.isArray(data)) {
+      flattenStructureNodes(data, 0, items, seen);
+      return items;
+    }
+    if (data.structure) {
+      if (Array.isArray(data.structure)) flattenStructureNodes(data.structure, 0, items, seen);
+      else if (Array.isArray(data.structure.children)) {
+        flattenStructureNodes(data.structure.children, 1, items, seen);
+      } else if (Array.isArray(data.structure.items)) {
+        flattenStructureNodes(data.structure.items, 0, items, seen);
+      } else {
+        var rootRow = mirrorRowFromStructureNode(data.structure, 0, 0);
+        if (rootRow) items.push(rootRow);
+      }
+    }
+    if (Array.isArray(data.rows) && data.rows.length) {
+      flattenStructureNodes(data.rows, 0, items, seen);
+    }
+    if (Array.isArray(data.tree) && data.tree.length) {
+      flattenStructureNodes(data.tree, 0, items, seen);
+    }
+    if (Array.isArray(data.children) && data.children.length) {
+      flattenStructureNodes(data.children, 1, items, seen);
+    }
+    if (data.data) {
+      var nested = extractStructureItemsFromPayload(data.data);
+      nested.forEach(function (row) {
+        var key = normalizePartKey(row.name) + '|' + row.level;
+        if (!seen[key]) {
+          seen[key] = true;
+          items.push(row);
+        }
+      });
+    }
+    if (Array.isArray(data.items) && data.items.length >= 2) {
+      flattenStructureNodes(data.items, 0, items, seen);
+    }
+    return items;
+  }
+
+  function storeStructureFromMessage(data, eventType) {
+    if (!isStructureTreePayload(data)) return false;
+    var items = extractStructureItemsFromPayload(data);
+    if (!items.length) return false;
+    interWidgetState.cachedStructurePayload = {
+      items: items,
+      eventType: eventType || 'unknown',
+      receivedAt: Date.now()
+    };
+    interWidgetState.cachedStructureAt = Date.now();
+    return true;
+  }
+
+  function requestInterWidgetStructureSignals() {
+    if (typeof PlatformBridge !== 'undefined' && PlatformBridge.requestExplorerStructure) {
+      PlatformBridge.requestExplorerStructure();
+    }
+    var req = null;
+    try {
+      if (typeof PlatformBridge !== 'undefined' && PlatformBridge.safeGetRequire) {
+        req = PlatformBridge.safeGetRequire();
+      }
+    } catch (e0) { /* */ }
+    if (!req) {
+      try {
+        if (typeof require !== 'undefined') req = require;
+      } catch (e1) { /* */ }
+    }
+    if (!req) return;
+    try {
+      req(['DS/PlatformAPI/PlatformAPI'], function (PlatformAPI) {
+        if (PlatformAPI && PlatformAPI.getSelection) {
+          PlatformAPI.getSelection().then(function (selItems) {
+            if (selItems && selItems.length) {
+              storeStructureFromMessage({ items: selItems }, 'PlatformAPI.getSelection');
+            }
+          }).catch(function () { /* */ });
+        }
+      });
+    } catch (e2) { /* */ }
+    try {
+      req(['UWA/Utils/InterCom'], function (InterCom) {
+        if (InterCom && InterCom.subscribe) {
+          try {
+            InterCom.subscribe(function (msg) {
+              if (msg && msg.data) storeStructureFromMessage(msg.data, 'InterCom.subscribe');
+            });
+          } catch (eSub) { /* */ }
+        }
+      });
+    } catch (e3) { /* */ }
+  }
+
+  function tryInterWidgetMirrorCaptureAsync(rootName, expected, options) {
+    options = options || {};
+    var timeoutMs = options.timeoutMs || 2800;
+    var pollMs = options.pollMs || 120;
+    requestInterWidgetStructureSignals();
+    return new Promise(function (resolve) {
+      var deadline = Date.now() + timeoutMs;
+      function tick() {
+        var cached = interWidgetState.cachedStructurePayload;
+        if (cached && cached.items && cached.items.length) {
+          var payload = buildMirrorPayloadFromItems(
+            cached.items,
+            rootName,
+            'inter-widget-' + (cached.eventType || 'message'),
+            expected
+          );
+          if (payload) {
+            payload.captureSource = 'inter-widget';
+            payload.interWidgetEvent = cached.eventType;
+            return resolve(payload);
+          }
+        }
+        if (Date.now() >= deadline) return resolve(null);
+        requestInterWidgetStructureSignals();
+        window.setTimeout(tick, pollMs);
+      }
+      tick();
+    });
+  }
+
+  function buildBlockingReason(diag, expected, finalRows) {
+    finalRows = finalRows || 0;
+    if (expected > 0 && finalRows >= expected) return '';
+    var iframeBlocked =
+      diag.siblingIframeAccess === 'blocked' ||
+      (diag.host && diag.host.diag && diag.host.diag.readExplorerIframeDocument === 'fail');
+    var interWidgetMissing = !diag.interWidgetApiFound || !listExplorerEventsSeen().length;
+    if (iframeBlocked && interWidgetMissing) {
+      return (
+        'Nao e possivel espelhar automaticamente o Product Structure Explorer a partir de um widget ' +
+        'GitHub Pages separado devido a isolamento de iframe/cross-origin e ausencia de API publica ' +
+        'de estado expandido. Alternativas: (a) widget nativo mesma origem 3DEXPERIENCE, ' +
+        '(b) API oficial do Product Structure Explorer, (c) backend que reconstrua expansao por parametros oficiais, ' +
+        '(d) modo backend full BOM separado (nao chamar de mirror Explorer).'
+      );
+    }
+    if (iframeBlocked) {
+      return 'iframe Explorer inacessivel (cross-origin); inter-widget nao entregou ' + expected + ' linhas';
+    }
+    if (finalRows <= 1 && expected > 1) {
+      return 'grade virtualizada do Explorer nao acessivel; somente metadados do painel (contador/raiz) visiveis';
+    }
+    return 'captura automatica incompleta — DOM/inter-widget nao reproduziu estado expandido do Explorer';
+  }
+
+  function probeAutomaticExplorerCapture(rootName, options) {
+    options = options || {};
+    rootName = String(rootName || structureNameHint || '').trim();
+    pollDashboardExplorerChrome();
+    pollStructureHint();
+
+    var widgetCtx = probeWidgetContextAvailable();
+    var iwApis = probeInterWidgetApis();
+    var iframeProbe = probeSiblingIframeAccess();
+    var host = resolveExplorerCaptureHost();
+    var expected = getExplorerObjectCount();
+    var domRows = 0;
+    var gridRows = 0;
+    var virtualScrollRows = 0;
+
+    if (host.doc) {
+      var probeItems = [];
+      var probeSeen = {};
+      var text = harvestExplorerWidgetTextFromDashboard() || harvestExplorerTextOnly() || '';
+      var rootMeta = parseExplorerRootMetaFromText(text);
+      collectMirrorRowsFromDoc(host.doc, rootName, probeSeen, probeItems, rootMeta);
+      domRows = probeItems.length;
+      gridRows = getExplorerDataRows(host.doc).length;
+      var scrollerInfo = findExplorerScroller(host.doc, host.grid);
+      if (scrollerInfo.scroller) {
+        virtualScrollRows = scrollerInfo.scroller.querySelectorAll('[role="row"], [role="treeitem"]').length;
+      }
+    }
+
+    var syncMirror = scrapeExplorerMirror(rootName);
+    var finalMirrorRows = syncMirror && syncMirror.items ? syncMirror.items.length : domRows;
+
+    var diag = {
+      mode: 'automatic',
+      widgetContextAvailable: widgetCtx,
+      interWidgetApiFound: iwApis.found,
+      interWidgetApis: iwApis.apis,
+      explorerEventsFound: listExplorerEventsSeen(),
+      siblingIframeAccess: iframeProbe.access,
+      siblingIframeReason: iframeProbe.reason,
+      domRowsFound: domRows,
+      gridRowsFound: gridRows,
+      virtualScrollRowsFound: virtualScrollRows,
+      explorerCounter: expected,
+      finalMirrorRows: finalMirrorRows,
+      host: host,
+      blockingReason: ''
+    };
+    diag.blockingReason = buildBlockingReason(diag, expected, finalMirrorRows);
+    interWidgetState.lastProbe = diag;
+
+    bridgeLog('mode', diag.mode);
+    bridgeLog('widget context available', diag.widgetContextAvailable);
+    bridgeLog('inter-widget API found', diag.interWidgetApiFound);
+    bridgeLog('explorer events found', diag.explorerEventsFound);
+    bridgeLog('sibling iframe access', diag.siblingIframeAccess);
+    bridgeLog('DOM rows found', diag.domRowsFound);
+    bridgeLog('virtual scroll rows found', diag.virtualScrollRowsFound);
+    bridgeLog('explorer counter', diag.explorerCounter);
+    bridgeLog('final mirror rows', diag.finalMirrorRows);
+    if (diag.blockingReason && (expected < 1 || finalMirrorRows < expected)) {
+      bridgeLog('blocking reason', diag.blockingReason);
+    }
+    if (options.log) {
+      options.log('probe host source', host.source);
+      options.log('probe iframe reason', iframeProbe.reason);
+    }
+    return diag;
+  }
+
   function assessDashboardMirrorQuality(items) {
     return assessMirrorQuality(items);
   }
@@ -2820,6 +3243,11 @@ var ProductExplorerBridge = (function () {
     tryExplorerScrollHarvestAsync: tryExplorerScrollHarvestAsync,
     tryReadClipboardViaPasteTrap: tryReadClipboardViaPasteTrap,
     probeExplorerMirrorCapture: probeExplorerMirrorCapture,
-    resolveExplorerCaptureHost: resolveExplorerCaptureHost
+    resolveExplorerCaptureHost: resolveExplorerCaptureHost,
+    probeAutomaticExplorerCapture: probeAutomaticExplorerCapture,
+    tryInterWidgetMirrorCaptureAsync: tryInterWidgetMirrorCaptureAsync,
+    requestInterWidgetStructureSignals: requestInterWidgetStructureSignals,
+    listExplorerEventsSeen: listExplorerEventsSeen,
+    getLastAutomaticProbe: function () { return interWidgetState.lastProbe; }
   };
 })();
