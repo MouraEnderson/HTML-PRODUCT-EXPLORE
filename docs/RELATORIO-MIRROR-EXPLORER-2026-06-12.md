@@ -1,7 +1,7 @@
 # Relatório técnico — Mirror Explorer vs Full BOM API
 
 Data: 2026-06-12 · Atualizado: 2026-06-13  
-Build de referência: `bom20260613a`
+Build de referência: `bom20260613b`
 
 ## Marco técnico (2026-06-13)
 

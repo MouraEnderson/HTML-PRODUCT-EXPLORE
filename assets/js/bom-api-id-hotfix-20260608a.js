@@ -1313,7 +1313,8 @@ function isExpectedDiagnosticProbe(row) {
   if (status === 404 || status === 403) return true;
   if (/\b404\b|\b403\b/.test(detail)) return true;
   if (/expand/i.test(blob)) return true;
-  if (/EngItem|EngInstance|PhysicalProduct|VPMReference/i.test(blob)) return true;
+  if (/EngItem|EngInstance|PhysicalProduct|VPMReference|dseng:/i.test(blob)) return true;
+  if (/^dseng:/i.test(step) && (status === 404 || status === 403)) return true;
   if (/nenhum candidato|sem instancias|sem filhos|indisponivel para testar|sem ID candidato|label nao e identidade/i.test(detail)) {
     return true;
   }

@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260607a',
+    BUILD: 'bom20260613b',
     /** Product Explorer conta ocorrencias; nao consolidar linhas repetidas por ID. */
     PRESERVE_OCCURRENCE_ROWS: true,
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */
@@ -64,7 +64,7 @@
     /** Atualizar estrutura e acionado pelo usuario; o botao pode acionar copia interna do Explorer. */
     SKIP_CLIPBOARD_READ: true,
     PASTE_TRAP_ENABLED: false,
-    EXPLORER_AUTO_COPY_ENABLED: true,
+    EXPLORER_AUTO_COPY_ENABLED: false,
     /** Fallback DOM manual só até N peças */
     DOM_MIRROR_MANUAL_MAX_EXPECTED: 1000,
     AUTO_SCAN_ON_SELECTION: false,
@@ -104,7 +104,7 @@
     AUTO_REFRESH_ON_STRUCTURE_CHANGE: false,
     /** Sprint 2.5 — TSV fast-path até N peças; acima disso API lazy */
     FAST_TSV_MAX: 500,
-    PRIMARY_LOADER: 'tsv',
+    PRIMARY_LOADER: 'api',
     /** Additional App trusted: tentar API antes de TSV no Atualizar */
     PREFER_API_ON_MANUAL_REFRESH: false,
     /** Se espelho/auto-copy falhar no Atualizar, tentar API ENOVIA (WAFData) */

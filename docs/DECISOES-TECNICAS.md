@@ -132,7 +132,7 @@ Modos:
 
 Consequencia:
 
-- Botao **Atualizar estrutura** usa Full BOM API por padrao (build `bom20260613a`).
+- Botao **Atualizar estrutura** usa Full BOM API por padrao (build `bom20260613b`).
 - Sem fallback TSV/clipboard/DOM mirror como fluxo principal.
 - `1/21` nunca e sucesso parcial.
 - Relatorio: `docs/RELATORIO-MIRROR-EXPLORER-2026-06-12.md`.
