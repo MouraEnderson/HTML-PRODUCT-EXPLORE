@@ -8,7 +8,7 @@
   var w = global;
 
   var LOG = '[ExpandItemProvider]';
-  var BUILD = s(w.__BOM_BUILD_ID__ || (w.APP_CONFIG && w.APP_CONFIG.BUILD) || 'bom20260614d');
+  var BUILD = s(w.__BOM_BUILD_ID__ || (w.APP_CONFIG && w.APP_CONFIG.BUILD) || 'bom20260614e');
   var FORBIDDEN_HEADER_RE = /csrf|x-csrf-token/i;
   /** Fallback temporário de teste — último recurso após contexto/UQL/EnoviaApi */
   var KNOWN_ROOT_BY_PRD = {
@@ -65,6 +65,26 @@
       if (w.widget && w.widget.wafSecurityContext) return s(w.widget.wafSecurityContext);
     } catch (e) {}
     return '';
+  }
+
+  function maskSecurityContext(sc) {
+    sc = s(sc);
+    if (!sc) return '(ausente)';
+    if (sc.length <= 12) return sc;
+    return sc.slice(0, 8) + '…' + sc.slice(-4);
+  }
+
+  function ensurePlatformContext() {
+    if (typeof w.PlatformContext === 'undefined' || !w.PlatformContext.init) {
+      return Promise.resolve(getSecurityContextValue());
+    }
+    return Promise.resolve(w.PlatformContext.init())
+      .catch(function () {
+        return null;
+      })
+      .then(function () {
+        return getSecurityContextValue();
+      });
   }
 
   /** Headers POST oficial dseng_v1 — nunca PlatformContext.getHeaders(). */
@@ -124,6 +144,12 @@
 
   function logExpandPostResult(res) {
     log('status:', res.status);
+    if (res.securityContext) log('SecurityContext:', maskSecurityContext(res.securityContext));
+    if (res.status === 403) {
+      log('403 transport:', res.transport || res.form || '(unknown)');
+      log('403 SecurityContext sent:', res.securityContext ? 'sim' : 'nao');
+      log('403 responseText:', res.responseText || '(n/a)');
+    }
     if (res.status === 415) {
       log('415 Content-Type header:', (res.headers && res.headers['Content-Type']) || '(missing)');
       log('415 contentType option:', res.contentTypeOption || '(none)');
@@ -141,16 +167,32 @@
     }
   }
 
-  /**
-   * Forma A: Content-Type no header + data JSON.stringify + type json
-   * Forma B: contentType option + data JSON.stringify (sem Content-Type no header)
-   */
-  function runExpandPostForm(url, bodyString, formLabel, useContentTypeOption) {
+  function swapExpandUrlHost(url) {
+    url = s(url);
+    if (!url || !w.APP_CONFIG || !w.APP_CONFIG.TENANT_DEFAULTS) return '';
+    var sh = w.APP_CONFIG.TENANT_DEFAULTS.spaceHost;
+    var ih = w.APP_CONFIG.TENANT_DEFAULTS.platformHost;
+    if (typeof w.CompassServices !== 'undefined' && w.CompassServices.swapUrlHost) {
+      if (sh && url.indexOf(sh) >= 0) return w.CompassServices.swapUrlHost(url, sh, ih);
+      if (ih && url.indexOf(ih) >= 0) return w.CompassServices.swapUrlHost(url, ih, sh);
+    }
+    if (sh && ih) {
+      if (url.indexOf(sh) >= 0) return url.replace(sh, ih);
+      if (url.indexOf(ih) >= 0) return url.replace(ih, sh);
+    }
+    return '';
+  }
+
+  function runWafExpandPost(url, bodyString, formLabel, transportMode, useContentTypeOption) {
     formLabel = formLabel || 'A';
+    transportMode = transportMode || 'authenticatedRequest';
     var headers = getOfficialPostHeaders(!useContentTypeOption);
     var contentTypeOption = useContentTypeOption ? 'application/json' : '(header Content-Type only)';
+    var securityContext = getSecurityContextValue();
 
     logExpandPostAttempt(url, headers, contentTypeOption, bodyString, formLabel);
+    log('transport mode:', transportMode);
+    log('SecurityContext:', maskSecurityContext(securityContext));
 
     return new Promise(function (resolve) {
       var WAF = getWafData();
@@ -160,12 +202,19 @@
           status: 0,
           error: 'WAFData indisponível',
           form: formLabel,
+          transport: transportMode,
           headers: headers,
           contentTypeOption: contentTypeOption,
-          bodyString: bodyString
+          bodyString: bodyString,
+          securityContext: securityContext
         });
         return;
       }
+
+      var requestFn =
+        transportMode === 'proxifiedRequest' && WAF.proxifiedRequest
+          ? WAF.proxifiedRequest.bind(WAF)
+          : WAF.authenticatedRequest.bind(WAF);
 
       var opts = {
         method: 'POST',
@@ -178,9 +227,12 @@
             status: 200,
             data: data,
             form: formLabel,
+            transport: transportMode,
+            url: url,
             headers: headers,
             contentTypeOption: contentTypeOption,
-            bodyString: bodyString
+            bodyString: bodyString,
+            securityContext: securityContext
           });
         },
         onFailure: function (err) {
@@ -192,12 +244,19 @@
             responseText: extractResponseText(err, msg),
             err: err,
             form: formLabel,
+            transport: transportMode,
+            url: url,
             headers: headers,
             contentTypeOption: contentTypeOption,
-            bodyString: bodyString
+            bodyString: bodyString,
+            securityContext: securityContext
           });
         }
       };
+
+      if (transportMode === 'proxifiedRequest') {
+        opts.proxy = 'passport';
+      }
 
       if (useContentTypeOption) {
         opts.contentType = 'application/json';
@@ -206,18 +265,58 @@
       }
 
       try {
-        WAF.authenticatedRequest(url, opts);
+        requestFn(url, opts);
       } catch (e) {
         resolve({
           ok: false,
           status: 0,
           error: e && e.message ? e.message : String(e),
           form: formLabel,
+          transport: transportMode,
+          url: url,
           headers: headers,
           contentTypeOption: contentTypeOption,
-          bodyString: bodyString
+          bodyString: bodyString,
+          securityContext: securityContext
         });
       }
+    });
+  }
+
+  /**
+   * Forma A: authenticatedRequest + Content-Type no header + type json
+   * Forma B: authenticatedRequest + contentType option (415)
+   * Forma C: proxifiedRequest passport proxy (403 / CSRF cross-origin)
+   */
+  function runExpandPostForm(url, bodyString, formLabel, transportMode, useContentTypeOption) {
+    return runWafExpandPost(url, bodyString, formLabel, transportMode, useContentTypeOption);
+  }
+
+  function runExpandPostWithFallbacks(url, bodyString) {
+    return runExpandPostForm(url, bodyString, 'A', 'authenticatedRequest', false).then(function (resA) {
+      if (resA.ok && hasExpandMemberPayload(resA.data)) return resA;
+
+      if (resA.status === 415) {
+        log('Form A retornou 415 — tentando Form B (contentType option)');
+        return runExpandPostForm(url, bodyString, 'B', 'authenticatedRequest', true);
+      }
+
+      if (resA.status === 403) {
+        var altUrl = swapExpandUrlHost(url);
+        if (altUrl && altUrl !== url) {
+          log('Form A retornou 403 — tentando host alternativo:', altUrl);
+          return runExpandPostForm(altUrl, bodyString, 'A-alt', 'authenticatedRequest', false).then(function (resAlt) {
+            if (resAlt.ok && hasExpandMemberPayload(resAlt.data)) return resAlt;
+            if (resAlt.status !== 403) return resAlt;
+            log('Host alternativo ainda 403 — tentando Form C (proxifiedRequest passport)');
+            return runExpandPostForm(altUrl, bodyString, 'C', 'proxifiedRequest', false);
+          });
+        }
+        log('Form A retornou 403 — tentando Form C (proxifiedRequest passport)');
+        return runExpandPostForm(url, bodyString, 'C', 'proxifiedRequest', false);
+      }
+
+      return resA;
     });
   }
 
@@ -238,6 +337,14 @@
     if (res.status === 400 && res.responseText) {
       msg += ' | responseText=' + res.responseText;
     }
+    if (res.status === 403) {
+      msg +=
+        ' | transport=' +
+        (res.transport || '?') +
+        ' | SecurityContext=' +
+        (res.securityContext ? 'sim' : 'nao');
+      if (res.responseText) msg += ' | responseText=' + res.responseText;
+    }
     var err = new Error(msg);
     err.status = res.status;
     err.expandPostResult = res;
@@ -248,7 +355,7 @@
     logExpandPostResult(res);
     lastTransportStats = {
       build: BUILD,
-      transport: 'direct-wafdata',
+      transport: res.transport || 'direct-wafdata',
       method: 'POST',
       url: url,
       form: res.form,
@@ -257,6 +364,7 @@
       forbiddenHeaders: forbiddenHeadersPresent(res.headers),
       bodyString: res.bodyString,
       status: res.status,
+      securityContext: res.securityContext ? maskSecurityContext(res.securityContext) : '(ausente)',
       expandDepth: bodyObj.expandDepth
     };
     w.__lastExpandItemStats = lastTransportStats;
@@ -589,39 +697,38 @@
     }
     log('rootId:', rootId);
     log('levels:', levels);
-    return ensureSpaceUrl().then(function () {
-      var url = expandUrl(rootId);
-      var bodyObj = expandBody(levels);
-      var bodyString = JSON.stringify(bodyObj);
-      log('transport: direct-wafdata');
-      return runExpandPostForm(url, bodyString, 'A', false).then(function (resA) {
-        if (resA.ok && hasExpandMemberPayload(resA.data)) {
-          return finishExpandSuccess(resA, url, bodyObj);
-        }
-        if (resA.status === 415) {
-          log('Form A retornou 415 — tentando Form B (contentType option)');
-          return runExpandPostForm(url, bodyString, 'B', true).then(function (resB) {
-            if (resB.ok && hasExpandMemberPayload(resB.data)) {
-              return finishExpandSuccess(resB, url, bodyObj);
-            }
-            throw expandPostError(resB.ok ? { status: 200, error: 'member vazio', form: 'B', data: resB.data, headers: resB.headers, contentTypeOption: resB.contentTypeOption, bodyString: bodyString } : resB);
-          });
-        }
-        if (resA.ok && !hasExpandMemberPayload(resA.data)) {
-          throw expandPostError({
-            ok: false,
-            status: 200,
-            error: 'Expand Item POST retornou member vazio',
-            form: 'A',
-            headers: resA.headers,
-            contentTypeOption: resA.contentTypeOption,
-            bodyString: bodyString,
-            data: resA.data
-          });
-        }
-        throw expandPostError(resA);
+    return ensurePlatformContext()
+      .then(function (sc) {
+        log('SecurityContext ready:', maskSecurityContext(sc));
+        return ensureSpaceUrl();
+      })
+      .then(function () {
+        var url = expandUrl(rootId);
+        var bodyObj = expandBody(levels);
+        var bodyString = JSON.stringify(bodyObj);
+        log('transport: direct-wafdata');
+        return runExpandPostWithFallbacks(url, bodyString).then(function (res) {
+          var finalUrl = res.url || url;
+          if (res.ok && hasExpandMemberPayload(res.data)) {
+            return finishExpandSuccess(res, finalUrl, bodyObj);
+          }
+          if (res.ok && !hasExpandMemberPayload(res.data)) {
+            throw expandPostError({
+              ok: false,
+              status: 200,
+              error: 'Expand Item POST retornou member vazio',
+              form: res.form || '?',
+              transport: res.transport,
+              headers: res.headers,
+              contentTypeOption: res.contentTypeOption,
+              bodyString: bodyString,
+              data: res.data,
+              securityContext: res.securityContext
+            });
+          }
+          throw expandPostError(res);
+        });
       });
-    });
   }
 
   function isVpmReference(obj) {

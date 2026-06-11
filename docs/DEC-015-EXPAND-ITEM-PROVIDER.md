@@ -1,7 +1,7 @@
 # DEC-015 — Expand Item Provider
 
 **Data:** 2026-06-14  
-**Build:** `bom20260614c`  
+**Build:** `bom20260614e`  
 **Referência:** [dseng_v1](https://media.3ds.com/support/documentation/developer/Cloud/en/DSDoc.htm?show=CAAEngineeringWS/dseng_v1.htm) — validado via SDK oficial `ws3dx.dseng` (DS CPE EMED)
 
 ---
@@ -82,22 +82,25 @@ Endpoint:
 
 ---
 
-## Transporte HTTP (`bom20260614c`)
+## Transporte HTTP (`bom20260614e`)
 
-### Implementação
+### Evolução de erros no tenant
 
-**Uma única chamada POST** conforme dseng_v1 — sem cascade GET/POST especulativo, sem fallback silencioso para Full BOM API.
+| Build | Erro | Causa provável |
+|-------|------|----------------|
+| 14a | CORS / ResponseCode 0 | `x-csrf-token` manual → preflight bloqueado |
+| 14c | HTTP 415 | Content-Type/body incorreto |
+| 14d | HTTP 403 | POST sem CSRF/contexto válido via `authenticatedRequest` cross-origin |
+| 14e | — | Retry host space↔ifwe + `proxifiedRequest` passport (Form C) |
 
-```javascript
-WAFData.authenticatedRequest(url, {
-  method: 'POST',
-  type: 'json',
-  headers: { Accept: 'application/json', SecurityContext: '...' },
-  data: JSON.stringify({ expandDepth, withPath: true, type_filter_bo, type_filter_rel })
-});
-```
+### Implementação 14e
 
-Logs probe: `transport: direct-wafdata`, `method: POST`, `url`, `custom headers`, `status`.
+1. **Form A** — `authenticatedRequest` + headers mínimos + `type:'json'`
+2. **Form B** — se 415: `contentType:'application/json'`
+3. **Form C** — se 403: `proxifiedRequest` + `proxy:'passport'` (doc CAAWebApps — evita CORS e delega CSRF ao proxy)
+4. Entre A e C: retry com host alternativo (`*-space` ↔ `*-ifwe`)
+
+Logs probe em 403: `SecurityContext`, `responseText`, `transport`.
 
 ### Correção CORS (`bom20260614b`)
 

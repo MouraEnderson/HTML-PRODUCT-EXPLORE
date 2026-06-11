@@ -1,9 +1,9 @@
-/* BOM hotfix - 20260614d — DEC-015 Expand Item POST Content-Type fix (415) */
+/* BOM hotfix - 20260614e — DEC-015 Expand Item POST 403 transport (proxifiedRequest) */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260614d';
+var BUILD = 'bom20260614e';
 var BACKEND = 'https://bom-resolver.onrender.com';
 var DATA_SOURCE = 'expand-item';
 var EXPAND_ITEM_LEVELS = 2;
