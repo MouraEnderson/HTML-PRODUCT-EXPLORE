@@ -1,0 +1,46 @@
+# Deploy GitHub Pages a partir de uma branch (preview antes de merge em main).
+# Uso: Actions → Deploy Preview → Run workflow → branch cursor/expand-item-provider-3e49
+name: Deploy Preview (branch)
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to deploy to GitHub Pages
+        required: true
+        default: cursor/expand-item-provider-3e49
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-preview
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout preview branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+          exclude-paths: |
+            .github/**
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

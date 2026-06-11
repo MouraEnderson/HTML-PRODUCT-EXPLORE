@@ -8,6 +8,7 @@
   var w = global;
 
   var LOG = '[ExpandItemProvider]';
+  /** Fallback temporário de teste — último recurso após contexto/UQL/EnoviaApi */
   var KNOWN_ROOT_BY_PRD = {
     'prd-R1132100929518-01103695': '63FC553465A62400699E0792000086AB'
   };
@@ -139,9 +140,51 @@
     return '';
   }
 
+  function memberToInternalId(member) {
+    if (!member) return '';
+    var id = s(member.id || member.physicalid || member.physicalId);
+    return isInternalVpmId(id) ? id : '';
+  }
+
+  function resolveEngItemMemberId(input, titleHint) {
+    input = s(input);
+    titleHint = s(titleHint);
+    if (!input && !titleHint) return Promise.resolve('');
+    if (isInternalVpmId(input)) return Promise.resolve(input);
+    if (typeof w.EnoviaApi === 'undefined' || !w.EnoviaApi.resolveEngItemMember) {
+      return Promise.resolve('');
+    }
+    return ensureSpaceUrl()
+      .then(function () {
+        return w.EnoviaApi.resolveEngItemMember(input, titleHint);
+      })
+      .then(function (member) {
+        var id = memberToInternalId(member);
+        if (id) log('root resolved via EnoviaApi.resolveEngItemMember:', id);
+        return id;
+      })
+      .catch(function () {
+        return '';
+      });
+  }
+
   function searchEngItemId(term) {
     term = s(term);
     if (!term || typeof w.EnoviaApi === 'undefined') return Promise.resolve('');
+    if (typeof w.EnoviaApi.findEngItemByLabel === 'function') {
+      return ensureSpaceUrl()
+        .then(function () {
+          return w.EnoviaApi.findEngItemByLabel(term, 20);
+        })
+        .then(function (member) {
+          var id = memberToInternalId(member);
+          if (id) log('root resolved via findEngItemByLabel:', id);
+          return id;
+        })
+        .catch(function () {
+          return '';
+        });
+    }
     var url =
       w.EnoviaApi.engItemUqlSearchUrl &&
       w.EnoviaApi.engItemUqlSearchUrl('label:"' + term + '"', 20);
@@ -151,46 +194,78 @@
       if (!res.ok) return '';
       var members = extractMembers(res.data);
       for (var i = 0; i < members.length; i++) {
-        var m = members[i];
-        var id = s(m.id || m.physicalid || m.physicalId);
-        if (isInternalVpmId(id)) return id;
+        var id = memberToInternalId(members[i]);
+        if (id) {
+          log('root resolved via UQL search:', id);
+          return id;
+        }
       }
       return '';
     });
   }
 
-  function resolveCurrentRootId() {
-    if (isInternalVpmId(w.__EXPAND_ITEM_ROOT_ID__)) return Promise.resolve(s(w.__EXPAND_ITEM_ROOT_ID__));
-
+  function readExplorerContextIds() {
+    var out = { physicalId: '', prdName: '', rootName: '', source: '' };
     try {
       if (typeof w.ExplorerContext !== 'undefined' && w.ExplorerContext.refresh) {
         var ctx = w.ExplorerContext.refresh(true);
-        if (ctx && isInternalVpmId(ctx.physicalId)) return Promise.resolve(s(ctx.physicalId));
-        if (ctx && isInternalVpmId(ctx.resourceId)) return Promise.resolve(s(ctx.resourceId));
+        if (ctx) {
+          out.physicalId = s(ctx.physicalId || ctx.resourceId);
+          out.rootName = s(ctx.rootName || ctx.productName || ctx.displayName);
+          out.source = s(ctx.source);
+          if (out.physicalId.indexOf('prd-') === 0) out.prdName = out.physicalId;
+        }
       }
     } catch (e) {}
+    if (!out.prdName) out.prdName = getExplorerPrdName();
+    if (!out.rootName) out.rootName = getExplorerRootName();
+    return out;
+  }
 
-    var prd = getExplorerPrdName();
-    if (prd && KNOWN_ROOT_BY_PRD[prd]) return Promise.resolve(KNOWN_ROOT_BY_PRD[prd]);
+  function resolveCurrentRootId() {
+    if (isInternalVpmId(w.__EXPAND_ITEM_ROOT_ID__)) {
+      log('root resolved via __EXPAND_ITEM_ROOT_ID__ override');
+      return Promise.resolve(s(w.__EXPAND_ITEM_ROOT_ID__));
+    }
 
-    var rootName = getExplorerRootName();
+    var ctxIds = readExplorerContextIds();
+    if (isInternalVpmId(ctxIds.physicalId)) {
+      log('root resolved via ExplorerContext internal id:', ctxIds.physicalId);
+      return Promise.resolve(ctxIds.physicalId);
+    }
+
+    var prd = ctxIds.prdName;
+    var rootName = ctxIds.rootName;
+
     return ensureSpaceUrl().then(function () {
-      if (prd && KNOWN_ROOT_BY_PRD[prd]) return KNOWN_ROOT_BY_PRD[prd];
-      if (isInternalVpmId(prd)) return prd;
       var chain = Promise.resolve('');
+
+      if (ctxIds.physicalId || prd) {
+        chain = chain.then(function (id) {
+          if (id) return id;
+          return resolveEngItemMemberId(ctxIds.physicalId || prd, rootName);
+        });
+      }
       if (rootName) {
         chain = chain.then(function (id) {
           if (id) return id;
           return searchEngItemId(rootName);
         });
       }
-      if (prd) {
+      if (prd && prd !== ctxIds.physicalId) {
         chain = chain.then(function (id) {
           if (id) return id;
-          return searchEngItemId(prd);
+          return resolveEngItemMemberId(prd, rootName);
         });
       }
-      return chain;
+      return chain.then(function (id) {
+        if (id) return id;
+        if (prd && KNOWN_ROOT_BY_PRD[prd]) {
+          log('root resolved via KNOWN_ROOT_BY_PRD fallback (temporário):', KNOWN_ROOT_BY_PRD[prd]);
+          return KNOWN_ROOT_BY_PRD[prd];
+        }
+        return '';
+      });
     });
   }
 

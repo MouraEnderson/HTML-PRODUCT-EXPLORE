@@ -69,14 +69,27 @@ O **Total Peças** e a tabela usam **`rows.length`** após normalização.
 
 ---
 
+## Resolução de root
+
+Ordem (dinâmica):
+
+1. `ExplorerContext` / seleção Explorer — id interno VPMReference (32 hex)
+2. `EnoviaApi.resolveEngItemMember(prd-R…, rootName)` — UQL exato
+3. `findEngItemByLabel` / UQL por título da estrutura
+4. `KNOWN_ROOT_BY_PRD` — **apenas fallback temporário de teste** (último recurso)
+
 ## Configuração
 
 ```javascript
 APP_CONFIG.DATA_SOURCE = 'expand-item';      // principal
-APP_CONFIG.EXPAND_ITEM_LEVELS = 99;          // expandDepth
+APP_CONFIG.EXPAND_ITEM_LEVELS = 99;          // expandDepth enviado ao POST /expand
 // alternativo:
 APP_CONFIG.DATA_SOURCE = 'full-bom-api';
 ```
+
+### Profundidade vs Explorer visual
+
+`EXPAND_ITEM_LEVELS` controla `expandDepth` na API. Valores altos (ex.: 99) podem retornar **mais linhas** que o Explorer com expansão parcial. Para aproximar a contagem visual do Explorer, use a **mesma profundidade** que o usuário expandiu (ex.: probe `__expandItemProbe(2)` antes de `Atualizar estrutura` com `EXPAND_ITEM_LEVELS = 2`).
 
 ---
 
