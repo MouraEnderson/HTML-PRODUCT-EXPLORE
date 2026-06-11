@@ -898,15 +898,46 @@ var App = (function () {
           box.value = report.summary || '';
           box.classList.remove('bom-hidden');
         }
-        var fails = (report.rows || []).filter(function (r) {
+        var rows = report.rows || [];
+        var fails = rows.filter(function (r) {
           return !r.ok;
         });
-        setStatus(
-          fails.length
-            ? 'Diagnóstico: ' + fails.length + ' falha(s) — veja Avançado'
-            : 'Diagnóstico API OK — tente Atualizar estrutura',
-          fails.length ? 'error' : 'ok'
-        );
+        var fullBomOk =
+          (typeof window !== 'undefined' &&
+            window.__bomBridgeLastResult &&
+            (window.__bomBridgeLastResult.mappedCount || window.__bomBridgeLastResult.dedupCount) > 0) ||
+          (typeof BomService !== 'undefined' && BomService.getNodeCount && BomService.getNodeCount() > 0);
+        var operational = fails.filter(function (r) {
+          var step = String((r && r.step) || '');
+          var detail = String((r && r.detail) || '');
+          if (/^RAW /i.test(step)) return false;
+          if (/probe|candidate|search|UQL|resolver|expand|EngItem|EngInstance|PhysicalProduct|VPMReference/i.test(step + detail)) {
+            return false;
+          }
+          if (r.extra && (r.extra.status === 404 || r.extra.status === 403)) return false;
+          if (/\b404\b|\b403\b/.test(detail)) return false;
+          return true;
+        });
+        var probeCount = fails.length - operational.length;
+        var msg;
+        var type;
+        if (fullBomOk && operational.length === 0) {
+          msg =
+            probeCount > 0
+              ? 'Diagnóstico: ' + probeCount + ' probes técnicos, 0 falhas operacionais'
+              : 'Diagnóstico API OK';
+          type = 'ok';
+        } else if (operational.length > 0) {
+          msg = 'Diagnóstico: ' + operational.length + ' falha(s) operacional(is) — veja Avançado';
+          type = 'error';
+        } else if (probeCount > 0) {
+          msg = 'Diagnóstico: API concluída com probes esperados — veja Avançado';
+          type = 'ok';
+        } else {
+          msg = 'Diagnóstico API OK';
+          type = 'ok';
+        }
+        setStatus(msg, type);
         console.log('[BOM API DIAG]', report);
       })
       .catch(function (err) {

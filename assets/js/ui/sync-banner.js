@@ -153,11 +153,14 @@ var SyncBanner = (function () {
     ) {
       var explorerRef = (lastLoad.diagnostic && lastLoad.diagnostic.explorerReferenceCount) || explorer || 0;
       el.className = 'bom-sync-banner bom-sync-ok';
-      el.innerHTML =
-        'Modo <strong>Full BOM API</strong> — estrutura via ENOVIA REST (não espelha expansão visual do Explorer)' +
-        (explorerRef > 0
-          ? ' · Explorer carregado: <strong>' + explorerRef + '</strong> | Full BOM API: <strong>' + dash + '</strong>'
-          : ' · <strong>' + dash + '</strong> linhas');
+      if (explorerRef > 0) {
+        el.innerHTML =
+          'Explorer carregado: <strong>' + explorerRef + '</strong> | Full BOM API: <strong>' + dash +
+          '</strong> linhas | modo API ENOVIA';
+      } else {
+        el.innerHTML =
+          'Full BOM API: <strong>' + dash + '</strong> linhas | modo API ENOVIA';
+      }
       return;
     }
 

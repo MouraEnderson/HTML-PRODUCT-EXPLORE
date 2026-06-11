@@ -1,9 +1,9 @@
-/* BOM browser-auth bridge hotfix - 20260613a — DEC-014 Full BOM API */
+/* BOM browser-auth bridge hotfix - 20260613b — DEC-014 Full BOM API + UI messaging */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260613a';
+var BUILD = 'bom20260613b';
 var BACKEND = 'https://bom-resolver.onrender.com';
 var LOADER_MODE = 'full-bom-api';
 var MIRROR_EXPLORER_MODE = false;
@@ -1240,25 +1240,305 @@ function buildOrchestratorResult(processed, loaded) {
   };
 }
 
+function getUiRoot() {
+  return w.__3DX_UI_ROOT__ || document;
+}
+
+function byIdUi(id) {
+  var root = getUiRoot();
+  if (root.querySelector) {
+    var el = root.querySelector('#' + id);
+    if (el) return el;
+  }
+  return document.getElementById(id);
+}
+
+function isFullBomActive() {
+  return LOADER_MODE === 'full-bom-api' || w.__BOM_LOADER_MODE__ === 'full-bom-api';
+}
+
+function parseExplorerRef(processed) {
+  processed = processed || w.__bomBridgeLastResult || {};
+  var ref = n(processed.explorerReferenceCount || processed.explorerLoadedCount);
+  if (ref > 0) return ref;
+  if (typeof w.SyncBanner !== 'undefined' && w.SyncBanner.parseExplorerCount) {
+    var fromBanner = w.SyncBanner.parseExplorerCount();
+    if (fromBanner > 0) return fromBanner;
+  }
+  return 0;
+}
+
+function renderFullBomBanner(el, dash, explorerRef) {
+  explorerRef = n(explorerRef);
+  dash = n(dash);
+  el.classList.remove('bom-hidden');
+  el.className = 'bom-sync-banner bom-sync-ok';
+  if (explorerRef > 0) {
+    el.innerHTML =
+      'Explorer carregado: <strong>' + explorerRef + '</strong> | Full BOM API: <strong>' + dash +
+      '</strong> linhas | modo API ENOVIA';
+  } else {
+    el.innerHTML =
+      'Full BOM API: <strong>' + dash + '</strong> linhas | modo API ENOVIA';
+  }
+}
+
 function updateLoadSyncBanner(processed, dash) {
   processed = processed || {};
   dash = n(dash);
   try {
-    var root = w.__3DX_UI_ROOT__ || document;
-    var el = root.querySelector && root.querySelector('#syncBanner');
+    var el = byIdUi('syncBanner');
     if (!el) return;
-    var explorerRef = n(processed.explorerReferenceCount || processed.explorerLoadedCount);
-    el.classList.remove('bom-hidden');
-    el.className = 'bom-sync-banner bom-sync-ok';
-    var line =
-      'Modo <strong>Full BOM API</strong> — ' + FULL_BOM_API_MSG;
-    if (explorerRef > 0) {
-      line += ' · Explorer carregado: <strong>' + explorerRef + '</strong> | Full BOM API: <strong>' + dash + '</strong>';
-    } else {
-      line += ' · <strong>' + dash + '</strong> linhas';
-    }
-    el.innerHTML = line;
+    renderFullBomBanner(el, dash, parseExplorerRef(processed));
   } catch (e) {}
+}
+
+function parseDiagStatus(detail) {
+  var m = String(detail || '').match(/\b(401|403|404|406|500|502|503)\b/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+function isExpectedDiagnosticProbe(row) {
+  if (!row || row.ok) return false;
+  var step = String(row.step || '');
+  var detail = String(row.detail || '');
+  var url = row.extra && row.extra.url ? String(row.extra.url) : '';
+  var status = row.extra && row.extra.status != null ? row.extra.status : parseDiagStatus(detail);
+  var blob = step + ' ' + detail + ' ' + url;
+
+  if (/^RAW /i.test(step)) return true;
+  if (/probe|candidate|candidates|search|UQL|resolver|variants|relationship|child resolution|Label ambiguity/i.test(blob)) {
+    return true;
+  }
+  if (status === 404 || status === 403) return true;
+  if (/\b404\b|\b403\b/.test(detail)) return true;
+  if (/expand/i.test(blob)) return true;
+  if (/EngItem|EngInstance|PhysicalProduct|VPMReference/i.test(blob)) return true;
+  if (/nenhum candidato|sem instancias|sem filhos|indisponivel para testar|sem ID candidato|label nao e identidade/i.test(detail)) {
+    return true;
+  }
+  return false;
+}
+
+function isOperationalDiagnosticError(row) {
+  if (!row || row.ok) return false;
+  if (isExpectedDiagnosticProbe(row)) return false;
+  var step = String(row.step || '');
+  var detail = String(row.detail || '');
+
+  if (step === 'WAFData') return true;
+  if (step === 'SecurityContext' && /sem SecurityContext/i.test(detail)) return true;
+  if (/CompassServices|Compass\/3DSpace|3DSpace verificado|CSRF/.test(step)) return true;
+  if (/ExplorerContext/.test(step)) return true;
+  if (/physicalId/.test(step) && /nao resolvido/i.test(detail)) return true;
+  if (/modulo indisponivel|indisponivel neste build/i.test(detail)) return true;
+  if (/CORS|browser\/start|browser\/continue|backend/i.test(detail)) return true;
+  return true;
+}
+
+function classifyDiagnosticRows(rows) {
+  rows = rows || [];
+  var operationalErrors = [];
+  var diagnosticProbes = [];
+  var expectedFailures = [];
+  var backendErrors = [];
+
+  rows.forEach(function (row) {
+    if (!row || row.ok) return;
+    if (isExpectedDiagnosticProbe(row)) {
+      expectedFailures.push(row);
+      diagnosticProbes.push(row);
+      return;
+    }
+    if (/backend|browser\/start|browser\/continue/i.test(String(row.step || '') + String(row.detail || ''))) {
+      backendErrors.push(row);
+      operationalErrors.push(row);
+      return;
+    }
+    if (isOperationalDiagnosticError(row)) {
+      operationalErrors.push(row);
+    } else {
+      expectedFailures.push(row);
+      diagnosticProbes.push(row);
+    }
+  });
+
+  return {
+    operationalErrors: operationalErrors,
+    diagnosticProbes: diagnosticProbes,
+    expectedFailures: expectedFailures,
+    backendErrors: backendErrors,
+    probeCount: diagnosticProbes.length,
+    operationalCount: operationalErrors.length
+  };
+}
+
+function fullBomLoadSucceeded() {
+  var last = w.__bomBridgeLastResult;
+  if (last && n(last.mappedCount || last.dedupCount) > 0) return true;
+  if (typeof w.BomService !== 'undefined' && w.BomService.getNodeCount && w.BomService.getNodeCount() > 0) {
+    return true;
+  }
+  return false;
+}
+
+function formatDiagStatusMessage(classified) {
+  classified = classified || {};
+  var probes = n(classified.probeCount);
+  var ops = n(classified.operationalCount);
+  var success = fullBomLoadSucceeded();
+
+  if (success && ops === 0) {
+    if (probes > 0) {
+      return 'Diagnóstico: ' + probes + ' probes técnicos, 0 falhas operacionais';
+    }
+    return 'Diagnóstico API OK';
+  }
+  if (ops > 0) {
+    return 'Diagnóstico: ' + ops + ' falha(s) operacional(is) — veja Avançado';
+  }
+  if (probes > 0) {
+    return 'Diagnóstico: API concluída com probes esperados — veja Avançado';
+  }
+  return 'Diagnóstico API OK';
+}
+
+function renderAdvancedPanel(classified) {
+  try {
+    var panel = byIdUi('bomRulesPanel');
+    if (!panel) return;
+    panel.setAttribute('data-dec014', '1');
+
+    var last = w.__bomBridgeLastResult || {};
+    var explorerRef = parseExplorerRef(last);
+    var dash = n(last.mappedCount || last.dedupCount);
+    if (typeof w.BomService !== 'undefined' && w.BomService.getNodeCount) {
+      dash = dash || w.BomService.getNodeCount();
+    }
+    var probes = classified ? n(classified.probeCount) : n(w.__bomDiagClassification && w.__bomDiagClassification.probeCount);
+    var ops = classified ? n(classified.operationalCount) : n(w.__bomDiagClassification && w.__bomDiagClassification.operationalCount);
+
+    panel.innerHTML =
+      '<p style="margin:0 0 6px;font-size:.72rem"><strong>DEC-014: Mirror Explorer indisponível</strong></p>' +
+      '<p style="margin:0 0 6px;font-size:.7rem">Modo ativo: <strong>Full BOM API</strong></p>' +
+      (explorerRef > 0
+        ? '<p style="margin:0 0 4px;font-size:.7rem">Explorer carregado: <strong>' + explorerRef + '</strong></p>'
+        : '') +
+      (dash > 0
+        ? '<p style="margin:0 0 4px;font-size:.7rem">Full BOM API: <strong>' + dash + '</strong></p>'
+        : '') +
+      '<p style="margin:0 0 4px;font-size:.7rem">Probes esperados: <strong>' + probes + '</strong></p>' +
+      '<p style="margin:0 0 6px;font-size:.7rem">Falhas operacionais: <strong>' + ops + '</strong></p>' +
+      '<p style="margin:0 0 6px;font-size:.65rem;color:#5c6b7a">Root resolvido via EngItem/search/candidato navegável</p>' +
+      '<p style="margin:0 0 6px;font-size:.65rem;color:#92400e">' + MIRROR_UNAVAILABLE_MSG + '</p>' +
+      '<p style="margin:0;font-size:.65rem;color:#5c6b7a">' + MIRROR_ROADMAP_NOTE + '</p>';
+  } catch (e) {}
+}
+
+function patchSyncBanner() {
+  if (!w.SyncBanner || !w.SyncBanner.update || w.SyncBanner.__BOM_DEC014_UI_PATCH__) return false;
+
+  var originalUpdate = w.SyncBanner.update.bind(w.SyncBanner);
+  w.SyncBanner.__BOM_ORIGINAL_UPDATE__ = originalUpdate;
+  w.SyncBanner.update = function (dashboardCount) {
+    if (!isFullBomActive()) {
+      return originalUpdate(dashboardCount);
+    }
+
+    var dash = n(dashboardCount);
+    if (typeof w.BomService !== 'undefined' && w.BomService.getNodeCount && w.BomService.getNodeCount() > 0) {
+      dash = w.BomService.getNodeCount();
+    }
+
+    var el = byIdUi('syncBanner');
+    if (!el) return;
+
+    var explorerRef = parseExplorerRef();
+    if (dash < 1 && explorerRef < 1) {
+      el.className = 'bom-sync-banner bom-sync-info';
+      el.innerHTML =
+        'Nenhuma estrutura carregada. Abra o Product Structure Explorer ao lado e clique ' +
+        '<strong>Atualizar estrutura</strong> (modo <strong>Full BOM API</strong>, DEC-014).';
+      return;
+    }
+
+    renderFullBomBanner(el, dash, explorerRef);
+  };
+  w.SyncBanner.__BOM_DEC014_UI_PATCH__ = true;
+  return true;
+}
+
+function runDec014ApiDiagnostic(btnEl) {
+  if (typeof w.ApiDiagnostic === 'undefined' || !w.ApiDiagnostic.run) {
+    if (w.App && w.App.setStatus) w.App.setStatus('Diagnóstico API indisponível neste build.', 'error');
+    return;
+  }
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.textContent = 'Diagnosticando…';
+  }
+  if (w.App && w.App.setStatus) w.App.setStatus('Diagnóstico API ENOVIA…', 'info');
+
+  w.ApiDiagnostic.run()
+    .then(function (report) {
+      var rows = (report && report.rows) || [];
+      var classified = classifyDiagnosticRows(rows);
+      w.__bomDiagClassification = classified;
+
+      var box = byIdUi('apiDiagReport');
+      if (box) {
+        var summary = (report && report.summary) || '';
+        summary +=
+          '\n\n--- Probes esperados / diagnóstico de contrato ---\n' +
+          'Probes técnicos: ' + classified.probeCount + '\n' +
+          'Falhas operacionais: ' + classified.operationalCount;
+        box.value = summary;
+        box.classList.remove('bom-hidden');
+      }
+
+      var msg = formatDiagStatusMessage(classified);
+      if (w.App && w.App.setStatus) {
+        w.App.setStatus(msg, classified.operationalCount > 0 ? 'error' : 'ok');
+      }
+      renderAdvancedPanel(classified);
+      console.log('[BOM API DIAG]', report, classified);
+    })
+    .catch(function (err) {
+      if (w.App && w.App.setStatus) {
+        w.App.setStatus('Diagnóstico: ' + (err.message || err), 'error');
+      }
+    })
+    .finally(function () {
+      if (btnEl) {
+        btnEl.disabled = false;
+        btnEl.textContent = 'Diagnosticar API';
+      }
+    });
+}
+
+function patchDiagnosticButton() {
+  var btn = byIdUi('btnApiDiagnostic');
+  if (!btn || btn.__BOM_DEC014_DIAG_PATCH__) return false;
+
+  btn.addEventListener(
+    'click',
+    function (ev) {
+      if (!isFullBomActive()) return;
+      ev.stopImmediatePropagation();
+      ev.preventDefault();
+      runDec014ApiDiagnostic(btn);
+    },
+    true
+  );
+  btn.__BOM_DEC014_DIAG_PATCH__ = true;
+  return true;
+}
+
+function patchUiMessaging() {
+  var bannerOk = patchSyncBanner();
+  var diagOk = patchDiagnosticButton();
+  renderAdvancedPanel(w.__bomDiagClassification || null);
+  return bannerOk || diagOk;
 }
 
 function finalizeBridgeResult(raw, loadContext) {
@@ -1275,16 +1555,21 @@ function finalizeBridgeResult(raw, loadContext) {
     var out = buildOrchestratorResult(processed, loaded);
     var dash = n(loaded.count) || n(processed.mappedCount);
     var explorerRef = n(processed.explorerReferenceCount);
-    diag('ok', 'Full BOM API: ' + dash + ' linhas' + (explorerRef > 0 ? ' (Explorer ref: ' + explorerRef + ')' : ''));
+    var successMsg = 'Full BOM API: ' + dash + ' linhas';
+    diag('ok', successMsg + (explorerRef > 0 ? ' (Explorer ref: ' + explorerRef + ')' : ''));
+    if (w.App && w.App.setStatus) {
+      w.App.setStatus(successMsg, 'ok');
+    }
     bridgeLog(
       'load summary',
       (explorerRef > 0 ? 'Explorer carregado: ' + explorerRef + ' | ' : '') +
       'Full BOM API: ' + dash
     );
-    updateLoadSyncBanner(processed, dash);
     if (typeof w.SyncBanner !== 'undefined' && w.SyncBanner.setLoadResult) {
       w.SyncBanner.setLoadResult(out);
     }
+    updateLoadSyncBanner(processed, dash);
+    renderAdvancedPanel(w.__bomDiagClassification || null);
     updateBuildPill();
     return out;
   });
@@ -1456,20 +1741,6 @@ return true;
 
 }
 
-function installDec014ModePanel() {
-  try {
-    var root = w.__3DX_UI_ROOT__ || document;
-    var panel = root.querySelector && root.querySelector('#bomRulesPanel');
-    if (!panel || panel.getAttribute('data-dec014')) return;
-    panel.setAttribute('data-dec014', '1');
-    panel.innerHTML =
-      '<p style="margin:0 0 6px;font-size:.72rem"><strong>Modos (DEC-014)</strong></p>' +
-      '<p style="margin:0 0 6px;font-size:.7rem;color:#92400e">' + MIRROR_UNAVAILABLE_MSG + '</p>' +
-      '<p style="margin:0 0 6px;font-size:.7rem;color:#166534">' + FULL_BOM_API_MSG + '</p>' +
-      '<p style="margin:0;font-size:.65rem;color:#5c6b7a">' + MIRROR_ROADMAP_NOTE + '</p>';
-  } catch (e) {}
-}
-
 function boot() {
 diag('ok', 'Hotfix carregado: ' + BUILD + ' | ' + LOADER_MODE + ' (' + DEC014_REF + ')');
 disableMirrorCaptureFlags();
@@ -1477,13 +1748,14 @@ updateBuildPill();
 
 patchOrchestrator();
 patchScanner();
-installDec014ModePanel();
+patchUiMessaging();
 
 var tries = 0;
 var timer = setInterval(function () {
   tries += 1;
   var okOrchestrator = patchOrchestrator();
   var okScanner = patchScanner();
+  patchUiMessaging();
   if ((okOrchestrator && okScanner) || tries > 100) {
     clearInterval(timer);
     if (!okOrchestrator) {
@@ -1498,6 +1770,7 @@ var timer = setInterval(function () {
 setTimeout(function () {
   patchOrchestrator();
   patchScanner();
+  patchUiMessaging();
 }, 1000);
 
 }
@@ -1506,7 +1779,7 @@ w.__bomBridgeInstall = function () {
   disableMirrorCaptureFlags();
   patchOrchestrator();
   patchScanner();
-  installDec014ModePanel();
+  patchUiMessaging();
   return w.__bomBridgeInfo();
 };
 
