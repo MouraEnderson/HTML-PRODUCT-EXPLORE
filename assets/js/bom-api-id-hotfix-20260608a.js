@@ -1,14 +1,16 @@
-/* BOM browser-auth bridge hotfix - 20260611b */
+/* BOM browser-auth bridge hotfix - 20260611c */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260611b';
+var BUILD = 'bom20260611c';
 var BACKEND = 'https://bom-resolver.onrender.com';
 
 w.BOM_BUILD_ID = BUILD;
 w.__BOM_BUILD_ID__ = BUILD;
 w.__BOM_HOTFIX_MODE__ = 'browser-auth-bfs-bridge';
+w.__bomBridgeLastResult = null;
+w.__bomBridgeLastError = null;
 
 function updateBuildPill() {
   try {
@@ -31,8 +33,13 @@ function getWafData() {
 function getWafHeaders() {
   var h = { Accept: 'application/json' };
   try {
-    if (typeof w.PlatformContext !== 'undefined' && w.PlatformContext.getHeaders) {
-      return w.PlatformContext.getHeaders();
+    var st =
+      typeof w.PlatformContext !== 'undefined' &&
+      w.PlatformContext.getState &&
+      w.PlatformContext.getState();
+    if (st && st.securityContext) {
+      h.SecurityContext = st.securityContext;
+      return h;
     }
   } catch (e) {}
   try {
