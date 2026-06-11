@@ -1,9 +1,9 @@
-/* BOM browser-auth bridge hotfix - 20260611c */
+/* BOM browser-auth bridge hotfix - 20260612a */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260611c';
+var BUILD = 'bom20260612a';
 var BACKEND = 'https://bom-resolver.onrender.com';
 
 w.BOM_BUILD_ID = BUILD;
@@ -388,6 +388,312 @@ return {
 
 }
 
+function bridgeLog(label, value) {
+  try {
+    if (value !== undefined) {
+      console.log('[BOM bridge]', label + ':', value);
+    } else {
+      console.log('[BOM bridge]', label);
+    }
+  } catch (e) {}
+}
+
+function dedupeKey(row) {
+  row = row || {};
+  var instanceId = s(row.instanceId);
+  if (instanceId) return 'inst:' + instanceId;
+  var parentId = s(row.parentId || 'ROOT');
+  var refId = s(row.physicalId || row.referenceId || row.navId || row.objectId || row.id);
+  var instName = s(row.instanceName || row.name || row.title);
+  return 'combo:' + parentId + '|' + refId + '|' + instName;
+}
+
+function rowScore(row) {
+  row = row || {};
+  var score = 0;
+  if (s(row.source) === 'browser-auth') score += 100;
+  if (s(row.instanceId)) score += 60;
+  if (n(row.level) === 1) score += 20;
+  if (s(row.parentId)) score += 10;
+  if (s(row.physicalId || row.navId)) score += 8;
+  if (s(row.instanceName || row.name)) score += 4;
+  return score;
+}
+
+function dedupeBridgeRows(rows) {
+  rows = Array.isArray(rows) ? rows : [];
+  var best = {};
+  var removed = 0;
+  rows.forEach(function (row) {
+    var key = dedupeKey(row);
+    if (!best[key] || rowScore(row) > rowScore(best[key])) {
+      if (best[key]) removed += 1;
+      best[key] = row;
+    } else {
+      removed += 1;
+    }
+  });
+  return {
+    rows: Object.keys(best).map(function (k) {
+      return best[k];
+    }),
+    removed: removed
+  };
+}
+
+function trimToExpected(rows, expected) {
+  rows = Array.isArray(rows) ? rows : [];
+  expected = n(expected);
+  if (!expected || rows.length <= expected + 1) return rows;
+
+  var byId = {};
+  rows.forEach(function (row) {
+    byId[s(row.id)] = row;
+  });
+
+  var scored = rows.slice().sort(function (a, b) {
+    return rowScore(b) - rowScore(a);
+  });
+
+  var keep = {};
+  var keptCount = 0;
+  scored.forEach(function (row) {
+    if (keptCount >= expected) return;
+    keep[s(row.id)] = row;
+    keptCount += 1;
+    var parentId = s(row.parentId);
+    while (parentId && byId[parentId] && !keep[parentId]) {
+      keep[parentId] = byId[parentId];
+      parentId = s(byId[parentId].parentId);
+    }
+  });
+
+  return rows.filter(function (row) {
+    return !!keep[s(row.id)];
+  });
+}
+
+function sortRowsTreeOrder(rows) {
+  rows = Array.isArray(rows) ? rows : [];
+  if (!rows.length) return [];
+
+  var byId = {};
+  rows.forEach(function (row) {
+    byId[s(row.id)] = row;
+  });
+
+  var roots = rows.filter(function (row) {
+    var parentId = s(row.parentId);
+    return !parentId || !byId[parentId] || n(row.level) === 0;
+  });
+
+  if (!roots.length) roots = [rows[0]];
+  roots.sort(function (a, b) {
+    return n(a.level) - n(b.level);
+  });
+
+  var out = [];
+  var seen = {};
+
+  function walk(row, depth) {
+    var id = s(row.id);
+    if (seen[id]) return;
+    seen[id] = true;
+    row.level = depth;
+    out.push(row);
+    rows.forEach(function (child) {
+      if (s(child.parentId) === id) walk(child, depth + 1);
+    });
+  }
+
+  roots.forEach(function (root) {
+    walk(root, n(root.level) || 0);
+  });
+
+  rows.forEach(function (row) {
+    if (!seen[s(row.id)]) {
+      out.push(row);
+    }
+  });
+
+  return out;
+}
+
+function mapRowsToImportItems(rows, rootName) {
+  rows = sortRowsTreeOrder(rows);
+  return rows.map(function (row, idx) {
+    var physicalid =
+      s(row.instanceId) ||
+      s(row.physicalId) ||
+      s(row.navId) ||
+      s(row.referenceId) ||
+      ('bridge_' + idx);
+    var title = s(row.title || row.name || row.instanceName);
+    var name = s(row.instanceName || row.name || title);
+    return {
+      level: n(row.level),
+      physicalid: physicalid,
+      name: name || title || ('Item ' + idx),
+      title: title || name,
+      type: s(row.type || row.objectType) || 'VPMReference',
+      displayType: 'Physical Product',
+      revision: s(row.revision) || '',
+      state: s(row.maturity || row.state) || '',
+      maturity: s(row.maturity || row.state) || '',
+      owner: s(row.owner || row.reservedBy) || '',
+      approval: 'Unknown',
+      quantity: row.quantity || 1,
+      sourcePhysicalId: s(row.physicalId || row.navId || row.referenceId),
+      parentId: s(row.parentId),
+      instanceName: name,
+      referenceId: s(row.physicalId || row.navId || row.referenceId || physicalid)
+    };
+  });
+}
+
+function processBridgeResult(raw) {
+  raw = raw || {};
+  var rawRows = raw.rows || raw.items || raw.bom || [];
+  if (!Array.isArray(rawRows)) rawRows = [];
+
+  var expected = n(raw.expectedCount) || getExpectedCount();
+  var rootName = getRootName();
+
+  bridgeLog('raw rows', rawRows.length);
+  bridgeLog('expected', expected);
+  bridgeLog('root', rootName);
+
+  var deduped = dedupeBridgeRows(rawRows);
+  bridgeLog('dedup rows', deduped.rows.length);
+  bridgeLog('ids duplicados removidos', deduped.removed);
+
+  var trimmed = trimToExpected(deduped.rows, expected);
+  if (expected > 0 && trimmed.length > expected) {
+    trimmed = sortRowsTreeOrder(trimmed).slice(0, expected);
+    bridgeLog('trim tree rows', trimmed.length);
+  }
+  var items = mapRowsToImportItems(trimmed, rootName);
+  var mappedCount = items.length;
+
+  bridgeLog('mapped rows', mappedCount);
+  if (items.length) bridgeLog('first row', items[0]);
+
+  var partial = expected > 0 && mappedCount < expected - 1;
+  var message =
+    expected > 0
+      ? (partial
+        ? 'Parcial ' + mappedCount + '/' + expected + ' (BROWSER-BACKEND)'
+        : 'BOM ' + mappedCount + '/' + expected + ' via bridge')
+      : ('Bridge ' + BUILD + ': ' + mappedCount + ' linhas');
+
+  return {
+    rawCount: rawRows.length,
+    dedupCount: deduped.rows.length,
+    mappedCount: mappedCount,
+    expectedCount: expected,
+    rootName: rootName,
+    items: items,
+    partial: partial,
+    message: message,
+    removedDuplicates: deduped.removed
+  };
+}
+
+function applyBridgeItemsToUI(processed) {
+  processed = processed || {};
+  var items = processed.items || [];
+  var rootName = processed.rootName || getRootName();
+
+  if (!items.length) {
+    return Promise.reject(new Error('Bridge retornou 0 linhas apos deduplicacao'));
+  }
+
+  if (typeof w.APP_CONFIG !== 'undefined') {
+    w.APP_CONFIG.IMPORT_MODE = true;
+    w.APP_CONFIG.DEMO_MODE = false;
+  }
+
+  if (typeof w.BomSnapshot !== 'undefined' && w.BomSnapshot.buildFromImported && w.BomSnapshot.applyPayload) {
+    var payload = w.BomSnapshot.buildFromImported(items, rootName);
+    if (payload) payload.scrapeSource = 'browser-auth-bridge';
+    return w.BomSnapshot.applyPayload(payload).then(function (meta) {
+      var count =
+        typeof w.BomService !== 'undefined' && w.BomService.getNodeCount
+          ? w.BomService.getNodeCount()
+          : processed.mappedCount;
+      bridgeLog('UI nodeCount', count);
+      return {
+        meta: meta || {},
+        count: count
+      };
+    });
+  }
+
+  if (typeof w.BomService === 'undefined' || !w.BomService.loadFromImportedItems) {
+    return Promise.reject(new Error('BomService indisponivel para aplicar bridge'));
+  }
+
+  if (w.BomService.reset) w.BomService.reset();
+  return Promise.resolve(w.BomService.loadFromImportedItems(items)).then(function () {
+    var count = w.BomService.getNodeCount ? w.BomService.getNodeCount() : items.length;
+    bridgeLog('UI nodeCount', count);
+    return {
+      meta: {
+        productName: rootName,
+        itemCount: count,
+        rootPhysicalId: items[0] && items[0].physicalid
+      },
+      count: count
+    };
+  });
+}
+
+function buildOrchestratorResult(processed, loaded) {
+  processed = processed || {};
+  loaded = loaded || {};
+  var count = n(loaded.count) || processed.mappedCount || 0;
+  var expected = n(processed.expectedCount);
+  var partial = expected > 0 ? count < expected - 1 : !!processed.partial;
+
+  return {
+    loaderMode: 'browser-backend',
+    mode: 'browser-backend',
+    partial: partial,
+    message: processed.message || ('Bridge ' + BUILD + ': ' + count + ' linhas'),
+    meta: Object.assign({}, loaded.meta || {}, {
+      itemCount: count,
+      rootPhysicalId: getPhysicalId(),
+      productName: processed.rootName || getRootName(),
+      bridgeRawCount: processed.rawCount,
+      bridgeDedupCount: processed.dedupCount,
+      bridgeRemovedDuplicates: processed.removedDuplicates
+    }),
+    context: {
+      expectedCount: expected,
+      productName: processed.rootName || getRootName(),
+      physicalId: getPhysicalId()
+    },
+    refreshSource: 'manual',
+    bridgeResult: processed
+  };
+}
+
+function finalizeBridgeResult(raw) {
+  var processed = processBridgeResult(raw);
+  return applyBridgeItemsToUI(processed).then(function (loaded) {
+    w.__bomBridgeLastResult = processed;
+    w.__bomBridgeLastError = null;
+    var out = buildOrchestratorResult(processed, loaded);
+    diag(
+      'ok',
+      'Bridge OK: ' + (loaded.count || processed.mappedCount) +
+        ' linhas (raw ' + processed.rawCount + ', dedup ' + processed.dedupCount + ')'
+    );
+    updateBuildPill();
+    return out;
+  });
+}
+
 function bridgeLoop(startPayload) {
 var jobId = startPayload.jobId;
 var current = startPayload;
@@ -472,24 +778,6 @@ function bridgeFailure(err, context) {
   throw err;
 }
 
-function bridgeResultToOrchestrator(result) {
-  result = result || {};
-  var rows = result.rows || result.items || result.bom || [];
-  if (!Array.isArray(rows)) rows = [];
-  return {
-    loaderMode: 'browser-backend',
-    mode: 'browser-backend',
-    partial: !!result.partial,
-    message: result.message || ('Bridge ' + BUILD + ': ' + rows.length + ' linhas'),
-    meta: {
-      itemCount: result.actualCount || rows.length,
-      rootPhysicalId: getPhysicalId(),
-      productName: getRootName()
-    },
-    bridgeResult: result
-  };
-}
-
 function patchOrchestrator() {
   if (!w.BomOrchestrator || !w.BomOrchestrator.refreshStructure) return false;
   if (w.BomOrchestrator.__BOM_BRIDGE_PATCHED__) return true;
@@ -508,12 +796,7 @@ function patchOrchestrator() {
 
     return runBrowserBridge()
       .then(function (result) {
-        w.__bomBridgeLastResult = result;
-        w.__bomBridgeLastError = null;
-        var out = bridgeResultToOrchestrator(result);
-        diag('ok', 'Bridge OK: ' + ((result.rows || result.items || result.bom || []).length) + ' linhas');
-        updateBuildPill();
-        return out;
+        return finalizeBridgeResult(result);
       })
       .catch(function (err) {
         return bridgeFailure(err, 'Atualizar estrutura');
@@ -544,9 +827,7 @@ w.ExplorerScanner.__BOM_ORIGINAL_SCAN__ = w.ExplorerScanner.__BOM_ORIGINAL_SCAN_
 w.ExplorerScanner.scan = function () {
   return runBrowserBridge()
     .then(function (result) {
-      w.__bomBridgeLastResult = result;
-      w.__bomBridgeLastError = null;
-      return result;
+      return finalizeBridgeResult(result);
     })
     .catch(function (err) {
       return bridgeFailure(err, 'ExplorerScanner.scan');
@@ -598,15 +879,15 @@ w.__bomBridgeInstall = function () {
 
 w.__bomBridgeRun = function () {
   diag('ok', 'Executando bridge manual: ' + BUILD);
-  return runBrowserBridge().then(function (result) {
-    w.__bomBridgeLastResult = result;
-    diag('ok', 'Bridge manual retornou ' + ((result.rows || result.items || result.bom || []).length) + ' linhas');
-    return result;
-  }).catch(function (err) {
-    w.__bomBridgeLastError = err;
-    diag('error', 'Bridge manual erro: ' + (err && err.message ? err.message : err));
-    throw err;
-  });
+  return runBrowserBridge()
+    .then(function (result) {
+      return finalizeBridgeResult(result);
+    })
+    .catch(function (err) {
+      w.__bomBridgeLastError = err;
+      diag('error', 'Bridge manual erro: ' + (err && err.message ? err.message : err));
+      throw err;
+    });
 };
 
 w.__bomBridgeInfo = function () {
