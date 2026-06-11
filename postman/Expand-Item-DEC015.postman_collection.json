@@ -1,0 +1,125 @@
+{
+  "info": {
+    "name": "DEC-015 — Expand Item dseng (Postman oficial)",
+    "description": "Validação Expand Item fora do widget. Tenant piloto R1132100929518.\n\nOrdem:\n1. Autenticar (CAS/Login Ticket — collection ENOVIA User Community ou cookie de sessão)\n2. GET CSRF\n3. GET EngItem root validation\n4. POST expand\n\nNunca usar host *-ifwe* para dseng. Sempre SPACE_URL *-space*.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1 — GET CSRF",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const status = pm.response.code;",
+              "pm.test('CSRF status 200', function () { pm.expect(status).to.eql(200); });",
+              "let body = {};",
+              "try { body = pm.response.json(); } catch (e) {}",
+              "const csrf = body.csrf || body;",
+              "const name = csrf.name || 'ENO_CSRF_TOKEN';",
+              "const value = csrf.value || body.value || body.token || '';",
+              "pm.environment.set('CSRF_NAME', name);",
+              "pm.environment.set('CSRF_VALUE', value);",
+              "console.log('CSRF status:', status);",
+              "console.log('csrf.name:', name);",
+              "console.log('csrf.value present:', !!value);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": "{{SPACE_URL}}/resources/v1/application/CSRF"
+      }
+    },
+    {
+      "name": "2 — GET EngItem root validation",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const status = pm.response.code;",
+              "console.log('Root validation status:', status);",
+              "let body = {};",
+              "try { body = pm.response.json(); } catch (e) {}",
+              "const member = (body.member && body.member[0]) || body;",
+              "console.log('Root title:', member.title || member.name || '(n/a)');",
+              "console.log('Root type:', member.type || '(n/a)');",
+              "console.log('Root state:', member.state || member.maturity || '(n/a)');",
+              "console.log('Root id:', member.id || '(n/a)');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "SecurityContext", "value": "{{SECURITY_CONTEXT}}" }
+        ],
+        "url": "{{SPACE_URL}}/resources/v1/modeler/dseng/dseng:EngItem/{{ROOT_ID}}"
+      }
+    },
+    {
+      "name": "3 — POST Expand Item (dseng_v1)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const status = pm.response.code;",
+              "console.log('POST Expand status:', status);",
+              "let body = {};",
+              "try { body = pm.response.json(); } catch (e) { body = { raw: pm.response.text() }; }",
+              "const members = body.member || [];",
+              "let ref = 0, inst = 0, paths = 0, firstPath = '';",
+              "members.forEach(function (m) {",
+              "  if (!m) return;",
+              "  if (m.type === 'VPMReference') ref++;",
+              "  if (m.type === 'VPMInstance') inst++;",
+              "  if (Array.isArray(m.Path) && m.Path.length) { paths++; if (!firstPath) firstPath = m.Path.join(' -> '); }",
+              "});",
+              "console.log('totalItems:', body.totalItems);",
+              "console.log('member count:', members.length);",
+              "console.log('VPMReference count:', ref);",
+              "console.log('VPMInstance count:', inst);",
+              "console.log('Path count:', paths);",
+              "console.log('first Path:', firstPath || '(none)');",
+              "if (status === 200 && paths > 0) {",
+              "  console.log('CONCLUSÃO: API OK — seguir transporte widget (ENO_CSRF_TOKEN + space host)');",
+              "} else if (status === 403) {",
+              "  console.log('CONCLUSÃO: permissão/CSRF/SecurityContext — resolver antes do widget');",
+              "} else if (status === 404) {",
+              "  console.log('CONCLUSÃO: rootId ou URL errado');",
+              "} else if (status === 405) {",
+              "  console.log('CONCLUSÃO: método/URL errado — confirmar POST em *-space*');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "SecurityContext", "value": "{{SECURITY_CONTEXT}}" },
+          { "key": "{{CSRF_NAME}}", "value": "{{CSRF_VALUE}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"expandDepth\": {{EXPAND_DEPTH}},\n  \"withPath\": true,\n  \"type_filter_bo\": [\"VPMReference\", \"VPMRepReference\"],\n  \"type_filter_rel\": [\"VPMInstance\", \"VPMRepInstance\"]\n}"
+        },
+        "url": "{{SPACE_URL}}/resources/v1/modeler/dseng/dseng:EngItem/{{ROOT_ID}}/expand"
+      }
+    }
+  ]
+}
