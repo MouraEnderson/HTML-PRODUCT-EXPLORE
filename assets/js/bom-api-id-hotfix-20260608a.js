@@ -1,9 +1,9 @@
-/* BOM browser-auth bridge hotfix - 20260612e */
+/* BOM browser-auth bridge hotfix - 20260612f */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260612e';
+var BUILD = 'bom20260612f';
 var BACKEND = 'https://bom-resolver.onrender.com';
 var MIRROR_EXPLORER_MODE = true;
 
@@ -326,65 +326,226 @@ function mirrorItemToExplorerRow(item, idx) {
   };
 }
 
-function extractExplorerSnapshot() {
-  var snapshot = {
-    mirrorExplorerMode: MIRROR_EXPLORER_MODE,
-    explorerLoadedCount: 0,
-    rootName: getRootName(),
-    rows: [],
-    source: 'none',
-    error: null,
-    capturedAt: Date.now()
-  };
-
+function mirrorLog(label, value) {
   try {
-    if (typeof w.ProductExplorerBridge !== 'undefined') {
-      if (w.ProductExplorerBridge.pollDashboardExplorerChrome) {
-        w.ProductExplorerBridge.pollDashboardExplorerChrome();
-      }
-      if (typeof w.ExplorerContext !== 'undefined' && w.ExplorerContext.refresh) {
-        var ctx = w.ExplorerContext.refresh(true);
-        if (ctx && ctx.rootName) snapshot.rootName = s(ctx.rootName) || snapshot.rootName;
-      }
+    if (value !== undefined) console.log('[Explorer mirror]', label + ':', value);
+    else console.log('[Explorer mirror]', label);
+  } catch (e) {}
+}
 
-      snapshot.explorerLoadedCount = getExplorerLoadedCount();
-      var rootName = snapshot.rootName || getRootName();
-      var payload = null;
-
-      if (w.ProductExplorerBridge.scrapeExplorerMirror) {
-        payload = w.ProductExplorerBridge.scrapeExplorerMirror(rootName);
-      }
-      if ((!payload || !payload.items || payload.items.length < 1) && w.ProductExplorerBridge.scrapeExplorerGrid) {
-        payload = w.ProductExplorerBridge.scrapeExplorerGrid(rootName);
-      }
-
-      if (payload && payload.items && payload.items.length) {
-        snapshot.source = payload.scrapeSource || 'explorer-mirror';
-        snapshot.rootName = s(payload.productName) || rootName;
-        snapshot.rows = payload.items.map(mirrorItemToExplorerRow);
-        snapshot.rows = inferParentVisualIndices(snapshot.rows);
-        if (!snapshot.explorerLoadedCount) {
-          snapshot.explorerLoadedCount = n(payload.explorerExpected) || snapshot.rows.length;
-        }
-      } else if (snapshot.explorerLoadedCount > 0) {
-        snapshot.error = 'explorer-snapshot-empty';
-      }
-    } else {
-      snapshot.error = 'ProductExplorerBridge indisponivel';
-    }
+function probeExplorerDomAccess() {
+  var out = {
+    crossOriginBlocked: false,
+    iframeDoc: false,
+    topAccessible: false,
+    reason: ''
+  };
+  try {
+    if (w.top && w.top.document && w.top.document.body) out.topAccessible = true;
   } catch (e) {
-    snapshot.error = e && e.message ? e.message : String(e);
+    out.crossOriginBlocked = true;
+    out.reason = 'top document blocked: ' + (e && e.message ? e.message : String(e));
   }
+  try {
+    var PEB = w.ProductExplorerBridge;
+    if (PEB && PEB.readExplorerIframeDocument) {
+      var doc = PEB.readExplorerIframeDocument();
+      out.iframeDoc = !!(doc && doc.body);
+      if (!out.iframeDoc && !out.crossOriginBlocked) {
+        out.reason = out.reason || 'explorer iframe not found in parent/top';
+      }
+    }
+  } catch (e2) {
+    out.crossOriginBlocked = true;
+    out.reason = e2 && e2.message ? e2.message : String(e2);
+  }
+  return out;
+}
 
-  if (!snapshot.explorerLoadedCount && snapshot.rows.length) {
-    snapshot.explorerLoadedCount = snapshot.rows.length;
+function applyExplorerPayload(snapshot, payload, mode) {
+  if (!payload || !payload.items || !payload.items.length) return false;
+  if (payload.items.length < (snapshot.rows || []).length) return false;
+  snapshot.source = payload.scrapeSource || mode;
+  snapshot.extractionMode = mode;
+  snapshot.rootName = s(payload.productName) || snapshot.rootName;
+  snapshot.rows = payload.items.map(mirrorItemToExplorerRow);
+  snapshot.rows = inferParentVisualIndices(snapshot.rows);
+  return true;
+}
+
+function finalizeExplorerSnapshot(snapshot) {
+  var expected = n(snapshot.explorerLoadedCount);
+  var unique = (snapshot.rows || []).length;
+  mirrorLog('unique rows', unique);
+  if (expected > 0) mirrorLog('missing rows', Math.max(0, expected - unique));
+  if (snapshot.rows && snapshot.rows.length) {
+    mirrorLog('first 5 rows', snapshot.rows.slice(0, 5).map(function (row) {
+      return {
+        title: row.title,
+        level: row.level,
+        physicalId: row.physicalId,
+        revision: row.revision
+      };
+    }));
+  }
+  mirrorLog('extraction mode', snapshot.extractionMode || 'failed');
+
+  if (expected > 0 && unique === expected) {
+    snapshot.status = 'complete';
+    snapshot.error = null;
+  } else if (expected > 0 && unique < expected) {
+    snapshot.status = 'incomplete';
+    snapshot.error = 'extractor-incompleto:' + unique + '/' + expected;
+    if (unique <= 1 && expected > 1) {
+      if (snapshot.domAccess && snapshot.domAccess.crossOriginBlocked) {
+        snapshot.errorReason = 'cross-origin blocked';
+        mirrorLog('parent DOM not accessible due cross-origin', snapshot.domAccess.reason);
+      } else if (snapshot.domAccess && !snapshot.domAccess.iframeDoc) {
+        snapshot.errorReason = 'explorer iframe not accessible';
+      } else {
+        snapshot.errorReason = 'virtualized grid not fully scanned or selectors failed';
+      }
+      mirrorLog('failure reason', snapshot.errorReason);
+    }
+  } else if (unique > 0) {
+    snapshot.status = 'complete';
+    if (!expected) snapshot.explorerLoadedCount = unique;
+  } else {
+    snapshot.status = 'failed';
+    snapshot.error = snapshot.error || 'explorer-snapshot-empty';
+    snapshot.errorReason = snapshot.errorReason || 'selectors failed';
   }
 
   w.__bomExplorerSnapshot = snapshot;
   return snapshot;
 }
 
-w.__bomExtractExplorerSnapshot = extractExplorerSnapshot;
+function extractExplorerSnapshotAsync() {
+  var snapshot = {
+    mirrorExplorerMode: MIRROR_EXPLORER_MODE,
+    explorerLoadedCount: 0,
+    rootName: getRootName(),
+    rows: [],
+    source: 'none',
+    extractionMode: 'failed',
+    status: 'incomplete',
+    error: null,
+    errorReason: null,
+    domAccess: null,
+    capturedAt: Date.now()
+  };
+
+  var PEB = w.ProductExplorerBridge;
+  if (!PEB) {
+    snapshot.error = 'ProductExplorerBridge indisponivel';
+    snapshot.status = 'failed';
+    mirrorLog('extraction mode', 'failed');
+    w.__bomExplorerSnapshot = snapshot;
+    return Promise.resolve(snapshot);
+  }
+
+  if (PEB.pollDashboardExplorerChrome) PEB.pollDashboardExplorerChrome();
+  if (typeof w.ExplorerContext !== 'undefined' && w.ExplorerContext.refresh) {
+    var ctx = w.ExplorerContext.refresh(true);
+    if (ctx && ctx.rootName) snapshot.rootName = s(ctx.rootName) || snapshot.rootName;
+  }
+
+  snapshot.explorerLoadedCount = getExplorerLoadedCount();
+  snapshot.domAccess = probeExplorerDomAccess();
+  mirrorLog('explorerCount from footer', snapshot.explorerLoadedCount);
+  if (snapshot.domAccess.crossOriginBlocked) {
+    mirrorLog('parent DOM not accessible due cross-origin', snapshot.domAccess.reason);
+  }
+
+  var rootName = snapshot.rootName || getRootName();
+  var expected = n(snapshot.explorerLoadedCount);
+
+  var syncPayload = PEB.scrapeExplorerMirror ? PEB.scrapeExplorerMirror(rootName) : null;
+  var syncCount = syncPayload && syncPayload.items ? syncPayload.items.length : 0;
+  mirrorLog('DOM rows found', syncCount);
+  applyExplorerPayload(snapshot, syncPayload, 'dom');
+
+  if (expected > 0 && snapshot.rows.length >= expected) {
+    return Promise.resolve(finalizeExplorerSnapshot(snapshot));
+  }
+
+  function afterScroll(scrollPayload) {
+    var scrollCount = scrollPayload && scrollPayload.items ? scrollPayload.items.length : 0;
+    mirrorLog('rows after scroll scan', scrollCount);
+    applyExplorerPayload(snapshot, scrollPayload, 'virtual-scroll');
+
+    if (expected > 0 && snapshot.rows.length >= expected) {
+      return finalizeExplorerSnapshot(snapshot);
+    }
+
+    if (PEB.scrapeExplorerGrid && snapshot.rows.length < expected) {
+      var gridPayload = PEB.scrapeExplorerGrid(rootName);
+      var gridCount = gridPayload && gridPayload.items ? gridPayload.items.length : 0;
+      mirrorLog('rows after grid scrape', gridCount);
+      applyExplorerPayload(snapshot, gridPayload, 'dom');
+    }
+
+    if (expected > 0 && snapshot.rows.length >= expected) {
+      return finalizeExplorerSnapshot(snapshot);
+    }
+
+    if (typeof w.APP_CONFIG === 'undefined') w.APP_CONFIG = {};
+    w.APP_CONFIG.EXPLORER_AUTO_COPY_ENABLED = true;
+
+    if (!PEB.tryExplorerAutoCopyParse) {
+      return finalizeExplorerSnapshot(snapshot);
+    }
+
+    return PEB.tryExplorerAutoCopyParse(rootName).then(function (tsvPayload) {
+      var tsvCount = tsvPayload && tsvPayload.items ? tsvPayload.items.length : 0;
+      mirrorLog('rows after TSV copy', tsvCount);
+      if (tsvPayload && tsvPayload.items && tsvPayload.items.length) {
+        applyExplorerPayload(snapshot, tsvPayload, 'tsv');
+      } else if (expected > 0 && snapshot.rows.length < expected) {
+        snapshot.errorReason = snapshot.errorReason || 'fallback TSV missing';
+        mirrorLog('failure reason', snapshot.errorReason);
+      }
+      return finalizeExplorerSnapshot(snapshot);
+    });
+  }
+
+  if (PEB.tryExplorerScrollHarvestAsync) {
+    var maxSteps = Math.max(48, Math.ceil((expected || 40) / 2));
+    return PEB.tryExplorerScrollHarvestAsync(rootName, { maxSteps: maxSteps }).then(afterScroll);
+  }
+
+  return afterScroll(null);
+}
+
+function extractExplorerSnapshot() {
+  return w.__bomExplorerSnapshot || finalizeExplorerSnapshot({
+    mirrorExplorerMode: MIRROR_EXPLORER_MODE,
+    explorerLoadedCount: getExplorerLoadedCount(),
+    rootName: getRootName(),
+    rows: [],
+    extractionMode: 'failed',
+    status: 'incomplete',
+    error: 'use extractExplorerSnapshotAsync'
+  });
+}
+
+function isSnapshotComplete(snapshot) {
+  snapshot = snapshot || {};
+  if (snapshot.status === 'complete') return true;
+  var expected = n(snapshot.explorerLoadedCount);
+  var got = (snapshot.rows || []).length;
+  return expected > 0 && got === expected;
+}
+
+function snapshotIncompleteMessage(snapshot) {
+  snapshot = snapshot || {};
+  var got = (snapshot.rows || []).length;
+  var expected = n(snapshot.explorerLoadedCount) || '?';
+  var reason = snapshot.errorReason ? ' (' + snapshot.errorReason + ')' : '';
+  return 'Extractor incompleto: ' + got + '/' + expected + ' linhas capturadas do Explorer' + reason;
+}
+
+w.__bomExtractExplorerSnapshot = extractExplorerSnapshotAsync;
 
 function backendPost(path, payload) {
 return fetch(BACKEND + path, {
@@ -1039,9 +1200,10 @@ function processBridgeResult(raw, explorerSnapshot) {
   var rootName = s(explorerSnapshot.rootName) || getRootName();
   var backendStats = raw.stats || {};
 
-  if (!explorerSnapshotCount) {
-    bridgeLog('explorer snapshot rows', 0);
+  if (!explorerSnapshotCount || explorerSnapshot.status === 'incomplete' || explorerSnapshot.status === 'failed') {
+    bridgeLog('explorer snapshot rows', explorerSnapshotCount);
     bridgeLog('explorer snapshot error', explorerSnapshot.error || 'sem linhas no DOM do Explorer');
+    if (explorerSnapshot.errorReason) bridgeLog('explorer snapshot reason', explorerSnapshot.errorReason);
     return {
       rawCount: rawRows.length,
       realTreeCount: 0,
@@ -1049,14 +1211,15 @@ function processBridgeResult(raw, explorerSnapshot) {
       dedupCount: 0,
       mappedCount: 0,
       explorerLoadedCount: explorerLoadedCount,
-      explorerSnapshotCount: 0,
+      explorerSnapshotCount: explorerSnapshotCount,
       expectedCount: explorerLoadedCount,
       rootName: rootName,
       items: [],
       partial: true,
+      incomplete: true,
       mirrorMode: true,
-      snapshotError: explorerSnapshot.error || 'explorer-snapshot-empty',
-      message: 'Explorer mirror falhou: snapshot vazio'
+      snapshotError: explorerSnapshot.error || snapshotIncompleteMessage(explorerSnapshot),
+      message: snapshotIncompleteMessage(explorerSnapshot)
     };
   }
 
@@ -1104,8 +1267,9 @@ function processBridgeResult(raw, explorerSnapshot) {
   var partial =
     explorerLoadedCount > 0 && mappedCount !== explorerLoadedCount ||
     explorerSnapshotCount !== mappedCount;
-  var message =
-    'Bridge OK: ' + mappedCount + ' linhas (Explorer mirror)';
+  var message = partial
+    ? snapshotIncompleteMessage(explorerSnapshot)
+    : ('Bridge OK: ' + mappedCount + ' linhas (Explorer mirror)');
 
   return {
     rawCount: rawRows.length,
@@ -1249,8 +1413,15 @@ function updateMirrorSyncBanner(processed, dash) {
     var backendFound = n(processed.rawCount);
     var extras = n(processed.backendOnlyDiscarded);
     var inSync = explorerLoaded > 0 && dash === explorerLoaded;
-    el.className = inSync ? 'bom-sync-banner bom-sync-ok' : 'bom-sync-banner bom-sync-warn';
     el.classList.remove('bom-hidden');
+    if (processed.incomplete) {
+      el.className = 'bom-sync-banner bom-sync-warn';
+      el.innerHTML =
+        '<strong>Extractor incompleto: ' + dash + '/' + explorerLoaded + '</strong>' +
+        ' linhas capturadas do Explorer — expanda a árvore ou use importação TSV/clipboard.';
+      return;
+    }
+    el.className = inSync ? 'bom-sync-banner bom-sync-ok' : 'bom-sync-banner bom-sync-warn';
     el.innerHTML =
       'Explorer carregado: <strong>' + explorerLoaded + '</strong>' +
       ' · Dashboard: <strong>' + dash + '</strong>' +
@@ -1261,10 +1432,17 @@ function updateMirrorSyncBanner(processed, dash) {
 }
 
 function finalizeBridgeResult(raw, explorerSnapshot) {
+  explorerSnapshot = explorerSnapshot || w.__bomExplorerSnapshot || {};
   var processed = processBridgeResult(raw, explorerSnapshot);
-  if (!processed.items || !processed.items.length) {
-    var snapErr = processed.snapshotError || 'Explorer snapshot vazio';
-    diag('error', 'Explorer mirror falhou: ' + snapErr);
+  if (processed.incomplete || !isSnapshotComplete(explorerSnapshot) || !processed.items || !processed.items.length) {
+    var snapErr = processed.snapshotError || processed.message || snapshotIncompleteMessage(explorerSnapshot);
+    diag('error', snapErr);
+    updateMirrorSyncBanner({
+      explorerLoadedCount: n(explorerSnapshot.explorerLoadedCount),
+      rawCount: n(processed.rawCount),
+      backendOnlyDiscarded: 0,
+      incomplete: true
+    }, n((explorerSnapshot.rows || []).length));
     return Promise.reject(new Error(snapErr));
   }
   return applyBridgeItemsToUI(processed).then(function (loaded) {
@@ -1275,10 +1453,11 @@ function finalizeBridgeResult(raw, explorerSnapshot) {
     var explorerLoaded = n(processed.explorerLoadedCount);
     var backendFound = n(processed.rawCount);
     var backendOnly = n(processed.backendOnlyDiscarded);
-    diag(
-      'ok',
-      'Bridge OK: ' + dash + ' linhas (Explorer mirror)'
-    );
+    if (!processed.partial && isSnapshotComplete(explorerSnapshot) && dash === n(explorerSnapshot.explorerLoadedCount)) {
+      diag('ok', 'Bridge OK: ' + dash + ' linhas (Explorer mirror)');
+    } else {
+      diag('warn', snapshotIncompleteMessage(explorerSnapshot));
+    }
     bridgeLog(
       'mirror summary',
       'Explorer carregado: ' + explorerLoaded +
@@ -1342,10 +1521,17 @@ return step();
 function runBrowserBridge() {
 return ensureBridgeContext()
 .then(function () {
-  var explorerSnapshot = extractExplorerSnapshot();
+  return extractExplorerSnapshotAsync();
+})
+.then(function (explorerSnapshot) {
   w.__bomExplorerSnapshot = explorerSnapshot;
   bridgeLog('explorer snapshot rows', (explorerSnapshot.rows || []).length);
   bridgeLog('explorer loaded count', explorerSnapshot.explorerLoadedCount);
+  if (!isSnapshotComplete(explorerSnapshot)) {
+    var incompleteMsg = snapshotIncompleteMessage(explorerSnapshot);
+    diag('error', incompleteMsg);
+    return Promise.reject(new Error(incompleteMsg));
+  }
   return explorerSnapshot;
 })
 .then(function (explorerSnapshot) {

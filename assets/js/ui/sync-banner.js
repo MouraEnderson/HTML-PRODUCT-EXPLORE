@@ -44,7 +44,7 @@ var SyncBanner = (function () {
     lastLoad.domFallback =
       !!res.domFallback ||
       lastLoad.loaderMode === 'dom-fallback' ||
-      String(res.mode || '').indexOf('mirror') >= 0 ||
+      (String(res.mode || '').indexOf('mirror') >= 0 && res.loaderMode !== 'explorer-mirror') ||
       String(res.mode || '').indexOf('grid') >= 0;
     if (res.context && res.context.expectedCount > 0) {
       lastLoad.expected = res.context.expectedCount;
