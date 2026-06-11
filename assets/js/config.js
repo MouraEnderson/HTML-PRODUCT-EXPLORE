@@ -110,9 +110,9 @@
     /** Se espelho/auto-copy falhar no Atualizar, tentar API ENOVIA (WAFData) */
     MANUAL_API_FALLBACK: true,
     /** Sprint 2.5 item 6: espelho DOM/innerText nunca como primary */
-    USE_DOM_MIRROR_PRIMARY: true,
+    USE_DOM_MIRROR_PRIMARY: false,
     /** Fallback DOM reprovado como fonte de produto: iframe/grid virtualizada geram parciais. */
-    DOM_MIRROR_FALLBACK: true,
+    DOM_MIRROR_FALLBACK: false,
     PILOT_API_TREE_DEPTH: 1,
     STRUCTURE_SYNC_DEBOUNCE_MS: 2200,
     AUTO_SYNC_TIMEOUT_MS: 24000,

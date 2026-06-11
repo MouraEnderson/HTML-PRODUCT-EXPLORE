@@ -74,6 +74,7 @@ var SyncBanner = (function () {
 
   function modeLabel(mode) {
     mode = String(mode || '').toLowerCase();
+    if (mode === 'full-bom-api' || mode === 'browser-backend') return 'Full BOM API';
     if (mode === 'api') return 'API';
     if (mode === 'explorer-mirror' || mode.indexOf('mirror') >= 0) return 'Mirror';
     if (mode === 'tsv' || mode.indexOf('explorer') >= 0 || mode === 'text') return 'TSV';
@@ -129,7 +130,7 @@ var SyncBanner = (function () {
       el.className = 'bom-sync-banner bom-sync-info';
       el.innerHTML =
         'Nenhuma estrutura carregada. Abra o Product Structure Explorer ao lado e clique ' +
-        '<strong>Atualizar estrutura</strong>.';
+        '<strong>Atualizar estrutura</strong> (modo <strong>Full BOM API</strong>, DEC-014).';
       return;
     }
 
@@ -145,19 +146,25 @@ var SyncBanner = (function () {
     var diff = explorer > 0 ? Math.abs(explorer - dash) : 0;
     var partial = lastLoad.partial || (explorer > 0 && dash < explorer - 1);
 
-    if (lastLoad.loaderMode === 'explorer-mirror' || (lastLoad.diagnostic && lastLoad.diagnostic.mirrorMode)) {
-      var diag = lastLoad.diagnostic || {};
-      var backendFound = diag.backendFound || 0;
-      var extras = diag.backendOnlyDiscarded || 0;
-      var explorerLoaded = diag.explorerLoadedCount || explorer || 0;
-      var inSync = explorerLoaded > 0 && dash === explorerLoaded;
-      el.className = inSync ? 'bom-sync-banner bom-sync-ok' : 'bom-sync-banner bom-sync-warn';
+    if (
+      lastLoad.loaderMode === 'full-bom-api' ||
+      lastLoad.loaderMode === 'browser-backend' ||
+      (lastLoad.diagnostic && lastLoad.diagnostic.loaderMode === 'full-bom-api')
+    ) {
+      var explorerRef = (lastLoad.diagnostic && lastLoad.diagnostic.explorerReferenceCount) || explorer || 0;
+      el.className = 'bom-sync-banner bom-sync-ok';
       el.innerHTML =
-        'Explorer carregado: <strong>' + explorerLoaded + '</strong>' +
-        ' · Dashboard: <strong>' + dash + '</strong>' +
-        ' · Backend encontrados: <strong>' + backendFound + '</strong>' +
-        (extras > 0 ? ' · Extras descartados: <strong>' + extras + '</strong>' : '') +
-        (inSync ? ' — sincronizado (Explorer mirror)' : ' — diferença no mirror');
+        'Modo <strong>Full BOM API</strong> — estrutura via ENOVIA REST (não espelha expansão visual do Explorer)' +
+        (explorerRef > 0
+          ? ' · Explorer carregado: <strong>' + explorerRef + '</strong> | Full BOM API: <strong>' + dash + '</strong>'
+          : ' · <strong>' + dash + '</strong> linhas');
+      return;
+    }
+
+    if (lastLoad.loaderMode === 'explorer-mirror' || (lastLoad.diagnostic && lastLoad.diagnostic.mirrorMode)) {
+      el.className = 'bom-sync-banner bom-sync-warn';
+      el.innerHTML =
+        '<strong>Explorer Mirror indisponível</strong> (DEC-014) — use <strong>Atualizar estrutura</strong> em modo Full BOM API.';
       return;
     }
 
@@ -211,6 +218,16 @@ var SyncBanner = (function () {
       return;
     }
 
+    if (mode === 'Full BOM API' || lastLoad.loaderMode === 'full-bom-api') {
+      el.className = 'bom-sync-banner bom-sync-ok';
+      el.innerHTML =
+        'Modo <strong>Full BOM API</strong>' +
+        (explorer > 0
+          ? ' · Explorer carregado: <strong>' + explorer + '</strong> | Full BOM API: <strong>' + dash + '</strong>'
+          : ' · <strong>' + dash + '</strong> linhas');
+      return;
+    }
+
     if (explorer > 0 && diff <= 1) {
       el.className = 'bom-sync-banner bom-sync-ok';
       var autoTag =
@@ -220,13 +237,21 @@ var SyncBanner = (function () {
       return;
     }
 
+    if (explorer > 0 && dash > 0) {
+      el.className = 'bom-sync-banner bom-sync-ok';
+      el.innerHTML =
+        'Explorer carregado: <strong>' + explorer + '</strong> | Dashboard: <strong>' + dash + '</strong>' +
+        (mode ? ' · <strong>' + mode + '</strong>' : '') +
+        ' — referência visual; contagens podem diferir (DEC-014).';
+      return;
+    }
+
     el.className = 'bom-sync-banner bom-sync-warn';
     el.innerHTML =
       'Explorer: <strong>' + explorer + '</strong> · Dashboard: <strong>' + dash +
       '</strong>' +
       (mode ? ' · modo <strong>' + mode + '</strong>' : '') +
-      ' — diferença de <strong>' + diff +
-      '</strong>. Clique <strong>Atualizar estrutura</strong>.';
+      '. Clique <strong>Atualizar estrutura</strong>.';
   }
 
   return {

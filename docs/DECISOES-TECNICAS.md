@@ -117,3 +117,22 @@ Motivo: as tentativas anteriores misturaram API, TSV, paste, DOM mirror e heuris
 Consequencia: cada sprint de carga deve comecar por diagnostico isolado e terminar com evidencia objetiva. Caminhos que nao entregam pai, filho real, revisao, proprietario, maturidade e ID estavel devem ser reprovados ou mantidos apenas como contingencia explicita.
 
 Referencia: `docs/ANALISE-CONTRATO-EBOM-2026-06-06.md`.
+
+## DEC-014 - Dois modos de produto: Mirror Explorer vs Full BOM API
+
+Decisao: o produto tem dois modos explicitos e incompativeis como fonte primaria de linhas.
+
+Motivo: mirror do Explorer e BOM completa via API respondem perguntas diferentes. Misturar as fontes gera contagens erradas e falsa sensacao de sucesso (ex.: 1/21).
+
+Modos:
+
+1. **Mirror Explorer real** — somente viavel com widget nativo mesma origem ou API oficial do Explorer. **Reprovado** para widget GitHub Pages separado (cross-origin + sem contrato publico de arvore expandida). **Encerrado como sprint ativo** em 2026-06-13; permanece no roadmap.
+
+2. **Full BOM via API** — estrutura via `dseng`/backend/WAFData. UI: **"BOM completa via API"**. Nao usar contador do Explorer para cortar lista nem como erro operacional.
+
+Consequencia:
+
+- Botao **Atualizar estrutura** usa Full BOM API por padrao (build `bom20260613a`).
+- Sem fallback TSV/clipboard/DOM mirror como fluxo principal.
+- `1/21` nunca e sucesso parcial.
+- Relatorio: `docs/RELATORIO-MIRROR-EXPLORER-2026-06-12.md`.

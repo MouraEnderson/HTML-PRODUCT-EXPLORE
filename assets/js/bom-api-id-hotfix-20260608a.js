@@ -1,15 +1,24 @@
-/* BOM browser-auth bridge hotfix - 20260612g */
+/* BOM browser-auth bridge hotfix - 20260613a — DEC-014 Full BOM API */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260612g';
+var BUILD = 'bom20260613a';
 var BACKEND = 'https://bom-resolver.onrender.com';
-var MIRROR_EXPLORER_MODE = true;
+var LOADER_MODE = 'full-bom-api';
+var MIRROR_EXPLORER_MODE = false;
+var DEC014_REF = 'DEC-014 (docs/DECISOES-TECNICAS.md)';
+var MIRROR_UNAVAILABLE_MSG =
+  'Modo Explorer Mirror indisponível: o Product Structure Explorer não expõe API pública para árvore expandida em widget GitHub Pages separado. Consulte DEC-014.';
+var FULL_BOM_API_MSG =
+  'Modo Full BOM API: estrutura reconstruída via API ENOVIA, independente do estado visual expandido no Product Explorer.';
+var MIRROR_ROADMAP_NOTE =
+  'Para viabilizar Mirror Explorer real, validar com Dassault/tenant contrato oficial ENOPSTR_* ou API interna para nós expandidos/carregados. Sem esse contrato: widget nativo mesma origem com API oficial.';
 
 w.BOM_BUILD_ID = BUILD;
 w.__BOM_BUILD_ID__ = BUILD;
-w.__BOM_HOTFIX_MODE__ = 'explorer-mirror-bridge';
+w.__BOM_HOTFIX_MODE__ = 'full-bom-api-bridge';
+w.__BOM_LOADER_MODE__ = LOADER_MODE;
 w.__BOM_MIRROR_EXPLORER_MODE__ = MIRROR_EXPLORER_MODE;
 w.__bomBridgeLastResult = null;
 w.__bomBridgeLastError = null;
@@ -326,10 +335,54 @@ function mirrorItemToExplorerRow(item, idx) {
   };
 }
 
+function disableMirrorCaptureFlags() {
+  try {
+    if (typeof w.APP_CONFIG === 'undefined') w.APP_CONFIG = {};
+    w.APP_CONFIG.USE_DOM_MIRROR_PRIMARY = false;
+    w.APP_CONFIG.DOM_MIRROR_FALLBACK = false;
+    w.APP_CONFIG.EXPLORER_AUTO_COPY_ENABLED = false;
+    w.APP_CONFIG.PASTE_TRAP_ENABLED = false;
+    w.APP_CONFIG.EXPLORER_MIRROR_AUTO_SYNC = false;
+    w.APP_CONFIG.PRIMARY_LOADER = 'api';
+  } catch (e) {}
+}
+
+function getExplorerReferenceContext() {
+  var rootName = getRootName();
+  try {
+    if (typeof w.ProductExplorerBridge !== 'undefined') {
+      if (w.ProductExplorerBridge.pollDashboardExplorerChrome) {
+        w.ProductExplorerBridge.pollDashboardExplorerChrome();
+      }
+      if (w.ProductExplorerBridge.getStructureNameHint) {
+        var hint = s(w.ProductExplorerBridge.getStructureNameHint());
+        if (hint) rootName = hint;
+      }
+    }
+  } catch (e0) { /* */ }
+  try {
+    if (typeof w.ExplorerContext !== 'undefined' && w.ExplorerContext.refresh) {
+      var ctx = w.ExplorerContext.refresh(true);
+      if (ctx && ctx.rootName) rootName = s(ctx.rootName) || rootName;
+    }
+  } catch (e1) { /* */ }
+  return {
+    loaderMode: LOADER_MODE,
+    mirrorExplorerMode: false,
+    mirrorStatus: 'unavailable',
+    mirrorMessage: MIRROR_UNAVAILABLE_MSG,
+    fullBomMessage: FULL_BOM_API_MSG,
+    dec014: DEC014_REF,
+    explorerReferenceCount: getExplorerLoadedCount(),
+    rootName: rootName,
+    status: 'reference-only'
+  };
+}
+
 function mirrorLog(label, value) {
   try {
-    if (value !== undefined) console.log('[Explorer mirror]', label + ':', value);
-    else console.log('[Explorer mirror]', label);
+    if (value !== undefined) console.log('[BOM loader]', label + ':', value);
+    else console.log('[BOM loader]', label);
   } catch (e) {}
 }
 
@@ -373,206 +426,17 @@ function applyExplorerPayload(snapshot, payload, mode) {
   return true;
 }
 
-function finalizeExplorerSnapshot(snapshot) {
-  var expected = n(snapshot.explorerLoadedCount);
-  var unique = (snapshot.rows || []).length;
-  mirrorLog('final unique rows', unique);
-  if (expected > 0) mirrorLog('missing rows', Math.max(0, expected - unique));
-  if (snapshot.rows && snapshot.rows.length) {
-    mirrorLog('first 5 rows', snapshot.rows.slice(0, 5).map(function (row) {
-      return {
-        title: row.title,
-        level: row.level,
-        physicalId: row.physicalId,
-        revision: row.revision
-      };
-    }));
-  }
-  mirrorLog('extraction mode', snapshot.extractionMode || 'failed');
-
-  if (expected > 0 && unique === expected) {
-    snapshot.status = 'complete';
-    snapshot.error = null;
-  } else if (expected > 0 && unique < expected) {
-    snapshot.status = 'incomplete';
-    snapshot.error = 'extractor-incompleto:' + unique + '/' + expected;
-    if (!snapshot.errorReason) {
-      if (snapshot.captureDiag && snapshot.captureDiag.readExplorerIframeDocument === 'fail' &&
-          snapshot.captureDiag.readExplorerHost === 'fail') {
-        snapshot.errorReason = 'Nao foi possivel acessar a grade do Product Explorer por restrição de iframe/cross-origin';
-      } else if (snapshot.captureDiag && snapshot.captureDiag.readExplorerIframeDocument === 'fail') {
-        snapshot.errorReason = 'iframe Explorer inacessivel; scroll/dashboard-host nao atingiu ' + expected + ' linhas';
-      } else if (snapshot.domAccess && snapshot.domAccess.crossOriginBlocked) {
-        snapshot.errorReason = 'cross-origin blocked';
-        mirrorLog('parent DOM not accessible due cross-origin', snapshot.domAccess.reason);
-      } else if (snapshot.domAccess && !snapshot.domAccess.iframeDoc) {
-        snapshot.errorReason = 'explorer iframe not accessible';
-      } else {
-        snapshot.errorReason = 'virtualized grid not fully scanned or selectors failed';
-      }
-    }
-    mirrorLog('failure reason', snapshot.errorReason);
-  } else if (unique > 0) {
-    snapshot.status = 'complete';
-    if (!expected) snapshot.explorerLoadedCount = unique;
-  } else {
-    snapshot.status = 'failed';
-    snapshot.error = snapshot.error || 'explorer-snapshot-empty';
-    snapshot.errorReason = snapshot.errorReason || 'selectors failed';
-  }
-
-  w.__bomExplorerSnapshot = snapshot;
-  return snapshot;
-}
-
+/** Referência Explorer apenas (contador/nome) — sem DOM/TSV/clipboard. DEC-014 */
 function extractExplorerSnapshotAsync() {
-  var snapshot = {
-    mirrorExplorerMode: MIRROR_EXPLORER_MODE,
-    explorerLoadedCount: 0,
-    rootName: getRootName(),
-    rows: [],
-    source: 'none',
-    extractionMode: 'failed',
-    status: 'incomplete',
-    error: null,
-    errorReason: null,
-    domAccess: null,
-    capturedAt: Date.now()
-  };
-
-  var PEB = w.ProductExplorerBridge;
-  if (!PEB) {
-    snapshot.error = 'ProductExplorerBridge indisponivel';
-    snapshot.status = 'failed';
-    mirrorLog('extraction mode', 'failed');
-    w.__bomExplorerSnapshot = snapshot;
-    return Promise.resolve(snapshot);
-  }
-
-  if (PEB.pollDashboardExplorerChrome) PEB.pollDashboardExplorerChrome();
-  if (typeof w.ExplorerContext !== 'undefined' && w.ExplorerContext.refresh) {
-    var ctx = w.ExplorerContext.refresh(true);
-    if (ctx && ctx.rootName) snapshot.rootName = s(ctx.rootName) || snapshot.rootName;
-  }
-
-  snapshot.explorerLoadedCount = getExplorerLoadedCount();
-  snapshot.domAccess = probeExplorerDomAccess();
-  mirrorLog('expected/count from Explorer', snapshot.explorerLoadedCount);
-  if (snapshot.domAccess.crossOriginBlocked) {
-    mirrorLog('parent DOM not accessible due cross-origin', snapshot.domAccess.reason);
-  }
-
-  var rootName = snapshot.rootName || getRootName();
-  var expected = n(snapshot.explorerLoadedCount);
-  var captureProbe = null;
-
-  if (PEB.probeExplorerMirrorCapture) {
-    captureProbe = PEB.probeExplorerMirrorCapture(rootName, { log: mirrorLog });
-    snapshot.captureDiag = captureProbe.host && captureProbe.host.diag;
-  }
-
-  var syncPayload = PEB.scrapeExplorerMirror ? PEB.scrapeExplorerMirror(rootName) : null;
-  var syncCount = syncPayload && syncPayload.items ? syncPayload.items.length : 0;
-  mirrorLog('DOM direct rows', syncCount);
-  applyExplorerPayload(snapshot, syncPayload, 'dom');
-
-  if (expected > 0 && snapshot.rows.length >= expected) {
-    return Promise.resolve(finalizeExplorerSnapshot(snapshot));
-  }
-
-  function afterScroll(scrollPayload) {
-    var scrollCount = scrollPayload && scrollPayload.items ? scrollPayload.items.length : 0;
-    mirrorLog('rows after scroll scan', scrollCount);
-    applyExplorerPayload(snapshot, scrollPayload, 'virtual-scroll');
-
-    if (expected > 0 && snapshot.rows.length >= expected) {
-      return finalizeExplorerSnapshot(snapshot);
-    }
-
-    if (PEB.scrapeExplorerGrid && snapshot.rows.length < expected) {
-      var gridPayload = PEB.scrapeExplorerGrid(rootName);
-      var gridCount = gridPayload && gridPayload.items ? gridPayload.items.length : 0;
-      mirrorLog('rows after grid scrape', gridCount);
-      applyExplorerPayload(snapshot, gridPayload, 'dom');
-    }
-
-    if (expected > 0 && snapshot.rows.length >= expected) {
-      return finalizeExplorerSnapshot(snapshot);
-    }
-
-    if (typeof w.APP_CONFIG === 'undefined') w.APP_CONFIG = {};
-    w.APP_CONFIG.EXPLORER_AUTO_COPY_ENABLED = true;
-
-    if (!PEB.tryExplorerAutoCopyParse) {
-      return finalizeExplorerSnapshot(snapshot);
-    }
-
-    return PEB.tryExplorerAutoCopyParse(rootName).then(function (tsvPayload) {
-      var tsvCount = tsvPayload && tsvPayload.items ? tsvPayload.items.length : 0;
-      var tsvChars = 0;
-      try {
-        if (tsvPayload && tsvPayload.items && tsvPayload.items.length) {
-          tsvChars = JSON.stringify(tsvPayload.items).length;
-        }
-      } catch (e) {}
-      mirrorLog('TSV/copy chars', tsvChars);
-      mirrorLog('TSV parsed rows', tsvCount);
-      if (tsvPayload && tsvPayload.items && tsvPayload.items.length) {
-        applyExplorerPayload(snapshot, tsvPayload, 'tsv');
-      } else if (expected > 0 && snapshot.rows.length < expected) {
-        snapshot.errorReason = snapshot.errorReason || 'fallback TSV missing — use Ctrl+A/Ctrl+C no Explorer e importe TSV';
-        mirrorLog('failure reason', snapshot.errorReason);
-      }
-      mirrorLog('final unique rows', (snapshot.rows || []).length);
-      return finalizeExplorerSnapshot(snapshot);
-    });
-  }
-
-  if (PEB.tryExplorerScrollHarvestAsync) {
-    var maxSteps = Math.max(60, Math.ceil((expected || 40) * 1.5));
-    return PEB.tryExplorerScrollHarvestAsync(rootName, {
-      maxSteps: maxSteps,
-      stepMs: 120,
-      onStep: function (stepN, rowCount) {
-        mirrorLog('scroll step ' + stepN + ': rows collected', rowCount);
-      }
-    }).then(function (scrollPayload) {
-      if (scrollPayload && scrollPayload.captureDiag) {
-        snapshot.captureDiag = scrollPayload.captureDiag;
-      }
-      return afterScroll(scrollPayload);
-    });
-  }
-
-  return afterScroll(null);
+  var ctx = getExplorerReferenceContext();
+  w.__bomExplorerSnapshot = ctx;
+  mirrorLog('explorer reference count', ctx.explorerReferenceCount);
+  mirrorLog('loader mode', LOADER_MODE);
+  return Promise.resolve(ctx);
 }
 
 function extractExplorerSnapshot() {
-  return w.__bomExplorerSnapshot || finalizeExplorerSnapshot({
-    mirrorExplorerMode: MIRROR_EXPLORER_MODE,
-    explorerLoadedCount: getExplorerLoadedCount(),
-    rootName: getRootName(),
-    rows: [],
-    extractionMode: 'failed',
-    status: 'incomplete',
-    error: 'use extractExplorerSnapshotAsync'
-  });
-}
-
-function isSnapshotComplete(snapshot) {
-  snapshot = snapshot || {};
-  if (snapshot.status === 'complete') return true;
-  var expected = n(snapshot.explorerLoadedCount);
-  var got = (snapshot.rows || []).length;
-  return expected > 0 && got === expected;
-}
-
-function snapshotIncompleteMessage(snapshot) {
-  snapshot = snapshot || {};
-  var got = (snapshot.rows || []).length;
-  var expected = n(snapshot.explorerLoadedCount) || '?';
-  var reason = snapshot.errorReason ? ' — ' + snapshot.errorReason : '';
-  return 'Extractor incompleto: ' + got + '/' + expected + ' linhas capturadas do Explorer' + reason;
+  return w.__bomExplorerSnapshot || getExplorerReferenceContext();
 }
 
 w.__bomExtractExplorerSnapshot = extractExplorerSnapshotAsync;
@@ -1218,116 +1082,59 @@ function mapRowsToImportItems(rows, rootName, preserveOrder) {
   });
 }
 
-function processBridgeResult(raw, explorerSnapshot) {
+function processBridgeResult(raw, loadContext) {
   raw = raw || {};
-  explorerSnapshot = explorerSnapshot || w.__bomExplorerSnapshot || extractExplorerSnapshot();
+  loadContext = loadContext || w.__bomLoadContext || getExplorerReferenceContext();
 
   var rawRows = raw.rows || raw.items || raw.bom || raw.treeRows || [];
   if (!Array.isArray(rawRows)) rawRows = [];
 
-  var explorerLoadedCount = n(explorerSnapshot.explorerLoadedCount) || getExplorerLoadedCount();
-  var explorerSnapshotCount = (explorerSnapshot.rows || []).length;
-  var rootName = s(explorerSnapshot.rootName) || getRootName();
+  var explorerRef = n(loadContext.explorerReferenceCount) || getExplorerLoadedCount();
+  var rootName = s(loadContext.rootName) || getRootName();
   var backendStats = raw.stats || {};
 
-  if (!explorerSnapshotCount || explorerSnapshot.status === 'incomplete' || explorerSnapshot.status === 'failed') {
-    bridgeLog('explorer snapshot rows', explorerSnapshotCount);
-    bridgeLog('explorer snapshot error', explorerSnapshot.error || 'sem linhas no DOM do Explorer');
-    if (explorerSnapshot.errorReason) bridgeLog('explorer snapshot reason', explorerSnapshot.errorReason);
-    return {
-      rawCount: rawRows.length,
-      realTreeCount: 0,
-      discardedCount: 0,
-      dedupCount: 0,
-      mappedCount: 0,
-      explorerLoadedCount: explorerLoadedCount,
-      explorerSnapshotCount: explorerSnapshotCount,
-      expectedCount: explorerLoadedCount,
-      rootName: rootName,
-      items: [],
-      partial: true,
-      incomplete: true,
-      mirrorMode: true,
-      snapshotError: explorerSnapshot.error || snapshotIncompleteMessage(explorerSnapshot),
-      message: snapshotIncompleteMessage(explorerSnapshot)
-    };
-  }
-
-  bridgeLog('explorer snapshot rows', explorerSnapshotCount);
-  bridgeLog('explorer loaded count', explorerLoadedCount);
+  bridgeLog('explorer reference count', explorerRef);
   bridgeLog('backend raw rows', rawRows.length);
 
   var classified = classifyBridgeRows(rawRows);
   var built = buildFinalTreeRows(classified);
-  var backendTreeRows = built.finalRows;
-  var merged = mergeExplorerMirror(explorerSnapshot, backendTreeRows);
-  var finalRows = merged.finalRows;
-
+  var finalRows = built.finalRows;
   var detailMerged = n(backendStats.detailMerged) || 0;
   var duplicatesRemoved = built.instDedupRemoved + built.bridgeDedupRemoved;
-  var backendOnlyCount = merged.backendOnly.length;
-
-  bridgeLog('backend enriched matched rows', merged.matched);
-  bridgeLog('backend-only rows discarded', backendOnlyCount);
-  bridgeLog('final dashboard rows', finalRows.length);
 
   logDiscardedRows(classified.discarded);
-  logBackendOnlyRows(merged.backendOnly);
 
-  if (explorerLoadedCount > 0 && finalRows.length !== explorerLoadedCount) {
-    bridgeLog(
-      'count mismatch explorerLoaded=' + explorerLoadedCount +
-      ' snapshot=' + explorerSnapshotCount +
-      ' dashboard=' + finalRows.length
-    );
-  }
-
-  if (explorerSnapshotCount !== finalRows.length) {
-    bridgeLog('snapshot/dashboard row count mismatch', {
-      snapshot: explorerSnapshotCount,
-      dashboard: finalRows.length
-    });
-  }
-
-  var items = mapRowsToImportItems(finalRows, rootName, true);
+  var items = mapRowsToImportItems(finalRows, rootName, false);
   var mappedCount = items.length;
 
   if (items.length) bridgeLog('first row', items[0]);
+  bridgeLog('final dashboard rows', mappedCount);
 
-  var partial =
-    explorerLoadedCount > 0 && mappedCount !== explorerLoadedCount ||
-    explorerSnapshotCount !== mappedCount;
-  var message = partial
-    ? snapshotIncompleteMessage(explorerSnapshot)
-    : ('Bridge OK: ' + mappedCount + ' linhas (Explorer mirror)');
+  if (explorerRef > 0 && mappedCount !== explorerRef) {
+    bridgeLog('info only — Explorer carregado: ' + explorerRef + ' | Full BOM API: ' + mappedCount);
+  }
 
   return {
     rawCount: rawRows.length,
-    realTreeCount: backendTreeRows.length,
-    discardedCount: classified.discarded.length + backendOnlyCount,
+    realTreeCount: finalRows.length,
+    discardedCount: classified.discarded.length,
     dedupCount: mappedCount,
     mappedCount: mappedCount,
-    explorerLoadedCount: explorerLoadedCount,
-    explorerSnapshotCount: explorerSnapshotCount,
-    expectedCount: explorerLoadedCount,
+    explorerReferenceCount: explorerRef,
+    explorerLoadedCount: explorerRef,
     rootName: rootName,
     items: items,
-    partial: partial,
-    mirrorMode: true,
-    message: message,
+    partial: !!raw.partial,
+    incomplete: false,
+    mirrorMode: false,
+    loaderMode: LOADER_MODE,
+    message: 'Full BOM API: ' + mappedCount + ' linhas',
     removedDuplicates: duplicatesRemoved,
-    discardedRows: classified.discarded.concat(merged.backendOnly),
-    backendOnlyRows: merged.backendOnly,
-    backendMatched: merged.matched,
-    backendOnlyDiscarded: backendOnlyCount,
-    explorerSnapshot: explorerSnapshot,
+    discardedRows: classified.discarded,
     stats: {
-      explorerSnapshotRows: explorerSnapshotCount,
-      explorerLoadedCount: explorerLoadedCount,
+      explorerReferenceCount: explorerRef,
       backendRawRows: rawRows.length,
-      backendTreeRows: backendTreeRows.length,
-      backendMatched: merged.matched,
-      backendOnlyDiscarded: backendOnlyCount,
+      backendTreeRows: finalRows.length,
       searchDiscarded: classified.candidateRows.length,
       probeDiscarded: classified.probeRows.length,
       detailMerged: detailMerged,
@@ -1353,7 +1160,7 @@ function applyBridgeItemsToUI(processed) {
   if (typeof w.BomSnapshot !== 'undefined' && w.BomSnapshot.buildFromImported && w.BomSnapshot.applyPayload) {
     var payload = w.BomSnapshot.buildFromImported(items, rootName);
     if (payload) {
-      payload.scrapeSource = processed.mirrorMode ? 'explorer-mirror' : 'browser-auth-bridge';
+      payload.scrapeSource = processed.loaderMode === 'full-bom-api' ? 'full-bom-api' : 'browser-auth-bridge';
     }
     return w.BomSnapshot.applyPayload(payload).then(function (meta) {
       var count =
@@ -1395,10 +1202,10 @@ function buildOrchestratorResult(processed, loaded) {
   var partial = !!processed.partial;
 
   return {
-    loaderMode: 'explorer-mirror',
-    mode: 'explorer-mirror',
+    loaderMode: LOADER_MODE,
+    mode: LOADER_MODE,
     partial: partial,
-    message: processed.message || ('Bridge OK: ' + count + ' linhas (Explorer mirror)'),
+    message: processed.message || ('Full BOM API: ' + count + ' linhas'),
     meta: Object.assign({}, loaded.meta || {}, {
       itemCount: count,
       rootPhysicalId: getPhysicalId(),
@@ -1406,96 +1213,75 @@ function buildOrchestratorResult(processed, loaded) {
       bridgeRawCount: processed.rawCount,
       bridgeDedupCount: processed.dedupCount,
       bridgeRemovedDuplicates: processed.removedDuplicates,
-      backendMatched: n(processed.backendMatched),
-      backendOnlyDiscarded: n(processed.backendOnlyDiscarded),
-      explorerSnapshotCount: n(processed.explorerSnapshotCount),
-      explorerLoadedCount: explorerLoaded,
-      mirrorMode: true
+      explorerReferenceCount: explorerLoaded,
+      dec014: DEC014_REF,
+      mirrorStatus: 'unavailable',
+      mirrorMode: false,
+      fullBomApi: true
     }),
     context: {
-      expectedCount: explorerLoaded,
-      explorerLoadedCount: explorerLoaded,
-      explorerSnapshotCount: n(processed.explorerSnapshotCount),
+      explorerReferenceCount: explorerLoaded,
       productName: processed.rootName || getRootName(),
-      physicalId: getPhysicalId()
+      physicalId: getPhysicalId(),
+      loaderMode: LOADER_MODE
     },
     diagnostic: {
+      explorerReferenceCount: explorerLoaded,
       explorerLoadedCount: explorerLoaded,
       dashboardCount: count,
       backendFound: n(processed.rawCount),
-      backendOnlyDiscarded: n(processed.backendOnlyDiscarded),
-      backendMatched: n(processed.backendMatched),
-      mirrorMode: true
+      loaderMode: LOADER_MODE,
+      mirrorMode: false,
+      dec014: DEC014_REF,
+      mirrorRoadmap: MIRROR_ROADMAP_NOTE
     },
     refreshSource: 'manual',
     bridgeResult: processed
   };
 }
 
-function updateMirrorSyncBanner(processed, dash) {
+function updateLoadSyncBanner(processed, dash) {
   processed = processed || {};
   dash = n(dash);
   try {
     var root = w.__3DX_UI_ROOT__ || document;
     var el = root.querySelector && root.querySelector('#syncBanner');
     if (!el) return;
-    var explorerLoaded = n(processed.explorerLoadedCount);
-    var backendFound = n(processed.rawCount);
-    var extras = n(processed.backendOnlyDiscarded);
-    var inSync = explorerLoaded > 0 && dash === explorerLoaded;
+    var explorerRef = n(processed.explorerReferenceCount || processed.explorerLoadedCount);
     el.classList.remove('bom-hidden');
-    if (processed.incomplete) {
-      el.className = 'bom-sync-banner bom-sync-warn';
-      el.innerHTML =
-        '<strong>Extractor incompleto: ' + dash + '/' + explorerLoaded + '</strong>' +
-        ' linhas capturadas do Explorer — expanda a árvore ou use importação TSV/clipboard.';
-      return;
+    el.className = 'bom-sync-banner bom-sync-ok';
+    var line =
+      'Modo <strong>Full BOM API</strong> — ' + FULL_BOM_API_MSG;
+    if (explorerRef > 0) {
+      line += ' · Explorer carregado: <strong>' + explorerRef + '</strong> | Full BOM API: <strong>' + dash + '</strong>';
+    } else {
+      line += ' · <strong>' + dash + '</strong> linhas';
     }
-    el.className = inSync ? 'bom-sync-banner bom-sync-ok' : 'bom-sync-banner bom-sync-warn';
-    el.innerHTML =
-      'Explorer carregado: <strong>' + explorerLoaded + '</strong>' +
-      ' · Dashboard: <strong>' + dash + '</strong>' +
-      ' · Backend encontrados: <strong>' + backendFound + '</strong>' +
-      (extras > 0 ? ' · Extras descartados: <strong>' + extras + '</strong>' : '') +
-      (inSync ? ' — sincronizado (Explorer mirror)' : ' — diferença no mirror');
+    el.innerHTML = line;
   } catch (e) {}
 }
 
-function finalizeBridgeResult(raw, explorerSnapshot) {
-  explorerSnapshot = explorerSnapshot || w.__bomExplorerSnapshot || {};
-  var processed = processBridgeResult(raw, explorerSnapshot);
-  if (processed.incomplete || !isSnapshotComplete(explorerSnapshot) || !processed.items || !processed.items.length) {
-    var snapErr = processed.snapshotError || processed.message || snapshotIncompleteMessage(explorerSnapshot);
-    diag('error', snapErr);
-    updateMirrorSyncBanner({
-      explorerLoadedCount: n(explorerSnapshot.explorerLoadedCount),
-      rawCount: n(processed.rawCount),
-      backendOnlyDiscarded: 0,
-      incomplete: true
-    }, n((explorerSnapshot.rows || []).length));
-    return Promise.reject(new Error(snapErr));
+function finalizeBridgeResult(raw, loadContext) {
+  loadContext = loadContext || w.__bomLoadContext || getExplorerReferenceContext();
+  var processed = processBridgeResult(raw, loadContext);
+  if (!processed.items || !processed.items.length) {
+    var errMsg = 'Full BOM API retornou 0 linhas — verifique raiz/seleção no Explorer e SecurityContext';
+    diag('error', errMsg);
+    return Promise.reject(new Error(errMsg));
   }
   return applyBridgeItemsToUI(processed).then(function (loaded) {
     w.__bomBridgeLastResult = processed;
     w.__bomBridgeLastError = null;
     var out = buildOrchestratorResult(processed, loaded);
     var dash = n(loaded.count) || n(processed.mappedCount);
-    var explorerLoaded = n(processed.explorerLoadedCount);
-    var backendFound = n(processed.rawCount);
-    var backendOnly = n(processed.backendOnlyDiscarded);
-    if (!processed.partial && isSnapshotComplete(explorerSnapshot) && dash === n(explorerSnapshot.explorerLoadedCount)) {
-      diag('ok', 'Bridge OK: ' + dash + ' linhas (Explorer mirror)');
-    } else {
-      diag('warn', snapshotIncompleteMessage(explorerSnapshot));
-    }
+    var explorerRef = n(processed.explorerReferenceCount);
+    diag('ok', 'Full BOM API: ' + dash + ' linhas' + (explorerRef > 0 ? ' (Explorer ref: ' + explorerRef + ')' : ''));
     bridgeLog(
-      'mirror summary',
-      'Explorer carregado: ' + explorerLoaded +
-      ' | Dashboard: ' + dash +
-      ' | Backend encontrados: ' + backendFound +
-      ' | Extras descartados: ' + backendOnly
+      'load summary',
+      (explorerRef > 0 ? 'Explorer carregado: ' + explorerRef + ' | ' : '') +
+      'Full BOM API: ' + dash
     );
-    updateMirrorSyncBanner(processed, dash);
+    updateLoadSyncBanner(processed, dash);
     if (typeof w.SyncBanner !== 'undefined' && w.SyncBanner.setLoadResult) {
       w.SyncBanner.setLoadResult(out);
     }
@@ -1549,61 +1335,55 @@ return step();
 }
 
 function runBrowserBridge() {
-return ensureBridgeContext()
-.then(function () {
-  return extractExplorerSnapshotAsync();
-})
-.then(function (explorerSnapshot) {
-  w.__bomExplorerSnapshot = explorerSnapshot;
-  bridgeLog('explorer snapshot rows', (explorerSnapshot.rows || []).length);
-  bridgeLog('explorer loaded count', explorerSnapshot.explorerLoadedCount);
-  if (!isSnapshotComplete(explorerSnapshot)) {
-    var incompleteMsg = snapshotIncompleteMessage(explorerSnapshot);
-    diag('error', incompleteMsg);
-    return Promise.reject(new Error(incompleteMsg));
-  }
-  return explorerSnapshot;
-})
-.then(function (explorerSnapshot) {
-return getCompassSpaceUrl().then(function (spaceUrl) {
-spaceUrl = cleanUrl(spaceUrl || guessSpaceUrlFromLocation());
+  return ensureBridgeContext()
+    .then(function () {
+      disableMirrorCaptureFlags();
+      return extractExplorerSnapshotAsync();
+    })
+    .then(function (loadContext) {
+      w.__bomLoadContext = loadContext;
+      w.__bomExplorerSnapshot = loadContext;
+      bridgeLog('loader mode', LOADER_MODE);
+      bridgeLog('explorer reference', loadContext.explorerReferenceCount);
+      return loadContext;
+    })
+    .then(function (loadContext) {
+      return getCompassSpaceUrl().then(function (spaceUrl) {
+        spaceUrl = cleanUrl(spaceUrl || guessSpaceUrlFromLocation());
+        var rootName = s(loadContext.rootName) || getRootName();
+        var physicalId = getPhysicalId();
+        var explorerRef = n(loadContext.explorerReferenceCount);
 
-    var rootName = s(explorerSnapshot.rootName) || getRootName();
-    var physicalId = getPhysicalId();
-    var explorerLoadedCount = n(explorerSnapshot.explorerLoadedCount) || getExplorerLoadedCount();
+        diag('ok', BUILD + ' | ' + FULL_BOM_API_MSG);
+        console.log('[BOM bridge]', BUILD, 'POST', BACKEND + '/api/bom/browser/start', {
+          spaceUrl: spaceUrl,
+          rootName: rootName,
+          physicalId: physicalId,
+          loaderMode: LOADER_MODE,
+          explorerReferenceCount: explorerRef,
+          mirrorExplorerMode: false
+        });
 
-    diag('ok', 'Hotfix ativo: ' + BUILD + ' | Explorer mirror + API enrich');
-    console.log('[BOM bridge]', BUILD, 'POST', BACKEND + '/api/bom/browser/start', {
-      spaceUrl: spaceUrl,
-      rootName: rootName,
-      physicalId: physicalId,
-      explorerLoadedCount: explorerLoadedCount,
-      explorerSnapshotRows: (explorerSnapshot.rows || []).length,
-      mirrorExplorerMode: MIRROR_EXPLORER_MODE
+        return backendPost('/api/bom/browser/start', {
+          spaceUrl: spaceUrl,
+          rootName: rootName,
+          physicalId: physicalId,
+          expectedCount: 0,
+          explorerReferenceCount: explorerRef,
+          loaderMode: LOADER_MODE,
+          mirrorExplorerMode: false
+        }).then(function (start) {
+          start.__loadContext = loadContext;
+          return start;
+        });
+      });
+    })
+    .then(function (start) {
+      return bridgeLoop(start).then(function (result) {
+        result.__loadContext = start.__loadContext;
+        return result;
+      });
     });
-
-    return backendPost('/api/bom/browser/start', {
-      spaceUrl: spaceUrl,
-      rootName: rootName,
-      physicalId: physicalId,
-      expectedCount: explorerLoadedCount,
-      explorerLoadedCount: explorerLoadedCount,
-      explorerSnapshotCount: (explorerSnapshot.rows || []).length,
-      explorerSnapshot: explorerSnapshot.rows || [],
-      mirrorExplorerMode: MIRROR_EXPLORER_MODE
-    }).then(function (start) {
-      start.__explorerSnapshot = explorerSnapshot;
-      return start;
-    });
-  });
-})
-  .then(function (start) {
-    return bridgeLoop(start).then(function (result) {
-      result.__explorerSnapshot = start.__explorerSnapshot;
-      return result;
-    });
-  });
-
 }
 
 function bridgeFailure(err, context) {
@@ -1626,12 +1406,12 @@ function patchOrchestrator() {
       return original(options);
     }
 
-    diag('ok', BUILD + ' | Atualizar estrutura -> POST /api/bom/browser/start');
-    console.log('[BOM bridge]', BUILD, 'Atualizar estrutura interceptado (refreshStructure manual)');
+    diag('ok', BUILD + ' | Atualizar estrutura -> Full BOM API (DEC-014)');
+    console.log('[BOM bridge]', BUILD, 'Atualizar estrutura -> Full BOM API');
 
     return runBrowserBridge()
       .then(function (result) {
-        return finalizeBridgeResult(result, result && result.__explorerSnapshot);
+        return finalizeBridgeResult(result, result && result.__loadContext);
       })
       .catch(function (err) {
         return bridgeFailure(err, 'Atualizar estrutura');
@@ -1647,7 +1427,7 @@ function patchScanner() {
 try {
 if (typeof w.ExplorerContext !== 'undefined') {
 w.ExplorerContext.suggestLoaderMode = function () {
-return 'browser-backend';
+return 'full-bom-api';
 };
 }
 } catch (e) {}
@@ -1662,7 +1442,7 @@ w.ExplorerScanner.__BOM_ORIGINAL_SCAN__ = w.ExplorerScanner.__BOM_ORIGINAL_SCAN_
 w.ExplorerScanner.scan = function () {
   return runBrowserBridge()
     .then(function (result) {
-      return finalizeBridgeResult(result, result && result.__explorerSnapshot);
+      return finalizeBridgeResult(result, result && result.__loadContext);
     })
     .catch(function (err) {
       return bridgeFailure(err, 'ExplorerScanner.scan');
@@ -1676,12 +1456,28 @@ return true;
 
 }
 
+function installDec014ModePanel() {
+  try {
+    var root = w.__3DX_UI_ROOT__ || document;
+    var panel = root.querySelector && root.querySelector('#bomRulesPanel');
+    if (!panel || panel.getAttribute('data-dec014')) return;
+    panel.setAttribute('data-dec014', '1');
+    panel.innerHTML =
+      '<p style="margin:0 0 6px;font-size:.72rem"><strong>Modos (DEC-014)</strong></p>' +
+      '<p style="margin:0 0 6px;font-size:.7rem;color:#92400e">' + MIRROR_UNAVAILABLE_MSG + '</p>' +
+      '<p style="margin:0 0 6px;font-size:.7rem;color:#166534">' + FULL_BOM_API_MSG + '</p>' +
+      '<p style="margin:0;font-size:.65rem;color:#5c6b7a">' + MIRROR_ROADMAP_NOTE + '</p>';
+  } catch (e) {}
+}
+
 function boot() {
-diag('ok', 'Hotfix carregado: ' + BUILD + ' | instalando bridge...');
+diag('ok', 'Hotfix carregado: ' + BUILD + ' | ' + LOADER_MODE + ' (' + DEC014_REF + ')');
+disableMirrorCaptureFlags();
 updateBuildPill();
 
 patchOrchestrator();
 patchScanner();
+installDec014ModePanel();
 
 var tries = 0;
 var timer = setInterval(function () {
@@ -1707,8 +1503,10 @@ setTimeout(function () {
 }
 
 w.__bomBridgeInstall = function () {
+  disableMirrorCaptureFlags();
   patchOrchestrator();
   patchScanner();
+  installDec014ModePanel();
   return w.__bomBridgeInfo();
 };
 
@@ -1716,7 +1514,7 @@ w.__bomBridgeRun = function () {
   diag('ok', 'Executando bridge manual: ' + BUILD);
   return runBrowserBridge()
     .then(function (result) {
-      return finalizeBridgeResult(result, result && result.__explorerSnapshot);
+      return finalizeBridgeResult(result, result && result.__loadContext);
     })
     .catch(function (err) {
       w.__bomBridgeLastError = err;
@@ -1729,6 +1527,13 @@ w.__bomBridgeInfo = function () {
   return {
     build: BUILD,
     mode: w.__BOM_HOTFIX_MODE__,
+    loaderMode: LOADER_MODE,
+    mirrorExplorerMode: MIRROR_EXPLORER_MODE,
+    dec014: DEC014_REF,
+    mirrorStatus: 'unavailable',
+    mirrorMessage: MIRROR_UNAVAILABLE_MSG,
+    fullBomMessage: FULL_BOM_API_MSG,
+    mirrorRoadmap: MIRROR_ROADMAP_NOTE,
     backend: BACKEND,
     hasWAFData: !!getWafData(),
     hasSecurityContext: !!(getWafHeaders() && getWafHeaders().SecurityContext),
