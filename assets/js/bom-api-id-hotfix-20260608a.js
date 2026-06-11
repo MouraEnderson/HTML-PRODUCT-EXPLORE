@@ -1,12 +1,12 @@
-/* BOM hotfix - 20260614a — DEC-015 Expand Item Provider + Full BOM API alternativo */
+/* BOM hotfix - 20260614b — DEC-015 Expand Item transport fix (CORS/CSRF) + Full BOM API alternativo */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260614a';
+var BUILD = 'bom20260614b';
 var BACKEND = 'https://bom-resolver.onrender.com';
 var DATA_SOURCE = 'expand-item';
-var EXPAND_ITEM_LEVELS = 99;
+var EXPAND_ITEM_LEVELS = 2;
 var LOADER_MODE = DATA_SOURCE;
 var MIRROR_EXPLORER_MODE = false;
 var DEC014_REF = 'DEC-014 (docs/DECISOES-TECNICAS.md)';

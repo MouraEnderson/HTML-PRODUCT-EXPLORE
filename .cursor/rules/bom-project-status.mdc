@@ -16,7 +16,7 @@ alwaysApply: true
 
 ## Build atual (atualizar após cada deploy)
 
-- **BUILD:** `bom20260614a`
+- **BUILD:** `bom20260614b`
 - Widget: `widget-v3-08i.html` + hotfix `bom-api-id-hotfix-20260608a.js` + `expand-item-provider.js`
 - Fonte principal: **Expand Item** (`DATA_SOURCE=expand-item`); Full BOM API = alternativo
 - **Deploy one-click:** `powershell -ExecutionPolicy Bypass -File deploy.ps1`

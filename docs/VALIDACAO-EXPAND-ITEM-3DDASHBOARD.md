@@ -1,6 +1,6 @@
 # Validação obrigatória — Expand Item no 3DDashboard (DEC-015)
 
-**Build:** `bom20260614a`  
+**Build:** `bom20260614b`  
 **Status:** ⏳ pendente validação com sessão 3DEXPERIENCE autenticada  
 **PR:** #11 — **não fazer merge** até concluir esta checklist
 
@@ -8,21 +8,33 @@
 
 ## Pré-requisito
 
-GitHub Pages deve servir `bom20260614a` (widget boot: `Carregando build 20260614a (Expand Item · DEC-015)`).
-
-Verificar:
+GitHub Pages deve servir `bom20260614b`:
 
 ```text
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260614a
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260614b
 ```
+
+Boot esperado: `Carregando build 20260614b (Expand Item · DEC-015 transport fix)`
+
+Pill: `bom20260614b`
+
+---
+
+## Correção transporte (`bom20260614b` vs `bom20260614a`)
+
+| Problema 14a | Correção 14b |
+|--------------|--------------|
+| `PlatformContext.getHeaders()` → `x-csrf-token` | Headers mínimos: `Accept` + `SecurityContext` |
+| POST direto único | Cascade GET A → B → C → POST D |
+| CORS / ResponseCode 0 | Fallback `POST /api/bom/expand-item/start` |
 
 ---
 
 ## Passos no tenant piloto
 
-1. Abrir dashboard piloto com Product Structure Explorer e estrutura carregada.
-2. Widget: `widget-v3-08i.html?v=bom20260614a`
-3. Console do widget (iframe):
+1. Dashboard piloto + Product Structure Explorer com estrutura carregada.
+2. Widget: `widget-v3-08i.html?v=bom20260614b`
+3. Console do **iframe do widget**:
 
 ```javascript
 await window.__expandItemProbe(1)
@@ -30,10 +42,16 @@ await window.__expandItemProbe(2)
 await window.__expandItemProbe(99)
 ```
 
-4. Conferir logs `[ExpandItemProvider]`:
+4. Logs obrigatórios `[ExpandItemProvider]`:
 
-- `rootId:` — id interno 32 hex (não `prd-R...`)
+- `rootId:` — id interno 32 hex
+- `root resolution source:` — dinâmico (não só KNOWN_ROOT)
 - `levels:` — 1, 2, 99
+- `transport:` — `direct-wafdata` ou `backend-browser-auth`
+- `method:` — GET ou POST (qual tentativa venceu)
+- `url:`
+- `custom headers:` — **sem** x-csrf-token
+- `status:` — HTTP real (não 0)
 - `raw member count:`
 - `reference count:`
 - `instance count:`
@@ -45,48 +63,55 @@ await window.__expandItemProbe(99)
 5. Objetos globais:
 
 ```javascript
-window.__lastExpandItemPayload   // member + Path
-window.__lastExpandItemRows      // { source, rows, stats }
+window.__lastExpandItemPayload
+window.__lastExpandItemRows
+window.__lastExpandItemStats
 ```
 
-6. **Atualizar estrutura** — status deve mostrar `Expand Item: X linhas` com `X === rows.length`.
+6. **Atualizar estrutura** → `Expand Item: X linhas` com `X === rows.length`
 
-7. Comparar profundidade: se Explorer está expandido 2 níveis, `EXPAND_ITEM_LEVELS=2` deve aproximar a contagem; `99` pode trazer mais linhas (comportamento esperado da API).
+7. **Network tab:** sem erro CORS preflight por `x-csrf-token`
 
----
-
-## Critérios de aceite
-
-| Critério | Esperado |
-|----------|----------|
-| POST `/dseng:EngItem/{id}/expand` | 200 |
-| Payload | `member` com `Path` |
-| `pathCount` | > 0 |
-| `normalizedRows` | > 0 |
-| Hierarquia | `level` correto por Path |
-| Instâncias | `instanceId` preservado |
-| Deduplicação | não colapsar por `referenceId` sozinho |
-| Total Peças | `rows.length` |
-| Modo | Expand Item Provider (não Full BOM API) |
-| Console | limpo (sem probes RAW 404/403) |
+8. **Console:** limpo no fluxo normal
 
 ---
 
-## Root resolution (release)
+## Checklist aceite final
 
-Ordem dinâmica — hardcode `KNOWN_ROOT_BY_PRD` só como último fallback:
+- [ ] Pill `bom20260614b`
+- [ ] `DATA_SOURCE = expand-item`
+- [ ] `__expandItemProbe(2)` → payload com `Path`
+- [ ] `pathCount > 0`, `normalizedRows > 0`
+- [ ] `status` HTTP real (não ResponseCode 0)
+- [ ] Sem CORS por x-csrf-token
+- [ ] Atualizar estrutura carrega tabela
+- [ ] Total Peças = `__lastExpandItemRows.rows.length`
+- [ ] Full BOM API **não** usado como fallback silencioso
+- [ ] Root não depende só de hardcode
+- [ ] KPI alinhado a rows normalizadas
+
+---
+
+## Profundidade
+
+Config inicial: `EXPAND_ITEM_LEVELS = 2` (teste). Após validar, subir para 99 ou valor alinhado à expansão visual do Explorer.
+
+---
+
+## Root resolution
 
 1. ExplorerContext / seleção
 2. `EnoviaApi.resolveEngItemMember`
-3. UQL por título
-4. `KNOWN_ROOT_BY_PRD` (temporário)
+3. UQL label/título
+4. KNOWN_ROOT fallback — log explícito, não release genérico
 
 ---
 
-## Tentativa Cloud Agent (2026-06-14)
+## Tentativas Cloud Agent
 
-- GitHub Pages: `bom20260614a` publicado via branch `gh-pages`.
-- Playwright headless: redirecionado para **Login | 3DEXPERIENCE ID** — sem sessão autenticada.
-- Widget direto (sem WAF): `__expandItemProbe` falha em resolver root (esperado fora do 3DDashboard).
+| Build | Resultado |
+|-------|-----------|
+| 14a | CORS x-csrf-token no tenant (reportado) |
+| 14b | Patch aplicado; validação tenant pendente |
 
-**Conclusão:** validação real depende de execução no Console do widget dentro do 3DDashboard com usuário logado.
+Playwright headless: sem sessão 3DEXPERIENCE — não substitui teste manual no dashboard.

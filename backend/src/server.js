@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import { resolveBom } from './services/bomResolver.js';
 import { startBrowserBomJob, continueBrowserBomJob } from './services/browserAuthJobs.js';
+import { startExpandItemJob } from './services/expandItemJobs.js';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -47,7 +48,7 @@ app.get('/health', (_req, res) => {
     ok: true,
     service: 'bom-resolver',
     version: '0.2.1',
-    modes: ['server-auth', 'browser-auth-bridge']
+    modes: ['server-auth', 'browser-auth-bridge', 'expand-item-browser-auth']
   });
 });
 
@@ -67,6 +68,8 @@ app.post('/api/bom/resolve', async (req, res) => {
 app.post('/api/bom/browser/start', startBrowserBomJob);
 
 app.post('/api/bom/browser/continue', continueBrowserBomJob);
+
+app.post('/api/bom/expand-item/start', startExpandItemJob);
 
 app.listen(port, () => {
   console.log(`BOM Resolver listening on :${port}`);

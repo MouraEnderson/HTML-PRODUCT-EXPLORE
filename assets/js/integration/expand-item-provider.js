@@ -41,16 +41,49 @@
     return null;
   }
 
-  function getWafHeaders() {
-    var h = { Accept: 'application/json', 'Content-Type': 'application/json' };
+  var lastTransportStats = {};
+
+  function getBackendUrl() {
+    return s(w.__BOM_BACKEND_URL__) || 'https://bom-resolver.onrender.com';
+  }
+
+  /** Headers mínimos — NUNCA PlatformContext.getHeaders() (injeta x-csrf-token → CORS preflight). */
+  function getMinimalWafHeaders() {
+    var h = { Accept: 'application/json' };
     try {
-      if (typeof w.PlatformContext !== 'undefined' && w.PlatformContext.getHeaders) {
-        return Object.assign({}, w.PlatformContext.getHeaders(), h);
-      }
-      var st = w.PlatformContext && w.PlatformContext.getState && w.PlatformContext.getState();
+      var st =
+        typeof w.PlatformContext !== 'undefined' &&
+        w.PlatformContext.getState &&
+        w.PlatformContext.getState();
       if (st && st.securityContext) h.SecurityContext = st.securityContext;
     } catch (e) {}
+    try {
+      if (w.widget && w.widget.wafSecurityContext) {
+        h.SecurityContext = w.widget.wafSecurityContext;
+      }
+    } catch (e) {}
     return h;
+  }
+
+  function headerKeysList(headers) {
+    headers = headers || {};
+    return Object.keys(headers)
+      .filter(function (k) {
+        return headers[k] != null && headers[k] !== '';
+      })
+      .join(', ');
+  }
+
+  function isCorsOrNetworkError(errMsg, status) {
+    errMsg = s(errMsg);
+    if (n(status) === 0) return true;
+    return /NetworkError|ResponseCode.*["']?0|CORS|preflight|x-csrf-token|not allowed by Access-Control/i.test(
+      errMsg
+    );
+  }
+
+  function hasExpandMemberPayload(data) {
+    return extractMembers(data).length > 0;
   }
 
   function ensureSpaceUrl() {
@@ -71,35 +104,118 @@
     return Promise.resolve(null);
   }
 
-  function wafRequest(method, url, body) {
-    return new Promise(function (resolve, reject) {
+  function cleanWafRequest(method, url, body, transportLabel) {
+    method = s(method || 'GET').toUpperCase();
+    transportLabel = transportLabel || 'direct-wafdata';
+    var headers = getMinimalWafHeaders();
+    return new Promise(function (resolve) {
       var WAF = getWafData();
       if (!WAF) {
-        reject(new Error('WAFData indisponível'));
+        resolve({
+          ok: false,
+          status: 0,
+          error: 'WAFData indisponível',
+          transport: transportLabel,
+          method: method,
+          url: url,
+          customHeaders: headerKeysList(headers)
+        });
         return;
       }
       var opts = {
-        method: method || 'GET',
-        headers: getWafHeaders(),
+        method: method,
+        type: 'json',
+        headers: headers,
+        timeout: 60000,
         onComplete: function (data) {
-          resolve({ ok: true, status: 200, data: data });
+          resolve({
+            ok: true,
+            status: 200,
+            data: data,
+            transport: transportLabel,
+            method: method,
+            url: url,
+            customHeaders: headerKeysList(headers)
+          });
         },
         onFailure: function (err) {
-          var msg = (err && (err.message || err.error || err.statusText)) || 'WAF request failed';
-          resolve({ ok: false, status: (err && err.status) || 0, error: msg, data: err });
+          var status = n(err && (err.status || err.statusCode || err.responseCode));
+          var msg =
+            (err && (err.message || err.error || err.statusText)) || 'WAF request failed';
+          resolve({
+            ok: false,
+            status: status,
+            error: msg,
+            data: err,
+            transport: transportLabel,
+            method: method,
+            url: url,
+            customHeaders: headerKeysList(headers)
+          });
         }
       };
       if (method === 'POST' && body != null) {
-        opts.type = 'json';
         opts.data = typeof body === 'string' ? body : JSON.stringify(body);
-      } else {
-        opts.type = 'json';
       }
       try {
         WAF.authenticatedRequest(url, opts);
       } catch (e) {
-        reject(e);
+        resolve({
+          ok: false,
+          status: 0,
+          error: e && e.message ? e.message : String(e),
+          transport: transportLabel,
+          method: method,
+          url: url,
+          customHeaders: headerKeysList(headers)
+        });
       }
+    });
+  }
+
+  function backendPost(path, payload) {
+    return fetch(getBackendUrl() + path, {
+      method: 'POST',
+      mode: 'cors',
+      credentials: 'omit',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    }).then(function (res) {
+      return res.text().then(function (txt) {
+        var data = {};
+        try {
+          data = txt ? JSON.parse(txt) : {};
+        } catch (e) {
+          data = { raw: txt };
+        }
+        if (!res.ok) {
+          throw new Error(data.error || data.message || 'Backend HTTP ' + res.status);
+        }
+        return data;
+      });
+    });
+  }
+
+  function getSpaceUrlAndSecurityContext() {
+    return ensureSpaceUrl().then(function () {
+      var spaceUrl = '';
+      try {
+        if (w.CompassServices && w.CompassServices.getVerifiedSpaceUrl) {
+          spaceUrl = s(w.CompassServices.getVerifiedSpaceUrl());
+        }
+      } catch (e) {}
+      if (!spaceUrl && w.APP_CONFIG && w.APP_CONFIG.TENANT_DEFAULTS && w.APP_CONFIG.TENANT_DEFAULTS.spaceHost) {
+        spaceUrl = 'https://' + w.APP_CONFIG.TENANT_DEFAULTS.spaceHost + '/enovia';
+      }
+      var securityContext = '';
+      try {
+        var st =
+          typeof w.PlatformContext !== 'undefined' &&
+          w.PlatformContext.getState &&
+          w.PlatformContext.getState();
+        if (st && st.securityContext) securityContext = s(st.securityContext);
+      } catch (e) {}
+      return { spaceUrl: spaceUrl.replace(/\/+$/, ''), securityContext: securityContext };
     });
   }
 
@@ -190,7 +306,7 @@
       w.EnoviaApi.engItemUqlSearchUrl('label:"' + term + '"', 20);
     if (!url && w.EnoviaApi.engItemSearchUrl) url = w.EnoviaApi.engItemSearchUrl(term, 20);
     if (!url) return Promise.resolve('');
-    return wafRequest('GET', url).then(function (res) {
+    return cleanWafRequest('GET', url, null, 'direct-wafdata').then(function (res) {
       if (!res.ok) return '';
       var members = extractMembers(res.data);
       for (var i = 0; i < members.length; i++) {
@@ -224,47 +340,65 @@
 
   function resolveCurrentRootId() {
     if (isInternalVpmId(w.__EXPAND_ITEM_ROOT_ID__)) {
-      log('root resolved via __EXPAND_ITEM_ROOT_ID__ override');
-      return Promise.resolve(s(w.__EXPAND_ITEM_ROOT_ID__));
+      return Promise.resolve({
+        rootId: s(w.__EXPAND_ITEM_ROOT_ID__),
+        source: '__EXPAND_ITEM_ROOT_ID__ override'
+      });
     }
 
     var ctxIds = readExplorerContextIds();
     if (isInternalVpmId(ctxIds.physicalId)) {
-      log('root resolved via ExplorerContext internal id:', ctxIds.physicalId);
-      return Promise.resolve(ctxIds.physicalId);
+      return Promise.resolve({
+        rootId: ctxIds.physicalId,
+        source: 'explorer-context-internal-id (' + (ctxIds.source || 'context') + ')'
+      });
     }
 
     var prd = ctxIds.prdName;
     var rootName = ctxIds.rootName;
 
     return ensureSpaceUrl().then(function () {
-      var chain = Promise.resolve('');
+      var chain = Promise.resolve({ rootId: '', source: '' });
 
       if (ctxIds.physicalId || prd) {
-        chain = chain.then(function (id) {
-          if (id) return id;
-          return resolveEngItemMemberId(ctxIds.physicalId || prd, rootName);
+        chain = chain.then(function (prev) {
+          if (prev.rootId) return prev;
+          return resolveEngItemMemberId(ctxIds.physicalId || prd, rootName).then(function (id) {
+            if (id) {
+              return { rootId: id, source: 'EnoviaApi.resolveEngItemMember(name:' + (ctxIds.physicalId || prd) + ')' };
+            }
+            return prev;
+          });
         });
       }
       if (rootName) {
-        chain = chain.then(function (id) {
-          if (id) return id;
-          return searchEngItemId(rootName);
+        chain = chain.then(function (prev) {
+          if (prev.rootId) return prev;
+          return searchEngItemId(rootName).then(function (id) {
+            if (id) return { rootId: id, source: 'UQL label/título: ' + rootName };
+            return prev;
+          });
         });
       }
       if (prd && prd !== ctxIds.physicalId) {
-        chain = chain.then(function (id) {
-          if (id) return id;
-          return resolveEngItemMemberId(prd, rootName);
+        chain = chain.then(function (prev) {
+          if (prev.rootId) return prev;
+          return resolveEngItemMemberId(prd, rootName).then(function (id) {
+            if (id) return { rootId: id, source: 'EnoviaApi.resolveEngItemMember(prd:' + prd + ')' };
+            return prev;
+          });
         });
       }
-      return chain.then(function (id) {
-        if (id) return id;
+      return chain.then(function (prev) {
+        if (prev.rootId) return prev;
         if (prd && KNOWN_ROOT_BY_PRD[prd]) {
-          log('root resolved via KNOWN_ROOT_BY_PRD fallback (temporário):', KNOWN_ROOT_BY_PRD[prd]);
-          return KNOWN_ROOT_BY_PRD[prd];
+          log('KNOWN_ROOT fallback usado — não válido para release genérico');
+          return {
+            rootId: KNOWN_ROOT_BY_PRD[prd],
+            source: 'KNOWN_ROOT fallback temporário (' + prd + ')'
+          };
         }
-        return '';
+        return { rootId: '', source: 'unresolved' };
       });
     });
   }
@@ -292,7 +426,7 @@
 
   function expandBody(levels) {
     levels = n(levels);
-    if (levels < 1) levels = 99;
+    if (levels < 1) levels = 2;
     if (typeof w.EnoviaApi !== 'undefined' && w.EnoviaApi.engItemExpandBody) {
       return w.EnoviaApi.engItemExpandBody({ expandDepth: levels, withPath: true });
     }
@@ -304,22 +438,110 @@
     };
   }
 
+  function buildExpandAttempts(rootId, levels) {
+    var url = expandUrl(rootId);
+    var body = expandBody(levels);
+    return [
+      { id: 'A', method: 'GET', url: url, phase: 'expand-get' },
+      {
+        id: 'B',
+        method: 'GET',
+        url: url + '?$expandDepth=' + levels + '&withPath=true',
+        phase: 'expand-get-expandDepth'
+      },
+      { id: 'C', method: 'GET', url: url + '?$levels=' + levels, phase: 'expand-get-levels' },
+      { id: 'D', method: 'POST', url: url, body: body, phase: 'expand-post' }
+    ];
+  }
+
+  function logTransportAttempt(attempt, res) {
+    log('transport:', res.transport || 'direct-wafdata');
+    log('method:', res.method || attempt.method);
+    log('url:', res.url || attempt.url);
+    log('custom headers:', res.customHeaders || headerKeysList(getMinimalWafHeaders()));
+    log('status:', res.status);
+    if (!res.ok) log('attempt error:', res.error || '(unknown)');
+  }
+
+  function tryExpandAttempts(attempts, transportLabel) {
+    attempts = Array.isArray(attempts) ? attempts : [];
+    var lastError = '';
+    var lastStatus = 0;
+    var chain = Promise.resolve(null);
+
+    attempts.forEach(function (attempt) {
+      chain = chain.then(function (hit) {
+        if (hit) return hit;
+        return cleanWafRequest(attempt.method, attempt.url, attempt.body, transportLabel).then(
+          function (res) {
+            logTransportAttempt(attempt, res);
+            lastStatus = res.status;
+            if (res.ok && hasExpandMemberPayload(res.data)) {
+              lastTransportStats = {
+                transport: transportLabel,
+                method: res.method,
+                url: res.url,
+                customHeaders: res.customHeaders,
+                status: res.status,
+                phase: attempt.phase || attempt.id,
+                attemptId: attempt.id
+              };
+              return { payload: res.data, stats: lastTransportStats };
+            }
+            if (res.error) lastError = res.error;
+            if (isCorsOrNetworkError(res.error, res.status)) {
+              log('CORS/network na tentativa', attempt.id, '— próxima');
+            }
+            return null;
+          }
+        );
+      });
+    });
+
+    return chain.then(function (hit) {
+      if (hit) return hit;
+      var err = new Error(lastError || 'Expand Item falhou em todas tentativas (status ' + lastStatus + ')');
+      err.status = lastStatus;
+      err.corsOrNetwork = isCorsOrNetworkError(lastError, lastStatus);
+      throw err;
+    });
+  }
+
+  function expandViaBackend(rootId, levels) {
+    return getSpaceUrlAndSecurityContext().then(function (ctx) {
+      log('transport: backend-browser-auth (fallback após direct-wafdata)');
+      return backendPost('/api/bom/expand-item/start', {
+        rootId: rootId,
+        levels: levels,
+        spaceUrl: ctx.spaceUrl,
+        securityContext: ctx.securityContext
+      });
+    }).then(function (job) {
+      var attempts = job.attempts || buildExpandAttempts(rootId, levels);
+      return tryExpandAttempts(attempts, 'backend-browser-auth');
+    });
+  }
+
   function expand(rootId, levels) {
     rootId = s(rootId);
-    levels = n(levels) || 99;
+    levels = n(levels) || 2;
     if (!isInternalVpmId(rootId)) {
       return Promise.reject(new Error('rootId deve ser id interno VPMReference (32 hex), não prd-R...'));
     }
     log('rootId:', rootId);
     log('levels:', levels);
     return ensureSpaceUrl().then(function () {
-      var url = expandUrl(rootId);
-      return wafRequest('POST', url, expandBody(levels)).then(function (res) {
-        if (!res.ok) {
-          throw new Error(res.error || 'Expand Item falhou');
+      var attempts = buildExpandAttempts(rootId, levels);
+      return tryExpandAttempts(attempts, 'direct-wafdata').catch(function (directErr) {
+        if (!directErr.corsOrNetwork && directErr.status && directErr.status !== 0) {
+          throw directErr;
         }
-        return res.data || {};
+        log('direct-wafdata falhou — tentando backend-browser-auth');
+        return expandViaBackend(rootId, levels);
       });
+    }).then(function (result) {
+      w.__lastExpandItemStats = result.stats || lastTransportStats;
+      return result.payload || result;
     });
   }
 
@@ -482,12 +704,19 @@
     return normalizeExpandItemPayload(payload);
   }
 
-  function logPayloadStats(payload, normalized) {
+  function logPayloadStats(payload, normalized, rootMeta) {
+    rootMeta = rootMeta || {};
     var members = extractMembers(payload);
     var firstPath = '';
     members.forEach(function (m) {
       if (!firstPath && m && Array.isArray(m.Path) && m.Path.length) firstPath = m.Path.join(' -> ');
     });
+    if (rootMeta.source) log('root resolution source:', rootMeta.source);
+    if (lastTransportStats.transport) log('transport:', lastTransportStats.transport);
+    if (lastTransportStats.method) log('method:', lastTransportStats.method);
+    if (lastTransportStats.url) log('url:', lastTransportStats.url);
+    if (lastTransportStats.customHeaders) log('custom headers:', lastTransportStats.customHeaders);
+    if (lastTransportStats.status != null) log('status:', lastTransportStats.status);
     log('raw member count:', members.length);
     log('reference count:', normalized.stats.referenceCount);
     log('instance count:', normalized.stats.instanceCount);
@@ -498,20 +727,34 @@
   }
 
   function loadCurrentStructure(levels) {
-    levels = n(levels) || n(w.EXPAND_ITEM_LEVELS) || 99;
-    return resolveCurrentRootId().then(function (rootId) {
-      if (!rootId) throw new Error('Não foi possível resolver rootId interno VPMReference');
-      return expand(rootId, levels).then(function (payload) {
-        var normalized = normalizeExpandItemPayload(payload);
-        logPayloadStats(payload, normalized);
-        return {
-          rootId: rootId,
-          levels: levels,
-          payload: payload,
-          normalized: normalized
-        };
+    levels = n(levels) || n(w.EXPAND_ITEM_LEVELS) || 2;
+    var rootMeta = { rootId: '', source: '' };
+    return resolveCurrentRootId()
+      .then(function (resolved) {
+        rootMeta = resolved || {};
+        var rootId = s(rootMeta.rootId);
+        if (!rootId) throw new Error('Não foi possível resolver rootId interno VPMReference');
+        log('root resolution source:', rootMeta.source || '(unknown)');
+        return expand(rootId, levels).then(function (payload) {
+          var normalized = normalizeExpandItemPayload(payload);
+          logPayloadStats(payload, normalized, rootMeta);
+          w.__lastExpandItemStats = Object.assign({}, lastTransportStats, {
+            rootId: rootId,
+            rootResolutionSource: rootMeta.source,
+            levels: levels,
+            pathCount: normalized.stats.pathCount,
+            normalizedRows: normalized.stats.normalizedRows
+          });
+          return {
+            rootId: rootId,
+            rootResolutionSource: rootMeta.source,
+            levels: levels,
+            payload: payload,
+            normalized: normalized,
+            transportStats: w.__lastExpandItemStats
+          };
+        });
       });
-    });
   }
 
   function expandItemProbe(levels) {
@@ -519,7 +762,8 @@
     return loadCurrentStructure(levels).then(function (result) {
       w.__lastExpandItemPayload = result.payload;
       w.__lastExpandItemRows = result.normalized;
-      log('probe saved __lastExpandItemPayload / __lastExpandItemRows');
+      w.__lastExpandItemStats = result.transportStats || w.__lastExpandItemStats;
+      log('probe saved __lastExpandItemPayload / __lastExpandItemRows / __lastExpandItemStats');
       return result;
     });
   }
