@@ -1,13 +1,67 @@
-/* BOM browser-auth bridge hotfix - 20260611a */
+/* BOM browser-auth bridge hotfix - 20260611b */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260611a';
+var BUILD = 'bom20260611b';
 var BACKEND = 'https://bom-resolver.onrender.com';
 
 w.BOM_BUILD_ID = BUILD;
+w.__BOM_BUILD_ID__ = BUILD;
 w.__BOM_HOTFIX_MODE__ = 'browser-auth-bfs-bridge';
+
+function updateBuildPill() {
+  try {
+    w.__BOM_BUILD_ID__ = BUILD;
+    w.BOM_BUILD_ID = BUILD;
+    var root = w.__3DX_UI_ROOT__ || document;
+    var pill = root.querySelector && root.querySelector('.bom-build-pill');
+    if (pill) pill.textContent = BUILD;
+    var tag = root.querySelector && root.querySelector('#buildTag');
+    if (tag) tag.textContent = BUILD;
+  } catch (e) {}
+}
+
+function getWafData() {
+  if (w.WAFData && w.WAFData.authenticatedRequest) return w.WAFData;
+  if (w.widget && w.widget.WAFData && w.widget.WAFData.authenticatedRequest) return w.widget.WAFData;
+  return null;
+}
+
+function getWafHeaders() {
+  var h = { Accept: 'application/json' };
+  try {
+    if (typeof w.PlatformContext !== 'undefined' && w.PlatformContext.getHeaders) {
+      return w.PlatformContext.getHeaders();
+    }
+  } catch (e) {}
+  try {
+    if (w.widget && w.widget.wafSecurityContext) {
+      h.SecurityContext = w.widget.wafSecurityContext;
+    }
+  } catch (e) {}
+  return h;
+}
+
+function ensureBridgeContext() {
+  return Promise.resolve()
+    .then(function () {
+      if (typeof w.PlatformContext !== 'undefined' && w.PlatformContext.init) {
+        return w.PlatformContext.init();
+      }
+      return null;
+    })
+    .then(function () {
+      updateBuildPill();
+      var headers = getWafHeaders();
+      if (headers && headers.SecurityContext) return headers;
+      diag('warn', 'SecurityContext ausente — chamadas ENOVIA podem retornar 401');
+      return headers;
+    })
+    .catch(function () {
+      return getWafHeaders();
+    });
+}
 
 function s(v) {
 return String(v || '').trim();
@@ -229,7 +283,9 @@ data = { raw: txt };
 function wafGet(url) {
 return new Promise(function (resolve) {
 try {
-if (!w.WAFData || !w.WAFData.authenticatedRequest) {
+var WAF = getWafData();
+var headers = getWafHeaders();
+if (!WAF) {
 resolve({
 ok: false,
 error: 'WAFData.authenticatedRequest indisponivel',
@@ -238,9 +294,10 @@ status: 0
 return;
 }
 
-    w.WAFData.authenticatedRequest(url, {
+    WAF.authenticatedRequest(url, {
       method: 'GET',
       type: 'json',
+      headers: headers,
       timeout: 60000,
       onComplete: function (data) {
         resolve({
@@ -250,9 +307,10 @@ return;
         });
       },
       onFailure: function (err) {
+        var status = err && (err.status || err.statusCode || err.code || err.responseCode) || 0;
         resolve({
           ok: false,
-          status: err && (err.status || err.statusCode || err.code) || 0,
+          status: status,
           error: err && (err.message || err.error || err.toString && err.toString()) || 'WAF request failed',
           payload: err || null
         });
@@ -368,7 +426,7 @@ return step();
 }
 
 function runBrowserBridge() {
-return Promise.resolve()
+return ensureBridgeContext()
 .then(function () {
 return getCompassSpaceUrl();
 })
@@ -447,6 +505,7 @@ function patchOrchestrator() {
         w.__bomBridgeLastError = null;
         var out = bridgeResultToOrchestrator(result);
         diag('ok', 'Bridge OK: ' + ((result.rows || result.items || result.bom || []).length) + ' linhas');
+        updateBuildPill();
         return out;
       })
       .catch(function (err) {
@@ -496,6 +555,7 @@ return true;
 
 function boot() {
 diag('ok', 'Hotfix carregado: ' + BUILD + ' | instalando bridge...');
+updateBuildPill();
 
 patchOrchestrator();
 patchScanner();
@@ -547,7 +607,8 @@ w.__bomBridgeInfo = function () {
     build: BUILD,
     mode: w.__BOM_HOTFIX_MODE__,
     backend: BACKEND,
-    hasWAFData: !!(w.WAFData && w.WAFData.authenticatedRequest),
+    hasWAFData: !!getWafData(),
+    hasSecurityContext: !!(getWafHeaders() && getWafHeaders().SecurityContext),
     hasExplorerScanner: !!(w.ExplorerScanner && w.ExplorerScanner.scan),
     orchestratorPatched: !!(w.BomOrchestrator && w.BomOrchestrator.__BOM_BRIDGE_PATCHED__),
     scannerPatched: !!(w.ExplorerScanner && w.ExplorerScanner.__BOM_20260610D_PATCHED__),
