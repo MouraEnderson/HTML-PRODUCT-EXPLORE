@@ -16,8 +16,9 @@ alwaysApply: true
 
 ## Build atual (atualizar após cada deploy)
 
-- **BUILD:** `bom20260613c`
-- Widget carrega **`bom-bundle-<BUILD>.js`**, não os `.js` soltos
+- **BUILD:** `bom20260614a`
+- Widget: `widget-v3-08i.html` + hotfix `bom-api-id-hotfix-20260608a.js` + `expand-item-provider.js`
+- Fonte principal: **Expand Item** (`DATA_SOURCE=expand-item`); Full BOM API = alternativo
 - **Deploy one-click:** `powershell -ExecutionPolicy Bypass -File deploy.ps1`
 - Rebuild só bundle: `powershell -ExecutionPolicy Bypass -File scripts/build-bundle.ps1`
 
@@ -33,6 +34,8 @@ alwaysApply: true
 
 ## Arquivos-chave
 
+- Expand Item: `assets/js/integration/expand-item-provider.js` (DEC-015)
+- Hotfix loader: `assets/js/bom-api-id-hotfix-20260608a.js`
 - Import/paste: `assets/js/services/file-import-service.js`
 - Sync Explorer vs Dashboard: `assets/js/ui/sync-banner.js`
 - Maturidade/KPI: `attribute-service.js`, `metrics-engine.js`, `kpi-cards.js`, `config.js`
@@ -45,4 +48,4 @@ Antes de commit: `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, `G
 
 ## Fluxo de dados no widget
 
-Explorer → expandir árvore → coluna Maturidade visível → Ctrl+A → Ctrl+C → **Atualizar estrutura**. Sem import, KPIs em 0 é esperado.
+**Atualizar estrutura** → Expand Item (`dseng:EngItem/{rootId}/expand`) → normalização Path → tabela/KPIs = `rows.length`. Probe: `window.__expandItemProbe(2)`. Clipboard/TSV/DOM mirror reprovados.

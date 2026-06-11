@@ -1,13 +1,16 @@
-/* BOM browser-auth bridge hotfix - 20260613c — DEC-014 + release hardening (Console limpo) */
+/* BOM hotfix - 20260614a — DEC-015 Expand Item Provider + Full BOM API alternativo */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260613c';
+var BUILD = 'bom20260614a';
 var BACKEND = 'https://bom-resolver.onrender.com';
-var LOADER_MODE = 'full-bom-api';
+var DATA_SOURCE = 'expand-item';
+var EXPAND_ITEM_LEVELS = 99;
+var LOADER_MODE = DATA_SOURCE;
 var MIRROR_EXPLORER_MODE = false;
 var DEC014_REF = 'DEC-014 (docs/DECISOES-TECNICAS.md)';
+var DEC015_REF = 'DEC-015 (docs/DEC-015-EXPAND-ITEM-PROVIDER.md)';
 var MIRROR_UNAVAILABLE_MSG =
   'Modo Explorer Mirror indisponível: o Product Structure Explorer não expõe API pública para árvore expandida em widget GitHub Pages separado. Consulte DEC-014.';
 var FULL_BOM_API_MSG =
@@ -18,8 +21,10 @@ var MIRROR_ROADMAP_NOTE =
 w.BOM_BUILD_ID = BUILD;
 w.__BOM_BUILD_ID__ = BUILD;
 w.__BOM_BACKEND_URL__ = BACKEND;
-w.__BOM_HOTFIX_MODE__ = 'full-bom-api-bridge';
+w.__BOM_HOTFIX_MODE__ = 'expand-item-provider';
 w.__BOM_LOADER_MODE__ = LOADER_MODE;
+w.__BOM_DATA_SOURCE__ = DATA_SOURCE;
+w.EXPAND_ITEM_LEVELS = EXPAND_ITEM_LEVELS;
 w.__BOM_MIRROR_EXPLORER_MODE__ = MIRROR_EXPLORER_MODE;
 w.__bomBridgeLastResult = null;
 w.__bomBridgeLastError = null;
@@ -345,6 +350,16 @@ function disableMirrorCaptureFlags() {
     w.APP_CONFIG.PASTE_TRAP_ENABLED = false;
     w.APP_CONFIG.EXPLORER_MIRROR_AUTO_SYNC = false;
     w.APP_CONFIG.PRIMARY_LOADER = 'api';
+    if (w.APP_CONFIG.DATA_SOURCE) {
+      DATA_SOURCE = w.APP_CONFIG.DATA_SOURCE;
+      LOADER_MODE = DATA_SOURCE;
+      w.__BOM_DATA_SOURCE__ = DATA_SOURCE;
+      w.__BOM_LOADER_MODE__ = DATA_SOURCE;
+    }
+    if (w.APP_CONFIG.EXPAND_ITEM_LEVELS > 0) {
+      EXPAND_ITEM_LEVELS = n(w.APP_CONFIG.EXPAND_ITEM_LEVELS);
+      w.EXPAND_ITEM_LEVELS = EXPAND_ITEM_LEVELS;
+    }
   } catch (e) {}
 }
 
@@ -1049,6 +1064,35 @@ function sortRowsTreeOrder(rows) {
   return out;
 }
 
+function mapExpandRowsToImportItems(rows) {
+  rows = Array.isArray(rows) ? rows : [];
+  return rows.map(function (row, idx) {
+    row = row || {};
+    var physicalid = s(row.instanceId) || s(row.referenceId) || ('expand_' + idx);
+    return {
+      level: n(row.level),
+      physicalid: physicalid,
+      name: s(row.instanceName || row.name || row.title) || ('Item ' + idx),
+      title: s(row.title || row.name || row.instanceName),
+      type: s(row.type) || 'VPMReference',
+      displayType: 'Physical Product',
+      revision: s(row.revision),
+      state: s(row.state || row.maturity),
+      maturity: s(row.maturity || row.state),
+      owner: s(row.owner),
+      approval: 'Unknown',
+      quantity: 1,
+      sourcePhysicalId: s(row.physicalId || row.referenceId),
+      parentId: s(row.parentReferenceId),
+      instanceName: s(row.instanceName),
+      referenceId: s(row.referenceId),
+      rowKey: s(row.rowKey),
+      organization: s(row.organization),
+      collabspace: s(row.collabspace)
+    };
+  });
+}
+
 function mapRowsToImportItems(rows, rootName, preserveOrder) {
   if (!preserveOrder) {
     rows = sortRowsTreeOrder(rows);
@@ -1161,7 +1205,12 @@ function applyBridgeItemsToUI(processed) {
   if (typeof w.BomSnapshot !== 'undefined' && w.BomSnapshot.buildFromImported && w.BomSnapshot.applyPayload) {
     var payload = w.BomSnapshot.buildFromImported(items, rootName);
     if (payload) {
-      payload.scrapeSource = processed.loaderMode === 'full-bom-api' ? 'full-bom-api' : 'browser-auth-bridge';
+      payload.scrapeSource =
+        processed.loaderMode === 'expand-item'
+          ? 'expand-item'
+          : processed.loaderMode === 'full-bom-api'
+            ? 'full-bom-api'
+            : 'browser-auth-bridge';
     }
     return w.BomSnapshot.applyPayload(payload).then(function (meta) {
       var count =
@@ -1202,11 +1251,14 @@ function buildOrchestratorResult(processed, loaded) {
   var explorerLoaded = n(processed.explorerLoadedCount) || n(processed.expectedCount);
   var partial = !!processed.partial;
 
+  var mode = processed.loaderMode || LOADER_MODE;
   return {
-    loaderMode: LOADER_MODE,
-    mode: LOADER_MODE,
+    loaderMode: mode,
+    mode: mode,
     partial: partial,
-    message: processed.message || ('Full BOM API: ' + count + ' linhas'),
+    message:
+      processed.message ||
+      (mode === 'expand-item' ? 'Expand Item: ' + count + ' linhas' : 'Full BOM API: ' + count + ' linhas'),
     meta: Object.assign({}, loaded.meta || {}, {
       itemCount: count,
       rootPhysicalId: getPhysicalId(),
@@ -1224,14 +1276,15 @@ function buildOrchestratorResult(processed, loaded) {
       explorerReferenceCount: explorerLoaded,
       productName: processed.rootName || getRootName(),
       physicalId: getPhysicalId(),
-      loaderMode: LOADER_MODE
+      loaderMode: mode
     },
     diagnostic: {
       explorerReferenceCount: explorerLoaded,
       explorerLoadedCount: explorerLoaded,
       dashboardCount: count,
       backendFound: n(processed.rawCount),
-      loaderMode: LOADER_MODE,
+      loaderMode: mode,
+      expandItemRootId: processed.rootId || '',
       mirrorMode: false,
       dec014: DEC014_REF,
       mirrorRoadmap: MIRROR_ROADMAP_NOTE
@@ -1254,8 +1307,22 @@ function byIdUi(id) {
   return document.getElementById(id);
 }
 
+function getDataSource() {
+  if (w.__BOM_DATA_SOURCE__) return w.__BOM_DATA_SOURCE__;
+  if (w.APP_CONFIG && w.APP_CONFIG.DATA_SOURCE) return w.APP_CONFIG.DATA_SOURCE;
+  return DATA_SOURCE;
+}
+
+function isExpandItemActive() {
+  return getDataSource() === 'expand-item';
+}
+
 function isFullBomActive() {
-  return LOADER_MODE === 'full-bom-api' || w.__BOM_LOADER_MODE__ === 'full-bom-api';
+  return getDataSource() === 'full-bom-api' || LOADER_MODE === 'full-bom-api';
+}
+
+function isDec014UiActive() {
+  return isExpandItemActive() || isFullBomActive();
 }
 
 function parseExplorerRef(processed) {
@@ -1269,19 +1336,36 @@ function parseExplorerRef(processed) {
   return 0;
 }
 
-function renderFullBomBanner(el, dash, explorerRef) {
+function renderDataSourceBanner(el, dash, explorerRef) {
   explorerRef = n(explorerRef);
   dash = n(dash);
   el.classList.remove('bom-hidden');
   el.className = 'bom-sync-banner bom-sync-ok';
+  if (isExpandItemActive()) {
+    if (explorerRef > 0 && explorerRef !== dash) {
+      el.innerHTML =
+        'Explorer carregado: <strong>' + explorerRef + '</strong> | Expand Item: <strong>' + dash +
+        '</strong> linhas | modo dseng/expand';
+    } else if (explorerRef > 0) {
+      el.innerHTML =
+        'Explorer carregado: <strong>' + explorerRef + '</strong> | Expand Item: <strong>' + dash +
+        '</strong> linhas';
+    } else {
+      el.innerHTML = 'Expand Item: <strong>' + dash + '</strong> linhas | modo dseng/expand';
+    }
+    return;
+  }
   if (explorerRef > 0) {
     el.innerHTML =
       'Explorer carregado: <strong>' + explorerRef + '</strong> | Full BOM API: <strong>' + dash +
       '</strong> linhas | modo API ENOVIA';
   } else {
-    el.innerHTML =
-      'Full BOM API: <strong>' + dash + '</strong> linhas | modo API ENOVIA';
+    el.innerHTML = 'Full BOM API: <strong>' + dash + '</strong> linhas | modo API ENOVIA';
   }
+}
+
+function renderFullBomBanner(el, dash, explorerRef) {
+  renderDataSourceBanner(el, dash, explorerRef);
 }
 
 function updateLoadSyncBanner(processed, dash) {
@@ -1423,7 +1507,12 @@ function renderAdvancedPanel(classified) {
 
     panel.innerHTML =
       '<p style="margin:0 0 6px;font-size:.72rem"><strong>DEC-014: Mirror Explorer indisponível</strong></p>' +
-      '<p style="margin:0 0 6px;font-size:.7rem">Modo ativo: <strong>Full BOM API</strong></p>' +
+      '<p style="margin:0 0 6px;font-size:.7rem">Modo ativo: <strong>' +
+      (isExpandItemActive() ? 'Expand Item (DEC-015)' : 'Full BOM API') +
+      '</strong></p>' +
+      (isExpandItemActive()
+        ? '<p style="margin:0 0 4px;font-size:.65rem;color:#5c6b7a">Full BOM API disponível como alternativo (<code>DATA_SOURCE=full-bom-api</code>).</p>'
+        : '') +
       (explorerRef > 0
         ? '<p style="margin:0 0 4px;font-size:.7rem">Explorer carregado: <strong>' + explorerRef + '</strong></p>'
         : '') +
@@ -1449,7 +1538,7 @@ function patchSyncBanner() {
   var originalUpdate = w.SyncBanner.update.bind(w.SyncBanner);
   w.SyncBanner.__BOM_ORIGINAL_UPDATE__ = originalUpdate;
   w.SyncBanner.update = function (dashboardCount) {
-    if (!isFullBomActive()) {
+    if (!isDec014UiActive()) {
       return originalUpdate(dashboardCount);
     }
 
@@ -1694,7 +1783,7 @@ function wireDeepDiagnosticButton() {
   if (!btn) return;
   btn.onclick = function (ev) {
     if (ev && ev.preventDefault) ev.preventDefault();
-    if (!isFullBomActive()) return;
+    if (!isDec014UiActive()) return;
     var ok = w.confirm(
       'Diagnóstico profundo executa probes que podem gerar 404/403 esperados no Console. Continuar?'
     );
@@ -1710,7 +1799,7 @@ function patchDiagnosticButton() {
   btn.addEventListener(
     'click',
     function (ev) {
-      if (!isFullBomActive()) return;
+      if (!isDec014UiActive()) return;
       ev.stopImmediatePropagation();
       ev.preventDefault();
       runDec014ApiDiagnosticQuick(btn);
@@ -1809,6 +1898,90 @@ return step();
 
 }
 
+function runExpandItemStructure() {
+  if (typeof w.ExpandItemProvider === 'undefined' || !w.ExpandItemProvider.loadCurrentStructure) {
+    return Promise.reject(new Error('ExpandItemProvider indisponível'));
+  }
+  var levels = n(w.EXPAND_ITEM_LEVELS) || EXPAND_ITEM_LEVELS;
+  return ensureBridgeContext()
+    .then(function () {
+      disableMirrorCaptureFlags();
+      return extractExplorerSnapshotAsync();
+    })
+    .then(function (loadContext) {
+      w.__bomLoadContext = loadContext;
+      bridgeLog('loader mode', 'expand-item');
+      bridgeLog('expand levels', levels);
+      return w.ExpandItemProvider.loadCurrentStructure(levels).then(function (result) {
+        result.__loadContext = loadContext;
+        return result;
+      });
+    });
+}
+
+function processExpandItemResult(result, loadContext) {
+  result = result || {};
+  loadContext = loadContext || result.__loadContext || w.__bomLoadContext || getExplorerReferenceContext();
+  var normalized = result.normalized || (w.normalizeExpandItemPayload && w.normalizeExpandItemPayload(result.payload));
+  var rows = (normalized && normalized.rows) || [];
+  var explorerRef = n(loadContext.explorerReferenceCount) || getExplorerLoadedCount();
+  var rootName = s(loadContext.rootName) || getRootName();
+  var items = mapExpandRowsToImportItems(rows);
+
+  return {
+    rawCount: (normalized && normalized.stats && normalized.stats.rawMemberCount) || 0,
+    mappedCount: items.length,
+    dedupCount: items.length,
+    explorerReferenceCount: explorerRef,
+    explorerLoadedCount: explorerRef,
+    rootName: rootName,
+    rootId: result.rootId,
+    items: items,
+    partial: false,
+    incomplete: false,
+    mirrorMode: false,
+    loaderMode: 'expand-item',
+    message: 'Expand Item: ' + items.length + ' linhas',
+    normalized: normalized,
+    payload: result.payload
+  };
+}
+
+function finalizeExpandResult(result, loadContext) {
+  loadContext = loadContext || (result && result.__loadContext) || getExplorerReferenceContext();
+  var processed = processExpandItemResult(result, loadContext);
+  if (!processed.items || !processed.items.length) {
+    var errMsg = 'Expand Item retornou 0 linhas — verifique rootId interno e níveis de expansão';
+    diag('error', errMsg);
+    return Promise.reject(new Error(errMsg));
+  }
+  return applyBridgeItemsToUI(processed).then(function (loaded) {
+    w.__bomBridgeLastResult = processed;
+    w.__bomBridgeLastError = null;
+    w.__bomDiagClassification = null;
+    w.__bomDiagDeepRun = false;
+    var out = buildOrchestratorResult(processed, loaded);
+    out.loaderMode = 'expand-item';
+    out.mode = 'expand-item';
+    out.message = processed.message;
+    var dash = n(loaded.count) || n(processed.mappedCount);
+    var explorerRef = n(processed.explorerReferenceCount);
+    var successMsg = 'Expand Item: ' + dash + ' linhas';
+    diag('ok', successMsg + (explorerRef > 0 ? ' (Explorer ref: ' + explorerRef + ')' : ''));
+    if (w.App && w.App.setStatus) {
+      w.App.setStatus(successMsg, 'ok');
+    }
+    bridgeLog('load summary', successMsg);
+    if (typeof w.SyncBanner !== 'undefined' && w.SyncBanner.setLoadResult) {
+      w.SyncBanner.setLoadResult(out);
+    }
+    updateLoadSyncBanner(processed, dash);
+    renderAdvancedPanel(w.__bomDiagClassification || null);
+    updateBuildPill();
+    return out;
+  });
+}
+
 function runBrowserBridge() {
   return ensureBridgeContext()
     .then(function () {
@@ -1881,6 +2054,18 @@ function patchOrchestrator() {
       return original(options);
     }
 
+    if (isExpandItemActive()) {
+      diag('ok', BUILD + ' | Atualizar estrutura -> Expand Item (DEC-015)');
+      console.log('[BOM bridge]', BUILD, 'Atualizar estrutura -> Expand Item');
+      return runExpandItemStructure()
+        .then(function (result) {
+          return finalizeExpandResult(result, result && result.__loadContext);
+        })
+        .catch(function (err) {
+          return bridgeFailure(err, 'Atualizar estrutura Expand Item');
+        });
+    }
+
     diag('ok', BUILD + ' | Atualizar estrutura -> Full BOM API (DEC-014)');
     console.log('[BOM bridge]', BUILD, 'Atualizar estrutura -> Full BOM API');
 
@@ -1902,7 +2087,7 @@ function patchScanner() {
 try {
 if (typeof w.ExplorerContext !== 'undefined') {
 w.ExplorerContext.suggestLoaderMode = function () {
-return 'full-bom-api';
+return getDataSource();
 };
 }
 } catch (e) {}
@@ -1915,6 +2100,15 @@ var original = w.ExplorerScanner.scan.bind(w.ExplorerScanner);
 w.ExplorerScanner.__BOM_ORIGINAL_SCAN__ = w.ExplorerScanner.__BOM_ORIGINAL_SCAN__ || original;
 
 w.ExplorerScanner.scan = function () {
+  if (isExpandItemActive()) {
+    return runExpandItemStructure()
+      .then(function (result) {
+        return finalizeExpandResult(result, result && result.__loadContext);
+      })
+      .catch(function (err) {
+        return bridgeFailure(err, 'ExplorerScanner.scan Expand Item');
+      });
+  }
   return runBrowserBridge()
     .then(function (result) {
       return finalizeBridgeResult(result, result && result.__loadContext);
@@ -1932,7 +2126,7 @@ return true;
 }
 
 function boot() {
-diag('ok', 'Hotfix carregado: ' + BUILD + ' | ' + LOADER_MODE + ' (' + DEC014_REF + ')');
+diag('ok', 'Hotfix carregado: ' + BUILD + ' | ' + getDataSource() + ' (' + DEC015_REF + ')');
 disableMirrorCaptureFlags();
 updateBuildPill();
 
@@ -1974,14 +2168,16 @@ w.__bomBridgeInstall = function () {
 };
 
 w.__bomBridgeRun = function () {
-  diag('ok', 'Executando bridge manual: ' + BUILD);
-  return runBrowserBridge()
+  diag('ok', 'Executando carga manual: ' + BUILD + ' | ' + getDataSource());
+  var chain = isExpandItemActive() ? runExpandItemStructure() : runBrowserBridge();
+  var finalize = isExpandItemActive() ? finalizeExpandResult : finalizeBridgeResult;
+  return chain
     .then(function (result) {
-      return finalizeBridgeResult(result, result && result.__loadContext);
+      return finalize(result, result && result.__loadContext);
     })
     .catch(function (err) {
       w.__bomBridgeLastError = err;
-      diag('error', 'Bridge manual erro: ' + (err && err.message ? err.message : err));
+      diag('error', 'Carga manual erro: ' + (err && err.message ? err.message : err));
       throw err;
     });
 };
@@ -1990,7 +2186,10 @@ w.__bomBridgeInfo = function () {
   return {
     build: BUILD,
     mode: w.__BOM_HOTFIX_MODE__,
-    loaderMode: LOADER_MODE,
+    dataSource: getDataSource(),
+    loaderMode: getDataSource(),
+    expandItemLevels: EXPAND_ITEM_LEVELS,
+    dec015: DEC015_REF,
     mirrorExplorerMode: MIRROR_EXPLORER_MODE,
     dec014: DEC014_REF,
     mirrorStatus: 'unavailable',
