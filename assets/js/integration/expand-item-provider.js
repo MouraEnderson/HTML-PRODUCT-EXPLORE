@@ -8,7 +8,7 @@
   var w = global;
 
   var LOG = '[ExpandItemProvider]';
-  var BUILD = s(w.__BOM_BUILD_ID__ || (w.APP_CONFIG && w.APP_CONFIG.BUILD) || 'bom20260614l');
+  var BUILD = s(w.__BOM_BUILD_ID__ || (w.APP_CONFIG && w.APP_CONFIG.BUILD) || 'bom20260614m');
 
   function getBomVisualRowsCount(rows) {
     return Array.isArray(rows) ? rows.length : 0;

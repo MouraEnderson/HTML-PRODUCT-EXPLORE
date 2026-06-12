@@ -1,9 +1,9 @@
-/* BOM hotfix - 20260614l — bootstrap ExplorerMirrorProvider + zero clipboard runtime */
+/* BOM hotfix - 20260614m — DEC-017 contract discovery probe + cache gate */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260614l';
+var BUILD = 'bom20260614m';
 var PROVIDER_GLOBAL = 'ExplorerMirrorProvider';
 var PROVIDER_BOOTSTRAP_MSG =
   'Explorer Mirror Provider não foi carregado no runtime do widget. Verifique ordem de scripts, nome global exportado e cache do GitHub Pages.';
@@ -18,6 +18,7 @@ var MIRROR_EXPLORER_MODE = true;
 var DEC014_REF = 'DEC-014 (docs/DECISOES-TECNICAS.md)';
 var DEC015_REF = 'DEC-015 (docs/DEC-015-EXPAND-ITEM-PROVIDER.md)';
 var DEC016_REF = 'DEC-016 Explorer Mirror (fonte principal tabela/KPI)';
+var DEC017_REF = 'DEC-017 Product Explorer Mirror Contract Discovery';
 var MIRROR_UNAVAILABLE_MSG =
   'Não foi encontrada fonte oficial para espelhar exatamente a grade atual do Product Structure Explorer. ' +
   'Expand Item está disponível em Avançado, mas retorna uma expansão diferente da visualização do Explorer.';
@@ -1418,20 +1419,62 @@ function buildRuntimeCacheDiagnostics() {
     if (w.frameElement && w.frameElement.src) frameUwa = w.frameElement.src;
     else if (w.widget && w.widget.uwaUrl) frameUwa = String(w.widget.uwaUrl);
   } catch (e2) {}
+  var frameParam = '';
+  try {
+    var fm = String(frameUwa).match(/[?&]v=([^&]+)/);
+    frameParam = fm ? decodeURIComponent(fm[1]) : '';
+  } catch (e3) {}
   var runtimeBuild = w.__BOM_BUILD_ID__ || BUILD;
   var scriptBuild = (w[PROVIDER_GLOBAL] && w[PROVIDER_GLOBAL].BUILD) || '';
-  var divergent = !!(requested && runtimeBuild && requested.indexOf(runtimeBuild) < 0);
+  var divergent = !!(requested && runtimeBuild && requested !== runtimeBuild);
+  var frameDivergent = !!(frameParam && runtimeBuild && frameParam !== runtimeBuild);
+  var cacheWarning = '';
+  if (divergent) {
+    cacheWarning =
+      'Versão divergente: Web Page Reader ainda aponta para ' +
+      requested +
+      ', mas runtime carregou ' +
+      runtimeBuild +
+      '. Atualize a URL do widget e faça hard refresh.';
+  } else if (frameDivergent) {
+    cacheWarning =
+      'Versão divergente: frameUwaUrl contém v=' +
+      frameParam +
+      ', mas runtime carregou ' +
+      runtimeBuild +
+      '. Atualize a URL do widget e faça hard refresh.';
+  }
   return {
     runtimeBuild: runtimeBuild,
     requestedBuildFromUrl: requested,
+    frameBuildFromUrl: frameParam,
     scriptBuild: scriptBuild,
     cacheStatus: w.__BOM_SCRIPT_LOAD_STATUS__ || {},
     frameUwaUrl: frameUwa,
-    cacheDivergent: divergent,
-    cacheWarning: divergent
-      ? 'Possível cache/versionamento divergente: runtimeBuild diferente do parâmetro v da URL.'
-      : ''
+    cacheDivergent: divergent || frameDivergent,
+    cacheWarning: cacheWarning
   };
+}
+
+function showCacheDivergenceAlertIfNeeded() {
+  var runtime = buildRuntimeCacheDiagnostics();
+  if (!runtime.cacheDivergent || !runtime.cacheWarning) return;
+  w.__bomCacheDivergenceAlert = runtime.cacheWarning;
+  try {
+    var panel = byIdUi('expandItemValidationPanel');
+    if (panel) {
+      panel.classList.remove('bom-hidden');
+      panel.innerHTML =
+        '<div style="border:1px solid #f5c542;border-radius:8px;padding:8px;margin:6px;background:#fff8e6">' +
+        '<strong style="font-size:.74rem;color:#8a5300">Cache / versionamento</strong>' +
+        '<p style="margin:6px 0 0;font-size:.68rem;color:#8a5300">' +
+        runtime.cacheWarning +
+        '</p></div>';
+    }
+  } catch (e) {}
+  if (w.App && w.App.setStatus) {
+    w.App.setStatus(runtime.cacheWarning, 'error');
+  }
 }
 
 function attachTechnicalReport(extra) {
@@ -1439,8 +1482,10 @@ function attachTechnicalReport(extra) {
   var runtime = buildRuntimeCacheDiagnostics();
   w.__bomTechnicalReport = Object.assign({}, w.__bomTechnicalReport || {}, extra || {}, {
     explorerMirrorProvider: bootstrap,
-    runtime: runtime
+    runtime: runtime,
+    dec017: DEC017_REF
   });
+  showCacheDivergenceAlertIfNeeded();
   return w.__bomTechnicalReport;
 }
 
@@ -1801,12 +1846,88 @@ function wireExpandItemValidatorUi() {
             .catch(function (err) {
               diag('error', 'Copiar relatório: ' + (err && err.message ? err.message : err));
             });
+          return;
+        }
+        if (t.id === 'btnRunDec017Probe') {
+          ev.preventDefault();
+          ev.stopPropagation();
+          runDec017ContractProbe(t);
+          return;
+        }
+        if (t.id === 'btnCopyDec017ProbeReport') {
+          ev.preventDefault();
+          ev.stopPropagation();
+          copyDec017ProbeReport();
         }
       },
       true
     );
   }
 
+}
+
+function runDec017ContractProbe(btnEl) {
+  if (!w.ProductExplorerMirrorContractProbe || !w.ProductExplorerMirrorContractProbe.run) {
+    if (w.App && w.App.setStatus) {
+      w.App.setStatus('ProductExplorerMirrorContractProbe não carregado', 'error');
+    }
+    return;
+  }
+  var label = btnEl && btnEl.textContent ? btnEl.textContent : 'Probe DEC-017';
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.textContent = 'Coletando 10s…';
+  }
+  if (w.App && w.App.setStatus) {
+    w.App.setStatus('DEC-017: coletando runtime (postMessage 10s)…', 'info');
+  }
+  w.ProductExplorerMirrorContractProbe.run({ listenMs: 10000 })
+    .then(function (report) {
+      var ta = byIdUi('dec017ProbeReport');
+      if (ta) {
+        ta.classList.remove('bom-hidden');
+        ta.value = w.ProductExplorerMirrorContractProbe.formatReportText(report);
+      }
+      if (report.versionDivergence && report.versionDivergence.cacheWarning && w.App && w.App.setStatus) {
+        w.App.setStatus(report.versionDivergence.cacheWarning, 'error');
+      } else if (w.App && w.App.setStatus) {
+        w.App.setStatus('DEC-017 probe: ' + (report.verdict || 'concluído'), 'ok');
+      }
+      attachTechnicalReport({
+        dec017ProbeVerdict: report.verdict,
+        dec017ProbeTimestamp: report.timestamp
+      });
+      renderAdvancedPanel(w.__bomDiagClassification || null);
+    })
+    .catch(function (err) {
+      diag('error', 'DEC-017 probe: ' + (err && err.message ? err.message : err));
+      if (w.App && w.App.setStatus) w.App.setStatus('DEC-017 probe falhou', 'error');
+    })
+    .finally(function () {
+      if (btnEl) {
+        btnEl.disabled = false;
+        btnEl.textContent = label.indexOf('Coletando') >= 0 ? 'Executar probe DEC-017' : label;
+      }
+    });
+}
+
+function copyDec017ProbeReport() {
+  if (!w.ProductExplorerMirrorContractProbe || !w.ProductExplorerMirrorContractProbe.copyReportToClipboard) {
+    if (w.App && w.App.setStatus) {
+      w.App.setStatus('Probe DEC-017 indisponível', 'error');
+    }
+    return;
+  }
+  w.ProductExplorerMirrorContractProbe.copyReportToClipboard()
+    .then(function () {
+      diag('ok', 'Relatório DEC-017 copiado');
+      if (w.App && w.App.setStatus) w.App.setStatus('Relatório DEC-017 copiado', 'ok');
+    })
+    .catch(function (err) {
+      if (w.App && w.App.setStatus) {
+        w.App.setStatus(err && err.message ? err.message : 'Execute o probe DEC-017 primeiro', 'error');
+      }
+    });
 }
 
 function renderAdvancedPanel(classified) {
@@ -1828,7 +1949,23 @@ function renderAdvancedPanel(classified) {
     var ops = classified ? n(classified.operationalCount) : n(w.__bomDiagClassification && w.__bomDiagClassification.operationalCount);
 
     var tech = w.__bomTechnicalReport || {};
+    var runtime = tech.runtime || buildRuntimeCacheDiagnostics();
+    var cacheHtml = runtime.cacheDivergent
+      ? '<p style="margin:0 0 6px;font-size:.62rem;color:#b42318">' + runtime.cacheWarning + '</p>'
+      : '';
+    var dec017Verdict = tech.dec017ProbeVerdict || (w.__productExplorerMirrorContractProbeReport && w.__productExplorerMirrorContractProbeReport.verdict) || '';
     panel.innerHTML =
+      '<div style="margin:0 0 8px;padding:6px;border:1px dashed #b8c9e6;border-radius:6px;background:#f8fbff">' +
+      '<p style="margin:0 0 6px;font-size:.72rem"><strong>' + DEC017_REF + '</strong></p>' +
+      '<button type="button" id="btnRunDec017Probe" class="bom-btn bom-btn-secondary" style="font-size:.7rem;margin-right:4px">Executar probe DEC-017</button>' +
+      '<button type="button" id="btnCopyDec017ProbeReport" class="bom-btn bom-btn-secondary" style="font-size:.7rem">Copiar relatório DEC-017</button>' +
+      '<p style="margin:6px 0 0;font-size:.62rem;color:#5c6b7a">Coleta scripts, AMD, PlatformAPI, postMessage (10s). Sem DOM/clipboard/Expand Item como fonte.</p>' +
+      cacheHtml +
+      (dec017Verdict
+        ? '<p style="margin:4px 0 0;font-size:.62rem;color:#1f5fbf">verdict: <strong>' + dec017Verdict + '</strong></p>'
+        : '') +
+      '<textarea id="dec017ProbeReport" class="bom-input bom-hidden" rows="5" readonly="readonly" style="margin-top:6px;font-size:.6rem"></textarea>' +
+      '</div>' +
       '<div style="margin:0 0 8px;padding:6px;border:1px dashed #cfd8e3;border-radius:6px">' +
       '<p style="margin:0 0 6px;font-size:.72rem"><strong>Diagnóstico Expand Item (modo B — não alimenta tabela)</strong></p>' +
       '<button type="button" id="btnValidateExpandItem" class="bom-btn bom-btn-secondary" style="font-size:.7rem;margin-right:4px">Diagnóstico técnico Expand Item</button>' +
@@ -2835,6 +2972,7 @@ w.__bomBridgeInfo = function () {
     expandItemLevels: EXPAND_ITEM_LEVELS,
     dec015: DEC015_REF,
     dec016: DEC016_REF,
+    dec017: DEC017_REF,
     mirrorExplorerMode: MIRROR_EXPLORER_MODE,
     dec014: DEC014_REF,
     mirrorStatus: MIRROR_EXPLORER_MODE ? 'primary' : 'unavailable',

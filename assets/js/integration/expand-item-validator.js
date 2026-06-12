@@ -7,7 +7,7 @@
 
   var w = global;
   var LOG = '[ExpandItemValidator]';
-  var BUILD = 'bom20260614l';
+  var BUILD = 'bom20260614m';
   var MANUAL_CSRF_HEADER_RE = /^x-csrf-token$/i;
   var lastReport = null;
 
