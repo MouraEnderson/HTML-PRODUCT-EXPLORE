@@ -4,6 +4,7 @@ import cors from 'cors';
 import { resolveBom } from './services/bomResolver.js';
 import { startBrowserBomJob, continueBrowserBomJob } from './services/browserAuthJobs.js';
 import { startExpandItemJob } from './services/expandItemJobs.js';
+import threeDxBomRoutes from './routes/threeDxBomRoutes.js';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -70,6 +71,8 @@ app.post('/api/bom/browser/start', startBrowserBomJob);
 app.post('/api/bom/browser/continue', continueBrowserBomJob);
 
 app.post('/api/bom/expand-item/start', startExpandItemJob);
+
+app.use('/api/3dx/bom', threeDxBomRoutes);
 
 app.listen(port, () => {
   console.log(`BOM Resolver listening on :${port}`);

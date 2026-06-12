@@ -36,20 +36,35 @@ Este roadmap divide o trabalho em PRs pequenos. **PR 1 (este documento + invent�
 
 ---
 
-## Fase 2 — Backend mock (PR 2)
+## Fase 2 — Backend mock (PR 2) ✅
 
 **Branch:** `feature/backend-bom-service-contract-v1`
 
-| Item | Detalhe |
-|------|---------|
-| Nova rota | `POST /api/3dx/bom/structure` (mock) |
-| Health SKA | `GET /api/3dx/bom/health` |
-| Arquivos sugeridos | `threeDxBomRoutes.js`, `threeDxBomService.js`, `threeDxBomNormalizer.js` |
-| Registro | Apenas adicionar rotas em `server.js` |
-| Comportamento | Validar `rootId`; mock para `63FC553465A62400699E0792000086AB` → CJ MESA |
-| Proibido | Chamar 3DEXPERIENCE; quebrar rotas `/api/bom/*` |
+| Item | Status |
+|------|--------|
+| `GET /api/3dx/bom/health` | ✅ implementado (mock) |
+| `POST /api/3dx/bom/structure` | ✅ implementado (mock) |
+| `POST /api/3dx/bom/diagnostic` | ✅ implementado (mock) |
+| Arquivos | `threeDxBomRoutes.js`, `threeDxBomService.js`, `threeDxBomNormalizer.js` |
+| Registro | `server.js` — prefixo `/api/3dx/bom` |
+| Comportamento | Valida `rootId` / `depth`; mock CJ MESA para root conhecido |
+| Proibido neste PR | Chamar 3DEXPERIENCE; quebrar `/api/bom/*` |
 
-**Testes:** curl/Postman contra Render ou `localhost`.
+**Testes manuais:**
+
+```bash
+curl -s https://bom-resolver.onrender.com/api/3dx/bom/health
+
+curl -s -X POST https://bom-resolver.onrender.com/api/3dx/bom/structure \
+  -H "Content-Type: application/json" \
+  -d '{"rootId":"63FC553465A62400699E0792000086AB","depth":2,"includeRoot":true,"mode":"dseng-official"}'
+
+curl -s -X POST https://bom-resolver.onrender.com/api/3dx/bom/structure \
+  -H "Content-Type: application/json" \
+  -d '{"depth":2}'
+```
+
+(Local: substituir base URL por `http://localhost:3000`.)
 
 ---
 
@@ -121,7 +136,7 @@ Seguir `docs/LEGACY-CLEANUP-PLAN.md`:
 | PR | Branch | Escopo |
 |----|--------|--------|
 | **1** | `feature/render-bom-service-architecture` | Docs + inventário |
-| **2** | `feature/backend-bom-service-contract-v1` | Mock `/api/3dx/bom/structure` |
+| **2** | `feature/backend-bom-service-contract-v1` | Mock `/api/3dx/bom/*` ✅ |
 | **3** | `feature/backend-dseng-structure-v1` | dseng real |
 | **4** | `feature/frontend-consume-render-bom-service` | Frontend → Render |
 | **5** | `cleanup/remove-deprecated-explorer-mirror` | Limpeza legado |

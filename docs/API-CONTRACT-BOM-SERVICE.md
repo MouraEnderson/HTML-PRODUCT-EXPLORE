@@ -19,7 +19,9 @@
 
 ---
 
-## GET /api/3dx/bom/health (futuro — PR 2)
+## GET /api/3dx/bom/health (implementado — PR 2 mock)
+
+**Status:** ✅ mock em `backend/src/routes/threeDxBomRoutes.js`
 
 **Resposta 200:**
 
@@ -43,7 +45,9 @@
 
 ---
 
-## POST /api/3dx/bom/structure (futuro — PR 2 mock, PR 3 real)
+## POST /api/3dx/bom/structure (implementado — PR 2 mock, PR 3 dseng real)
+
+**Status:** ✅ mock em PR 2 — sem chamada 3DEXPERIENCE
 
 ### Request
 
@@ -146,6 +150,28 @@
 }
 ```
 
+### Response erro interno (500)
+
+Qualquer falha inesperada nas rotas `/api/3dx/bom/*` retorna **HTTP 500** com o contrato abaixo — **sem** `stack` ou detalhes de exceção no JSON:
+
+```json
+{
+  "ok": false,
+  "source": "RENDER_BOM_SERVICE",
+  "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "Unexpected backend error"
+  },
+  "diagnostics": {
+    "status": "ERROR",
+    "mode": "mock",
+    "endpointsUsed": [],
+    "warnings": [],
+    "errors": ["Unexpected backend error"]
+  }
+}
+```
+
 ### Códigos de erro previstos (v1)
 
 | code | HTTP | Quando |
@@ -155,11 +181,13 @@
 | `ROOT_NOT_FOUND` | 404 | EngItem não encontrado |
 | `AUTH_FAILED` | 401/403 | Falha autenticação 3DSpace |
 | `UPSTREAM_ERROR` | 502 | Erro ENOVIA não recuperável |
-| `INTERNAL_ERROR` | 500 | Erro interno (sem segredo no body) |
+| `INTERNAL_ERROR` | 500 | Falha inesperada no backend (sem stack trace no JSON) |
 
 ---
 
-## POST /api/3dx/bom/diagnostic (futuro — PR 2 ou 3)
+## POST /api/3dx/bom/diagnostic (implementado — PR 2 mock)
+
+**Status:** ✅ mock em PR 2 — sem chamada upstream
 
 ### Request
 
