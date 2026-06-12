@@ -201,6 +201,7 @@ Qualquer falha inesperada nas rotas `/api/3dx/bom/*` retorna **HTTP 500** com o 
 | `DEPTH_LIMIT_EXCEEDED` | 422 | `depth` > 3 (dseng v1) |
 | `UPSTREAM_NOT_CONFIGURED` | 503 | Env dseng incompleta |
 | `UPSTREAM_AUTH_FAILED` | 502 | Falha autenticação 3DSpace |
+| `UPSTREAM_AUTH_NOT_IMPLEMENTED` | 502 | Auth não configurada explicitamente (`THREEDX_AUTH_MODE`) |
 | `UPSTREAM_DSENG_ERROR` | 502 | Erro ENOVIA/dseng |
 | `INTERNAL_ERROR` | 500 | Falha inesperada no backend (sem stack trace no JSON) |
 

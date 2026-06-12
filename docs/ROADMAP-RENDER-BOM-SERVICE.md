@@ -92,7 +92,21 @@ THREEDX_PASSWORD
 BOM_SERVICE_MODE=dseng
 ```
 
-**Testes locais obrigatórios:** ver PR 3 — sem env → 503; mock → 200; depth>3 → 422.
+**Testes locais obrigatórios (PR 3):**
+
+| # | Cenário | Esperado |
+|---|---------|----------|
+| 1 | Sem env dseng | HTTP 503 `UPSTREAM_NOT_CONFIGURED` |
+| 2 | `BOM_SERVICE_MODE=mock` | HTTP 200 mock + warnings |
+| 3 | `depth=10` | HTTP 422 `DEPTH_LIMIT_EXCEEDED` |
+| 4 | Sem `rootId` | HTTP 422 `ROOT_ID_REQUIRED` |
+| 5 | `depth="abc"` | HTTP 422 `INVALID_DEPTH` |
+| 6 | `BOM_SERVICE_MODE=mock` + sem rootId | HTTP 422, `mode: mock`, `diagnostics.mode: mock` |
+| 7 | `BOM_SERVICE_MODE=mock` + depth inválido | HTTP 422, `mode: mock` |
+| 8 | `extractChildReferenceId` com `physicalid` de instância | não retorna como childId |
+| 9 | `extractChildReferenceId` com `reference.id` | retorna `reference.id` |
+| 10 | username/password sem `THREEDX_AUTH_MODE=basic` | HTTP 502 `UPSTREAM_AUTH_NOT_IMPLEMENTED` |
+| 11 | `THREEDX_AUTH_MODE=basic` + username/password | monta Basic (sem logar segredo) |
 
 ---
 

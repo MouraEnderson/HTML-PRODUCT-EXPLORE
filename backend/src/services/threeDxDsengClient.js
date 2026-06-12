@@ -11,11 +11,12 @@ export class ThreeDxDsengClient {
     this.client = new EnoviaClient({
       spaceUrl: config.spaceUrl,
       securityContext: config.securityContext,
-      username: config.username,
-      password: config.password,
+      username: config.authMode === 'basic' ? config.username : '',
+      password: config.authMode === 'basic' ? config.password : '',
       bearerToken: config.bearerToken,
       cookie: config.cookie,
-      csrfToken: config.csrfToken
+      csrfToken: config.csrfToken,
+      authMode: config.authMode
     });
   }
 
@@ -84,7 +85,14 @@ export function assertDsengConfigured(config = getThreeDxConfig()) {
       message: '3DEXPERIENCE upstream configuration is missing'
     };
   }
-  if (!config.credentialsConfigured) {
+  if (config.authNeedsExplicitMode) {
+    return {
+      ok: false,
+      code: 'UPSTREAM_AUTH_NOT_IMPLEMENTED',
+      message: '3DEXPERIENCE authentication mode is not implemented or not explicitly configured'
+    };
+  }
+  if (!config.authConfigured) {
     return {
       ok: false,
       code: 'UPSTREAM_NOT_CONFIGURED',

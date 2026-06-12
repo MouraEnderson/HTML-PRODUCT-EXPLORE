@@ -12,7 +12,8 @@ import {
   buildDiagnostics,
   normalizeEngItem,
   normalizeEngInstance,
-  unwrapEngItemPayload
+  unwrapEngItemPayload,
+  getMissingChildReferenceSampleKeys
 } from './threeDxBomNormalizer.js';
 
 const ERROR_STATUS = {
@@ -53,7 +54,7 @@ function normalizeRootId(value) {
   return String(value).trim();
 }
 
-function parseDepth(value, defaultDepth) {
+function parseDepth(value, defaultDepth, mode = 'dseng-official') {
   if (value === undefined || value === null) {
     return { ok: true, depth: defaultDepth };
   }
@@ -63,24 +64,25 @@ function parseDepth(value, defaultDepth) {
       ok: false,
       error: buildErrorResponse(
         'INVALID_DEPTH',
-        'depth must be an integer greater than or equal to zero'
+        'depth must be an integer greater than or equal to zero',
+        mode
       )
     };
   }
   return { ok: true, depth: num };
 }
 
-function parseStructureInput(body, defaultDepth = 1) {
+function parseStructureInput(body, defaultDepth = 1, mode = 'dseng-official') {
   body = body || {};
   const rootId = normalizeRootId(body.rootId);
   if (!rootId) {
     return {
       ok: false,
-      error: buildErrorResponse('ROOT_ID_REQUIRED', 'rootId is required')
+      error: buildErrorResponse('ROOT_ID_REQUIRED', 'rootId is required', mode)
     };
   }
 
-  const depthResult = parseDepth(body.depth, defaultDepth);
+  const depthResult = parseDepth(body.depth, defaultDepth, mode);
   if (!depthResult.ok) {
     return depthResult;
   }
@@ -90,7 +92,7 @@ function parseStructureInput(body, defaultDepth = 1) {
     rootId,
     depth: depthResult.depth,
     includeRoot: body.includeRoot !== false,
-    mode: body.mode || 'dseng-official'
+    mode: body.mode || mode
   };
 }
 
@@ -140,7 +142,7 @@ function buildMockRows(rootId, includeRoot) {
 }
 
 export function resolveMockStructure(body) {
-  const parsed = parseStructureInput(body, 2);
+  const parsed = parseStructureInput(body, 2, 'mock');
   if (!parsed.ok) {
     return parsed;
   }
@@ -193,6 +195,7 @@ async function resolveDsengStructure(parsed, config) {
   const errors = [];
   let missingChildReferenceIdsCount = 0;
   let skippedInstancesCount = 0;
+  let missingChildReferenceSampleKeys = null;
   const visitedPaths = new Set();
 
   let rootPayload;
@@ -241,6 +244,10 @@ async function resolveDsengStructure(parsed, config) {
         const childId = normalizedInst.childId;
         if (!childId) {
           missingChildReferenceIdsCount += 1;
+          skippedInstancesCount += 1;
+          if (!missingChildReferenceSampleKeys) {
+            missingChildReferenceSampleKeys = getMissingChildReferenceSampleKeys(inst);
+          }
           warnings.push('EngInstance missing child reference id');
           continue;
         }
@@ -305,7 +312,8 @@ async function resolveDsengStructure(parsed, config) {
         errors,
         levelCounts: counts.levelCounts,
         missingChildReferenceIdsCount,
-        skippedInstancesCount
+        skippedInstancesCount,
+        missingChildReferenceSampleKeys
       })
     })
   };
@@ -342,7 +350,7 @@ export async function resolveStructure(body) {
   if (!configured.ok) {
     return {
       ok: false,
-      status: 503,
+      status: getErrorStatus(configured.code),
       error: buildErrorResponse(configured.code, configured.message)
     };
   }
@@ -443,7 +451,7 @@ export async function resolveDiagnostic(body) {
   if (!configured.ok) {
     return {
       ok: false,
-      status: 503,
+      status: getErrorStatus(configured.code),
       error: buildErrorResponse(configured.code, configured.message)
     };
   }

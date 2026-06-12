@@ -6,6 +6,22 @@ function hasCredentialPair(username, password) {
   return Boolean(String(username || '').trim() && String(password || '').trim());
 }
 
+function resolveAuth({ bearerToken, cookie, username, password, authModeEnv }) {
+  if (bearerToken) {
+    return { authMode: 'bearer', authConfigured: true, needsExplicitMode: false };
+  }
+  if (cookie) {
+    return { authMode: 'cookie', authConfigured: true, needsExplicitMode: false };
+  }
+  if (authModeEnv === 'basic' && hasCredentialPair(username, password)) {
+    return { authMode: 'basic', authConfigured: true, needsExplicitMode: false };
+  }
+  if (hasCredentialPair(username, password)) {
+    return { authMode: 'none', authConfigured: false, needsExplicitMode: true };
+  }
+  return { authMode: 'none', authConfigured: false, needsExplicitMode: false };
+}
+
 export function getThreeDxConfig() {
   const spaceUrl = trimSlash(process.env.THREEDX_SPACE_URL || process.env.SPACE_URL || '');
   const securityContext = String(
@@ -17,15 +33,13 @@ export function getThreeDxConfig() {
   const cookie = String(process.env.ENOVIA_COOKIE || '').trim();
   const csrfToken = String(process.env.ENO_CSRF_TOKEN || '').trim();
   const bomServiceMode = String(process.env.BOM_SERVICE_MODE || '').trim().toLowerCase();
+  const authModeEnv = String(process.env.THREEDX_AUTH_MODE || '').trim().toLowerCase();
 
   const usernameConfigured = Boolean(username);
   const passwordConfigured = Boolean(password);
-  const bearerConfigured = Boolean(bearerToken);
-  const cookieConfigured = Boolean(cookie);
-  const credentialsConfigured =
-    hasCredentialPair(username, password) || bearerConfigured || cookieConfigured;
+  const auth = resolveAuth({ bearerToken, cookie, username, password, authModeEnv });
 
-  const isConfigured = Boolean(spaceUrl && securityContext && credentialsConfigured);
+  const isConfigured = Boolean(spaceUrl && securityContext && auth.authConfigured);
 
   let mode;
   if (bomServiceMode === 'mock') {
@@ -48,14 +62,18 @@ export function getThreeDxConfig() {
     bearerToken,
     cookie,
     csrfToken,
+    authMode: auth.authMode,
+    authModeEnv,
+    authConfigured: auth.authConfigured,
+    authNeedsExplicitMode: auth.needsExplicitMode,
     usernameConfigured,
     passwordConfigured,
-    credentialsConfigured,
+    credentialsConfigured: auth.authConfigured,
     isConfigured,
     upstream: {
       spaceUrlConfigured: Boolean(spaceUrl),
       securityContextConfigured: Boolean(securityContext),
-      credentialsConfigured
+      credentialsConfigured: auth.authConfigured
     }
   };
 }
@@ -64,12 +82,12 @@ export function getPublicEnvironmentFlags(config = getThreeDxConfig()) {
   let credentialsMode = 'none';
   if (config.bomServiceMode === 'mock' || config.mode === 'mock') {
     credentialsMode = 'mock';
-  } else if (hasCredentialPair(config.username, config.password)) {
-    credentialsMode = 'env';
-  } else if (config.bearerToken) {
+  } else if (config.authMode === 'bearer') {
     credentialsMode = 'bearer';
-  } else if (config.cookie) {
+  } else if (config.authMode === 'cookie') {
     credentialsMode = 'cookie';
+  } else if (config.authMode === 'basic') {
+    credentialsMode = 'basic';
   }
 
   return {

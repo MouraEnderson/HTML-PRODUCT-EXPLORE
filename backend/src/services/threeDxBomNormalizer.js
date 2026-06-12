@@ -95,8 +95,6 @@ export function extractChildReferenceId(instance) {
     instance.toId,
     instance.targetId,
     instance.relatedId,
-    instance.physicalid,
-    instance.physicalId,
     instance.referencedObject?.id,
     instance.referenceObject?.id,
     instance.reference?.id,
@@ -105,14 +103,16 @@ export function extractChildReferenceId(instance) {
     instance['dseng:EngItem']?.id
   ];
 
-  const member = Array.isArray(instance.member) ? instance.member[0] : null;
-  if (member?.id) candidates.push(member.id);
-
   for (const value of candidates) {
     const id = objectId({ id: value });
     if (id) return id;
   }
   return '';
+}
+
+export function getMissingChildReferenceSampleKeys(instance) {
+  if (!instance || typeof instance !== 'object') return [];
+  return Object.keys(instance).slice(0, 15);
 }
 
 export function buildRootContract(root) {
@@ -171,7 +171,8 @@ export function buildDiagnostics({
   errors = [],
   levelCounts = {},
   missingChildReferenceIdsCount = 0,
-  skippedInstancesCount = 0
+  skippedInstancesCount = 0,
+  missingChildReferenceSampleKeys = null
 }) {
   const diagnostics = {
     status: errors.length ? 'ERROR' : 'OK',
@@ -184,6 +185,9 @@ export function buildDiagnostics({
   if (Object.keys(levelCounts).length) diagnostics.levelCounts = levelCounts;
   if (missingChildReferenceIdsCount) diagnostics.missingChildReferenceIdsCount = missingChildReferenceIdsCount;
   if (skippedInstancesCount) diagnostics.skippedInstancesCount = skippedInstancesCount;
+  if (missingChildReferenceSampleKeys?.length) {
+    diagnostics.missingChildReferenceSampleKeys = missingChildReferenceSampleKeys;
+  }
   return diagnostics;
 }
 
