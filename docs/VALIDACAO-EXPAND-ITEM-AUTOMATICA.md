@@ -1,6 +1,6 @@
 # Validação automática Expand Item (DEC-015)
 
-**Build release:** `bom20260614j`  
+**Build release:** `bom20260614k` (Explorer Mirror principal; Expand Item só diagnóstico)  
 **Validado tenant:** `bom20260614g` / `14h` — classificação **A**  
 **PR:** #11 merged
 
@@ -9,7 +9,7 @@
 ## Widget piloto (URL fixa)
 
 ```
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260614j
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260614k
 ```
 
 Dashboard piloto: `#dashboard:e9bdf50c-6377-4956-b931-b5566a8e9e97/tabId:AMzDJUOA09wQHOdVtHHY`
@@ -19,9 +19,9 @@ Dashboard piloto: `#dashboard:e9bdf50c-6377-4956-b931-b5566a8e9e97/tabId:AMzDJUO
 ## Como usar (sem Console manual)
 
 1. Abra o dashboard piloto no 3DDashboard com Product Structure Explorer carregado.
-2. Clique **Atualizar estrutura** (único botão principal).
-3. O widget valida automaticamente (CSRF → root → POST expand) e, se **A**, carrega tabela/KPI/gráficos com o **mesmo payload** (sem segundo POST).
-4. Opcional (Avançado): **Diagnóstico técnico Expand Item** + **Copiar relatório técnico**.
+2. Clique **Atualizar estrutura** — tenta **Explorer Mirror** (fonte oficial do Explorer).
+3. KPI/tabela só carregam se `dashboardRows === explorerCount` (mirror válido).
+4. Avançado: **Diagnóstico técnico Expand Item** (modo B — não alimenta tabela) + **Copiar relatório técnico**.
 
 ---
 

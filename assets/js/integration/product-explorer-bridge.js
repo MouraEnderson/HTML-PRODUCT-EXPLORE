@@ -2265,6 +2265,26 @@ var ProductExplorerBridge = (function () {
       return;
     }
 
+    try {
+      var officialArrays = [
+        data.structureItems,
+        data.loadedItems,
+        data.loadedNodes,
+        data.visibleRows,
+        data.data && data.data.structureItems,
+        data.data && data.data.loadedNodes
+      ];
+      var oi;
+      for (oi = 0; oi < officialArrays.length; oi++) {
+        if (Array.isArray(officialArrays[oi]) && officialArrays[oi].length > 0) {
+          if (!data.scrapeSource || !/dom|mirror|clipboard|tsv/i.test(String(data.scrapeSource))) {
+            window.__BOM_OFFICIAL_STRUCTURE_CACHE__ = data;
+            break;
+          }
+        }
+      }
+    } catch (eStruct) {}
+
     if (data.structureName || data.rootName || data.structure || data.productName) {
       setStructureNameHint(data.structureName || data.rootName || data.structure || data.productName);
     }

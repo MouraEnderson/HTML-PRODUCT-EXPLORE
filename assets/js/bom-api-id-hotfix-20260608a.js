@@ -1,30 +1,32 @@
-/* BOM hotfix - 20260614j — fix stack overflow getBomVisualRowsCount + DEC-015 UX */
+/* BOM hotfix - 20260614k — Explorer Mirror principal; Expand Item só diagnóstico */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260614j';
+var BUILD = 'bom20260614k';
 /** Capturado antes de sobrescrever w.getBomVisualRowsCount (evita recursão infinita). */
 var _providerGetBomVisualRowsCount =
   typeof w.getBomVisualRowsCount === 'function' ? w.getBomVisualRowsCount : null;
 var BACKEND = 'https://bom-resolver.onrender.com';
-var DATA_SOURCE = 'expand-item';
+var DATA_SOURCE = 'explorer-mirror';
 var EXPAND_ITEM_LEVELS = 2;
 var LOADER_MODE = DATA_SOURCE;
-var MIRROR_EXPLORER_MODE = false;
+var MIRROR_EXPLORER_MODE = true;
 var DEC014_REF = 'DEC-014 (docs/DECISOES-TECNICAS.md)';
 var DEC015_REF = 'DEC-015 (docs/DEC-015-EXPAND-ITEM-PROVIDER.md)';
+var DEC016_REF = 'DEC-016 Explorer Mirror (fonte principal tabela/KPI)';
 var MIRROR_UNAVAILABLE_MSG =
-  'Modo Explorer Mirror indisponível: o Product Structure Explorer não expõe API pública para árvore expandida em widget GitHub Pages separado. Consulte DEC-014.';
+  'Não foi encontrada fonte oficial para espelhar exatamente a grade atual do Product Structure Explorer. ' +
+  'Expand Item está disponível em Avançado, mas retorna uma expansão diferente da visualização do Explorer.';
 var FULL_BOM_API_MSG =
-  'Modo Full BOM API: estrutura reconstruída via API ENOVIA, independente do estado visual expandido no Product Explorer.';
+  'Modo Full BOM API: estrutura reconstruída via API ENOVIA — não é mirror do Explorer.';
 var MIRROR_ROADMAP_NOTE =
-  'Para viabilizar Mirror Explorer real, validar com Dassault/tenant contrato oficial ENOPSTR_* ou API interna para nós expandidos/carregados. Sem esse contrato: widget nativo mesma origem com API oficial.';
+  'Explorer Mirror exige contrato oficial ENOPSTR_* ou intercom 3DDashboard que exporte os nós carregados/visíveis. Sem isso, a tabela principal não é preenchida com dados divergentes.';
 
 w.BOM_BUILD_ID = BUILD;
 w.__BOM_BUILD_ID__ = BUILD;
 w.__BOM_BACKEND_URL__ = BACKEND;
-w.__BOM_HOTFIX_MODE__ = 'expand-item-provider';
+w.__BOM_HOTFIX_MODE__ = 'explorer-mirror';
 w.__BOM_LOADER_MODE__ = LOADER_MODE;
 w.__BOM_DATA_SOURCE__ = DATA_SOURCE;
 w.EXPAND_ITEM_LEVELS = EXPAND_ITEM_LEVELS;
@@ -352,13 +354,14 @@ function disableMirrorCaptureFlags() {
     w.APP_CONFIG.EXPLORER_AUTO_COPY_ENABLED = false;
     w.APP_CONFIG.PASTE_TRAP_ENABLED = false;
     w.APP_CONFIG.EXPLORER_MIRROR_AUTO_SYNC = false;
-    w.APP_CONFIG.PRIMARY_LOADER = 'api';
-    if (w.APP_CONFIG.DATA_SOURCE) {
-      DATA_SOURCE = w.APP_CONFIG.DATA_SOURCE;
-      LOADER_MODE = DATA_SOURCE;
-      w.__BOM_DATA_SOURCE__ = DATA_SOURCE;
-      w.__BOM_LOADER_MODE__ = DATA_SOURCE;
-    }
+    w.APP_CONFIG.PRIMARY_LOADER = 'explorer-mirror';
+    w.APP_CONFIG.DATA_SOURCE = w.APP_CONFIG.DATA_SOURCE || DATA_SOURCE;
+    DATA_SOURCE = w.APP_CONFIG.DATA_SOURCE;
+    LOADER_MODE = DATA_SOURCE;
+    w.__BOM_DATA_SOURCE__ = DATA_SOURCE;
+    w.__BOM_LOADER_MODE__ = LOADER_MODE;
+    MIRROR_EXPLORER_MODE = DATA_SOURCE === 'explorer-mirror';
+    w.__BOM_MIRROR_EXPLORER_MODE__ = MIRROR_EXPLORER_MODE;
     if (w.APP_CONFIG.EXPAND_ITEM_LEVELS > 0) {
       EXPAND_ITEM_LEVELS = n(w.APP_CONFIG.EXPAND_ITEM_LEVELS);
       w.EXPAND_ITEM_LEVELS = EXPAND_ITEM_LEVELS;
@@ -387,14 +390,15 @@ function getExplorerReferenceContext() {
   } catch (e1) { /* */ }
   return {
     loaderMode: LOADER_MODE,
-    mirrorExplorerMode: false,
-    mirrorStatus: 'unavailable',
+    mirrorExplorerMode: MIRROR_EXPLORER_MODE,
+    mirrorStatus: MIRROR_EXPLORER_MODE ? 'primary' : 'unavailable',
     mirrorMessage: MIRROR_UNAVAILABLE_MSG,
     fullBomMessage: FULL_BOM_API_MSG,
     dec014: DEC014_REF,
+    dec016: DEC016_REF,
     explorerReferenceCount: getExplorerLoadedCount(),
     rootName: rootName,
-    status: 'reference-only'
+    status: MIRROR_EXPLORER_MODE ? 'explorer-mirror-primary' : 'reference-only'
   };
 }
 
@@ -1234,21 +1238,28 @@ function applyBridgeItemsToUI(processed) {
     var payload = w.BomSnapshot.buildFromImported(items, productName);
     if (payload) {
       payload.scrapeSource =
-        processed.loaderMode === 'expand-item'
-          ? 'expand-item'
-          : processed.loaderMode === 'full-bom-api'
-            ? 'full-bom-api'
-            : 'browser-auth-bridge';
+        processed.loaderMode === 'explorer-mirror'
+          ? 'official-explorer-mirror'
+          : processed.loaderMode === 'expand-item'
+            ? 'expand-item'
+            : processed.loaderMode === 'full-bom-api'
+              ? 'full-bom-api'
+              : 'browser-auth-bridge';
     }
     return w.BomSnapshot.applyPayload(payload).then(function (meta) {
       var visualCount = getBomVisualRowsCount(items);
       var count =
-        processed.loaderMode === 'expand-item'
+        processed.loaderMode === 'explorer-mirror'
           ? visualCount
-          : typeof w.BomService !== 'undefined' && w.BomService.getNodeCount
-            ? w.BomService.getNodeCount()
-            : processed.mappedCount;
-      if (processed.loaderMode === 'expand-item' && count !== visualCount) {
+          : processed.loaderMode === 'expand-item'
+            ? visualCount
+            : typeof w.BomService !== 'undefined' && w.BomService.getNodeCount
+              ? w.BomService.getNodeCount()
+              : processed.mappedCount;
+      if (
+        (processed.loaderMode === 'expand-item' || processed.loaderMode === 'explorer-mirror') &&
+        count !== visualCount
+      ) {
         bridgeLog('warn count mismatch BomService vs rows', count, visualCount);
         count = visualCount;
       }
@@ -1348,6 +1359,10 @@ function getDataSource() {
   return DATA_SOURCE;
 }
 
+function isExplorerMirrorActive() {
+  return getDataSource() === 'explorer-mirror' || MIRROR_EXPLORER_MODE;
+}
+
 function isExpandItemActive() {
   return getDataSource() === 'expand-item';
 }
@@ -1357,7 +1372,7 @@ function isFullBomActive() {
 }
 
 function isDec014UiActive() {
-  return isExpandItemActive() || isFullBomActive();
+  return isExplorerMirrorActive() || isExpandItemActive() || isFullBomActive();
 }
 
 function parseExplorerRef(processed) {
@@ -1371,12 +1386,14 @@ function parseExplorerRef(processed) {
   return 0;
 }
 
-function ebomUxNoteHtml() {
-  var depth = n(w.EXPAND_ITEM_LEVELS) || EXPAND_ITEM_LEVELS;
+function expandItemDiagNoteHtml() {
+  var rep = w.__bomTechnicalReport || {};
+  var expandRows = n(rep.expandItemRows);
+  if (!expandRows) return '';
   return (
-    '<p style="margin:4px 0 0;font-size:.6rem;color:#5c6b7a;line-height:1.35">EBOM oficial expandida via API Expand Item com profundidade ' +
-    depth +
-    '. A contagem pode ser maior que os itens visíveis no Product Explorer quando a árvore do Explorer estiver colapsada.</p>'
+    '<p style="margin:4px 0 0;font-size:.6rem;color:#5c6b7a">Diagnóstico Expand Item: <strong>' +
+    expandRows +
+    '</strong> linhas retornadas pela API, não usado como fonte principal.</p>'
   );
 }
 
@@ -1384,34 +1401,55 @@ function renderDataSourceBanner(el, dash, explorerRef) {
   explorerRef = n(explorerRef);
   dash = n(dash);
   el.classList.remove('bom-hidden');
-  el.className = 'bom-sync-banner bom-sync-ok';
-  var explorerTip =
-    'Referência visual Explorer = nós atualmente visíveis no grid do Product Explorer. EBOM API = estrutura oficial retornada pelo Expand Item, normalizada por Path.';
-  if (isExpandItemActive()) {
-    if (explorerRef > 0 && explorerRef !== dash) {
+  var tech = w.__bomTechnicalReport || {};
+  var diverged = !!tech.divergence || (explorerRef > 0 && dash > 0 && explorerRef !== dash);
+
+  if (isExplorerMirrorActive()) {
+    if (diverged || (explorerRef > 0 && dash > 0 && explorerRef !== dash)) {
+      el.className = 'bom-sync-banner bom-sync-warn';
       el.innerHTML =
-        '<span title="' +
-        explorerTip +
-        '">Referência visual Explorer: <strong>' +
+        'Product Explorer: <strong>' +
         explorerRef +
-        '</strong> | EBOM API: <strong>' +
+        '</strong> objetos | Fonte da tabela: <strong>Explorer Mirror</strong> — ' +
+        '<strong>divergência</strong> (' +
         dash +
-        '</strong> linhas | modo dseng/expand</span>' +
-        ebomUxNoteHtml();
-    } else if (explorerRef > 0) {
-      el.innerHTML =
-        '<span title="' +
-        explorerTip +
-        '">Referência visual Explorer: <strong>' +
-        explorerRef +
-        '</strong> | EBOM API: <strong>' +
-        dash +
-        '</strong> linhas</span>' +
-        ebomUxNoteHtml();
-    } else {
-      el.innerHTML =
-        'EBOM API: <strong>' + dash + '</strong> linhas | modo dseng/expand' + ebomUxNoteHtml();
+        ' linhas). A tabela principal não é mirror do Explorer.' +
+        expandItemDiagNoteHtml();
+      return;
     }
+    if (dash > 0 && explorerRef > 0 && dash === explorerRef) {
+      el.className = 'bom-sync-banner bom-sync-ok';
+      el.innerHTML =
+        'Product Explorer: <strong>' +
+        explorerRef +
+        '</strong> objetos | Fonte da tabela: <strong>Explorer Mirror</strong> | KPI/tabela: <strong>' +
+        dash +
+        '</strong> linhas' +
+        expandItemDiagNoteHtml();
+      return;
+    }
+    if (explorerRef > 0 && dash < 1) {
+      el.className = 'bom-sync-banner bom-sync-warn';
+      el.innerHTML =
+        'Product Explorer: <strong>' +
+        explorerRef +
+        '</strong> objetos | Fonte da tabela: <strong>Explorer Mirror</strong> — aguardando carga válida.' +
+        expandItemDiagNoteHtml();
+      return;
+    }
+    el.className = 'bom-sync-banner bom-sync-info';
+    el.innerHTML =
+      'Product Explorer: <strong>' +
+      (explorerRef || '—') +
+      '</strong> objetos | Fonte da tabela: <strong>Explorer Mirror</strong>' +
+      expandItemDiagNoteHtml();
+    return;
+  }
+
+  el.className = 'bom-sync-banner bom-sync-ok';
+  if (isExpandItemActive()) {
+    el.innerHTML =
+      'Modo legado Expand Item — use Explorer Mirror (<code>DATA_SOURCE=explorer-mirror</code>).';
     return;
   }
   if (explorerRef > 0) {
@@ -1588,6 +1626,17 @@ function runExpandItemValidation(options) {
   var runOpts = Object.assign({ returnPayload: !!options.returnPayload }, options);
   return w.ExpandItemValidator.run(runOpts)
     .then(function (report) {
+      var expandRows =
+        n(report && report.normalization && report.normalization.visualRowsCount) ||
+        n(report && report.normalization && report.normalization.normalizedRows) ||
+        n(report && report.counts && report.counts.tableRows);
+      if (w.ExplorerMirrorProvider && w.ExplorerMirrorProvider.attachExpandItemDiagnostic) {
+        w.ExplorerMirrorProvider.attachExpandItemDiagnostic(expandRows);
+      } else {
+        w.__bomTechnicalReport = Object.assign({}, w.__bomTechnicalReport || {}, {
+          expandItemRows: expandRows
+        });
+      }
       if (!silent) {
         w.ExpandItemValidator.renderReport(report);
         if (w.App && w.App.setStatus) {
@@ -1597,9 +1646,14 @@ function runExpandItemValidation(options) {
               ? w.ExpandItemValidator.userMessageFor(cls)
               : report && report.decision;
           if (cls === 'A' && diagnostic) {
-            w.App.setStatus('Diagnóstico: API OK (A) — use Atualizar estrutura para carregar EBOM', 'ok');
+            w.App.setStatus(
+              'Diagnóstico Expand Item: API OK (A), ' +
+                expandRows +
+                ' linhas — não usado como fonte principal da tabela',
+              'ok'
+            );
           } else if (cls === 'A') {
-            w.App.setStatus('Diagnóstico: API OK (A)', 'ok');
+            w.App.setStatus('Diagnóstico Expand Item: API OK (A)', 'ok');
           } else {
             w.App.setStatus('Diagnóstico Expand Item: ' + (cls || '?') + ' — ' + userMsg, 'error');
           }
@@ -1658,17 +1712,6 @@ function wireExpandItemValidatorUi() {
     );
   }
 
-  try {
-    var auto =
-      (w.APP_CONFIG && w.APP_CONFIG.AUTO_VALIDATE_EXPAND_ITEM === true) ||
-      w.AUTO_VALIDATE_EXPAND_ITEM === true;
-    if (auto && getWafData() && isExpandItemActive() && !w.__BOM_AUTO_VALIDATE_RAN__) {
-      w.__BOM_AUTO_VALIDATE_RAN__ = true;
-      setTimeout(function () {
-        runExpandItemValidation({}).catch(function () {});
-      }, 1200);
-    }
-  } catch (eAuto) {}
 }
 
 function renderAdvancedPanel(classified) {
@@ -1689,38 +1732,43 @@ function renderAdvancedPanel(classified) {
       : 0;
     var ops = classified ? n(classified.operationalCount) : n(w.__bomDiagClassification && w.__bomDiagClassification.operationalCount);
 
+    var tech = w.__bomTechnicalReport || {};
     panel.innerHTML =
-      (isExpandItemActive()
-        ? '<div style="margin:0 0 8px;padding:6px;border:1px dashed #cfd8e3;border-radius:6px">' +
-          '<p style="margin:0 0 6px;font-size:.72rem"><strong>Diagnóstico técnico (opcional)</strong></p>' +
-          '<button type="button" id="btnValidateExpandItem" class="bom-btn bom-btn-secondary" style="font-size:.7rem;margin-right:4px">Diagnóstico técnico Expand Item</button>' +
-          '<button type="button" id="btnCopyExpandValidationReport" class="bom-btn bom-btn-secondary" style="font-size:.7rem">Copiar relatório técnico</button>' +
-          '<p style="margin:6px 0 0;font-size:.62rem;color:#5c6b7a">Use <strong>Atualizar estrutura</strong> no fluxo normal — validação automática embutida. Diagnóstico só para auditoria.</p>' +
-          '</div>'
-        : '') +
-      '<p style="margin:0 0 6px;font-size:.72rem"><strong>DEC-014: Mirror Explorer indisponível</strong></p>' +
-      '<p style="margin:0 0 6px;font-size:.7rem">Modo ativo: <strong>' +
-      (isExpandItemActive() ? 'Expand Item (DEC-015)' : 'Full BOM API') +
-      '</strong></p>' +
-      (isExpandItemActive()
-        ? '<p style="margin:0 0 4px;font-size:.65rem;color:#5c6b7a">Full BOM API disponível como alternativo (<code>DATA_SOURCE=full-bom-api</code>).</p>'
-        : '') +
+      '<div style="margin:0 0 8px;padding:6px;border:1px dashed #cfd8e3;border-radius:6px">' +
+      '<p style="margin:0 0 6px;font-size:.72rem"><strong>Diagnóstico Expand Item (modo B — não alimenta tabela)</strong></p>' +
+      '<button type="button" id="btnValidateExpandItem" class="bom-btn bom-btn-secondary" style="font-size:.7rem;margin-right:4px">Diagnóstico técnico Expand Item</button>' +
+      '<button type="button" id="btnCopyExpandValidationReport" class="bom-btn bom-btn-secondary" style="font-size:.7rem">Copiar relatório técnico</button>' +
+      '<p style="margin:6px 0 0;font-size:.62rem;color:#5c6b7a">O botão principal <strong>Atualizar estrutura</strong> usa apenas <strong>Explorer Mirror</strong>. Expand Item é só auditoria de API.</p>' +
+      '</div>' +
+      '<p style="margin:0 0 6px;font-size:.72rem"><strong>' + DEC016_REF + '</strong></p>' +
+      '<p style="margin:0 0 6px;font-size:.7rem">Modo ativo: <strong>Explorer Mirror</strong> (fonte principal tabela/KPI)</p>' +
       (explorerRef > 0
-        ? '<p style="margin:0 0 4px;font-size:.7rem" title="Nós visíveis no grid do Product Explorer">Referência visual Explorer: <strong>' +
-          explorerRef +
-          '</strong></p>'
+        ? '<p style="margin:0 0 4px;font-size:.7rem">Product Explorer: <strong>' + explorerRef + '</strong> objetos</p>'
         : '') +
-      (dash > 0 && isExpandItemActive()
-        ? '<p style="margin:0 0 4px;font-size:.7rem">EBOM API (Expand Item): <strong>' + dash + '</strong> linhas</p>'
-        : dash > 0
-          ? '<p style="margin:0 0 4px;font-size:.7rem">Full BOM API: <strong>' + dash + '</strong></p>'
-          : '') +
+      (dash > 0
+        ? '<p style="margin:0 0 4px;font-size:.7rem">Fonte da tabela: Explorer Mirror — <strong>' + dash + '</strong> linhas</p>'
+        : '') +
+      (n(tech.expandItemRows) > 0
+        ? '<p style="margin:0 0 4px;font-size:.65rem;color:#5c6b7a">Diagnóstico Expand Item: <strong>' +
+          tech.expandItemRows +
+          '</strong> linhas (não usado como fonte principal)</p>'
+        : '') +
+      (tech.sourceUsed
+        ? '<p style="margin:0 0 4px;font-size:.65rem;color:#5c6b7a">sourceUsed: ' + tech.sourceUsed + '</p>'
+        : '') +
       '<p style="margin:0 0 4px;font-size:.7rem">Falhas operacionais: <strong>' + ops + '</strong></p>' +
       (deepRun
         ? '<p style="margin:0 0 6px;font-size:.7rem">Probes técnicos (profundo): <strong>' + probes + '</strong></p>'
         : '<p style="margin:0 0 6px;font-size:.65rem;color:#5c6b7a">Probes de contrato só no diagnóstico profundo.</p>') +
       '<p style="margin:0 0 6px;font-size:.65rem;color:#5c6b7a">Root resolvido via EngItem/search/candidato navegável</p>' +
       '<p style="margin:0 0 8px;font-size:.65rem;color:#92400e">' + MIRROR_UNAVAILABLE_MSG + '</p>' +
+      (tech.divergence
+        ? '<p style="margin:0 0 8px;font-size:.65rem;color:#b42318">divergence: true — explorerCount=' +
+          n(tech.explorerCount) +
+          ', dashboardRows=' +
+          n(tech.dashboardRows) +
+          '</p>'
+        : '') +
       '<button type="button" id="btnApiDiagnosticDeep" class="bom-btn bom-btn-secondary" style="font-size:.7rem;margin-bottom:4px">Diagnóstico profundo</button>' +
       '<p id="bomDiagDeepHint" style="margin:0 0 6px;font-size:.62rem;color:#92400e">Diagnóstico profundo executa probes que podem gerar 404/403 esperados no Console.</p>' +
       '<p style="margin:0;font-size:.65rem;color:#5c6b7a">' + MIRROR_ROADMAP_NOTE + '</p>';
@@ -1755,7 +1803,7 @@ function patchSyncBanner() {
       el.className = 'bom-sync-banner bom-sync-info';
       el.innerHTML =
         'Nenhuma estrutura carregada. Abra o Product Structure Explorer ao lado e clique ' +
-        '<strong>Atualizar estrutura</strong> (modo <strong>Full BOM API</strong>, DEC-014).';
+        '<strong>Atualizar estrutura</strong> (modo <strong>Explorer Mirror</strong>).';
       return;
     }
 
@@ -2151,13 +2199,117 @@ function buildExpandResultFromValidatedPayload(payload, report, loadContext) {
   };
 }
 
-function atualizarEstruturaComValidacao() {
+function validateExplorerMirrorDivergence(explorerCount, dashboardRows) {
+  explorerCount = n(explorerCount);
+  dashboardRows = n(dashboardRows);
+  if (explorerCount > 0 && dashboardRows !== explorerCount) {
+    var msg =
+      w.ExplorerMirrorProvider && w.ExplorerMirrorProvider.divergenceMessage
+        ? w.ExplorerMirrorProvider.divergenceMessage(explorerCount, dashboardRows)
+        : 'Divergência: Product Explorer mostra ' +
+          explorerCount +
+          ' objetos, mas a fonte do dashboard retornou ' +
+          dashboardRows +
+          ' linhas. A tabela principal não será considerada mirror do Explorer.';
+    return msg;
+  }
+  return '';
+}
+
+function buildMirrorResultFromProvider(mirrorReport, loadContext) {
+  mirrorReport = mirrorReport || {};
+  loadContext = loadContext || w.__bomLoadContext || getExplorerReferenceContext();
+  var items = mirrorReport.items || [];
+  var explorerRef = n(mirrorReport.explorerCount) || n(loadContext.explorerReferenceCount);
+  return {
+    rootId: null,
+    items: items,
+    mappedCount: items.length,
+    dedupCount: items.length,
+    explorerReferenceCount: explorerRef,
+    explorerLoadedCount: explorerRef,
+    rootName: s(mirrorReport.rootName || loadContext.rootName) || getRootName(),
+    loaderMode: 'explorer-mirror',
+    mirrorMode: true,
+    isExplorerMirror: !!mirrorReport.isExplorerMirror,
+    sourceUsed: mirrorReport.sourceUsed || 'none',
+    sourceMode: mirrorReport.sourceMode || 'explorer-mirror',
+    divergence: !!mirrorReport.divergence,
+    message: mirrorReport.message || 'Explorer Mirror',
+    technicalReport: mirrorReport,
+    partial: false,
+    incomplete: false
+  };
+}
+
+function finalizeMirrorResult(result, loadContext) {
+  loadContext = loadContext || w.__bomLoadContext || getExplorerReferenceContext();
+  result = result || {};
+  var explorerCount = n(result.explorerReferenceCount) || parseExplorerRef(result);
+  var dashboardRows = n(result.mappedCount) || (result.items && result.items.length) || 0;
+  var divergenceMsg = validateExplorerMirrorDivergence(explorerCount, dashboardRows);
+  if (divergenceMsg) {
+    diag('error', divergenceMsg);
+    if (w.ExplorerMirrorProvider && w.ExplorerMirrorProvider.buildReport) {
+      w.ExplorerMirrorProvider.buildReport(
+        Object.assign({}, result.technicalReport || {}, {
+          ok: false,
+          divergence: true,
+          explorerCount: explorerCount,
+          dashboardRows: dashboardRows,
+          message: divergenceMsg
+        })
+      );
+    }
+    renderAdvancedPanel(w.__bomDiagClassification || null);
+    updateLoadSyncBanner(result, dashboardRows);
+    return Promise.reject(new Error(divergenceMsg));
+  }
+  if (!result.items || !result.items.length) {
+    var emptyMsg =
+      (w.ExplorerMirrorProvider && w.ExplorerMirrorProvider.HONEST_FAILURE_MSG) || MIRROR_UNAVAILABLE_MSG;
+    diag('error', emptyMsg);
+    return Promise.reject(new Error(emptyMsg));
+  }
+  return applyBridgeItemsToUI(result).then(function (loaded) {
+    w.__bomBridgeLastResult = result;
+    w.__bomBridgeLastError = null;
+    var out = buildOrchestratorResult(result, loaded);
+    out.loaderMode = 'explorer-mirror';
+    out.mode = 'explorer-mirror';
+    out.isExplorerMirror = true;
+    out.sourceUsed = result.sourceUsed;
+    out.message = result.message;
+    var dash = n(loaded.count) || dashboardRows;
+    if (dash !== explorerCount && explorerCount > 0) {
+      return Promise.reject(new Error(validateExplorerMirrorDivergence(explorerCount, dash)));
+    }
+    diag('ok', 'Explorer Mirror: ' + dash + ' linhas (Product Explorer: ' + explorerCount + ')');
+    if (w.SyncBanner && w.SyncBanner.setLoadResult) w.SyncBanner.setLoadResult(out);
+    updateLoadSyncBanner(result, dash);
+    renderAdvancedPanel(w.__bomDiagClassification || null);
+    updateBuildPill();
+    if (w.App && w.App.setStatus) {
+      w.App.setStatus('Explorer Mirror: ' + dash + ' linhas — KPI alinhado ao Product Explorer.', 'ok');
+    }
+    return out;
+  });
+}
+
+function atualizarEstruturaExplorerMirror() {
   var btn = byIdUi('btnImportPaste');
   if (btn) btn.disabled = true;
   if (w.App && w.App.setStatus) {
-    w.App.setStatus('Validando estrutura oficial no 3DEXPERIENCE...', 'info');
+    w.App.setStatus('Buscando fonte oficial Explorer Mirror...', 'info');
   }
-  showExpandValidationBusy();
+  var panel = byIdUi('expandItemValidationPanel');
+  if (panel) {
+    panel.innerHTML =
+      '<div style="border:1px solid #d8e0ea;border-radius:8px;padding:8px;margin:6px;background:#fff">' +
+      '<strong style="font-size:.74rem">Explorer Mirror</strong>' +
+      '<p style="margin:6px 0 0;font-size:.68rem;color:#5c6b7a">Consultando fontes oficiais (postMessage / contexto widget)…</p>' +
+      '</div>';
+  }
 
   return ensureBridgeContext()
     .then(function () {
@@ -2166,45 +2318,36 @@ function atualizarEstruturaComValidacao() {
     })
     .then(function (loadContext) {
       w.__bomLoadContext = loadContext;
-      bridgeLog('loader mode', 'expand-item-auto-validate');
-      return runExpandItemValidation({ silent: true, returnPayload: true });
+      bridgeLog('loader mode', 'explorer-mirror-primary');
+      if (!w.ExplorerMirrorProvider || !w.ExplorerMirrorProvider.fetch) {
+        return Promise.reject(new Error('ExplorerMirrorProvider indisponível'));
+      }
+      return w.ExplorerMirrorProvider.fetch({
+        explorerCount: loadContext.explorerReferenceCount,
+        rootName: loadContext.rootName
+      });
     })
-    .then(function (report) {
-      var cls = report && report.classification;
-      if (cls !== 'A' || !report.validatedPayload) {
-        w.ExpandItemValidator.renderReport(report);
-        var msg =
-          (w.ExpandItemValidator.userMessageFor && w.ExpandItemValidator.userMessageFor(cls || '?')) ||
-          (report && report.decision) ||
-          'Falha na validação Expand Item.';
-        diag('error', 'Expand Item ' + (cls || '?') + ': ' + msg);
+    .then(function (mirrorReport) {
+      if (!mirrorReport || !mirrorReport.ok) {
+        var msg = (mirrorReport && mirrorReport.message) || MIRROR_UNAVAILABLE_MSG;
+        diag('error', 'Explorer Mirror: ' + msg);
         if (w.App && w.App.setStatus) w.App.setStatus(msg, 'error');
+        renderAdvancedPanel(w.__bomDiagClassification || null);
+        updateLoadSyncBanner({ explorerReferenceCount: mirrorReport && mirrorReport.explorerCount }, 0);
         return Promise.reject(new Error(msg));
       }
-
-      var result = buildExpandResultFromValidatedPayload(report.validatedPayload, report, w.__bomLoadContext);
+      var result = buildMirrorResultFromProvider(mirrorReport, w.__bomLoadContext);
       result.__loadContext = w.__bomLoadContext;
-      return finalizeExpandResult(result, w.__bomLoadContext).then(function (out) {
-        if (w.ExpandItemValidator && w.ExpandItemValidator.attachLoadCounts) {
-          w.ExpandItemValidator.attachLoadCounts(report, {
-            validationRows: getBomVisualRowsCount(result.normalized && result.normalized.rows),
-            importRows: n(result.mappedCount),
-            tableRows: n(result.mappedCount),
-            kpiTotalPecas: n(result.mappedCount),
-            difference: 0,
-            differenceReason: ''
-          });
-          w.ExpandItemValidator.renderReport(w.ExpandItemValidator.getLastReport());
-        }
-        if (w.App && w.App.setStatus) {
-          w.App.setStatus('Estrutura oficial carregada com sucesso.', 'ok');
-        }
-        return out;
-      });
+      return finalizeMirrorResult(result, w.__bomLoadContext);
     })
     .finally(function () {
       if (btn) btn.disabled = false;
     });
+}
+
+/** Mantido para diagnóstico manual Expand Item (Avançado) — não alimenta tabela principal. */
+function atualizarEstruturaComValidacao() {
+  return runExpandItemValidation({ diagnostic: true, returnPayload: true });
 }
 
 function processExpandItemResult(result, loadContext) {
@@ -2356,8 +2499,16 @@ function patchOrchestrator() {
       return original(options);
     }
 
+    if (isExplorerMirrorActive()) {
+      diag('ok', BUILD + ' | Atualizar estrutura -> Explorer Mirror (fonte principal)');
+      console.log('[BOM bridge]', BUILD, 'Atualizar estrutura -> atualizarEstruturaExplorerMirror');
+      return atualizarEstruturaExplorerMirror().catch(function (err) {
+        return bridgeFailure(err, 'Atualizar estrutura Explorer Mirror');
+      });
+    }
+
     if (isExpandItemActive()) {
-      diag('ok', BUILD + ' | Atualizar estrutura -> Expand Item + validação automática');
+      diag('ok', BUILD + ' | Atualizar estrutura -> Expand Item (legado)');
       console.log('[BOM bridge]', BUILD, 'Atualizar estrutura -> atualizarEstruturaComValidacao');
       return atualizarEstruturaComValidacao().catch(function (err) {
         return bridgeFailure(err, 'Atualizar estrutura Expand Item');
@@ -2398,6 +2549,11 @@ var original = w.ExplorerScanner.scan.bind(w.ExplorerScanner);
 w.ExplorerScanner.__BOM_ORIGINAL_SCAN__ = w.ExplorerScanner.__BOM_ORIGINAL_SCAN__ || original;
 
 w.ExplorerScanner.scan = function () {
+  if (isExplorerMirrorActive()) {
+    return atualizarEstruturaExplorerMirror().catch(function (err) {
+      return bridgeFailure(err, 'ExplorerScanner.scan Explorer Mirror');
+    });
+  }
   if (isExpandItemActive()) {
     return atualizarEstruturaComValidacao().catch(function (err) {
       return bridgeFailure(err, 'ExplorerScanner.scan Expand Item');
@@ -2420,7 +2576,7 @@ return true;
 }
 
 function boot() {
-diag('ok', 'Hotfix carregado: ' + BUILD + ' | ' + getDataSource() + ' (' + DEC015_REF + ')');
+diag('ok', 'Hotfix carregado: ' + BUILD + ' | ' + getDataSource() + ' (' + DEC016_REF + ')');
 disableMirrorCaptureFlags();
 updateBuildPill();
 
@@ -2463,8 +2619,18 @@ w.__bomBridgeInstall = function () {
 
 w.__bomBridgeRun = function () {
   diag('ok', 'Executando carga manual: ' + BUILD + ' | ' + getDataSource());
-  var chain = isExpandItemActive() ? atualizarEstruturaComValidacao() : runBrowserBridge();
-  var finalize = isExpandItemActive() ? finalizeExpandResult : finalizeBridgeResult;
+  var chain = isExplorerMirrorActive()
+    ? atualizarEstruturaExplorerMirror()
+    : isExpandItemActive()
+      ? atualizarEstruturaComValidacao()
+      : runBrowserBridge();
+  var finalize = isExplorerMirrorActive()
+    ? function (r) {
+        return Promise.resolve(r);
+      }
+    : isExpandItemActive()
+      ? finalizeExpandResult
+      : finalizeBridgeResult;
   return chain
     .then(function (result) {
       return finalize(result, result && result.__loadContext);
@@ -2484,10 +2650,12 @@ w.__bomBridgeInfo = function () {
     loaderMode: getDataSource(),
     expandItemLevels: EXPAND_ITEM_LEVELS,
     dec015: DEC015_REF,
+    dec016: DEC016_REF,
     mirrorExplorerMode: MIRROR_EXPLORER_MODE,
     dec014: DEC014_REF,
-    mirrorStatus: 'unavailable',
+    mirrorStatus: MIRROR_EXPLORER_MODE ? 'primary' : 'unavailable',
     mirrorMessage: MIRROR_UNAVAILABLE_MSG,
+    technicalReport: w.__bomTechnicalReport || null,
     fullBomMessage: FULL_BOM_API_MSG,
     mirrorRoadmap: MIRROR_ROADMAP_NOTE,
     backend: BACKEND,
@@ -2503,6 +2671,7 @@ w.__bomBridgeInfo = function () {
 
 w.__bomBridgeLastResult = w.__bomBridgeLastResult || null;
 w.__bomBridgeLastError = w.__bomBridgeLastError || null;
+w.atualizarEstruturaExplorerMirror = atualizarEstruturaExplorerMirror;
 w.atualizarEstruturaComValidacao = atualizarEstruturaComValidacao;
 w.getBomVisualRowsCount = getBomVisualRowsCount;
 

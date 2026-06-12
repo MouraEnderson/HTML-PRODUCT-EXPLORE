@@ -7,7 +7,7 @@
 
   var w = global;
   var LOG = '[ExpandItemValidator]';
-  var BUILD = 'bom20260614j';
+  var BUILD = 'bom20260614k';
   var MANUAL_CSRF_HEADER_RE = /^x-csrf-token$/i;
   var lastReport = null;
 
@@ -741,6 +741,13 @@
       ['importRows', report.counts && report.counts.importRows],
       ['difference', report.counts && report.counts.difference],
       ['difference reason', report.counts && report.counts.differenceReason],
+      ['explorerCount', (w.__bomTechnicalReport && w.__bomTechnicalReport.explorerCount) || ''],
+      ['dashboardRows', (w.__bomTechnicalReport && w.__bomTechnicalReport.dashboardRows) || ''],
+      ['sourceUsed', (w.__bomTechnicalReport && w.__bomTechnicalReport.sourceUsed) || ''],
+      ['sourceMode', (w.__bomTechnicalReport && w.__bomTechnicalReport.sourceMode) || ''],
+      ['isExplorerMirror', w.__bomTechnicalReport && w.__bomTechnicalReport.isExplorerMirror ? 'true' : 'false'],
+      ['divergence', w.__bomTechnicalReport && w.__bomTechnicalReport.divergence ? 'true' : 'false'],
+      ['expandItemRows', (w.__bomTechnicalReport && w.__bomTechnicalReport.expandItemRows) || ''],
       ['first Path', report.payload && report.payload.firstPath],
       [
         'first normalized row',

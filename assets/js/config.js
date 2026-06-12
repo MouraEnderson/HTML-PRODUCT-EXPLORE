@@ -8,9 +8,9 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260614j',
-    /** DEC-015: expand-item (principal) | full-bom-api (alternativo) */
-    DATA_SOURCE: 'expand-item',
+    BUILD: 'bom20260614k',
+    /** DEC-016: explorer-mirror (principal) | expand-item (diagnóstico) | full-bom-api (alternativo) */
+    DATA_SOURCE: 'explorer-mirror',
     EXPAND_ITEM_LEVELS: 2,
     /** Validação automática Expand Item ao abrir widget (14f: false) */
     AUTO_VALIDATE_EXPAND_ITEM: false,
@@ -162,12 +162,12 @@
      */
     /** Tabela compacta no modo UI_CLEAN */
     PILOT_TABLE_COLUMNS: [
-      { key: '_thumb', label: '', format: 'thumb', width: 44 },
       { key: 'name', label: 'T\u00edtulo' },
-      { key: 'title', label: 'Descri\u00e7\u00e3o' },
       { key: 'revision', label: 'Revis\u00e3o' },
       { key: 'owner', label: 'Propriet\u00e1rio' },
-      { key: 'maturity', label: 'Estado de maturidade', format: 'status' }
+      { key: 'maturity', label: 'Estado de maturidade', format: 'status' },
+      { key: 'displayType', label: 'Formato' },
+      { key: 'title', label: 'Descri\u00e7\u00e3o' }
     ],
 
     PRODUCT_EXPLORER_COLUMNS: [
