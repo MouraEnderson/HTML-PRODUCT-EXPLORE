@@ -1244,6 +1244,10 @@ body.ui-clean .main-clean {
   border-radius: 4px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 2.4em;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .bom-topbar-left {
@@ -2473,6 +2477,8 @@ body.ui-clean .main-clean {
 .bom-layout-page > .bom-zone-1 .bom-build-pill {
   padding: 1px 5px;
   font-size: 0.6rem;
+  flex-shrink: 0;
+  min-width: 2.2em;
 }
 
 .bom-quad {

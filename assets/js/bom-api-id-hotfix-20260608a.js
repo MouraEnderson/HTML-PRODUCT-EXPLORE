@@ -46,12 +46,22 @@ function syncAppConfigBuild() {
   } catch (e) {}
 }
 
+function formatBuildPillLabel(build) {
+  var m = String(build || '').match(/^bom(\d{8})([a-z])$/i);
+  if (m) return m[1].slice(-2) + m[2];
+  return String(build || '');
+}
+
 function updateBuildPill() {
   try {
     syncAppConfigBuild();
     var root = w.__3DX_UI_ROOT__ || document;
     var pill = root.querySelector && root.querySelector('.bom-build-pill');
-    if (pill) pill.textContent = BUILD;
+    if (pill) {
+      pill.textContent = formatBuildPillLabel(BUILD);
+      pill.title = BUILD;
+      pill.setAttribute('aria-label', 'Build ' + BUILD);
+    }
     var tag = root.querySelector && root.querySelector('#buildTag');
     if (tag) tag.textContent = BUILD;
   } catch (e) {}

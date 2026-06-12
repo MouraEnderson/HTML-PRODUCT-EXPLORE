@@ -223,16 +223,18 @@ O dashboard E-BOM precisa bater com o Product Structure Explorer em:
 
 ## Resultado da investigação
 
-**Conclusão: D — Não foi encontrada fonte oficial acessível ao widget (Web Page Reader + GitHub Pages) para espelhar a grade atual do Product Structure Explorer.**
+**Conclusão: D — Não foi encontrada fonte oficial que retorne a grade carregada/visível do Product Structure Explorer com contagem e colunas equivalentes.**
+
+**Contexto piloto corrigido:** o tenant usa **Additional App trusted** (WAFData OK, inter-widget *possível* por CAA). Isso **não** muda a conclusão D: mesmo no modo trusted, **não há contrato documentado/comprovado** do PSE exportando `loadedNodes` / linhas da grade para consumo pelo widget BOM.
 
 Evidência convergente:
 
-1. **CAA** restringe Web Page Reader: sem REST 3DSpace, sem comunicação entre widgets, sem 6WTagger.
-2. **`dseng` Expand Item** é oficial mas retorna **EBOM expandida** (C), com contagem **diferente** do Explorer no tenant.
-3. **ENOPSTR_AP / ENOSCEN_AP / `getLoadedStructure`** — **sem documentação oficial** encontrada; tentativas no runtime não produziram linhas.
-4. **postMessage** com tipos inferidos — **sem evidência** de broadcast oficial do PSE com `loadedNodes` / grade.
+1. **Additional App** habilita REST e comunicação entre widgets (CAA), mas **não** documenta payload de grade do PSE.
+2. **`dseng` Expand Item** é oficial mas retorna **EBOM expandida** (C), com contagem **diferente** do Explorer no tenant (ex.: 24 vs 17).
+3. **ENOPSTR_AP / ENOSCEN_AP / `getLoadedStructure`** — **sem documentação oficial** encontrada; tentativas AMD no runtime não produziram linhas.
+4. **postMessage** com tipos inferidos — **sem evidência** de broadcast oficial do PSE com estrutura completa.
 
-Nota: viabilizar mirror no futuro alinha-se com **E** (Additional App trusted, extensão CAA/tenant, ou serviço intermediário com contrato explícito) — mas isso **não** constitui contrato existente hoje para o widget atual.
+Nota: caminho **E** (extensão nativa PSE, evento DS/tenant documentado, ou serviço intermediário) permanece o único viável para mirror real — mas **não** constitui contrato existente hoje.
 
 ## Decisão técnica (conclusão D)
 
@@ -268,7 +270,7 @@ Use o probe **ProductExplorerMirrorContractProbe** (Avançado → “Copiar rela
 
 Se `requestedBuildFromUrl !== runtimeBuild`, o relatório DEC-017 deve alertar:
 
-> Versão divergente: Web Page Reader ainda aponta para {requestedBuildFromUrl}, mas runtime carregou {runtimeBuild}. Atualize a URL do widget e faça hard refresh.
+> Versão divergente: Additional App ainda aponta para {requestedBuildFromUrl}, mas runtime carregou {runtimeBuild}. Atualize a **Source code URL** no Platform Manager (`?v={runtimeBuild}`) e faça hard refresh.
 
 Não usar divergência de cache como desculpa para fallback.
 
