@@ -9,6 +9,6 @@ Quando o usuário pedir para verificar o widget BOM no 3DEXPERIENCE:
 
 1. **Tentar abrir o link do dashboard** no browser MCP — a sessão do usuário já está logada no Cursor; **não pedir login/senha**.
 2. URL piloto: `https://r1132100929518-us1-ifwe.3dexperience.3ds.com/#dashboard:e9bdf50c-6377-4956-b931-b5566a8e9e97/tabId:AMzDJUOA09wQHOdVtHHY`
-3. Dashboard **LISTA 3DX / PRODUCTEXPLORE** — widget BOM Analytics: `widget-v3-08i.html?v=bom20260614h` (GitHub Pages).
-4. Fluxo DEC-015: Explorer carregado → **Avançado → Validar Expand Item** (classificação A) → **Atualizar estrutura**.
-5. Sem validação A, KPIs ficam em 0 e gate bloqueia carga — esperado.
+3. Dashboard **LISTA 3DX / PRODUCTEXPLORE** — widget BOM Analytics: `widget-v3-08i.html?v=bom20260614i` (GitHub Pages).
+4. Fluxo DEC-015: Explorer carregado → **Atualizar estrutura** (validação automática + carga EBOM).
+5. Diagnóstico técnico opcional em Avançado — não necessário para o fluxo normal.

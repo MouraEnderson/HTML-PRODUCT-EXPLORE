@@ -7,7 +7,7 @@
 
   var w = global;
   var LOG = '[ExpandItemValidator]';
-  var BUILD = 'bom20260614h';
+  var BUILD = 'bom20260614i';
   var MANUAL_CSRF_HEADER_RE = /^x-csrf-token$/i;
   var lastReport = null;
 
@@ -435,6 +435,51 @@
     return map[code] || 'Inconclusivo — repetir validação';
   }
 
+  function userMessageFor(code) {
+    var map = {
+      A: 'Estrutura oficial carregada com sucesso.',
+      B: 'Falha de permissão/autorização ao consultar Expand Item.',
+      C: 'RootId inválido ou não encontrado.',
+      D: 'Endpoint ou método inválido.',
+      E: 'Body ou Content-Type inválido.',
+      F: 'Falha de transporte/CORS.'
+    };
+    return map[code] || 'Validação Expand Item inconclusiva.';
+  }
+
+  function attachNormalizationReport(report, norm) {
+    norm = norm || {};
+    var rows = norm.rows || [];
+    var visualRowsCount =
+      n(norm.visualRowsCount) ||
+      (w.getBomVisualRowsCount ? w.getBomVisualRowsCount(rows) : rows.length);
+    report.normalization = {
+      normalizedRows: visualRowsCount,
+      visualRowsCount: visualRowsCount,
+      includesRoot: !!norm.includesRoot,
+      rootRowCount: n(norm.rootRowCount),
+      firstRow: rows[0] || null,
+      stats: norm.stats || {}
+    };
+    report.counts = {
+      memberCount: n(report.payload && report.payload.memberCount),
+      totalItems: n(report.payload && report.payload.totalItems) || n(norm.stats && norm.stats.totalItems),
+      referenceCount: n(report.payload && report.payload.referenceCount),
+      instanceCount: n(report.payload && report.payload.instanceCount),
+      pathCount: n(report.payload && report.payload.pathCount),
+      normalizedRows: visualRowsCount,
+      includesRoot: !!norm.includesRoot,
+      rootRowCount: n(norm.rootRowCount),
+      visualRowsCount: visualRowsCount,
+      tableRows: n(report.counts && report.counts.tableRows),
+      kpiTotalPecas: n(report.counts && report.counts.kpiTotalPecas),
+      validationRows: visualRowsCount,
+      importRows: n(report.counts && report.counts.importRows),
+      difference: n(report.counts && report.counts.difference),
+      differenceReason: s(report.counts && report.counts.differenceReason)
+    };
+  }
+
   function buildReportObject(report) {
     return {
       build: BUILD,
@@ -445,9 +490,13 @@
       expand: report.expand,
       payload: report.payload,
       normalization: report.normalization,
+      counts: report.counts || {},
+      validatedPayload: report.validatedPayload || null,
       classification: report.classification,
       decision: report.decision,
-      uiSummary: report.uiSummary
+      userMessage: report.userMessage || userMessageFor(report.classification),
+      uiSummary: report.uiSummary,
+      countConsistencyError: report.countConsistencyError || ''
     };
   }
 
@@ -574,13 +623,12 @@
 
                 if (expandRes.ok && expandRes.data) {
                   report.payload = analyzePayload(expandRes.data);
+                  report.payload.totalItems = n(expandRes.data.totalItems);
+                  if (options.returnPayload) {
+                    report.validatedPayload = expandRes.data;
+                  }
                   if (typeof w.normalizeExpandItemPayload === 'function') {
-                    var norm = w.normalizeExpandItemPayload(expandRes.data);
-                    report.normalization = {
-                      normalizedRows: norm.rows ? norm.rows.length : 0,
-                      firstRow: norm.rows && norm.rows[0] ? norm.rows[0] : null,
-                      stats: norm.stats || {}
-                    };
+                    attachNormalizationReport(report, w.normalizeExpandItemPayload(expandRes.data));
                   }
                 } else {
                   report.payload = analyzePayload(expandRes.responseJson || {});
@@ -588,18 +636,22 @@
 
                 report.classification = classify(report);
                 report.decision = decisionFor(report.classification);
+                report.userMessage = userMessageFor(report.classification);
                 report.uiSummary = {
                   wafOk: report.environment.wafDataAvailable,
                   csrfOk: !!report.csrf.valuePresent,
                   rootOk: report.root.validationStatus === 200,
                   expandOk: report.expand.status === 200,
                   pathCount: n(report.payload.pathCount),
-                  normalizedRows: n(report.normalization.normalizedRows)
+                  normalizedRows: n(report.normalization && report.normalization.visualRowsCount)
                 };
 
                 lastReport = buildReportObject(report);
                 w.__lastExpandItemValidationReport = lastReport;
                 w.__expandItemValidationPassed = report.classification === 'A';
+                if (report.classification === 'A' && report.validatedPayload) {
+                  w.__lastValidatedExpandPayload = report.validatedPayload;
+                }
                 log('classification:', report.classification);
                 log('decision:', report.decision);
                 return lastReport;
@@ -678,7 +730,17 @@
       ['VPMReference count', report.payload && report.payload.referenceCount],
       ['VPMInstance count', report.payload && report.payload.instanceCount],
       ['Path count', report.payload && report.payload.pathCount],
+      ['totalItems (API)', report.payload && report.payload.totalItems],
       ['normalized rows', report.normalization && report.normalization.normalizedRows],
+      ['includesRoot', report.normalization && report.normalization.includesRoot ? 'true' : 'false'],
+      ['rootRowCount', report.normalization && report.normalization.rootRowCount],
+      ['visualRowsCount', report.normalization && report.normalization.visualRowsCount],
+      ['tableRows', report.counts && report.counts.tableRows],
+      ['kpiTotalPecas', report.counts && report.counts.kpiTotalPecas],
+      ['validationRows', report.counts && report.counts.validationRows],
+      ['importRows', report.counts && report.counts.importRows],
+      ['difference', report.counts && report.counts.difference],
+      ['difference reason', report.counts && report.counts.differenceReason],
       ['first Path', report.payload && report.payload.firstPath],
       [
         'first normalized row',
@@ -765,6 +827,28 @@
     copyReport: copyReport,
     getLastReport: getLastReport,
     isPassed: isPassed,
+    userMessageFor: userMessageFor,
+    attachLoadCounts: function (report, counts) {
+      report = report || lastReport || w.__lastExpandItemValidationReport;
+      if (!report) return null;
+      report.counts = Object.assign({}, report.counts || {}, counts || {});
+      if (n(report.counts.validationRows) && n(report.counts.importRows)) {
+        report.counts.difference = report.counts.importRows - report.counts.validationRows;
+        if (report.counts.difference !== 0 && !report.counts.differenceReason) {
+          report.counts.differenceReason =
+            'diferença entre rows validados e linhas importadas — verificar ensureContextRoot';
+        }
+      }
+      if (report.counts.kpiTotalPecas !== report.counts.tableRows) {
+        report.countConsistencyError =
+          'Inconsistência de contagem: KPI Total Peças diferente da quantidade de linhas da tabela. Corrigir normalização antes de exibir como válido.';
+      } else {
+        report.countConsistencyError = '';
+      }
+      lastReport = buildReportObject(report);
+      w.__lastExpandItemValidationReport = lastReport;
+      return lastReport;
+    },
     getOfficialCsrf: getOfficialCsrf,
     postExpandOfficial: postExpandOfficial,
     ensureSpaceUrl: ensureSpaceUrl,

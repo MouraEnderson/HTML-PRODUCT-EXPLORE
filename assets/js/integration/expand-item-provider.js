@@ -8,7 +8,11 @@
   var w = global;
 
   var LOG = '[ExpandItemProvider]';
-  var BUILD = s(w.__BOM_BUILD_ID__ || (w.APP_CONFIG && w.APP_CONFIG.BUILD) || 'bom20260614h');
+  var BUILD = s(w.__BOM_BUILD_ID__ || (w.APP_CONFIG && w.APP_CONFIG.BUILD) || 'bom20260614i');
+
+  function getBomVisualRowsCount(rows) {
+    return Array.isArray(rows) ? rows.length : 0;
+  }
   var MANUAL_CSRF_HEADER_RE = /^x-csrf-token$/i;
   /** Fallback temporário de teste — último recurso após contexto/UQL/EnoviaApi */
   var KNOWN_ROOT_BY_PRD = {
@@ -903,16 +907,28 @@
       }
     });
 
+    var rootRowCount = rootIncluded ? 1 : 0;
+    var visualRowsCount = getBomVisualRowsCount(rows);
     return {
       source: 'expand-item',
       rows: rows,
+      pathCount: pathCount,
+      memberCount: members.length,
+      referenceCount: referenceCount,
+      instanceCount: instanceCount,
+      includesRoot: rootIncluded,
+      rootRowCount: rootRowCount,
+      visualRowsCount: visualRowsCount,
       stats: {
         rawMemberCount: members.length,
         referenceCount: referenceCount,
         instanceCount: instanceCount,
         pathCount: pathCount,
-        normalizedRows: rows.length,
-        totalItems: n(payload.totalItems)
+        normalizedRows: visualRowsCount,
+        totalItems: n(payload.totalItems),
+        includesRoot: rootIncluded,
+        rootRowCount: rootRowCount,
+        visualRowsCount: visualRowsCount
       }
     };
   }
@@ -999,10 +1015,13 @@
   w.normalizeExpandItemPayload = normalizeExpandItemPayload;
   w.__expandItemProbe = expandItemProbe;
 
+  w.getBomVisualRowsCount = getBomVisualRowsCount;
+
   w.ExpandItemProvider = {
     expand: expand,
     normalize: normalize,
     normalizeExpandItemPayload: normalizeExpandItemPayload,
+    getBomVisualRowsCount: getBomVisualRowsCount,
     loadCurrentStructure: loadCurrentStructure,
     resolveCurrentRootId: resolveCurrentRootId
   };

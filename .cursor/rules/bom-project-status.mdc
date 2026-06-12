@@ -10,13 +10,13 @@ alwaysApply: true
 - Pasta: `C:\Users\Enderson\Projects\3dx-product-explorer-bom-dashboard`
 - GitHub: `https://github.com/MouraEnderson/HTML-PRODUCT-EXPLORE`
 - Pages: `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/`
-- Widget 3DDashboard: `widget-v3-08i.html?v=bom20260614h` (Web Page Reader)
+- Widget 3DDashboard: `widget-v3-08i.html?v=bom20260614i` (Web Page Reader)
 - Tenant piloto: `R1132100929518`
 - Dashboard piloto: `#dashboard:e9bdf50c-6377-4956-b931-b5566a8e9e97/tabId:AMzDJUOA09wQHOdVtHHY`
 
 ## Build atual (atualizar após cada deploy)
 
-- **BUILD:** `bom20260614h`
+- **BUILD:** `bom20260614i`
 - **Release DEC-015:** Expand Item validado tenant (classificação **A**, PR #11 merged)
 - Widget: `widget-v3-08i.html` + hotfix + `expand-item-provider.js` + `expand-item-validator.js`
 - Fonte principal: **Expand Item** (`DATA_SOURCE=expand-item`); Full BOM API = alternativo
@@ -51,4 +51,4 @@ Antes de commit: `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, `G
 
 ## Fluxo de dados no widget
 
-**Avançado → Validar Expand Item** (classificação A) → **Atualizar estrutura** → Expand Item POST → normalização Path → tabela/KPIs = `rows.length`. Clipboard/TSV/DOM mirror reprovados.
+**Atualizar estrutura** (validação automática embutida) → Expand Item POST único → normalização Path → tabela/KPIs = `rows.length`. Diagnóstico técnico opcional em Avançado. Clipboard/TSV/DOM mirror reprovados.
