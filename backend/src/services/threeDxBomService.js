@@ -196,6 +196,7 @@ async function resolveDsengStructure(parsed, config) {
   let missingChildReferenceIdsCount = 0;
   let skippedInstancesCount = 0;
   let missingChildReferenceSampleKeys = null;
+  let truncatedInstancesCount = 0;
   const visitedPaths = new Set();
 
   let rootPayload;
@@ -231,6 +232,12 @@ async function resolveDsengStructure(parsed, config) {
       try {
         const instancesResult = await client.getEngInstances(current.parentId);
         members = instancesResult.members;
+        if (instancesResult.truncatedInstancesCount > 0) {
+          truncatedInstancesCount += instancesResult.truncatedInstancesCount;
+          warnings.push(
+            `EngInstances truncated for parent ${current.parentId}: ${instancesResult.truncatedInstancesCount} not fetched (page limit)`
+          );
+        }
       } catch (error) {
         if (current.level === 0) {
           return failureFromUpstream(error, client);
@@ -313,7 +320,8 @@ async function resolveDsengStructure(parsed, config) {
         levelCounts: counts.levelCounts,
         missingChildReferenceIdsCount,
         skippedInstancesCount,
-        missingChildReferenceSampleKeys
+        missingChildReferenceSampleKeys,
+        truncatedInstancesCount
       })
     })
   };

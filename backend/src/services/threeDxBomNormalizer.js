@@ -172,7 +172,8 @@ export function buildDiagnostics({
   levelCounts = {},
   missingChildReferenceIdsCount = 0,
   skippedInstancesCount = 0,
-  missingChildReferenceSampleKeys = null
+  missingChildReferenceSampleKeys = null,
+  truncatedInstancesCount = 0
 }) {
   const diagnostics = {
     status: errors.length ? 'ERROR' : 'OK',
@@ -185,6 +186,7 @@ export function buildDiagnostics({
   if (Object.keys(levelCounts).length) diagnostics.levelCounts = levelCounts;
   if (missingChildReferenceIdsCount) diagnostics.missingChildReferenceIdsCount = missingChildReferenceIdsCount;
   if (skippedInstancesCount) diagnostics.skippedInstancesCount = skippedInstancesCount;
+  if (truncatedInstancesCount) diagnostics.truncatedInstancesCount = truncatedInstancesCount;
   if (missingChildReferenceSampleKeys?.length) {
     diagnostics.missingChildReferenceSampleKeys = missingChildReferenceSampleKeys;
   }

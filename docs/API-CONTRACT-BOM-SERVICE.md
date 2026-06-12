@@ -60,7 +60,9 @@
 **Status:** ✅ PR 3 — dseng real via GET EngItem + GET EngInstance; mock explícito com `BOM_SERVICE_MODE=mock`
 
 **Regras PR 3:**
-- Fonte principal: `GET /dseng:EngItem/{id}` + `GET /dseng:EngItem/{id}/dseng:EngInstance`
+- Fonte principal: `GET /dseng:EngItem/{id}` + `GET /dseng:EngItem/{id}/dseng:EngInstance` (paginado via `getAllEngInstances`)
+- EngInstances: paginação automática (100/página, `DSENG_MAX_INSTANCE_PAGES` default 20); se truncar, `diagnostics.truncatedInstancesCount` + warning
+- Auth: somente material do `authMode` resolvido (bearer **ou** cookie **ou** basic — nunca misturados)
 - **Não** usa POST `/expand` (Expand Item) como fonte principal
 - `BOM_SERVICE_MODE=mock` → mock PR #16 (sem fallback silencioso)
 - Env dseng incompleta → **503** `UPSTREAM_NOT_CONFIGURED`

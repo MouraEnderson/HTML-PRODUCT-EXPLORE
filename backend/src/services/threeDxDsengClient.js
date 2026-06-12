@@ -8,15 +8,18 @@ export class ThreeDxDsengClient {
   constructor(config = getThreeDxConfig()) {
     this.config = config;
     this.endpointsUsed = [];
+    const selectedAuth = {
+      bearerToken: config.authMode === 'bearer' ? config.bearerToken : '',
+      cookie: config.authMode === 'cookie' ? config.cookie : '',
+      username: config.authMode === 'basic' ? config.username : '',
+      password: config.authMode === 'basic' ? config.password : ''
+    };
     this.client = new EnoviaClient({
       spaceUrl: config.spaceUrl,
       securityContext: config.securityContext,
-      username: config.authMode === 'basic' ? config.username : '',
-      password: config.authMode === 'basic' ? config.password : '',
-      bearerToken: config.bearerToken,
-      cookie: config.cookie,
       csrfToken: config.csrfToken,
-      authMode: config.authMode
+      authMode: config.authMode,
+      ...selectedAuth
     });
   }
 
@@ -63,9 +66,24 @@ export class ThreeDxDsengClient {
     const endpoint = ENG_INSTANCE_ENDPOINT;
     try {
       await this.ensureCsrf();
-      const data = await this.client.getEngInstances(parentId, { skip: 0, top: 100 });
+      const maxPages = Number(process.env.DSENG_MAX_INSTANCE_PAGES || 20);
+      const data = await this.client.getAllEngInstances(parentId, {
+        pageSize: 100,
+        maxPages
+      });
+      const members = extractMembers(data);
+      const totalItems = Number(data?.totalItems ?? members.length);
+      const truncatedInstancesCount = totalItems > members.length
+        ? totalItems - members.length
+        : 0;
       this.recordEndpoint('GET', endpoint, 200);
-      return { ok: true, data, members: extractMembers(data) };
+      return {
+        ok: true,
+        data,
+        members,
+        totalItems,
+        truncatedInstancesCount
+      };
     } catch (error) {
       this.recordEndpoint('GET', endpoint, Number(error?.status || 502));
       throw error;
