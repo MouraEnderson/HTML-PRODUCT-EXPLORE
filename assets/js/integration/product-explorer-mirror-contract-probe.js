@@ -7,7 +7,7 @@
   'use strict';
 
   var w = global;
-  var BUILD = 'bom20260614m';
+  var BUILD = 'bom20260614n';
   var LOG = '[DEC-017 Probe]';
   var LISTEN_MS = 10000;
 
@@ -58,13 +58,38 @@
     return null;
   }
 
-  function getRequestedBuildFromUrl() {
+  function extractBuildFromUrl(url) {
     try {
-      var m = String(w.location.search || '').match(/[?&]v=([^&]+)/);
+      var m = String(url || '').match(/[?&]v=([^&]+)/);
       return m ? decodeURIComponent(m[1]) : '';
     } catch (e) {
       return '';
     }
+  }
+
+  function getRequestedBuildFromUrl() {
+    var urls = [w.location.href];
+    try {
+      if (w.frameElement && w.frameElement.src) urls.push(w.frameElement.src);
+      if (w.widget && w.widget.uwaUrl) urls.push(String(w.widget.uwaUrl));
+      if (w.widget && w.widget.getUrl) urls.push(String(w.widget.getUrl()));
+    } catch (e) {}
+    var i;
+    for (i = 0; i < urls.length; i++) {
+      var b = extractBuildFromUrl(urls[i]);
+      if (b) return b;
+    }
+    return '';
+  }
+
+  function detectDeploymentMode() {
+    try {
+      if (w.__3DX_TRUSTED_WIDGET__ && (typeof w.WAFData !== 'undefined' || w.widget)) {
+        return 'additional-app-trusted';
+      }
+      if (w.widget && (w.widget.uwaUrl || w.widget.getUrl)) return 'uwa-widget';
+    } catch (e) {}
+    return 'standalone';
   }
 
   function getRuntimeBuild() {
@@ -92,13 +117,19 @@
     var divergent = !!(requested && runtime && requested !== runtime);
     var frameDivergent = !!(frameParam && runtime && frameParam !== runtime);
     var msg = '';
+    var deployLabel =
+      detectDeploymentMode() === 'additional-app-trusted' ? 'Additional App' : 'widget';
     if (divergent) {
       msg =
-        'Versão divergente: Web Page Reader ainda aponta para ' +
+        'Versão divergente: ' +
+        deployLabel +
+        ' ainda aponta para ' +
         requested +
         ', mas runtime carregou ' +
         runtime +
-        '. Atualize a URL do widget e faça hard refresh.';
+        '. Atualize a Source code URL no Platform Manager (v=' +
+        runtime +
+        ') e faça hard refresh.';
     }
   return {
       requestedBuildFromUrl: requested,
@@ -324,7 +355,7 @@
 
   function computeVerdict(report) {
     if (report.version.cacheDivergent) {
-      return 'BLOCKED_CACHE_DIVERGENCE — corrija v= na URL do Web Page Reader antes de concluir';
+      return 'BLOCKED_CACHE_DIVERGENCE — corrija v= na Source code URL do Additional App antes de concluir';
     }
     var structureMessages = (report.postMessages || []).filter(function (m) {
       return m.structureLike && n(m.rowCount) > 0;
@@ -368,6 +399,7 @@
       runtimeBuild: version.runtimeBuild,
       frameBuildFromUrl: version.frameBuildFromUrl,
       versionDivergence: version,
+      deploymentMode: detectDeploymentMode(),
       loadedScripts: collectLoadedScripts(),
       explorerMirrorProvider: probeExplorerMirrorProviderStatus(),
       platformApi: probePlatformApiQuick(),

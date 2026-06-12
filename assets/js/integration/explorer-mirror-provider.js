@@ -8,7 +8,7 @@
   'use strict';
 
   var w = global;
-  var BUILD = 'bom20260614m';
+  var BUILD = 'bom20260614n';
   var LOG = '[ExplorerMirror]';
   var SOURCE_MODE = 'explorer-mirror';
   var HONEST_FAILURE_MSG =

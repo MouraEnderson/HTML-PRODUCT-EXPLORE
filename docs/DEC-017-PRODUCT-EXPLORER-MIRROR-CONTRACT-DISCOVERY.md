@@ -1,7 +1,8 @@
 # DEC-017 — Product Explorer Mirror Contract Discovery
 
 **Data:** 2026-06-11  
-**Build de investigação:** `bom20260614m`  
+**Build de investigação:** `bom20260614n`  
+**Deploy piloto:** **Additional App** (trusted) no 3DDashboard — **não** Web Page Reader.  
 **Gate:** nenhuma implementação de Explorer Mirror na tabela principal até esta decisão ser aceita.
 
 ## Objetivo

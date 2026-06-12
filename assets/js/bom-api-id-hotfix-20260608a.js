@@ -1,9 +1,9 @@
-/* BOM hotfix - 20260614m — DEC-017 contract discovery probe + cache gate */
+/* BOM hotfix - 20260614n — DEC-017 + build sync Additional App */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260614m';
+var BUILD = 'bom20260614n';
 var PROVIDER_GLOBAL = 'ExplorerMirrorProvider';
 var PROVIDER_BOOTSTRAP_MSG =
   'Explorer Mirror Provider não foi carregado no runtime do widget. Verifique ordem de scripts, nome global exportado e cache do GitHub Pages.';
@@ -38,16 +38,74 @@ w.__BOM_MIRROR_EXPLORER_MODE__ = MIRROR_EXPLORER_MODE;
 w.__bomBridgeLastResult = null;
 w.__bomBridgeLastError = null;
 
-function updateBuildPill() {
+function syncAppConfigBuild() {
   try {
     w.__BOM_BUILD_ID__ = BUILD;
     w.BOM_BUILD_ID = BUILD;
+    if (typeof w.APP_CONFIG !== 'undefined') w.APP_CONFIG.BUILD = BUILD;
+  } catch (e) {}
+}
+
+function updateBuildPill() {
+  try {
+    syncAppConfigBuild();
     var root = w.__3DX_UI_ROOT__ || document;
     var pill = root.querySelector && root.querySelector('.bom-build-pill');
     if (pill) pill.textContent = BUILD;
     var tag = root.querySelector && root.querySelector('#buildTag');
     if (tag) tag.textContent = BUILD;
   } catch (e) {}
+}
+
+function detectDeploymentMode() {
+  try {
+    if (w.__3DX_TRUSTED_WIDGET__ && (typeof w.WAFData !== 'undefined' || w.widget)) {
+      return 'additional-app-trusted';
+    }
+    if (w.widget && (w.widget.uwaUrl || w.widget.getUrl)) return 'uwa-widget';
+  } catch (e) {}
+  return 'standalone';
+}
+
+function extractBuildFromUrl(url) {
+  try {
+    var m = String(url || '').match(/[?&]v=([^&]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function getRequestedBuildFromAllSources() {
+  var urls = [w.location.href];
+  try {
+    if (w.frameElement && w.frameElement.src) urls.push(w.frameElement.src);
+    if (w.widget && w.widget.uwaUrl) urls.push(String(w.widget.uwaUrl));
+    if (w.widget && w.widget.getUrl) urls.push(String(w.widget.getUrl()));
+  } catch (e) {}
+  var i;
+  for (i = 0; i < urls.length; i++) {
+    var b = extractBuildFromUrl(urls[i]);
+    if (b) return b;
+  }
+  return '';
+}
+
+function patchAppStatusBuild() {
+  if (!w.App || !w.App.setStatus || w.App.__BOM_BUILD_STATUS_PATCH__) return false;
+  var orig = w.App.setStatus.bind(w.App);
+  w.App.setStatus = function (msg, kind) {
+    syncAppConfigBuild();
+    if (msg && typeof msg === 'string') {
+      msg = msg.replace(/bom20260607a/g, BUILD);
+      if (/build\s+bom202606/i.test(msg) && msg.indexOf(BUILD) < 0) {
+        msg = msg.replace(/build\s+\S+/, 'build ' + BUILD);
+      }
+    }
+    return orig(msg, kind);
+  };
+  w.App.__BOM_BUILD_STATUS_PATCH__ = true;
+  return true;
 }
 
 function getWafData() {
@@ -353,6 +411,7 @@ function mirrorItemToExplorerRow(item, idx) {
 function disableMirrorCaptureFlags() {
   try {
     if (typeof w.APP_CONFIG === 'undefined') w.APP_CONFIG = {};
+    syncAppConfigBuild();
     w.APP_CONFIG.USE_DOM_MIRROR_PRIMARY = false;
     w.APP_CONFIG.DOM_MIRROR_FALLBACK = false;
     w.APP_CONFIG.EXPLORER_AUTO_COPY_ENABLED = false;
@@ -1409,46 +1468,46 @@ function probeExplorerMirrorProviderBootstrap() {
 }
 
 function buildRuntimeCacheDiagnostics() {
-  var requested = '';
-  try {
-    var m = String(location.search || '').match(/[?&]v=([^&]+)/);
-    requested = m ? decodeURIComponent(m[1]) : '';
-  } catch (e) {}
+  var requested = getRequestedBuildFromAllSources();
   var frameUwa = '';
   try {
     if (w.frameElement && w.frameElement.src) frameUwa = w.frameElement.src;
     else if (w.widget && w.widget.uwaUrl) frameUwa = String(w.widget.uwaUrl);
+    else if (w.widget && w.widget.getUrl) frameUwa = String(w.widget.getUrl());
   } catch (e2) {}
-  var frameParam = '';
-  try {
-    var fm = String(frameUwa).match(/[?&]v=([^&]+)/);
-    frameParam = fm ? decodeURIComponent(fm[1]) : '';
-  } catch (e3) {}
+  var frameParam = extractBuildFromUrl(frameUwa);
   var runtimeBuild = w.__BOM_BUILD_ID__ || BUILD;
   var scriptBuild = (w[PROVIDER_GLOBAL] && w[PROVIDER_GLOBAL].BUILD) || '';
   var divergent = !!(requested && runtimeBuild && requested !== runtimeBuild);
   var frameDivergent = !!(frameParam && runtimeBuild && frameParam !== runtimeBuild);
+  var deployMode = detectDeploymentMode();
+  var deployLabel = deployMode === 'additional-app-trusted' ? 'Additional App' : 'widget';
   var cacheWarning = '';
   if (divergent) {
     cacheWarning =
-      'Versão divergente: Web Page Reader ainda aponta para ' +
+      'Versão divergente: ' +
+      deployLabel +
+      ' ainda aponta para ' +
       requested +
       ', mas runtime carregou ' +
       runtimeBuild +
-      '. Atualize a URL do widget e faça hard refresh.';
+      '. Atualize a Source code URL no Platform Manager (v=' +
+      runtimeBuild +
+      ') e faça hard refresh no widget.';
   } else if (frameDivergent) {
     cacheWarning =
-      'Versão divergente: frameUwaUrl contém v=' +
+      'Versão divergente: uwaUrl contém v=' +
       frameParam +
       ', mas runtime carregou ' +
       runtimeBuild +
-      '. Atualize a URL do widget e faça hard refresh.';
+      '. Atualize a Source code URL do Additional App e faça hard refresh.';
   }
   return {
     runtimeBuild: runtimeBuild,
     requestedBuildFromUrl: requested,
     frameBuildFromUrl: frameParam,
     scriptBuild: scriptBuild,
+    deploymentMode: deployMode,
     cacheStatus: w.__BOM_SCRIPT_LOAD_STATUS__ || {},
     frameUwaUrl: frameUwa,
     cacheDivergent: divergent || frameDivergent,
@@ -2369,6 +2428,8 @@ function patchImportButton() {
 }
 
 function patchUiMessaging() {
+  syncAppConfigBuild();
+  patchAppStatusBuild();
   patchClipboardRuntime();
   patchImportButton();
   patchApiDiagnosticModes();
@@ -2891,9 +2952,11 @@ return true;
 }
 
 function boot() {
+syncAppConfigBuild();
 diag('ok', 'Hotfix carregado: ' + BUILD + ' | ' + getDataSource() + ' (' + DEC016_REF + ')');
 disableMirrorCaptureFlags();
 updateBuildPill();
+patchAppStatusBuild();
 
 patchOrchestrator();
 patchScanner();
