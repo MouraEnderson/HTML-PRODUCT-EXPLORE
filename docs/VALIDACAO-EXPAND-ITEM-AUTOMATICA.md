@@ -1,6 +1,6 @@
 # Validação automática Expand Item (DEC-015)
 
-**Build:** `bom20260614f`  
+**Build:** `bom20260614g`  
 **PR:** #11 (draft — sem merge até classificação **A** no tenant)
 
 ---
@@ -8,7 +8,7 @@
 ## Como usar (sem Console manual)
 
 1. Abra o dashboard piloto no 3DDashboard com Product Structure Explorer carregado.
-2. Widget: `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260614f`
+2. Widget: `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260614g`
 3. No widget, abra **Avançado**.
 4. Clique **Validar Expand Item**.
 5. Leia o painel **Validação Expand Item** (zona central, abaixo do banner).
