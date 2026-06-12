@@ -2,7 +2,7 @@
 
 **Serviço:** SKA BOM Service  
 **Base URL (produção):** https://bom-resolver.onrender.com  
-**Versão contrato:** v1 (documentação PR 1; implementação PR 2+)  
+**Versão contrato:** v1 (PR 1 docs; PR 2 mock; **PR 3 dseng real v1**)  
 **Decisão:** DEC-018
 
 ---
@@ -19,11 +19,11 @@
 
 ---
 
-## GET /api/3dx/bom/health (implementado — PR 2 mock)
+## GET /api/3dx/bom/health (implementado — PR 2 mock, PR 3 upstream flags)
 
-**Status:** ✅ mock em `backend/src/routes/threeDxBomRoutes.js`
+**Status:** ✅ PR 3 — `mode` reflete `BOM_SERVICE_MODE` e config upstream
 
-**Resposta 200:**
+**Resposta 200 (mock explícito — `BOM_SERVICE_MODE=mock`):**
 
 ```json
 {
@@ -31,9 +31,18 @@
   "service": "SKA_BOM_SERVICE",
   "source": "RENDER_BOM_SERVICE",
   "version": "v1",
-  "mode": "mock"
+  "mode": "mock",
+  "upstream": {
+    "spaceUrlConfigured": true,
+    "securityContextConfigured": true,
+    "credentialsConfigured": false
+  }
 }
 ```
+
+**Resposta 200 (dseng configurado):** `mode: "dseng-official"`, `upstream.*` booleanos `true`.
+
+**Resposta 200 (não configurado):** `mode: "not-configured"`, `upstream.*` booleanos conforme env.
 
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
@@ -41,13 +50,22 @@
 | `service` | string | Identificador fixo `SKA_BOM_SERVICE` |
 | `source` | string | `RENDER_BOM_SERVICE` |
 | `version` | string | Versão do contrato (`v1`) |
-| `mode` | string | `mock` \| `dseng-official` |
+| `mode` | string | `mock` \| `dseng-official` \| `not-configured` |
+| `upstream` | object | Flags booleanas — **nunca** valores secretos |
 
 ---
 
-## POST /api/3dx/bom/structure (implementado — PR 2 mock, PR 3 dseng real)
+## POST /api/3dx/bom/structure (implementado — PR 2 mock, PR 3 dseng real v1)
 
-**Status:** ✅ mock em PR 2 — sem chamada 3DEXPERIENCE
+**Status:** ✅ PR 3 — dseng real via GET EngItem + GET EngInstance; mock explícito com `BOM_SERVICE_MODE=mock`
+
+**Regras PR 3:**
+- Fonte principal: `GET /dseng:EngItem/{id}` + `GET /dseng:EngItem/{id}/dseng:EngInstance`
+- **Não** usa POST `/expand` (Expand Item) como fonte principal
+- `BOM_SERVICE_MODE=mock` → mock PR #16 (sem fallback silencioso)
+- Env dseng incompleta → **503** `UPSTREAM_NOT_CONFIGURED`
+- `depth` máximo v1 = **3** → **422** `DEPTH_LIMIT_EXCEEDED`
+- Sem stack trace no JSON de erro
 
 ### Request
 
@@ -180,7 +198,10 @@ Qualquer falha inesperada nas rotas `/api/3dx/bom/*` retorna **HTTP 500** com o 
 | `INVALID_DEPTH` | 422 | `depth` não numérico ou negativo |
 | `ROOT_NOT_FOUND` | 404 | EngItem não encontrado |
 | `AUTH_FAILED` | 401/403 | Falha autenticação 3DSpace |
-| `UPSTREAM_ERROR` | 502 | Erro ENOVIA não recuperável |
+| `DEPTH_LIMIT_EXCEEDED` | 422 | `depth` > 3 (dseng v1) |
+| `UPSTREAM_NOT_CONFIGURED` | 503 | Env dseng incompleta |
+| `UPSTREAM_AUTH_FAILED` | 502 | Falha autenticação 3DSpace |
+| `UPSTREAM_DSENG_ERROR` | 502 | Erro ENOVIA/dseng |
 | `INTERNAL_ERROR` | 500 | Falha inesperada no backend (sem stack trace no JSON) |
 
 ---

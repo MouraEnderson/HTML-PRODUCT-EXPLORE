@@ -1,19 +1,50 @@
+import { getThreeDxConfig, getPublicEnvironmentFlags } from './threeDxConfig.js';
+import { ThreeDxDsengClient, assertDsengConfigured } from './threeDxDsengClient.js';
 import {
   SOURCE,
   CJ_MESA_ROOT_ID,
+  DSENG_MAX_DEPTH,
   buildErrorResponse,
   buildMockRow,
   buildStructureSuccess,
-  buildDiagnosticSuccess
+  buildDiagnosticSuccess,
+  buildBomRow,
+  buildDiagnostics,
+  normalizeEngItem,
+  normalizeEngInstance,
+  unwrapEngItemPayload
 } from './threeDxBomNormalizer.js';
 
+const ERROR_STATUS = {
+  ROOT_ID_REQUIRED: 422,
+  INVALID_DEPTH: 422,
+  DEPTH_LIMIT_EXCEEDED: 422,
+  UPSTREAM_NOT_CONFIGURED: 503,
+  ROOT_NOT_FOUND: 404,
+  UPSTREAM_AUTH_FAILED: 502,
+  UPSTREAM_AUTH_NOT_IMPLEMENTED: 502,
+  UPSTREAM_DSENG_ERROR: 502,
+  INTERNAL_ERROR: 500
+};
+
+export function getErrorStatus(code) {
+  return ERROR_STATUS[code] || 500;
+}
+
 export function getSkaHealth() {
+  const config = getThreeDxConfig();
+  let mode = config.mode;
+  if (mode === 'dseng-official') mode = 'dseng-official';
+  else if (mode === 'mock') mode = 'mock';
+  else mode = 'not-configured';
+
   return {
     ok: true,
     service: 'SKA_BOM_SERVICE',
     source: SOURCE,
     version: 'v1',
-    mode: 'mock'
+    mode,
+    upstream: config.upstream
   };
 }
 
@@ -22,11 +53,12 @@ function normalizeRootId(value) {
   return String(value).trim();
 }
 
-function parseDepth(value) {
+function parseDepth(value, defaultDepth) {
   if (value === undefined || value === null) {
-    return { ok: true, depth: 2 };
+    return { ok: true, depth: defaultDepth };
   }
-  if (!Number.isInteger(value) || value < 0) {
+  const num = Number(value);
+  if (!Number.isInteger(num) || num < 0) {
     return {
       ok: false,
       error: buildErrorResponse(
@@ -35,10 +67,10 @@ function parseDepth(value) {
       )
     };
   }
-  return { ok: true, depth: value };
+  return { ok: true, depth: num };
 }
 
-function parseStructureInput(body) {
+function parseStructureInput(body, defaultDepth = 1) {
   body = body || {};
   const rootId = normalizeRootId(body.rootId);
   if (!rootId) {
@@ -48,7 +80,7 @@ function parseStructureInput(body) {
     };
   }
 
-  const depthResult = parseDepth(body.depth);
+  const depthResult = parseDepth(body.depth, defaultDepth);
   if (!depthResult.ok) {
     return depthResult;
   }
@@ -82,10 +114,7 @@ function buildRootMeta(rootId) {
 }
 
 function buildMockRows(rootId, includeRoot) {
-  const root = buildRootMeta(rootId);
-  if (!includeRoot) {
-    return [];
-  }
+  if (!includeRoot) return [];
   if (rootId === CJ_MESA_ROOT_ID) {
     return [
       buildMockRow({
@@ -111,42 +140,321 @@ function buildMockRows(rootId, includeRoot) {
 }
 
 export function resolveMockStructure(body) {
-  const parsed = parseStructureInput(body);
+  const parsed = parseStructureInput(body, 2);
   if (!parsed.ok) {
     return parsed;
   }
 
   const rootMeta = buildRootMeta(parsed.rootId);
   const rows = buildMockRows(parsed.rootId, parsed.includeRoot);
+  const counts = {
+    totalRows: rows.length,
+    rootIncluded: parsed.includeRoot,
+    depth: parsed.depth,
+    levelCounts: rows.reduce((acc, row) => {
+      acc[row.level] = (acc[row.level] || 0) + 1;
+      return acc;
+    }, {})
+  };
 
   return {
     ok: true,
     data: buildStructureSuccess({
-      mode: parsed.mode,
+      mode: 'mock',
       root: rootMeta,
       rows,
       depth: parsed.depth,
-      includeRoot: parsed.includeRoot
+      includeRoot: parsed.includeRoot,
+      diagnostics: buildDiagnostics({
+        mode: 'mock',
+        endpointsUsed: [],
+        durationMs: 0,
+        warnings: ['Mock response only. No 3DEXPERIENCE call was executed in PR 2.'],
+        errors: [],
+        levelCounts: counts.levelCounts
+      })
     })
   };
+}
+
+function failureFromUpstream(error, client, mode = 'dseng-official') {
+  const mapped = client.mapUpstreamError(error);
+  return {
+    ok: false,
+    status: getErrorStatus(mapped.code),
+    error: buildErrorResponse(mapped.code, mapped.message, mode)
+  };
+}
+
+async function resolveDsengStructure(parsed, config) {
+  const started = Date.now();
+  const client = new ThreeDxDsengClient(config);
+  const warnings = [];
+  const errors = [];
+  let missingChildReferenceIdsCount = 0;
+  let skippedInstancesCount = 0;
+  const visitedPaths = new Set();
+
+  let rootPayload;
+  try {
+    const result = await client.getEngItem(parsed.rootId);
+    rootPayload = unwrapEngItemPayload(result.data);
+  } catch (error) {
+    return failureFromUpstream(error, client);
+  }
+
+  const root = normalizeEngItem(rootPayload);
+  if (!root.id) {
+    return {
+      ok: false,
+      status: 404,
+      error: buildErrorResponse('ROOT_NOT_FOUND', 'EngItem not found')
+    };
+  }
+
+  const rows = [];
+  if (parsed.includeRoot) {
+    rows.push(buildBomRow({ level: 0, parentId: null, instance: null, item: root }));
+  }
+
+  if (parsed.depth > 0) {
+    const queue = [{ parentId: root.id, level: 0 }];
+
+    while (queue.length) {
+      const current = queue.shift();
+      if (current.level >= parsed.depth) continue;
+
+      let members = [];
+      try {
+        const instancesResult = await client.getEngInstances(current.parentId);
+        members = instancesResult.members;
+      } catch (error) {
+        if (current.level === 0) {
+          return failureFromUpstream(error, client);
+        }
+        warnings.push(`Failed to fetch EngInstances for parent ${current.parentId}`);
+        continue;
+      }
+
+      for (const inst of members) {
+        const normalizedInst = normalizeEngInstance(inst);
+        const childId = normalizedInst.childId;
+        if (!childId) {
+          missingChildReferenceIdsCount += 1;
+          warnings.push('EngInstance missing child reference id');
+          continue;
+        }
+
+        const nextLevel = current.level + 1;
+        const pathKey = `${current.parentId}:${normalizedInst.instanceId}:${childId}:${nextLevel}`;
+        if (visitedPaths.has(pathKey)) {
+          skippedInstancesCount += 1;
+          continue;
+        }
+        visitedPaths.add(pathKey);
+
+        let childItem;
+        try {
+          const childResult = await client.getEngItem(childId);
+          childItem = normalizeEngItem(unwrapEngItemPayload(childResult.data));
+        } catch (_error) {
+          skippedInstancesCount += 1;
+          warnings.push(`Failed to fetch EngItem ${childId}`);
+          continue;
+        }
+
+        rows.push(
+          buildBomRow({
+            level: nextLevel,
+            parentId: current.parentId,
+            instance: normalizedInst,
+            item: childItem
+          })
+        );
+
+        if (nextLevel < parsed.depth) {
+          queue.push({ parentId: childId, level: nextLevel });
+        }
+      }
+    }
+  }
+
+  const counts = rows.length
+    ? buildStructureSuccess({
+        mode: 'dseng-official',
+        root,
+        rows,
+        depth: parsed.depth,
+        includeRoot: parsed.includeRoot
+      }).counts
+    : { totalRows: 0, rootIncluded: parsed.includeRoot, depth: parsed.depth, levelCounts: {} };
+
+  return {
+    ok: true,
+    data: buildStructureSuccess({
+      mode: 'dseng-official',
+      root,
+      rows,
+      depth: parsed.depth,
+      includeRoot: parsed.includeRoot,
+      diagnostics: buildDiagnostics({
+        mode: 'dseng-official',
+        endpointsUsed: client.getEndpointsUsed(),
+        durationMs: Date.now() - started,
+        warnings,
+        errors,
+        levelCounts: counts.levelCounts,
+        missingChildReferenceIdsCount,
+        skippedInstancesCount
+      })
+    })
+  };
+}
+
+export async function resolveStructure(body) {
+  const config = getThreeDxConfig();
+
+  if (config.mode === 'mock') {
+    const mock = resolveMockStructure(body);
+    if (!mock.ok) {
+      return { ok: false, status: getErrorStatus(mock.error.error.code), error: mock.error };
+    }
+    return { ok: true, status: 200, data: mock.data };
+  }
+
+  const parsed = parseStructureInput(body, 1);
+  if (!parsed.ok) {
+    return { ok: false, status: getErrorStatus(parsed.error.error.code), error: parsed.error };
+  }
+
+  if (parsed.depth > DSENG_MAX_DEPTH) {
+    return {
+      ok: false,
+      status: 422,
+      error: buildErrorResponse(
+        'DEPTH_LIMIT_EXCEEDED',
+        'depth greater than 3 is not allowed in dseng v1'
+      )
+    };
+  }
+
+  const configured = assertDsengConfigured(config);
+  if (!configured.ok) {
+    return {
+      ok: false,
+      status: 503,
+      error: buildErrorResponse(configured.code, configured.message)
+    };
+  }
+
+  const result = await resolveDsengStructure(parsed, config);
+  if (!result.ok) {
+    return result;
+  }
+  return { ok: true, status: 200, data: result.data };
 }
 
 export function resolveMockDiagnostic(body) {
   body = body || {};
   const rootId = normalizeRootId(body.rootId);
-  const depthResult = parseDepth(body.depth);
+  const depthResult = parseDepth(body.depth, 2);
   const depth = depthResult.ok ? depthResult.depth : 2;
 
   return buildDiagnosticSuccess({
+    mode: 'mock',
     parameters: {
       rootId: rootId || null,
       depth
     },
     environment: {
-      spaceUrlConfigured: Boolean(process.env.SPACE_URL),
-      securityContextConfigured: Boolean(process.env.SECURITY_CONTEXT),
+      ...getPublicEnvironmentFlags(getThreeDxConfig()),
       credentialsMode: 'mock'
     },
-    durationMs: 0
+    durationMs: 0,
+    warnings: ['Diagnostic mock only. No upstream call executed.'],
+    errors: []
   });
+}
+
+async function resolveDsengDiagnostic(body, config) {
+  const started = Date.now();
+  const client = new ThreeDxDsengClient(config);
+  const rootId = normalizeRootId(body?.rootId);
+  const depthResult = parseDepth(body?.depth, 1);
+  const depth = depthResult.ok ? depthResult.depth : 1;
+  const warnings = [];
+  const checks = {};
+
+  if (rootId) {
+    let root;
+    try {
+      const rootResult = await client.getEngItem(rootId);
+      root = normalizeEngItem(unwrapEngItemPayload(rootResult.data));
+      checks.root = {
+        ok: true,
+        status: 200,
+        title: root.title
+      };
+    } catch (error) {
+      return failureFromUpstream(error, client);
+    }
+
+    try {
+      const instancesResult = await client.getEngInstances(rootId);
+      checks.level1Instances = {
+        ok: true,
+        status: 200,
+        count: instancesResult.members.length
+      };
+    } catch (error) {
+      const mapped = client.mapUpstreamError(error);
+      return {
+        ok: false,
+        status: getErrorStatus(mapped.code),
+        error: buildErrorResponse(mapped.code, mapped.message)
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    status: 200,
+    data: buildDiagnosticSuccess({
+      mode: 'dseng-official',
+      parameters: { rootId: rootId || null, depth },
+      environment: getPublicEnvironmentFlags(config),
+      checks: Object.keys(checks).length ? checks : undefined,
+      endpointsUsed: client.getEndpointsUsed(),
+      durationMs: Date.now() - started,
+      warnings,
+      errors: []
+    })
+  };
+}
+
+export async function resolveDiagnostic(body) {
+  const config = getThreeDxConfig();
+
+  if (config.mode === 'mock') {
+    return { ok: true, status: 200, data: resolveMockDiagnostic(body) };
+  }
+
+  const configured = assertDsengConfigured(config);
+  if (!configured.ok) {
+    return {
+      ok: false,
+      status: 503,
+      error: buildErrorResponse(configured.code, configured.message)
+    };
+  }
+
+  const result = await resolveDsengDiagnostic(body, config);
+  if (!result.ok) {
+    return {
+      ok: false,
+      status: result.status || 502,
+      error: result.error
+    };
+  }
+  return { ok: true, status: 200, data: result.data };
 }

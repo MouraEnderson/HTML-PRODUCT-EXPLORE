@@ -68,9 +68,35 @@ curl -s -X POST https://bom-resolver.onrender.com/api/3dx/bom/structure \
 
 ---
 
-## Fase 3 — Backend dseng oficial (PR 3)
+## Fase 3 — Backend dseng oficial (PR 3) 🚧
 
 **Branch:** `feature/backend-dseng-structure-v1`
+
+| Item | Status |
+|------|--------|
+| `GET /api/3dx/bom/health` | ✅ upstream flags + `BOM_SERVICE_MODE` |
+| `POST /api/3dx/bom/structure` | ✅ dseng real v1 (GET EngItem + EngInstance) |
+| `POST /api/3dx/bom/diagnostic` | ✅ diagnóstico real controlado (nível 1) |
+| `BOM_SERVICE_MODE=mock` | ✅ preserva mock PR #16 |
+| Env vars | `THREEDX_*`, `BOM_SERVICE_MODE` |
+| Arquivos novos | `threeDxConfig.js`, `threeDxDsengClient.js` |
+| Proibido | Expand Item como fonte structure; fallback silencioso mock; frontend |
+
+**Variáveis Render (após merge):**
+
+```
+THREEDX_SPACE_URL
+THREEDX_SECURITY_CONTEXT
+THREEDX_USERNAME
+THREEDX_PASSWORD
+BOM_SERVICE_MODE=dseng
+```
+
+**Testes locais obrigatórios:** ver PR 3 — sem env → 503; mock → 200; depth>3 → 422.
+
+---
+
+## Fase 3 (legado — detalhe técnico)
 
 | Item | Detalhe |
 |------|---------|

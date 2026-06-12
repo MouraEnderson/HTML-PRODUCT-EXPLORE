@@ -1,13 +1,15 @@
 const DEFAULT_TOP = 100;
 
 export class EnoviaClient {
-  constructor({ spaceUrl, csrfToken, securityContext, cookie, bearerToken }) {
+  constructor({ spaceUrl, csrfToken, securityContext, cookie, bearerToken, username, password }) {
     if (!spaceUrl) throw new Error('spaceUrl is required.');
     this.spaceUrl = String(spaceUrl).replace(/\/$/, '');
     this.csrfToken = csrfToken || '';
     this.securityContext = securityContext || '';
     this.cookie = cookie || '';
     this.bearerToken = bearerToken || '';
+    this.username = username || '';
+    this.password = password || '';
   }
 
   headers(extra = {}) {
@@ -20,7 +22,12 @@ export class EnoviaClient {
     if (this.csrfToken) h.ENO_CSRF_TOKEN = this.csrfToken;
     if (this.securityContext) h.SecurityContext = this.securityContext;
     if (this.cookie) h.Cookie = this.cookie;
-    if (this.bearerToken) h.Authorization = `Bearer ${this.bearerToken}`;
+    if (this.bearerToken) {
+      h.Authorization = `Bearer ${this.bearerToken}`;
+    } else if (this.username && this.password) {
+      const token = Buffer.from(`${this.username}:${this.password}`).toString('base64');
+      h.Authorization = `Basic ${token}`;
+    }
     return h;
   }
 
