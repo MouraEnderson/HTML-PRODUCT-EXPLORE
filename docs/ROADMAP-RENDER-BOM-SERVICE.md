@@ -68,9 +68,49 @@ curl -s -X POST https://bom-resolver.onrender.com/api/3dx/bom/structure \
 
 ---
 
-## Fase 3 — Backend dseng oficial (PR 3)
+## Fase 3 — Backend dseng oficial (PR 3) 🚧
 
 **Branch:** `feature/backend-dseng-structure-v1`
+
+| Item | Status |
+|------|--------|
+| `GET /api/3dx/bom/health` | ✅ upstream flags + `BOM_SERVICE_MODE` |
+| `POST /api/3dx/bom/structure` | ✅ dseng real v1 (GET EngItem + EngInstance) |
+| `POST /api/3dx/bom/diagnostic` | ✅ diagnóstico real controlado (nível 1) |
+| `BOM_SERVICE_MODE=mock` | ✅ preserva mock PR #16 |
+| Env vars | `THREEDX_*`, `BOM_SERVICE_MODE` |
+| Arquivos novos | `threeDxConfig.js`, `threeDxDsengClient.js` |
+| Proibido | Expand Item como fonte structure; fallback silencioso mock; frontend |
+
+**Variáveis Render (após merge):**
+
+```
+THREEDX_SPACE_URL
+THREEDX_SECURITY_CONTEXT
+THREEDX_USERNAME
+THREEDX_PASSWORD
+BOM_SERVICE_MODE=dseng
+```
+
+**Testes locais obrigatórios (PR 3):**
+
+| # | Cenário | Esperado |
+|---|---------|----------|
+| 1 | Sem env dseng | HTTP 503 `UPSTREAM_NOT_CONFIGURED` |
+| 2 | `BOM_SERVICE_MODE=mock` | HTTP 200 mock + warnings |
+| 3 | `depth=10` | HTTP 422 `DEPTH_LIMIT_EXCEEDED` |
+| 4 | Sem `rootId` | HTTP 422 `ROOT_ID_REQUIRED` |
+| 5 | `depth="abc"` | HTTP 422 `INVALID_DEPTH` |
+| 6 | `BOM_SERVICE_MODE=mock` + sem rootId | HTTP 422, `mode: mock`, `diagnostics.mode: mock` |
+| 7 | `BOM_SERVICE_MODE=mock` + depth inválido | HTTP 422, `mode: mock` |
+| 8 | `extractChildReferenceId` com `physicalid` de instância | não retorna como childId |
+| 9 | `extractChildReferenceId` com `reference.id` | retorna `reference.id` |
+| 10 | username/password sem `THREEDX_AUTH_MODE=basic` | HTTP 502 `UPSTREAM_AUTH_NOT_IMPLEMENTED` |
+| 11 | `THREEDX_AUTH_MODE=basic` + username/password | monta Basic (sem logar segredo) |
+
+---
+
+## Fase 3 (legado — detalhe técnico)
 
 | Item | Detalhe |
 |------|---------|

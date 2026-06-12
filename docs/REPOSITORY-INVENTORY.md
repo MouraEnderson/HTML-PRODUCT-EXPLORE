@@ -126,7 +126,9 @@ Inventário para suportar DEC-018 e `LEGACY-CLEANUP-PLAN.md`.
 
 | Arquivo planejado | PR |
 |------------------|-----|
-| `backend/src/routes/threeDxBomRoutes.js` | 2 |
+| `backend/src/services/threeDxConfig.js` | 3 |
+| `backend/src/services/threeDxDsengClient.js` | 3 |
+| `backend/src/routes/threeDxBomRoutes.js` | 2–3 |
 | `backend/src/services/threeDxBomService.js` | 2–3 |
 | `backend/src/services/threeDxBomNormalizer.js` | 2–3 |
 
@@ -162,4 +164,4 @@ Inventário para suportar DEC-018 e `LEGACY-CLEANUP-PLAN.md`.
 | Backend Render | `/api/bom/*` legado | **+ SKA routes** sem quebrar legado |
 | Legado alto risco | `product-explorer-bridge`, `explorer-scanner`, mirror | **Isolar Fase 5** |
 
-**Próximo passo:** PR 2 — mock backend conforme `API-CONTRACT-BOM-SERVICE.md`.
+**Próximo passo:** PR 4 — frontend consome `POST /api/3dx/bom/structure` (após merge PR 3 + env Render).
