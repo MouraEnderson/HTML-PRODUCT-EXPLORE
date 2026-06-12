@@ -8,7 +8,7 @@
   'use strict';
 
   var w = global;
-  var BUILD = 'bom20260614k';
+  var BUILD = 'bom20260614l';
   var LOG = '[ExplorerMirror]';
   var SOURCE_MODE = 'explorer-mirror';
   var HONEST_FAILURE_MSG =
@@ -427,6 +427,18 @@
     return rep;
   }
 
+  function getBootstrapStatus() {
+    return {
+      scriptExpected: true,
+      globalName: 'ExplorerMirrorProvider',
+      available: true,
+      methods: ['fetch', 'getExplorerCount', 'buildReport', 'attachExpandItemDiagnostic', 'divergenceMessage', 'getBootstrapStatus'],
+      loadError: '',
+      sourceMode: SOURCE_MODE,
+      build: BUILD
+    };
+  }
+
   w.ExplorerMirrorProvider = {
     BUILD: BUILD,
     SOURCE_MODE: SOURCE_MODE,
@@ -435,6 +447,13 @@
     getExplorerCount: getExplorerCount,
     buildReport: buildReport,
     attachExpandItemDiagnostic: attachExpandItemDiagnostic,
-    divergenceMessage: divergenceMessage
+    divergenceMessage: divergenceMessage,
+    getBootstrapStatus: getBootstrapStatus
   };
+
+  try {
+    if (typeof global !== 'undefined' && global !== w) {
+      global.ExplorerMirrorProvider = w.ExplorerMirrorProvider;
+    }
+  } catch (eGlobal) {}
 })(typeof window !== 'undefined' ? window : global);

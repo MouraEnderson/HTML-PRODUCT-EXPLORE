@@ -49,7 +49,11 @@ var SnapshotPanel = (function () {
   function importText(text, options) {
     var trimmed = String(text || '').trim();
     if (!trimmed) {
-      if (options.onError) options.onError('Cole a grade do Explorer (Ctrl+C).');
+      if (options.onError) {
+        options.onError(
+          'Importação manual desativada. Use Atualizar estrutura (Explorer Mirror — fonte oficial).'
+        );
+      }
       return;
     }
     if (trimmed.charAt(0) === '{' || trimmed.charAt(0) === '[') {

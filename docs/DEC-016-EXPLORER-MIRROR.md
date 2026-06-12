@@ -1,6 +1,6 @@
 # DEC-016 — Explorer Mirror (fonte principal)
 
-**Build:** `bom20260614k`
+**Build:** `bom20260614l`
 
 ## Decisão
 
@@ -44,8 +44,16 @@ Se nenhuma fonte retornar linhas que batam com o Explorer:
 
 Campos: `explorerCount`, `dashboardRows`, `sourceUsed`, `sourceMode`, `isExplorerMirror`, `divergence`, `expandItemRows` (se diagnóstico executado).
 
+### Bootstrap (`14l`)
+
+`explorerMirrorProvider`: `scriptExpected`, `globalName` (`ExplorerMirrorProvider`), `available`, `methods`, `loadError`, `sourceMode`.
+
+`runtime`: `runtimeBuild`, `requestedBuildFromUrl`, `scriptBuild`, `cacheStatus`, `frameUwaUrl`, `cacheWarning`.
+
+Clipboard/TSV/Ctrl+C **removidos do runtime** — `SnapshotPanel` e `App.rebindImportButton` interceptados pelo hotfix.
+
 ## Widget piloto
 
 ```
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260614k
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260614l
 ```

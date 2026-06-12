@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260614k',
+    BUILD: 'bom20260614l',
     /** DEC-016: explorer-mirror (principal) | expand-item (diagnóstico) | full-bom-api (alternativo) */
     DATA_SOURCE: 'explorer-mirror',
     EXPAND_ITEM_LEVELS: 2,

@@ -1,9 +1,12 @@
-/* BOM hotfix - 20260614k — Explorer Mirror principal; Expand Item só diagnóstico */
+/* BOM hotfix - 20260614l — bootstrap ExplorerMirrorProvider + zero clipboard runtime */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260614k';
+var BUILD = 'bom20260614l';
+var PROVIDER_GLOBAL = 'ExplorerMirrorProvider';
+var PROVIDER_BOOTSTRAP_MSG =
+  'Explorer Mirror Provider não foi carregado no runtime do widget. Verifique ordem de scripts, nome global exportado e cache do GitHub Pages.';
 /** Capturado antes de sobrescrever w.getBomVisualRowsCount (evita recursão infinita). */
 var _providerGetBomVisualRowsCount =
   typeof w.getBomVisualRowsCount === 'function' ? w.getBomVisualRowsCount : null;
@@ -1363,6 +1366,88 @@ function isExplorerMirrorActive() {
   return getDataSource() === 'explorer-mirror' || MIRROR_EXPLORER_MODE;
 }
 
+function formatUserFacingError(err) {
+  var msg = err && err.message ? err.message : String(err || 'Erro');
+  msg = msg.replace(/\s*\(sem fallback legado\)\s*/gi, '').trim();
+  if (/ExplorerMirrorProvider indisponível|Explorer Mirror Provider não foi carregado/i.test(msg)) {
+    return PROVIDER_BOOTSTRAP_MSG;
+  }
+  if (/clipboard|ctrl\+c|ctrl\+v|colar|tsv|copie a grade|cole a grade|importar ctrl/i.test(msg)) {
+    return PROVIDER_BOOTSTRAP_MSG;
+  }
+  return msg;
+}
+
+function probeExplorerMirrorProviderBootstrap() {
+  var provider = w[PROVIDER_GLOBAL];
+  var load = (w.__BOM_SCRIPT_LOAD_STATUS__ || {})['explorer-mirror-provider'] || {};
+  var methods = [];
+  if (provider) {
+    try {
+      methods = Object.keys(provider);
+    } catch (e) {}
+  }
+  var available = !!(provider && typeof provider.fetch === 'function');
+  var loadError = '';
+  if (!available) {
+    if (load.error) loadError = String(load.error);
+    else if (load.ok === false) loadError = 'falha ao carregar script (404/MIME/rede)';
+    else if (!provider) loadError = 'global ' + PROVIDER_GLOBAL + ' ausente após load';
+    else if (!provider.fetch) loadError = 'método fetch ausente em ' + PROVIDER_GLOBAL;
+  }
+  return {
+    scriptExpected: true,
+    globalName: PROVIDER_GLOBAL,
+    available: available,
+    methods: methods,
+    loadError: loadError,
+    sourceMode: 'Explorer Mirror',
+    scriptUrl: load.url || '',
+    scriptOk: load.ok === true
+  };
+}
+
+function buildRuntimeCacheDiagnostics() {
+  var requested = '';
+  try {
+    var m = String(location.search || '').match(/[?&]v=([^&]+)/);
+    requested = m ? decodeURIComponent(m[1]) : '';
+  } catch (e) {}
+  var frameUwa = '';
+  try {
+    if (w.frameElement && w.frameElement.src) frameUwa = w.frameElement.src;
+    else if (w.widget && w.widget.uwaUrl) frameUwa = String(w.widget.uwaUrl);
+  } catch (e2) {}
+  var runtimeBuild = w.__BOM_BUILD_ID__ || BUILD;
+  var scriptBuild = (w[PROVIDER_GLOBAL] && w[PROVIDER_GLOBAL].BUILD) || '';
+  var divergent = !!(requested && runtimeBuild && requested.indexOf(runtimeBuild) < 0);
+  return {
+    runtimeBuild: runtimeBuild,
+    requestedBuildFromUrl: requested,
+    scriptBuild: scriptBuild,
+    cacheStatus: w.__BOM_SCRIPT_LOAD_STATUS__ || {},
+    frameUwaUrl: frameUwa,
+    cacheDivergent: divergent,
+    cacheWarning: divergent
+      ? 'Possível cache/versionamento divergente: runtimeBuild diferente do parâmetro v da URL.'
+      : ''
+  };
+}
+
+function attachTechnicalReport(extra) {
+  var bootstrap = probeExplorerMirrorProviderBootstrap();
+  var runtime = buildRuntimeCacheDiagnostics();
+  w.__bomTechnicalReport = Object.assign({}, w.__bomTechnicalReport || {}, extra || {}, {
+    explorerMirrorProvider: bootstrap,
+    runtime: runtime
+  });
+  return w.__bomTechnicalReport;
+}
+
+function getExplorerMirrorProvider() {
+  return w[PROVIDER_GLOBAL] || null;
+}
+
 function isExpandItemActive() {
   return getDataSource() === 'expand-item';
 }
@@ -1430,10 +1515,20 @@ function renderDataSourceBanner(el, dash, explorerRef) {
     }
     if (explorerRef > 0 && dash < 1) {
       el.className = 'bom-sync-banner bom-sync-warn';
+      var boot = (w.__bomTechnicalReport && w.__bomTechnicalReport.explorerMirrorProvider) || probeExplorerMirrorProviderBootstrap();
+      var bootNote = '';
+      if (!boot.available) {
+        bootNote =
+          '<p style="margin:4px 0 0;font-size:.62rem;color:#b42318">Explorer Mirror Provider indisponível. Nenhuma fonte oficial do Explorer foi carregada.</p>';
+      } else {
+        bootNote =
+          '<p style="margin:4px 0 0;font-size:.62rem;color:#92400e">Aguardando carga válida via fonte oficial do Explorer.</p>';
+      }
       el.innerHTML =
         'Product Explorer: <strong>' +
         explorerRef +
         '</strong> objetos | Fonte da tabela: <strong>Explorer Mirror</strong> — aguardando carga válida.' +
+        bootNote +
         expandItemDiagNoteHtml();
       return;
     }
@@ -2075,13 +2170,77 @@ function patchKpiCardsRulesPanel() {
   return true;
 }
 
+function patchClipboardRuntime() {
+  if (w.__BOM_CLIPBOARD_RUNTIME_DISABLED__) return true;
+  w.__BOM_CLIPBOARD_RUNTIME_DISABLED__ = true;
+  try {
+    if (typeof w.APP_CONFIG !== 'undefined') {
+      w.APP_CONFIG.ALLOW_PASTE_FALLBACK = false;
+      w.APP_CONFIG.EXPLORER_AUTO_COPY_ENABLED = false;
+      w.APP_CONFIG.PASTE_TRAP_ENABLED = false;
+      w.APP_CONFIG.SKIP_MIRROR_ON_TSV = true;
+    }
+  } catch (e) {}
+  if (w.SnapshotPanel) {
+    w.SnapshotPanel.init = function () {};
+    w.SnapshotPanel.importText = function () {};
+    w.SnapshotPanel.__BOM_CLIPBOARD_DISABLED__ = true;
+  }
+  if (w.App && w.App.runImportFromClipboard) {
+    w.App.runImportFromClipboard = function (btnEl) {
+      return atualizarEstruturaExplorerMirror().catch(function (err) {
+        if (w.App && w.App.setStatus) w.App.setStatus(formatUserFacingError(err), 'error');
+      });
+    };
+  }
+  if (w.ExplorerScanner) {
+    if (w.ExplorerScanner.setPasteBuffer) {
+      w.ExplorerScanner.setPasteBuffer = function () {};
+    }
+    if (w.ExplorerScanner.getPasteBuffer) {
+      w.ExplorerScanner.getPasteBuffer = function () {
+        return '';
+      };
+    }
+  }
+  return true;
+}
+
+function patchImportButton() {
+  if (!w.App) return false;
+  w.App.rebindImportButton = function () {
+    var btn = byIdUi('btnImportPaste');
+    if (!btn || btn.__BOM_MIRROR_ONLY_BOUND__) return;
+    btn.__BOM_MIRROR_ONLY_BOUND__ = true;
+    btn.addEventListener(
+      'click',
+      function (ev) {
+        if (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+        }
+        atualizarEstruturaExplorerMirror().catch(function (err) {
+          if (w.App && w.App.setStatus) w.App.setStatus(formatUserFacingError(err), 'error');
+        });
+      },
+      true
+    );
+  };
+  w.App.__BOM_IMPORT_PATCHED__ = true;
+  return true;
+}
+
 function patchUiMessaging() {
+  patchClipboardRuntime();
+  patchImportButton();
   patchApiDiagnosticModes();
   patchKpiCardsRulesPanel();
   var bannerOk = patchSyncBanner();
   var diagOk = patchDiagnosticButton();
   renderAdvancedPanel(w.__bomDiagClassification || null);
   wireExpandItemValidatorUi();
+  attachTechnicalReport();
   return bannerOk || diagOk;
 }
 
@@ -2299,6 +2458,8 @@ function finalizeMirrorResult(result, loadContext) {
 function atualizarEstruturaExplorerMirror() {
   var btn = byIdUi('btnImportPaste');
   if (btn) btn.disabled = true;
+  attachTechnicalReport();
+  var bootstrap = probeExplorerMirrorProviderBootstrap();
   if (w.App && w.App.setStatus) {
     w.App.setStatus('Buscando fonte oficial Explorer Mirror...', 'info');
   }
@@ -2308,30 +2469,47 @@ function atualizarEstruturaExplorerMirror() {
       '<div style="border:1px solid #d8e0ea;border-radius:8px;padding:8px;margin:6px;background:#fff">' +
       '<strong style="font-size:.74rem">Explorer Mirror</strong>' +
       '<p style="margin:6px 0 0;font-size:.68rem;color:#5c6b7a">Consultando fontes oficiais (postMessage / contexto widget)…</p>' +
+      '<p style="margin:4px 0 0;font-size:.6rem;color:#5c6b7a">Provider: <strong>' +
+      (bootstrap.available ? 'OK' : 'indisponível') +
+      '</strong> (' +
+      PROVIDER_GLOBAL +
+      ')</p>' +
       '</div>';
   }
 
   return ensureBridgeContext()
     .then(function () {
       disableMirrorCaptureFlags();
+      patchClipboardRuntime();
       return extractExplorerSnapshotAsync();
     })
     .then(function (loadContext) {
       w.__bomLoadContext = loadContext;
       bridgeLog('loader mode', 'explorer-mirror-primary');
-      if (!w.ExplorerMirrorProvider || !w.ExplorerMirrorProvider.fetch) {
-        return Promise.reject(new Error('ExplorerMirrorProvider indisponível'));
+      attachTechnicalReport();
+      bootstrap = probeExplorerMirrorProviderBootstrap();
+      if (!bootstrap.available) {
+        return Promise.reject(new Error(PROVIDER_BOOTSTRAP_MSG));
       }
-      return w.ExplorerMirrorProvider.fetch({
+      var provider = getExplorerMirrorProvider();
+      return provider.fetch({
         explorerCount: loadContext.explorerReferenceCount,
         rootName: loadContext.rootName
       });
     })
     .then(function (mirrorReport) {
+      attachTechnicalReport({
+        explorerCount: mirrorReport && mirrorReport.explorerCount,
+        dashboardRows: mirrorReport && mirrorReport.dashboardRows,
+        sourceUsed: mirrorReport && mirrorReport.sourceUsed,
+        sourceMode: mirrorReport && mirrorReport.sourceMode,
+        isExplorerMirror: mirrorReport && mirrorReport.isExplorerMirror,
+        divergence: mirrorReport && mirrorReport.divergence
+      });
       if (!mirrorReport || !mirrorReport.ok) {
         var msg = (mirrorReport && mirrorReport.message) || MIRROR_UNAVAILABLE_MSG;
         diag('error', 'Explorer Mirror: ' + msg);
-        if (w.App && w.App.setStatus) w.App.setStatus(msg, 'error');
+        if (w.App && w.App.setStatus) w.App.setStatus(formatUserFacingError(new Error(msg)), 'error');
         renderAdvancedPanel(w.__bomDiagClassification || null);
         updateLoadSyncBanner({ explorerReferenceCount: mirrorReport && mirrorReport.explorerCount }, 0);
         return Promise.reject(new Error(msg));
@@ -2481,9 +2659,9 @@ function runBrowserBridge() {
 
 function bridgeFailure(err, context) {
   w.__bomBridgeLastError = err;
-  var msg = err && err.message ? err.message : String(err || 'Bridge falhou');
-  diag('error', (context || 'Bridge') + ' erro: ' + msg + ' (sem fallback legado)');
-  throw err;
+  var msg = formatUserFacingError(err);
+  diag('error', (context || 'Bridge') + ' erro: ' + msg);
+  throw new Error(msg);
 }
 
 function patchOrchestrator() {
@@ -2611,9 +2789,15 @@ setTimeout(function () {
 
 w.__bomBridgeInstall = function () {
   disableMirrorCaptureFlags();
+  patchClipboardRuntime();
+  patchImportButton();
   patchOrchestrator();
   patchScanner();
   patchUiMessaging();
+  attachTechnicalReport();
+  if (w.App && w.App.rebindImportButton && w.App.__BOM_IMPORT_PATCHED__) {
+    w.App.rebindImportButton();
+  }
   return w.__bomBridgeInfo();
 };
 
@@ -2674,6 +2858,9 @@ w.__bomBridgeLastError = w.__bomBridgeLastError || null;
 w.atualizarEstruturaExplorerMirror = atualizarEstruturaExplorerMirror;
 w.atualizarEstruturaComValidacao = atualizarEstruturaComValidacao;
 w.getBomVisualRowsCount = getBomVisualRowsCount;
+w.probeExplorerMirrorProviderBootstrap = probeExplorerMirrorProviderBootstrap;
+w.attachTechnicalReport = attachTechnicalReport;
+w.__bomPatchClipboardRuntime = patchClipboardRuntime;
 
 boot();
 })();
