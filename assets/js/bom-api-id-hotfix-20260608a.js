@@ -1,9 +1,12 @@
-/* BOM hotfix - 20260614i — DEC-015 UX: Atualizar estrutura + validação automática + contagem unificada */
+/* BOM hotfix - 20260614j — fix stack overflow getBomVisualRowsCount + DEC-015 UX */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260614i';
+var BUILD = 'bom20260614j';
+/** Capturado antes de sobrescrever w.getBomVisualRowsCount (evita recursão infinita). */
+var _providerGetBomVisualRowsCount =
+  typeof w.getBomVisualRowsCount === 'function' ? w.getBomVisualRowsCount : null;
 var BACKEND = 'https://bom-resolver.onrender.com';
 var DATA_SOURCE = 'expand-item';
 var EXPAND_ITEM_LEVELS = 2;
@@ -1065,7 +1068,7 @@ function sortRowsTreeOrder(rows) {
 }
 
 function getBomVisualRowsCount(rows) {
-  if (typeof w.getBomVisualRowsCount === 'function') return w.getBomVisualRowsCount(rows);
+  if (_providerGetBomVisualRowsCount) return _providerGetBomVisualRowsCount(rows);
   return Array.isArray(rows) ? rows.length : 0;
 }
 

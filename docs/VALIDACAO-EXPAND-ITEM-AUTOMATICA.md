@@ -1,6 +1,6 @@
 # Validação automática Expand Item (DEC-015)
 
-**Build release:** `bom20260614i`  
+**Build release:** `bom20260614j`  
 **Validado tenant:** `bom20260614g` / `14h` — classificação **A**  
 **PR:** #11 merged
 
@@ -9,7 +9,7 @@
 ## Widget piloto (URL fixa)
 
 ```
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260614i
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260614j
 ```
 
 Dashboard piloto: `#dashboard:e9bdf50c-6377-4956-b931-b5566a8e9e97/tabId:AMzDJUOA09wQHOdVtHHY`
@@ -51,12 +51,16 @@ Dashboard piloto: `#dashboard:e9bdf50c-6377-4956-b931-b5566a8e9e97/tabId:AMzDJUO
 
 ---
 
-## Contagem unificada (`14i`)
+## Contagem unificada (`14i`+)
 
 - `Total Peças` = `rows.length` = linhas na tabela
 - `visualRowsCount` = `includesRoot` + paths normalizados
 - Relatório técnico: `validationRows`, `importRows`, `tableRows`, `kpiTotalPecas`
 - Nota UX: EBOM API pode ter mais linhas que Explorer colapsado
+
+### Fix `14j` — Maximum call stack size exceeded
+
+O hotfix `bom-api-id-hotfix-20260608a.js` exportava `w.getBomVisualRowsCount` como wrapper que delegava de volta para `w.getBomVisualRowsCount` (já sobrescrito), causando recursão infinita ao clicar **Atualizar estrutura**. Correção: capturar a implementação do provider **antes** da sobrescrita (`_providerGetBomVisualRowsCount`).
 
 ---
 
