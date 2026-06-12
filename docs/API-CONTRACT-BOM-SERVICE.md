@@ -150,6 +150,28 @@
 }
 ```
 
+### Response erro interno (500)
+
+Qualquer falha inesperada nas rotas `/api/3dx/bom/*` retorna **HTTP 500** com o contrato abaixo — **sem** `stack` ou detalhes de exceção no JSON:
+
+```json
+{
+  "ok": false,
+  "source": "RENDER_BOM_SERVICE",
+  "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "Unexpected backend error"
+  },
+  "diagnostics": {
+    "status": "ERROR",
+    "mode": "mock",
+    "endpointsUsed": [],
+    "warnings": [],
+    "errors": ["Unexpected backend error"]
+  }
+}
+```
+
 ### Códigos de erro previstos (v1)
 
 | code | HTTP | Quando |
@@ -159,7 +181,7 @@
 | `ROOT_NOT_FOUND` | 404 | EngItem não encontrado |
 | `AUTH_FAILED` | 401/403 | Falha autenticação 3DSpace |
 | `UPSTREAM_ERROR` | 502 | Erro ENOVIA não recuperável |
-| `INTERNAL_ERROR` | 500 | Erro interno (sem segredo no body) |
+| `INTERNAL_ERROR` | 500 | Falha inesperada no backend (sem stack trace no JSON) |
 
 ---
 

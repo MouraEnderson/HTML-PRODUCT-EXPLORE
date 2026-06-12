@@ -17,6 +17,24 @@ export function buildErrorResponse(code, message) {
   };
 }
 
+export function buildInternalErrorResponse() {
+  return {
+    ok: false,
+    source: SOURCE,
+    error: {
+      code: 'INTERNAL_ERROR',
+      message: 'Unexpected backend error'
+    },
+    diagnostics: {
+      status: 'ERROR',
+      mode: 'mock',
+      endpointsUsed: [],
+      warnings: [],
+      errors: ['Unexpected backend error']
+    }
+  };
+}
+
 export function buildMockRow({ physicalId, title, level = 0, owner = '', revision = '', maturity = '', description = '' }) {
   return {
     rowKey: `level${level}:${physicalId}`,
