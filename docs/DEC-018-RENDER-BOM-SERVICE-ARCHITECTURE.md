@@ -37,7 +37,7 @@ RootId conhecido: `63FC553465A62400699E0792000086AB`
 
 ## 3. Por que a arquitetura antiga foi bloqueada
 
-1. **DEC-017** documentou que não existe contrato oficial acessível ao frontend para ler/espelhar a **grade visual atual** do Product Structure Explorer — mesmo no Additional App trusted.
+1. **DEC-017** documentou que, no runtime e abordagem avaliados até o momento, não existe contrato oficial comprovado para o frontend ler/espelhar a **grade visual atual** do Product Structure Explorer. Isso não fecha a porta para Additional App nativo, extensão CAA ou contrato Dassault futuro.
 2. Tentativas de mirror (postMessage, AMD inferido, DOM, clipboard, TSV, Expand Item como fonte principal) geravam **falsa sensação de sucesso** ou divergência mascarada.
 3. O frontend GitHub Pages / widget UWA **não deve** consultar outro widget/app (PSE) nem fazer scraping.
 4. Expand Item e Full BOM respondem perguntas de **EBOM via Engineering Web Services**, não de “o que o usuário vê expandido na UI do Explorer”.
