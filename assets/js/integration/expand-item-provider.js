@@ -8,8 +8,8 @@
   var w = global;
 
   var LOG = '[ExpandItemProvider]';
-  var BUILD = s(w.__BOM_BUILD_ID__ || (w.APP_CONFIG && w.APP_CONFIG.BUILD) || 'bom20260614g');
-  var FORBIDDEN_HEADER_RE = /csrf|x-csrf-token/i;
+  var BUILD = s(w.__BOM_BUILD_ID__ || (w.APP_CONFIG && w.APP_CONFIG.BUILD) || 'bom20260614h');
+  var MANUAL_CSRF_HEADER_RE = /^x-csrf-token$/i;
   /** Fallback temporário de teste — último recurso após contexto/UQL/EnoviaApi */
   var KNOWN_ROOT_BY_PRD = {
     'prd-R1132100929518-01103695': '63FC553465A62400699E0792000086AB'
@@ -101,7 +101,7 @@
   function forbiddenHeadersPresent(headers) {
     headers = headers || {};
     return Object.keys(headers).some(function (k) {
-      return FORBIDDEN_HEADER_RE.test(k) || FORBIDDEN_HEADER_RE.test(s(headers[k]));
+      return MANUAL_CSRF_HEADER_RE.test(k);
     });
   }
 

@@ -1,7 +1,7 @@
 # DEC-015 — Expand Item Provider
 
 **Data:** 2026-06-14  
-**Build:** `bom20260614f`  
+**Build release:** `bom20260614h` (validado tenant: `bom20260614g`)  
 **Referência:** [dseng_v1](https://media.3ds.com/support/documentation/developer/Cloud/en/DSDoc.htm?show=CAAEngineeringWS/dseng_v1.htm) — validado via SDK oficial `ws3dx.dseng` (DS CPE EMED)
 
 ---
@@ -82,7 +82,7 @@ Endpoint:
 
 ---
 
-## Transporte HTTP (`bom20260614f`)
+## Transporte HTTP (`bom20260614g` → release `14h`)
 
 ### Evolução de erros no tenant
 
@@ -92,7 +92,8 @@ Endpoint:
 | 14c | HTTP 415 | Content-Type/body incorreto |
 | 14d | HTTP 403 | POST sem CSRF/contexto válido via `authenticatedRequest` cross-origin |
 | 14e | HTTP 405 | Retry host **ifwe** — host inválido para dseng |
-| 14f | — | CSRF oficial + POST **space-only** + validação automática no widget |
+| 14g | **A** | Validação automática + POST oficial — tenant piloto OK |
+| 14h | — | Release: fix `forbiddenHeadersPresent` (não marcar `ENO_CSRF_TOKEN` como proibido) |
 
 ### Implementação 14f (oficial)
 
@@ -114,7 +115,7 @@ Retry `*-space` ↔ `*-ifwe` e `proxifiedRequest` foram **removidos** do fluxo p
 
 ---
 
-## Gate automático de validação (`bom20260614f`)
+## Gate automático de validação (`bom20260614g`)
 
 Antes de **Atualizar estrutura** com `DATA_SOURCE=expand-item`:
 
@@ -129,7 +130,27 @@ Relatório copiável: `window.__lastExpandItemValidationReport` (JSON) via botã
 
 Documentação operacional: `docs/VALIDACAO-EXPAND-ITEM-AUTOMATICA.md`.
 
-**PR #11 permanece draft** até classificação **A** no tenant real.
+**PR #11:** merged — classificação **A** confirmada no tenant piloto (2026-06-12).
+
+---
+
+## Validação tenant piloto (classificação A)
+
+**Produto:** CJ MESA 4BCS VP TOP 3DX (`prd-R1132100929518-01103695`)  
+**Root:** `63FC553465A62400699E0792000086AB`  
+**Build widget:** `bom20260614g`
+
+| Métrica | Valor |
+|---------|-------|
+| CSRF | 200 + `ENO_CSRF_TOKEN` |
+| POST expand | 200 (host `*-space*`) |
+| Path count | 19 |
+| normalizedRows (validação) | 24 |
+| Linhas na tabela (Atualizar estrutura) | 25 |
+| Explorer ref (grid parcial) | 7 |
+| KPI Total Peças | 25 |
+
+**Nota:** Explorer ref < Expand Item rows é esperado (árvore parcialmente colapsada vs `expandDepth: 2` + ocorrências por `Path`).
 
 ---
 
@@ -228,7 +249,7 @@ await window.__expandItemProbe(99);
 
 ---
 
-## Validação bom20260614f
+## Validação bom20260614h
 
 | Item | Valor |
 |------|-------|
@@ -238,6 +259,7 @@ await window.__expandItemProbe(99);
 | Body | `expandDepth` + `withPath: true` + type_filter_* |
 | Validação widget | **Validar Expand Item** (sem Console manual) |
 | Gate | Atualizar estrutura só após classificação **A** |
+| Tenant piloto | **A** confirmado — PR #11 merged |
 
 ---
 

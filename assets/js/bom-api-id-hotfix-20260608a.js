@@ -1,9 +1,9 @@
-/* BOM hotfix - 20260614g — DEC-015 Expand Item validator (fix botão Validar) */
+/* BOM hotfix - 20260614h — DEC-015 release tenant A confirmado */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260614g';
+var BUILD = 'bom20260614h';
 var BACKEND = 'https://bom-resolver.onrender.com';
 var DATA_SOURCE = 'expand-item';
 var EXPAND_ITEM_LEVELS = 2;
@@ -1626,7 +1626,7 @@ function renderAdvancedPanel(classified) {
           '<button type="button" id="btnCopyExpandValidationReport" class="bom-btn bom-btn-secondary" style="font-size:.7rem">Copiar relatório técnico</button>' +
           '<p style="margin:6px 0 0;font-size:.62rem;color:#5c6b7a">Clique Validar — sem Console manual. Gate: Atualizar estrutura só após classificação A.</p>' +
           '<p style="margin:4px 0 0;font-size:.6rem;color:#5c6b7a">Auto validar ao abrir: <strong>' +
-          ((w.APP_CONFIG && w.APP_CONFIG.AUTO_VALIDATE_EXPAND_ITEM === true) ? 'ligado' : 'desligado (14g)') +
+          ((w.APP_CONFIG && w.APP_CONFIG.AUTO_VALIDATE_EXPAND_ITEM === true) ? 'ligado' : 'desligado (14h)') +
           '</strong> — <code>APP_CONFIG.AUTO_VALIDATE_EXPAND_ITEM</code></p>' +
           '</div>'
         : '') +

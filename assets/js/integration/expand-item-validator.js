@@ -7,8 +7,8 @@
 
   var w = global;
   var LOG = '[ExpandItemValidator]';
-  var BUILD = 'bom20260614g';
-  var FORBIDDEN_HEADER_RE = /csrf|x-csrf-token/i;
+  var BUILD = 'bom20260614h';
+  var MANUAL_CSRF_HEADER_RE = /^x-csrf-token$/i;
   var lastReport = null;
 
   function s(v) {
@@ -112,7 +112,7 @@
   function forbiddenHeadersPresent(headers) {
     headers = headers || {};
     return Object.keys(headers).some(function (k) {
-      return FORBIDDEN_HEADER_RE.test(k) || FORBIDDEN_HEADER_RE.test(s(headers[k]));
+      return MANUAL_CSRF_HEADER_RE.test(k);
     });
   }
 
