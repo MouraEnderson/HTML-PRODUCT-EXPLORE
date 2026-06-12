@@ -10,14 +10,14 @@ alwaysApply: true
 - Pasta: `C:\Users\Enderson\Projects\3dx-product-explorer-bom-dashboard`
 - GitHub: `https://github.com/MouraEnderson/HTML-PRODUCT-EXPLORE`
 - Pages: `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/`
-- Widget 3DDashboard: `widget-v2.html?v=<BUILD>` (Web Page Reader)
+- Widget 3DDashboard: `widget-v3-08i.html?v=<BUILD>` (Web Page Reader)
 - Tenant piloto: `R1132100929518`
 - Dashboard piloto: `#dashboard:e9bdf50c-6377-4956-b931-b5566a8e9e97/tabId:AMzDJUOA09wQHOdVtHHY`
 
 ## Build atual (atualizar após cada deploy)
 
-- **BUILD:** `bom20260614e`
-- Widget: `widget-v3-08i.html` + hotfix `bom-api-id-hotfix-20260608a.js` + `expand-item-provider.js`
+- **BUILD:** `bom20260614f`
+- Widget: `widget-v3-08i.html` + hotfix `bom-api-id-hotfix-20260608a.js` + `expand-item-provider.js` + `expand-item-validator.js`
 - Fonte principal: **Expand Item** (`DATA_SOURCE=expand-item`); Full BOM API = alternativo
 - **Deploy one-click:** `powershell -ExecutionPolicy Bypass -File deploy.ps1`
 - Rebuild só bundle: `powershell -ExecutionPolicy Bypass -File scripts/build-bundle.ps1`
@@ -48,4 +48,4 @@ Antes de commit: `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, `G
 
 ## Fluxo de dados no widget
 
-**Atualizar estrutura** → Expand Item (`dseng:EngItem/{rootId}/expand`) → normalização Path → tabela/KPIs = `rows.length`. Probe: `window.__expandItemProbe(2)`. Clipboard/TSV/DOM mirror reprovados.
+**Atualizar estrutura** → gate validação A → Expand Item (`dseng:EngItem/{rootId}/expand`) → normalização Path → tabela/KPIs = `rows.length`. Validação: Avançado → **Validar Expand Item** (sem Console). Clipboard/TSV/DOM mirror reprovados.

@@ -8,10 +8,12 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260614e',
+    BUILD: 'bom20260614f',
     /** DEC-015: expand-item (principal) | full-bom-api (alternativo) */
     DATA_SOURCE: 'expand-item',
     EXPAND_ITEM_LEVELS: 2,
+    /** Validação automática Expand Item ao abrir widget (14f: false) */
+    AUTO_VALIDATE_EXPAND_ITEM: false,
     /** Product Explorer conta ocorrencias; nao consolidar linhas repetidas por ID. */
     PRESERVE_OCCURRENCE_ROWS: true,
     /** Acima deste N peças, preferir API lazy mesmo sem physicalId inicial */

@@ -1,9 +1,9 @@
-/* BOM hotfix - 20260614e — DEC-015 Expand Item POST 403 transport (proxifiedRequest) */
+/* BOM hotfix - 20260614f — DEC-015 Expand Item validator automático + CSRF oficial */
 (function () {
 'use strict';
 
 var w = window;
-var BUILD = 'bom20260614e';
+var BUILD = 'bom20260614f';
 var BACKEND = 'https://bom-resolver.onrender.com';
 var DATA_SOURCE = 'expand-item';
 var EXPAND_ITEM_LEVELS = 2;
@@ -1487,6 +1487,95 @@ function formatDiagStatusMessage(classified, mode) {
   return 'Diagnóstico: 0 falhas operacionais';
 }
 
+function isExpandValidationPassed() {
+  try {
+    if (w.ExpandItemValidator && w.ExpandItemValidator.isPassed) {
+      return w.ExpandItemValidator.isPassed();
+    }
+  } catch (e) {}
+  return !!w.__expandItemValidationPassed;
+}
+
+function runExpandItemValidation(options) {
+  if (typeof w.ExpandItemValidator === 'undefined' || !w.ExpandItemValidator.run) {
+    return Promise.reject(new Error('ExpandItemValidator indisponível'));
+  }
+  var btn = byIdUi('btnValidateExpandItem');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Validando…';
+  }
+  if (w.App && w.App.setStatus) {
+    w.App.setStatus('Validação Expand Item em execução…', 'info');
+  }
+  return w.ExpandItemValidator.run(options || {})
+    .then(function (report) {
+      w.ExpandItemValidator.renderReport(report);
+      if (w.App && w.App.setStatus) {
+        var cls = report && report.classification;
+        if (cls === 'A') {
+          w.App.setStatus('Validação Expand Item: API OK (A) — Atualizar estrutura liberado', 'ok');
+        } else {
+          w.App.setStatus(
+            'Validação Expand Item: ' + (cls || '?') + ' — ' + (report && report.decision ? report.decision : 'ver painel'),
+            'error'
+          );
+        }
+      }
+      return report;
+    })
+    .finally(function () {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Validar Expand Item';
+      }
+    });
+}
+
+function wireExpandItemValidatorUi() {
+  if (w.__BOM_EXPAND_VALIDATOR_WIRED__) return;
+  var btnRun = byIdUi('btnValidateExpandItem');
+  var btnCopy = byIdUi('btnCopyExpandValidationReport');
+  if (btnRun && !btnRun.__wired) {
+    btnRun.__wired = true;
+    btnRun.addEventListener('click', function () {
+      runExpandItemValidation({}).catch(function (err) {
+        diag('error', 'Validação Expand Item: ' + (err && err.message ? err.message : err));
+        if (w.App && w.App.setStatus) {
+          w.App.setStatus('Validação Expand Item falhou — ver painel', 'error');
+        }
+      });
+    });
+  }
+  if (btnCopy && !btnCopy.__wired) {
+    btnCopy.__wired = true;
+    btnCopy.addEventListener('click', function () {
+      if (!w.ExpandItemValidator || !w.ExpandItemValidator.copyReport) return;
+      w.ExpandItemValidator.copyReport()
+        .then(function () {
+          diag('ok', 'Relatório técnico copiado');
+          if (w.App && w.App.setStatus) w.App.setStatus('Relatório técnico copiado', 'ok');
+        })
+        .catch(function (err) {
+          diag('error', 'Copiar relatório: ' + (err && err.message ? err.message : err));
+        });
+    });
+  }
+  w.__BOM_EXPAND_VALIDATOR_WIRED__ = true;
+
+  try {
+    var auto =
+      (w.APP_CONFIG && w.APP_CONFIG.AUTO_VALIDATE_EXPAND_ITEM === true) ||
+      w.AUTO_VALIDATE_EXPAND_ITEM === true;
+    if (auto && getWafData() && isExpandItemActive() && !w.__BOM_AUTO_VALIDATE_RAN__) {
+      w.__BOM_AUTO_VALIDATE_RAN__ = true;
+      setTimeout(function () {
+        runExpandItemValidation({}).catch(function () {});
+      }, 1200);
+    }
+  } catch (eAuto) {}
+}
+
 function renderAdvancedPanel(classified) {
   try {
     var panel = byIdUi('bomRulesPanel');
@@ -1506,6 +1595,17 @@ function renderAdvancedPanel(classified) {
     var ops = classified ? n(classified.operationalCount) : n(w.__bomDiagClassification && w.__bomDiagClassification.operationalCount);
 
     panel.innerHTML =
+      (isExpandItemActive()
+        ? '<div style="margin:0 0 8px;padding:6px;border:1px dashed #cfd8e3;border-radius:6px">' +
+          '<p style="margin:0 0 6px;font-size:.72rem"><strong>Validação Expand Item (DEC-015)</strong></p>' +
+          '<button type="button" id="btnValidateExpandItem" class="bom-btn bom-btn-secondary" style="font-size:.7rem;margin-right:4px">Validar Expand Item</button>' +
+          '<button type="button" id="btnCopyExpandValidationReport" class="bom-btn bom-btn-secondary" style="font-size:.7rem">Copiar relatório técnico</button>' +
+          '<p style="margin:6px 0 0;font-size:.62rem;color:#5c6b7a">Clique Validar — sem Console manual. Gate: Atualizar estrutura só após classificação A.</p>' +
+          '<p style="margin:4px 0 0;font-size:.6rem;color:#5c6b7a">Auto validar ao abrir: <strong>' +
+          ((w.APP_CONFIG && w.APP_CONFIG.AUTO_VALIDATE_EXPAND_ITEM === true) ? 'ligado' : 'desligado (14f)') +
+          '</strong> — <code>APP_CONFIG.AUTO_VALIDATE_EXPAND_ITEM</code></p>' +
+          '</div>'
+        : '') +
       '<p style="margin:0 0 6px;font-size:.72rem"><strong>DEC-014: Mirror Explorer indisponível</strong></p>' +
       '<p style="margin:0 0 6px;font-size:.7rem">Modo ativo: <strong>' +
       (isExpandItemActive() ? 'Expand Item (DEC-015)' : 'Full BOM API') +
@@ -1529,6 +1629,10 @@ function renderAdvancedPanel(classified) {
       '<p id="bomDiagDeepHint" style="margin:0 0 6px;font-size:.62rem;color:#92400e">Diagnóstico profundo executa probes que podem gerar 404/403 esperados no Console.</p>' +
       '<p style="margin:0;font-size:.65rem;color:#5c6b7a">' + MIRROR_ROADMAP_NOTE + '</p>';
     wireDeepDiagnosticButton();
+    wireExpandItemValidatorUi();
+    if (w.ExpandItemValidator && w.ExpandItemValidator.renderReport && w.ExpandItemValidator.getLastReport()) {
+      w.ExpandItemValidator.renderReport(w.ExpandItemValidator.getLastReport());
+    }
   } catch (e) {}
 }
 
@@ -1815,6 +1919,7 @@ function patchUiMessaging() {
   var bannerOk = patchSyncBanner();
   var diagOk = patchDiagnosticButton();
   renderAdvancedPanel(w.__bomDiagClassification || null);
+  wireExpandItemValidatorUi();
   return bannerOk || diagOk;
 }
 
@@ -2055,6 +2160,12 @@ function patchOrchestrator() {
     }
 
     if (isExpandItemActive()) {
+      if (!isExpandValidationPassed()) {
+        var gateMsg = 'Expand Item ainda não validado. Rode Validação Expand Item.';
+        diag('error', gateMsg);
+        if (w.App && w.App.setStatus) w.App.setStatus(gateMsg, 'error');
+        return Promise.reject(new Error(gateMsg));
+      }
       diag('ok', BUILD + ' | Atualizar estrutura -> Expand Item (DEC-015)');
       console.log('[BOM bridge]', BUILD, 'Atualizar estrutura -> Expand Item');
       return runExpandItemStructure()
@@ -2101,6 +2212,10 @@ w.ExplorerScanner.__BOM_ORIGINAL_SCAN__ = w.ExplorerScanner.__BOM_ORIGINAL_SCAN_
 
 w.ExplorerScanner.scan = function () {
   if (isExpandItemActive()) {
+    if (!isExpandValidationPassed()) {
+      var gateMsg = 'Expand Item ainda não validado. Rode Validação Expand Item.';
+      return Promise.reject(new Error(gateMsg));
+    }
     return runExpandItemStructure()
       .then(function (result) {
         return finalizeExpandResult(result, result && result.__loadContext);

@@ -1,7 +1,7 @@
 # DEC-015 — Expand Item Provider
 
 **Data:** 2026-06-14  
-**Build:** `bom20260614e`  
+**Build:** `bom20260614f`  
 **Referência:** [dseng_v1](https://media.3ds.com/support/documentation/developer/Cloud/en/DSDoc.htm?show=CAAEngineeringWS/dseng_v1.htm) — validado via SDK oficial `ws3dx.dseng` (DS CPE EMED)
 
 ---
@@ -82,7 +82,7 @@ Endpoint:
 
 ---
 
-## Transporte HTTP (`bom20260614e`)
+## Transporte HTTP (`bom20260614f`)
 
 ### Evolução de erros no tenant
 
@@ -91,20 +91,45 @@ Endpoint:
 | 14a | CORS / ResponseCode 0 | `x-csrf-token` manual → preflight bloqueado |
 | 14c | HTTP 415 | Content-Type/body incorreto |
 | 14d | HTTP 403 | POST sem CSRF/contexto válido via `authenticatedRequest` cross-origin |
-| 14e | — | Retry host space↔ifwe + `proxifiedRequest` passport (Form C) |
+| 14e | HTTP 405 | Retry host **ifwe** — host inválido para dseng |
+| 14f | — | CSRF oficial + POST **space-only** + validação automática no widget |
 
-### Implementação 14e
+### Implementação 14f (oficial)
 
-1. **Form A** — `authenticatedRequest` + headers mínimos + `type:'json'`
-2. **Form B** — se 415: `contentType:'application/json'`
-3. **Form C** — se 403: `proxifiedRequest` + `proxy:'passport'` (doc CAAWebApps — evita CORS e delega CSRF ao proxy)
-4. Entre A e C: retry com host alternativo (`*-space` ↔ `*-ifwe`)
+1. `GET {space}/resources/v1/application/CSRF` → `csrf.name` + `csrf.value` (`ENO_CSRF_TOKEN`)
+2. `POST {space}/resources/v1/modeler/dseng/dseng:EngItem/{rootId}/expand` com body dseng_v1
+3. Headers: `Accept`, `Content-Type`, `SecurityContext`, `[csrf.name]: csrf.value`
+4. **Somente host `*-space*`** — nunca `ifwe`, nunca `proxifiedRequest` no fluxo principal
+5. Painel **Validação Expand Item** no widget (`ExpandItemValidator.run()`)
 
-Logs probe em 403: `SecurityContext`, `responseText`, `transport`.
+Logs: `[ExpandItemValidator] CSRF status/name/value present`, POST expand, classificação A–F.
 
 ### Correção CORS (`bom20260614b`)
 
 Removido `PlatformContext.getHeaders()` que injetava `x-csrf-token` → preflight bloqueado no iframe GitHub Pages.
+
+### Regressão 14e (revertida em 14f)
+
+Retry `*-space` ↔ `*-ifwe` e `proxifiedRequest` foram **removidos** do fluxo principal após **405** confirmado no tenant.
+
+---
+
+## Gate automático de validação (`bom20260614f`)
+
+Antes de **Atualizar estrutura** com `DATA_SOURCE=expand-item`:
+
+1. Usuário clica **Validar Expand Item** (Avançado) ou `AUTO_VALIDATE_EXPAND_ITEM=true` no boot.
+2. `ExpandItemValidator.run()` executa WAFData → CSRF → root → POST → normalização.
+3. Classificação **A** (`200` + `pathCount > 0` + `normalizedRows > 0`) libera **Atualizar estrutura**.
+4. Classificação **B/C/D/E/F** bloqueia carga — mensagem:  
+   `Expand Item ainda não validado. Rode Validação Expand Item.`
+5. Full BOM API **não** é fallback silencioso.
+
+Relatório copiável: `window.__lastExpandItemValidationReport` (JSON) via botão **Copiar relatório técnico**.
+
+Documentação operacional: `docs/VALIDACAO-EXPAND-ITEM-AUTOMATICA.md`.
+
+**PR #11 permanece draft** até classificação **A** no tenant real.
 
 ---
 
@@ -203,15 +228,16 @@ await window.__expandItemProbe(99);
 
 ---
 
-## Validação bom20260614c
+## Validação bom20260614f
 
 | Item | Valor |
 |------|-------|
 | Método | POST (dseng_v1) |
-| Transporte | direct-wafdata |
+| Transporte | `WAFData.authenticatedRequest` + GET CSRF + `ENO_CSRF_TOKEN` |
+| Host | `*-space*` only (nunca ifwe) |
 | Body | `expandDepth` + `withPath: true` + type_filter_* |
-| Headers | Accept + SecurityContext (sem CSRF manual) |
-| Validação tenant | _pendente_ — `__expandItemProbe(2)` |
+| Validação widget | **Validar Expand Item** (sem Console manual) |
+| Gate | Atualizar estrutura só após classificação **A** |
 
 ---
 
@@ -229,5 +255,6 @@ await window.__expandItemProbe(99);
 ## Relacionados
 
 - DEC-014: Mirror Explorer via widget separado reprovado; Full BOM API como alternativa
+- `docs/VALIDACAO-EXPAND-ITEM-AUTOMATICA.md`
 - `docs/VALIDACAO-EXPAND-ITEM-3DDASHBOARD.md`
 - `docs/RELATORIO-ENTREGA-BOM-API-2026-06-13.md`

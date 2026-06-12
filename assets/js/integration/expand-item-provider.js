@@ -8,7 +8,7 @@
   var w = global;
 
   var LOG = '[ExpandItemProvider]';
-  var BUILD = s(w.__BOM_BUILD_ID__ || (w.APP_CONFIG && w.APP_CONFIG.BUILD) || 'bom20260614e');
+  var BUILD = s(w.__BOM_BUILD_ID__ || (w.APP_CONFIG && w.APP_CONFIG.BUILD) || 'bom20260614f');
   var FORBIDDEN_HEADER_RE = /csrf|x-csrf-token/i;
   /** Fallback temporário de teste — último recurso após contexto/UQL/EnoviaApi */
   var KNOWN_ROOT_BY_PRD = {
@@ -688,6 +688,68 @@
     };
   }
 
+  function expandViaOfficialTransport(rootId, levels) {
+    var V = w.ExpandItemValidator;
+    if (!V || !V.ensureSpaceUrl || !V.getOfficialCsrf || !V.postExpandOfficial) {
+      return Promise.reject(new Error('ExpandItemValidator indisponível — carregue expand-item-validator.js'));
+    }
+    log('transport: official-csrf-space-only');
+    return ensurePlatformContext()
+      .then(function (sc) {
+        log('SecurityContext ready:', maskSecurityContext(sc));
+        return V.ensureSpaceUrl();
+      })
+      .then(function (spaceUrl) {
+        var sc = V.getSecurityContextValue ? V.getSecurityContextValue() : getSecurityContextValue();
+        return V.getOfficialCsrf(spaceUrl).then(function (csrf) {
+          if (!csrf.ok) {
+            var err = new Error('CSRF falhou (HTTP ' + (csrf.status || '?') + ') — rode Validação Expand Item');
+            err.status = csrf.status;
+            throw err;
+          }
+          return V.postExpandOfficial({
+            spaceUrl: spaceUrl,
+            rootId: rootId,
+            securityContext: sc,
+            csrf: csrf,
+            expandDepth: levels
+          });
+        });
+      })
+      .then(function (res) {
+        if (res.ok && hasExpandMemberPayload(res.data)) {
+          lastTransportStats = {
+            build: BUILD,
+            transport: 'official-csrf-space-only',
+            method: 'POST',
+            url: res.url,
+            form: 'official',
+            requestHeaders: res.headersPlanned,
+            forbiddenHeaders: res.forbiddenHeadersPresent,
+            bodyString: res.bodyString,
+            status: res.status,
+            securityContext: maskSecurityContext(
+              w.ExpandItemValidator.getSecurityContextValue && w.ExpandItemValidator.getSecurityContextValue()
+            ),
+            expandDepth: levels
+          };
+          w.__lastExpandItemStats = lastTransportStats;
+          return res.data;
+        }
+        throw expandPostError({
+          ok: false,
+          status: res.status,
+          error: res.error || res.wafMessage || 'Expand Item POST falhou',
+          form: 'official',
+          transport: 'official-csrf-space-only',
+          headers: res.headersPlanned,
+          bodyString: res.bodyString,
+          responseText: res.responseText,
+          securityContext: ''
+        });
+      });
+  }
+
   function expand(rootId, levels) {
     rootId = s(rootId);
     levels = n(levels);
@@ -697,38 +759,7 @@
     }
     log('rootId:', rootId);
     log('levels:', levels);
-    return ensurePlatformContext()
-      .then(function (sc) {
-        log('SecurityContext ready:', maskSecurityContext(sc));
-        return ensureSpaceUrl();
-      })
-      .then(function () {
-        var url = expandUrl(rootId);
-        var bodyObj = expandBody(levels);
-        var bodyString = JSON.stringify(bodyObj);
-        log('transport: direct-wafdata');
-        return runExpandPostWithFallbacks(url, bodyString).then(function (res) {
-          var finalUrl = res.url || url;
-          if (res.ok && hasExpandMemberPayload(res.data)) {
-            return finishExpandSuccess(res, finalUrl, bodyObj);
-          }
-          if (res.ok && !hasExpandMemberPayload(res.data)) {
-            throw expandPostError({
-              ok: false,
-              status: 200,
-              error: 'Expand Item POST retornou member vazio',
-              form: res.form || '?',
-              transport: res.transport,
-              headers: res.headers,
-              contentTypeOption: res.contentTypeOption,
-              bodyString: bodyString,
-              data: res.data,
-              securityContext: res.securityContext
-            });
-          }
-          throw expandPostError(res);
-        });
-      });
+    return expandViaOfficialTransport(rootId, levels);
   }
 
   function isVpmReference(obj) {
