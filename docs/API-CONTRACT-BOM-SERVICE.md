@@ -19,7 +19,9 @@
 
 ---
 
-## GET /api/3dx/bom/health (futuro — PR 2)
+## GET /api/3dx/bom/health (implementado — PR 2 mock)
+
+**Status:** ✅ mock em `backend/src/routes/threeDxBomRoutes.js`
 
 **Resposta 200:**
 
@@ -43,7 +45,9 @@
 
 ---
 
-## POST /api/3dx/bom/structure (futuro — PR 2 mock, PR 3 real)
+## POST /api/3dx/bom/structure (implementado — PR 2 mock, PR 3 dseng real)
+
+**Status:** ✅ mock em PR 2 — sem chamada 3DEXPERIENCE
 
 ### Request
 
@@ -159,7 +163,9 @@
 
 ---
 
-## POST /api/3dx/bom/diagnostic (futuro — PR 2 ou 3)
+## POST /api/3dx/bom/diagnostic (implementado — PR 2 mock)
+
+**Status:** ✅ mock em PR 2 — sem chamada upstream
 
 ### Request
 
