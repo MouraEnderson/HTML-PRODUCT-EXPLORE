@@ -82,6 +82,39 @@
     return map[code] || fallback || 'Falha ao carregar BOM via SKA BOM Service.';
   }
 
+  function normalizeSkaError(err) {
+    if (!err) {
+      return {
+        code: 'UNKNOWN_ERROR',
+        message: 'Falha ao carregar BOM via SKA BOM Service.',
+        payload: null
+      };
+    }
+
+    var rawMessage = String(err.message || '');
+    var rawName = String(err.name || '');
+    var code = err.code || '';
+
+    if (
+      code === 'HTTP_0' ||
+      rawName === 'TypeError' ||
+      rawMessage.indexOf('Failed to fetch') >= 0 ||
+      rawMessage.indexOf('NetworkError') >= 0
+    ) {
+      return {
+        code: 'HTTP_0',
+        message: 'Falha de rede ou CORS ao chamar o SKA BOM Service.',
+        payload: err.payload || null
+      };
+    }
+
+    return {
+      code: code || 'UNKNOWN_ERROR',
+      message: mapErrorMessage(code, rawMessage || 'Falha ao carregar BOM via SKA BOM Service.'),
+      payload: err.payload || null
+    };
+  }
+
   async function fetchBomStructureFromSkaService(opts) {
     opts = opts || {};
     var response = await fetch(SKA_URL, {
@@ -286,9 +319,20 @@
         return applySkaPayloadToUI(payload);
       })
       .catch(function (err) {
-        var msg = mapErrorMessage(err.code, err.message);
-        renderSkaDiagnostics(err.payload || { diagnostics: { status: 'ERROR', errors: [msg], warnings: [] } });
-        setStatus(msg, 'error');
+        var normalized = normalizeSkaError(err);
+        renderSkaDiagnostics(
+          normalized.payload || {
+            source: 'RENDER_BOM_SERVICE',
+            mode: 'dseng-official',
+            diagnostics: {
+              status: 'ERROR',
+              endpointsUsed: [],
+              errors: [normalized.message],
+              warnings: []
+            }
+          }
+        );
+        setStatus(normalized.message, 'error');
         throw err;
       })
       .finally(function () {
@@ -301,15 +345,10 @@
     if (btn) btn.textContent = 'Carregar BOM via SKA Service';
     var idEl = byId('explorerObjectId');
     if (idEl) {
-      idEl.placeholder = DEFAULT_ROOT;
+      idEl.placeholder = 'Root Physical ID';
       idEl.setAttribute('aria-label', 'Root Physical ID');
-    }
-    var adv = uiRoot().querySelector && uiRoot().querySelector('.bom-topbar-more summary');
-    if (adv && adv.nextElementSibling) {
-      var lbl = adv.parentElement.querySelector('label[for="explorerObjectId"]');
-      if (!lbl && idEl) {
-        idEl.setAttribute('title', 'Root Physical ID');
-      }
+      idEl.setAttribute('title', 'Root Physical ID');
+      if (!s(idEl.value)) idEl.value = DEFAULT_ROOT;
     }
     var banner = byId('syncBanner');
     if (banner) {
