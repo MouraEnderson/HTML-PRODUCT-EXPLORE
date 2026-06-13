@@ -11,11 +11,23 @@
 
 Após merge do PR #20 e correção do `WidgetCompilerException` (CDATA + `});` extra), o usuário ainda reportou:
 
-- Link do widget não funcionando corretamente no 3DEXPERIENCE Web Page Reader
-- Build pill exibindo **n14** / referências a builds antigos
-- Erro `WidgetCompilerException: Compilation produced 11 syntax errors`
+- Link `?v=bom20260617b&probe=dc91dcf` no GitHub Pages público exibindo **bom20260617a** e travando em "Carregando bom20260617a"
+- Build pill exibindo **n14** / referências a builds antigos (histórico PR #20)
+- Erro `WidgetCompilerException` (PR #20 / 17a)
 
-**Decisão:** não tratar como cache. Estabilizar release/runtime com build novo rastreável.
+### Validação pré-merge vs GitHub Pages público
+
+**Antes do merge do PR #21**, o link público GitHub Pages ainda aponta para **`main`**, que contém `bom20260617a`. O parâmetro `?v=bom20260617b` na URL **não altera** o `BOM_BUILD` declarado no HTML servido — por isso a tela pode mostrar 17a mesmo abrindo URL com 17b.
+
+| Ambiente | Branch servida | Build esperado |
+|----------|----------------|----------------|
+| GitHub Pages público (pré-merge PR #21) | `main` | `bom20260617a` |
+| PR #21 branch local (`python -m http.server`) | `hotfix/widget-3dx-runtime-stabilization-v1` | `bom20260617b` |
+| GitHub Pages pós-merge PR #21 | `main` (atualizada) | `bom20260617b` |
+
+**Antes do merge, a validação pré-merge deve ser local ou via ambiente preview separado — não usar o GitHub Pages público como prova do build 17b.**
+
+**Decisão:** não tratar como cache. Estabilizar release/runtime com build novo rastreável (`bom20260617b`) via PR #21.
 
 ---
 

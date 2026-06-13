@@ -78,6 +78,10 @@
       if (/KpiCards\.render protegido|DEC-015 preservado|vers[aã]o divergente|bom20260614|bom20260615|bom20260616/i.test(String(msg || ''))) {
         return;
       }
+      if (/Atualizar estrutura|clique Atualizar estrutura/i.test(String(msg || ''))) {
+        msg = 'Build ' + BUILD + ' | SKA BOM Service — use Sincronizar com Product Explorer ou Avançado.';
+        kind = kind === 'error' ? 'error' : 'ok';
+      }
     }
     if (w.App && w.App.setStatus) w.App.setStatus(msg, kind);
     else {
@@ -597,7 +601,25 @@
   w.refreshBomFromSka = refreshBom;
   w.loadViaSkaService = syncWithProductExplorer;
 
+  function ensureSyncExplorerButton() {
+    var syncBtn = byId('btnSyncExplorer');
+    if (syncBtn) {
+      syncBtn.classList.remove('bom-hidden');
+      return syncBtn;
+    }
+    var refreshBtn = byId('btnRefreshBom');
+    if (!refreshBtn || !refreshBtn.parentNode) return null;
+    syncBtn = document.createElement('button');
+    syncBtn.type = 'button';
+    syncBtn.id = 'btnSyncExplorer';
+    syncBtn.className = 'bom-btn bom-btn-primary';
+    syncBtn.textContent = 'Sincronizar com Product Explorer';
+    refreshBtn.parentNode.insertBefore(syncBtn, refreshBtn);
+    return syncBtn;
+  }
+
   function patchUiLabels() {
+    ensureSyncExplorerButton();
     var syncBtn = byId('btnSyncExplorer');
     if (syncBtn && syncBtn.textContent.indexOf('Sincronizar') < 0) {
       syncBtn.textContent = 'Sincronizar com Product Explorer';
@@ -681,7 +703,11 @@
         if (!w.__BOM_DEBUG__ && /KpiCards\.render protegido|DEC-015|vers[aã]o divergente|bom20260614|bom20260615|bom20260616/i.test(String(msg || ''))) {
           return;
         }
-        return origStatus.apply(this, arguments);
+        if (!w.__BOM_DEBUG__ && /Atualizar estrutura|clique Atualizar estrutura/i.test(String(msg || ''))) {
+          msg = 'Build ' + BUILD + ' | SKA BOM Service — use Sincronizar com Product Explorer ou Avançado.';
+          kind = kind === 'error' ? 'error' : 'ok';
+        }
+        return origStatus.call(this, msg, kind);
       };
       w.App.__BOM_SKA_STATUS_PATCHED__ = true;
     }
@@ -689,14 +715,22 @@
     if (w.App && w.App.refreshUI && !w.App.__BOM_SKA_REFRESH_PATCHED__) {
       var origRefresh = w.App.refreshUI;
       w.App.refreshUI = function () {
-        var out = origRefresh.apply(this, arguments);
-        if (w.__bomSkaLastPayload && w.__BOM_DATA_SOURCE__ === DATA_SOURCE) {
-          finalizeSkaUi(w.__bomSkaLastPayload);
-        } else {
-          syncBuild();
-          patchUiLabels();
+        if (w.__BOM_SKA_REFRESH_UI_LOCK__) {
+          return origRefresh.apply(this, arguments);
         }
-        return out;
+        w.__BOM_SKA_REFRESH_UI_LOCK__ = true;
+        try {
+          var out = origRefresh.apply(this, arguments);
+          if (w.__bomSkaLastPayload && w.__BOM_DATA_SOURCE__ === DATA_SOURCE) {
+            finalizeSkaUi(w.__bomSkaLastPayload);
+          } else {
+            syncBuild();
+            patchUiLabels();
+          }
+          return out;
+        } finally {
+          w.__BOM_SKA_REFRESH_UI_LOCK__ = false;
+        }
       };
       w.App.__BOM_SKA_REFRESH_PATCHED__ = true;
     }
@@ -745,22 +779,31 @@
   function installLabelGuard() {
     var root = uiRoot();
     if (!root || root.__BOM_SKA_MO__ || typeof MutationObserver === 'undefined') return;
+    var debounceTimer = null;
     var obs = new MutationObserver(function () {
       if (guardLock) return;
-      guardLock = true;
-      try {
-        syncBuild();
-        patchUiLabels();
-        bindSyncButtons();
-        var legacy = byId('btnImportPaste');
-        if (legacy && legacy.textContent.indexOf('Atualizar estrutura') >= 0) {
-          legacy.classList.add('bom-hidden');
+      if (debounceTimer) return;
+      debounceTimer = setTimeout(function () {
+        debounceTimer = null;
+        if (guardLock) return;
+        guardLock = true;
+        try {
+          patchUiLabels();
+          bindSyncButtons();
+          var legacy = byId('btnImportPaste');
+          if (legacy && legacy.textContent.indexOf('Atualizar estrutura') >= 0) {
+            legacy.classList.add('bom-hidden');
+          }
+          var pill = root.querySelector ? root.querySelector('.bom-build-pill') : null;
+          if (pill && pill.textContent !== formatBuildPillLabel(BUILD)) {
+            syncBuild();
+          }
+        } finally {
+          guardLock = false;
         }
-      } finally {
-        guardLock = false;
-      }
+      }, 120);
     });
-    obs.observe(root, { subtree: true, childList: true, characterData: true });
+    obs.observe(root, { subtree: true, childList: true });
     root.__BOM_SKA_MO__ = obs;
   }
 
