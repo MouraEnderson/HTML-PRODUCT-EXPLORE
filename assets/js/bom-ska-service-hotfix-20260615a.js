@@ -184,7 +184,9 @@
       { tone: 'blue', label: 'Root', value: (payload.root && payload.root.title) || (payload.root && payload.root.id) || '-' },
       { tone: 'green', label: 'Total linhas', value: counts.totalRows || (payload.rows && payload.rows.length) || 0 },
       { tone: 'purple', label: 'Profundidade', value: counts.depth != null ? counts.depth : DEFAULT_DEPTH },
-      { tone: 'red', label: 'Nível 1', value: level1 }
+      { tone: 'red', label: 'Nível 1', value: level1 },
+      { tone: 'blue', label: 'Status', value: (payload.diagnostics && payload.diagnostics.status) || 'OK' },
+      { tone: 'green', label: 'Fonte', value: 'SKA BOM Service' }
     ];
     grid.innerHTML = markers
       .map(function (m) {
