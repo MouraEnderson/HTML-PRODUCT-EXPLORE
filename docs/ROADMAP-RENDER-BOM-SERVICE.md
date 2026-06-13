@@ -125,29 +125,41 @@ BOM_SERVICE_MODE=dseng
 
 ---
 
-## Fase 4 — Frontend consome Render (PR 4) 🚧
+## Fase 4 — Frontend consome Render (PR 4) ✅
 
-**Branch:** `feature/frontend-render-bom-service-v1`
+**Branch:** `feature/frontend-render-bom-service-v1` — mergeado PR #18
 
 | Item | Status |
 |------|--------|
-| CORS/preflight | ✅ GitHub Pages + 3DEXPERIENCE IFWE (OPTIONS 204) |
+| CORS/preflight | ✅ GitHub Pages + 3DEXPERIENCE IFWE |
 | Script | `assets/js/bom-ska-service-hotfix-20260615a.js` |
 | Widget | `widget-v3-08i.html?v=bom20260615a` |
-| Botão | **Carregar BOM via SKA Service** |
 | Endpoint | `POST https://bom-resolver.onrender.com/api/3dx/bom/structure` |
-| Fetch | `mode:cors`, `credentials:omit`, sem Authorization/Cookie |
-| Tabela/KPI | `payload.rows` + `payload.counts` |
-| rootId | Manual via `#explorerObjectId` (PR 4 v1) |
-| Diagnostics | `#skaBomDiagnostics` — sem segredo |
-| Validado prod | CJ MESA — 5 linhas (1 root + 4 nível 1) |
+| Validado prod | CJ MESA — 5 linhas |
 
-**Regras PR 4:**
-- Fonte oficial: SKA BOM Service / dseng — **não** Explorer visual
-- Sem clipboard, TSV, DOM scraping, mock silencioso, Expand Item como fonte principal
-- Explorer Mirror permanece no código legado, não bloqueia operação
+**Build PR 4:** `bom20260615a`
 
-**Build:** `bom20260615a`
+---
+
+## Fase 4b — Fix SKA runtime UX and count (PR 19) 🚧
+
+**Branch:** `feature/frontend-ska-runtime-ux-count-fix-v1`
+
+| Item | Status |
+|------|--------|
+| Build | `bom20260616a` |
+| Script | `assets/js/bom-ska-service-hotfix-20260616a.js` |
+| Versionamento | Remove `bom20260614n` / aviso divergente falso; remove `bom-api-id-hotfix` do boot |
+| Contagem | Fonte única `payload.counts.totalRows`; bypass `buildFromImported`/`ensureContextRoot` |
+| Root duplicado | Snapshot direto via `BomSnapshot.applyPayload` (5 itens, sem root sintético) |
+| UX | Diagnostics colapsável, ResizeObserver, KPI clamp, topbar responsiva |
+| Debug | Toast `KpiCards.render protegido` suprimido (exceto `__BOM_DEBUG__`) |
+| Labels | MutationObserver mantém **Carregar BOM via SKA Service** |
+| Assert | `assertSkaCountIntegrity` — tabela/KPI/BomService = expectedTotal |
+
+**Widget:** `widget-v3-08i.html?v=bom20260616a`
+
+**Sem:** backend, contrato, mock, Explorer Mirror operacional, clipboard, TSV, DOM scraping.
 
 ---
 
@@ -193,7 +205,8 @@ Seguir `docs/LEGACY-CLEANUP-PLAN.md`:
 | **1** | `feature/render-bom-service-architecture` | Docs + inventário |
 | **2** | `feature/backend-bom-service-contract-v1` | Mock `/api/3dx/bom/*` ✅ |
 | **3** | `feature/backend-dseng-structure-v1` | dseng real |
-| **4** | `feature/frontend-render-bom-service-v1` | Frontend → Render (SKA BOM Service) |
+| **4** | `feature/frontend-render-bom-service-v1` | Frontend → Render (SKA BOM Service) ✅ |
+| **4b** | `feature/frontend-ska-runtime-ux-count-fix-v1` | UX + contagem consistente |
 | **5** | `cleanup/remove-deprecated-explorer-mirror` | Limpeza legado |
 
 **Regra:** um PR por fase; draft até revisão; não misturar frontend + backend + docs em PR gigante.
