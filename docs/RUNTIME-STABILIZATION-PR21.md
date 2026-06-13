@@ -11,7 +11,7 @@
 
 Após merge do PR #20 e correção do `WidgetCompilerException` (CDATA + `});` extra), o usuário ainda reportou:
 
-- Link `?v=bom20260617b&probe=dc91dcf` no GitHub Pages público exibindo **bom20260617a** e travando em "Carregando bom20260617a"
+- Link `?v=bom20260617b&probe=9c1893f` no GitHub Pages público exibindo **bom20260617a** e travando em "Carregando bom20260617a"
 - Build pill exibindo **n14** / referências a builds antigos (histórico PR #20)
 - Erro `WidgetCompilerException` (PR #20 / 17a)
 
@@ -82,7 +82,7 @@ Após merge do PR #20 e correção do `WidgetCompilerException` (CDATA + `});` e
 | Hotfix | `bom-ska-service-hotfix-20260617b.js` — ES5, sem async/await |
 | Widget loader | `widget-v3-08i.html` mínimo + CDATA |
 | Runtime externo | `widget-runtime-bom20260617b.js` — paint/boot ES5 |
-| Cache bust | `?v=bom20260617b&c=dc91dcf` |
+| Cache bust | `?v=bom20260617b&c=9c1893f` |
 | Boot | idempotente via `__BOM_WIDGET_BOOT_STATE__` |
 | Release | `__BOM_RELEASE_MANIFEST__` + `__BOM_RELEASE_PROBE__()` |
 | Product Explorer Sync | preservado (PlatformAPI + ExplorerContext) |
@@ -94,18 +94,18 @@ Após merge do PR #20 e correção do `WidgetCompilerException` (CDATA + `});` e
 
 **Navegador direto:**
 ```
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260617b&probe=dc91dcf
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260617b&probe=9c1893f
 ```
 
 **3DEXPERIENCE Web Page Reader:**
 ```
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260617b&t=3dx&probe=dc91dcf
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260617b&t=3dx&probe=9c1893f
 ```
 
 **Verificação no console:**
 ```javascript
 window.__BOM_RELEASE_PROBE__()
-// { build: 'bom20260617b', commit: 'dc91dcf', ... }
+// { build: 'bom20260617b', commit: '9c1893f', ... }
 ```
 
 ---
@@ -142,5 +142,5 @@ Não remendar main com commits diretos.
 ## 7. Por que 17a → 17b
 
 - 17a publicado com histórico de WidgetCompilerException, cache confuso e build pill n14
-- Novo build limpa rastreabilidade release (`probe=dc91dcf`)
+- Novo build limpa rastreabilidade release (`probe=9c1893f`)
 - Hotfix 17b remove `async/await` e `.finally()` da cadeia principal
