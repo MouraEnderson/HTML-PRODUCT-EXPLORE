@@ -2,7 +2,7 @@
 
 **Data:** 2026-06-11  
 **Branch referência:** `main` (pré DEC-018 implementação)  
-**Build frontend ativo:** `bom20260614n` (`widget-v3-08i.html`)
+**Build frontend ativo:** `bom20260615a` (`widget-v3-08i.html`)
 
 Inventário para suportar DEC-018 e `LEGACY-CLEANUP-PLAN.md`.  
 **Legenda status:** `active` | `diagnostic` | `deprecated` | `unknown`
@@ -29,7 +29,8 @@ Inventário para suportar DEC-018 e `LEGACY-CLEANUP-PLAN.md`.
 | 4 | `assets/js/integration/product-explorer-mirror-contract-probe.js` | **diagnostic** | Probe DEC-017 (Avançado) |
 | 5 | `assets/js/integration/expand-item-provider.js` | **diagnostic** | Expand Item via WAFData |
 | 6 | `assets/js/integration/expand-item-validator.js` | **diagnostic** | Validação Expand Item UI |
-| 7 | `assets/js/bom-api-id-hotfix-20260608a.js` | **active** | Orquestração atual: mirror gate, patches UI, build sync |
+| 7 | `assets/js/bom-api-id-hotfix-20260608a.js` | **deprecated** | Hotfix legado (mirror gate) — sobrescrito por SKA hotfix |
+| 8 | `assets/js/bom-ska-service-hotfix-20260615a.js` | **active** | PR 4: POST Render `/api/3dx/bom/structure`, tabela/KPIs/diagnostics |
 
 ### 1.3 Config e build
 
@@ -164,4 +165,4 @@ Inventário para suportar DEC-018 e `LEGACY-CLEANUP-PLAN.md`.
 | Backend Render | `/api/bom/*` legado | **+ SKA routes** sem quebrar legado |
 | Legado alto risco | `product-explorer-bridge`, `explorer-scanner`, mirror | **Isolar Fase 5** |
 
-**Próximo passo:** PR 4 — frontend consome `POST /api/3dx/bom/structure` (após merge PR 3 + env Render).
+**Próximo passo:** PR 5 — limpeza legado Explorer Mirror / clipboard (após merge PR 4).
