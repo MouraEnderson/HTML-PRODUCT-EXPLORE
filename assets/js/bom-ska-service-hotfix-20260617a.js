@@ -1,4 +1,4 @@
-/* PR #19 — Finalize Product Explorer sync, UX and count consistency */
+/* PR #20 — Finalize Product Explorer sync, UX and count consistency */
 (function () {
   'use strict';
 
@@ -70,7 +70,7 @@
 
   function setStatus(msg, kind) {
     if (!w.__BOM_DEBUG__) {
-      if (/KpiCards\.render protegido|DEC-015 preservado|vers[aã]o divergente|bom20260614|bom20260615/i.test(String(msg || ''))) {
+      if (/KpiCards\.render protegido|DEC-015 preservado|vers[aã]o divergente|bom20260614|bom20260615|bom20260616/i.test(String(msg || ''))) {
         return;
       }
     }
@@ -311,6 +311,10 @@
     var warnings = (diag.warnings || []).join(' · ');
     var errors = (diag.errors || []).join(' · ');
     var syncMeta = payload.__skaSyncMeta || {};
+    var bridgeDiag =
+      w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.getBridgeDiagnosticStatus
+        ? w.ProductExplorerSyncProvider.getBridgeDiagnosticStatus()
+        : '';
     var summary =
       'SKA Service ' +
       status +
@@ -342,6 +346,7 @@
       escapeHtml(endpoints || '(none)') +
       (warnings ? '<br/>warnings: ' + escapeHtml(warnings) : '') +
       (errors ? '<br/>errors: ' + escapeHtml(errors) : '') +
+      (bridgeDiag ? '<br/>bridge: ' + escapeHtml(bridgeDiag) : '') +
       '</div>';
 
     var toggle = panel.querySelector('.bom-ska-diag-toggle');
@@ -464,7 +469,7 @@
       el.textContent = 'Contexto detectado: ' + ctx.title;
       el.className = 'bom-explorer-context-status bom-explorer-context-ok';
     } else if (ctx.path === 'C') {
-      el.textContent = 'Contexto indisponível — modo avançado';
+      el.textContent = ctx.message || 'Contexto Product Explorer indisponível — modo avançado';
       el.className = 'bom-explorer-context-status bom-explorer-context-warn';
     } else {
       el.textContent = 'Aguardando Product Explorer';
@@ -664,7 +669,7 @@
     if (w.App && w.App.setStatus && !w.App.__BOM_SKA_STATUS_PATCHED__) {
       var origStatus = w.App.setStatus;
       w.App.setStatus = function (msg, kind) {
-        if (!w.__BOM_DEBUG__ && /KpiCards\.render protegido|DEC-015|vers[aã]o divergente|bom20260614/i.test(String(msg || ''))) {
+        if (!w.__BOM_DEBUG__ && /KpiCards\.render protegido|DEC-015|vers[aã]o divergente|bom20260614|bom20260615|bom20260616/i.test(String(msg || ''))) {
           return;
         }
         return origStatus.apply(this, arguments);
@@ -720,6 +725,11 @@
       }
       w.__BOM_MIRROR_EXPLORER_MODE__ = false;
       w.__BOM_CLIPBOARD_RUNTIME_DISABLED__ = true;
+      var expandPanel = byId('expandItemValidationPanel');
+      if (expandPanel) {
+        expandPanel.classList.add('bom-hidden');
+        expandPanel.innerHTML = '';
+      }
     } catch (e) {}
   }
 

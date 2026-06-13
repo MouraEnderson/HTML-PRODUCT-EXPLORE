@@ -62,7 +62,30 @@
 ### Auto-sync
 
 - Se `PlatformAPI.getSelection` disponível no 3DDashboard, poll leve (3s) + debounce 500ms dispara refresh de contexto.
-- Sync automático de **dados** (chamada Render) só se `__BOM_EXPLORER_AUTO_SYNC__ === true` (opt-in; default **false** no PR 19 v1).
+- Sync automático de **dados** (chamada Render) só se `__BOM_EXPLORER_AUTO_SYNC__ === true` (opt-in; default **false** no PR #20 v1).
+
+---
+
+## Hardening final PR #20
+
+**Build:** `bom20260617a`  
+**Decisão:** CAMINHO B — sync honesto sem gambiarras operacionais.
+
+| Regra | Implementação |
+|-------|---------------|
+| ProductExplorerBridge / postMessage | **Não é fonte operacional.** Apenas diagnóstico: *bridge disponível, mas não usado como fonte operacional*. |
+| Explorer Mirror | **Não carrega no boot principal.** Somente se `window.__BOM_DEBUG__ === true`. |
+| Expand Item | **Não carrega no boot principal.** Somente debug explícito. |
+| Fonte operacional de contexto | `PlatformAPI.getSelection()` + `ExplorerContext.refresh(false)` (sources: query-id, query-name, config-id, registry). |
+| Fonte operacional de dados | SKA BOM Service / dseng (`POST /api/3dx/bom/structure`, `credentials: omit`). |
+| Expansão visual PSE | **Sem evento oficial encontrado** — expansão automática **não prometida**. |
+| Root / depth manual | Apenas **Avançado** (fallback honesto quando contexto indisponível). |
+
+Se PlatformAPI e ExplorerContext falharem, o dashboard exibe:
+
+> Contexto Product Explorer indisponível — modo avançado
+
+Nunca usa bridge/postMessage como fallback de sync.
 
 ---
 
@@ -96,7 +119,7 @@ SKA Service fornece **rows/counts/diagnostics**.
 
 ---
 
-## 7. Próximos passos (pós PR 19)
+## 7. Próximos passos (pós PR #20)
 
 1. Validar `PlatformAPI.getSelection` no tenant piloto com PSE aberto (3DDashboard).
 2. Se DS publicar evento oficial PSE→widget, migrar de poll para subscribe (CAMINHO A).

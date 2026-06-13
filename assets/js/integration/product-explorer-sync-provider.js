@@ -1,13 +1,13 @@
 /**
- * Product Explorer Sync Provider — CAMINHO B
- * Detecta contexto/seleção via APIs oficiais (PlatformAPI / ExplorerContext).
- * Não renderiza tabela; emite evento interno para SKA BOM Service hotfix.
+ * Product Explorer Sync Provider — CAMINHO B (hardened PR #20)
+ * Fonte operacional de contexto: PlatformAPI.getSelection + ExplorerContext (sem bridge/postMessage).
  */
 (function (w) {
   'use strict';
 
   var DEBOUNCE_MS = 500;
   var POLL_MS = 3000;
+  var ALLOWED_EXPLORER_CONTEXT_SOURCES = ['query-id', 'query-name', 'config-id', 'registry'];
   var listeners = [];
   var lastContext = null;
   var debounceTimer = null;
@@ -56,9 +56,17 @@
       path: 'C',
       expansionAvailable: false,
       autoSyncAvailable: false,
-      message: message || 'Contexto do Product Explorer não disponível via contrato oficial neste runtime',
-      lastSyncAt: null
+      message: message || 'Contexto Product Explorer indisponível — modo avançado',
+      lastSyncAt: null,
+      bridgeDiagnostic: getBridgeDiagnosticStatus()
     };
+  }
+
+  function getBridgeDiagnosticStatus() {
+    var available = typeof w.ProductExplorerBridge !== 'undefined';
+    return available
+      ? 'bridge disponível, mas não usado como fonte operacional'
+      : 'bridge indisponível neste runtime';
   }
 
   function getRequire() {
@@ -107,6 +115,8 @@
     w.ExplorerContext.refresh(false);
     var ctx = w.ExplorerContext.get();
     if (!ctx || !ctx.hasValidPhysicalId) return null;
+    var src = s(ctx.source);
+    if (ALLOWED_EXPLORER_CONTEXT_SOURCES.indexOf(src) < 0) return null;
     return {
       rootId: s(ctx.physicalId),
       selectedId: s(ctx.physicalId),
@@ -116,34 +126,13 @@
       path: 'B',
       expansionAvailable: false,
       autoSyncAvailable: true,
-      message: '',
-      lastSyncAt: null
+      message: 'Contexto Product Explorer detectado',
+      lastSyncAt: null,
+      bridgeDiagnostic: getBridgeDiagnosticStatus()
     };
   }
 
-  function readBridgeSelectionOnly() {
-    if (typeof w.ProductExplorerBridge === 'undefined' || !w.ProductExplorerBridge.getSelection) {
-      return null;
-    }
-    var sel = w.ProductExplorerBridge.getSelection();
-    if (!sel) return null;
-    var pid = s(sel.physicalid || sel.physicalId || sel.id);
-    if (!isValidPhysicalId(pid)) return null;
-    return {
-      rootId: pid,
-      selectedId: pid,
-      title: s(sel.displayName || sel.name || sel.title),
-      source: 'PRODUCT_EXPLORER_BRIDGE',
-      eventType: 'bridge-selection',
-      path: 'B',
-      expansionAvailable: false,
-      autoSyncAvailable: false,
-      message: 'Seleção via bridge (secundário; não é contrato oficial documentado)',
-      lastSyncAt: null
-    };
-  }
-
-  function mergeContext(platformSel, ctxOfficial, ctxBridge) {
+  function mergeContext(platformSel, ctxOfficial) {
     if (platformSel && isValidPhysicalId(platformSel.physicalId)) {
       return {
         rootId: platformSel.physicalId,
@@ -155,11 +144,11 @@
         expansionAvailable: false,
         autoSyncAvailable: true,
         message: 'Contexto Product Explorer detectado',
-        lastSyncAt: null
+        lastSyncAt: null,
+        bridgeDiagnostic: getBridgeDiagnosticStatus()
       };
     }
     if (ctxOfficial && ctxOfficial.rootId) return ctxOfficial;
-    if (ctxBridge && ctxBridge.rootId) return ctxBridge;
     return emptyContext();
   }
 
@@ -175,7 +164,7 @@
   function refresh(eventType) {
     return fetchPlatformSelection()
       .then(function (platformSel) {
-        var ctx = mergeContext(platformSel, readExplorerContextOfficial(), readBridgeSelectionOnly());
+        var ctx = mergeContext(platformSel, readExplorerContextOfficial());
         if (eventType) ctx.eventType = eventType;
         emit(ctx);
         return ctx;
@@ -206,12 +195,6 @@
 
     refresh('install');
 
-    if (typeof w.ProductExplorerBridge !== 'undefined' && w.ProductExplorerBridge.subscribe) {
-      w.ProductExplorerBridge.subscribe(function () {
-        debouncedRefresh('bridge-selection');
-      });
-    }
-
     pollTimer = setInterval(function () {
       fetchPlatformSelection().then(function (sel) {
         if (!sel || !isValidPhysicalId(sel.physicalId)) return;
@@ -239,6 +222,7 @@
     getContext: function () {
       return lastContext || emptyContext();
     },
+    getBridgeDiagnosticStatus: getBridgeDiagnosticStatus,
     isValidPhysicalId: isValidPhysicalId,
     DEBOUNCE_MS: DEBOUNCE_MS
   };

@@ -141,9 +141,9 @@ BOM_SERVICE_MODE=dseng
 
 ---
 
-## Fase 4b — Product Explorer sync + UX (PR 19) 🚧
+## Fase 4b — Product Explorer sync + UX (PR #20) 🚧
 
-**Branch:** `feature/final-product-explorer-sync-ux-v1`
+**Branch:** `feature/final-product-explorer-sync-ux-v1` — PR #20
 
 | Item | Status |
 |------|--------|
