@@ -2,7 +2,7 @@
 
 **Data:** 2026-06-11  
 **Branch referência:** `main` (pré DEC-018 implementação)  
-**Build frontend ativo:** `bom20260616a` (`widget-v3-08i.html`)
+**Build frontend ativo:** `bom20260617a` (`widget-v3-08i.html`)
 
 Inventário para suportar DEC-018 e `LEGACY-CLEANUP-PLAN.md`.  
 **Legenda status:** `active` | `diagnostic` | `deprecated` | `unknown`
@@ -24,13 +24,14 @@ Inventário para suportar DEC-018 e `LEGACY-CLEANUP-PLAN.md`.
 | Ordem | Arquivo | Status | Função |
 |-------|---------|--------|--------|
 | 1 | `assets/js/bom-bundle-bom20260607a.js` | **active** | Bundle base (APP, BomService, UI, métricas) |
-| 2 | `assets/js/integration/product-explorer-bridge.js` | **deprecated** | Bridge PSE: postMessage, DOM scrape legado — **não será fonte DEC-018** |
-| 3 | `assets/js/integration/explorer-mirror-provider.js` | **deprecated** | Explorer Mirror (DEC-016) — bloqueado DEC-017 |
-| 4 | `assets/js/integration/product-explorer-mirror-contract-probe.js` | **diagnostic** | Probe DEC-017 (Avançado) |
-| 5 | `assets/js/integration/expand-item-provider.js` | **diagnostic** | Expand Item via WAFData |
-| 6 | `assets/js/integration/expand-item-validator.js` | **diagnostic** | Validação Expand Item UI |
-| 7 | `assets/js/bom-ska-service-hotfix-20260616a.js` | **active** | PR 19: SKA runtime UX, contagem consistente, build 16a |
-| 8 | `assets/js/bom-ska-service-hotfix-20260615a.js` | **deprecated** | PR 4 — substituído por 16a |
+| 2 | `assets/js/integration/product-explorer-bridge.js` | **deprecated** | Bridge PSE legado — seleção secundária; não fonte DEC-018 |
+| 3 | `assets/js/integration/product-explorer-sync-provider.js` | **active** | PR 19: contexto PSE via PlatformAPI + ExplorerContext (CAMINHO B) |
+| 4 | `assets/js/integration/explorer-mirror-provider.js` | **deprecated** | Explorer Mirror — não fonte operacional |
+| 5 | `assets/js/integration/product-explorer-mirror-contract-probe.js` | **diagnostic** | Probe DEC-017 (Avançado) |
+| 6 | `assets/js/integration/expand-item-provider.js` | **diagnostic** | Expand Item via WAFData |
+| 7 | `assets/js/integration/expand-item-validator.js` | **diagnostic** | Validação Expand Item UI |
+| 8 | `assets/js/bom-ska-service-hotfix-20260617a.js` | **active** | PR 19: sync PSE + SKA Service + UX + contagem |
+| 9 | `assets/js/bom-ska-service-hotfix-20260616a.js` | **deprecated** | PR 19 iter — substituído por 17a |
 
 ### 1.3 Config e build
 

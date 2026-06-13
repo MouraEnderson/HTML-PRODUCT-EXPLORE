@@ -141,25 +141,22 @@ BOM_SERVICE_MODE=dseng
 
 ---
 
-## Fase 4b — Fix SKA runtime UX and count (PR 19) 🚧
+## Fase 4b — Product Explorer sync + UX (PR 19) 🚧
 
-**Branch:** `feature/frontend-ska-runtime-ux-count-fix-v1`
+**Branch:** `feature/final-product-explorer-sync-ux-v1`
 
 | Item | Status |
 |------|--------|
-| Build | `bom20260616a` |
-| Script | `assets/js/bom-ska-service-hotfix-20260616a.js` |
-| Versionamento | Remove `bom20260614n` / aviso divergente falso; remove `bom-api-id-hotfix` do boot |
-| Contagem | Fonte única `payload.counts.totalRows`; bypass `buildFromImported`/`ensureContextRoot` |
-| Root duplicado | Snapshot direto via `BomSnapshot.applyPayload` (5 itens, sem root sintético) |
-| UX | Diagnostics colapsável, ResizeObserver, KPI clamp, topbar responsiva |
-| Debug | Toast `KpiCards.render protegido` suprimido (exceto `__BOM_DEBUG__`) |
-| Labels | MutationObserver mantém **Carregar BOM via SKA Service** |
-| Assert | `assertSkaCountIntegrity` — tabela/KPI/BomService = expectedTotal |
+| Build | `bom20260617a` |
+| Investigação | `docs/PRODUCT-EXPLORER-SYNC-FINDINGS.md` — **CAMINHO B** |
+| Provider | `assets/js/integration/product-explorer-sync-provider.js` |
+| Script | `assets/js/bom-ska-service-hotfix-20260617a.js` |
+| UI principal | **Sincronizar com Product Explorer** + **Atualizar BOM** |
+| Fallback | Root ID + Profundidade em Avançado |
+| Contagem | Fonte única `counts.totalRows`; snapshot direto (sem root duplicado) |
+| UX | Diagnostics colapsável, ResizeObserver, build 17a |
 
-**Widget:** `widget-v3-08i.html?v=bom20260616a`
-
-**Sem:** backend, contrato, mock, Explorer Mirror operacional, clipboard, TSV, DOM scraping.
+**Widget:** `widget-v3-08i.html?v=bom20260617a`
 
 ---
 
@@ -206,7 +203,7 @@ Seguir `docs/LEGACY-CLEANUP-PLAN.md`:
 | **2** | `feature/backend-bom-service-contract-v1` | Mock `/api/3dx/bom/*` ✅ |
 | **3** | `feature/backend-dseng-structure-v1` | dseng real |
 | **4** | `feature/frontend-render-bom-service-v1` | Frontend → Render (SKA BOM Service) ✅ |
-| **4b** | `feature/frontend-ska-runtime-ux-count-fix-v1` | UX + contagem consistente |
+| **4b** | `feature/final-product-explorer-sync-ux-v1` | Product Explorer sync + UX + contagem |
 | **5** | `cleanup/remove-deprecated-explorer-mirror` | Limpeza legado |
 
 **Regra:** um PR por fase; draft até revisão; não misturar frontend + backend + docs em PR gigante.
