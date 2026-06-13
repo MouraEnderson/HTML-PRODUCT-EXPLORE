@@ -2,7 +2,7 @@
 
 **Data:** 2026-06-11  
 **Branch referência:** `main` (pré DEC-018 implementação)  
-**Build frontend ativo:** `bom20260617a` (`widget-v3-08i.html`)
+**Build frontend ativo:** `bom20260617b` (`widget-v3-08i.html`)
 
 Inventário para suportar DEC-018 e `LEGACY-CLEANUP-PLAN.md`.  
 **Legenda status:** `active` | `diagnostic` | `deprecated` | `unknown`
@@ -19,24 +19,24 @@ Inventário para suportar DEC-018 e `LEGACY-CLEANUP-PLAN.md`.
 | `assets/css/dashboard.css` | **active** | Estilos dashboard |
 | `assets/vendor/chart.umd.min.js` | **active** | Chart.js |
 
-### 1.2 Cadeia de scripts (`widget-v3-08i.html` → `startBundle`)
+### 1.2 Cadeia de scripts (`widget-v3-08i.html` → runtime → `startBundle`)
 
 | Ordem | Arquivo | Status | Função |
 |-------|---------|--------|--------|
+| loader | `widget-v3-08i.html` | **active** | Loader mínimo XHTML/CDATA |
+| 0 | `assets/js/widget-runtime-bom20260617b.js` | **active** | PR #21: paint, boot idempotente, manifest |
 | 1 | `assets/vendor/chart.umd.min.js` | **active** | Chart.js |
-| 2 | `assets/js/bom-bundle-bom20260607a.js` | **active** | Bundle base (APP, BomService, UI, métricas) |
-| 3 | `assets/js/integration/product-explorer-sync-provider.js` | **active** | PR #20: contexto PSE via PlatformAPI + ExplorerContext (CAMINHO B) |
-| 4 | `assets/js/bom-ska-service-hotfix-20260617a.js` | **active** | PR #20: sync PSE + SKA Service + UX + contagem |
+| 2 | `assets/js/bom-bundle-bom20260607a.js` | **active** | Bundle base |
+| 3 | `assets/js/integration/product-explorer-sync-provider.js` | **active** | Contexto PSE CAMINHO B |
+| 4 | `assets/js/bom-ska-service-hotfix-20260617b.js` | **active** | SKA sync + UX ES5 |
 
-**Somente com `window.__BOM_DEBUG__ === true` (diagnóstico, não operacional):**
+**Histórico (não carregar em produção):**
 
 | Arquivo | Status |
 |---------|--------|
-| `assets/js/integration/product-explorer-bridge.js` | **diagnostic** — bridge disponível, não usado como fonte |
-| `assets/js/integration/explorer-mirror-provider.js` | **deprecated** |
-| `assets/js/integration/product-explorer-mirror-contract-probe.js` | **diagnostic** |
-| `assets/js/integration/expand-item-provider.js` | **diagnostic** |
-| `assets/js/integration/expand-item-validator.js` | **diagnostic** |
+| `bom-ska-service-hotfix-20260617a.js` | **deprecated** — continha async/await |
+| `bom-ska-service-hotfix-20260616a.js` | **deprecated** |
+| `bom-api-id-hotfix-20260608a.js` | **deprecated** — causava pill n14 |
 
 ### 1.3 Config e build
 
