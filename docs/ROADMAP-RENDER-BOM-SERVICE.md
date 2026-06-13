@@ -125,20 +125,35 @@ BOM_SERVICE_MODE=dseng
 
 ---
 
-## Fase 4 — Frontend consome Render (PR 4)
+## Fase 4 — Frontend consome Render (PR 4) 🚧
 
-**Branch:** `feature/frontend-consume-render-bom-service`
+**Branch:** `feature/frontend-render-bom-service-v1`
 
-| Item | Detalhe |
-|------|---------|
-| Feature flag | `BOM_DATA_SOURCE = "render-bom-service"` |
-| Botão | **Atualizar estrutura** → `POST …/api/3dx/bom/structure` |
-| UI | Tabela ← `response.rows`; KPI ← `counts.totalRows` |
-| Banner | `Fonte: Render BOM Service / dseng-official` |
-| Mensagem | Honesta (não é grade visual do Explorer) |
-| Rollback | Flag desliga novo fluxo |
+| Item | Status |
+|------|--------|
+| CORS/preflight | ✅ GitHub Pages + 3DEXPERIENCE IFWE (OPTIONS 204) |
+| Script | `assets/js/bom-ska-service-hotfix-20260615a.js` |
+| Widget | `widget-v3-08i.html?v=bom20260615a` |
+| Botão | **Carregar BOM via SKA Service** |
+| Endpoint | `POST https://bom-resolver.onrender.com/api/3dx/bom/structure` |
+| Fetch | `mode:cors`, `credentials:omit`, sem Authorization/Cookie |
+| Tabela/KPI | `payload.rows` + `payload.counts` |
+| rootId | Manual via `#explorerObjectId` (PR 4 v1) |
+| Diagnostics | `#skaBomDiagnostics` — sem segredo |
+| Validado prod | CJ MESA — 5 linhas (1 root + 4 nível 1) |
 
-**Build:** novo bump após merge PR 3.
+**Regras PR 4:**
+- Fonte oficial: SKA BOM Service / dseng — **não** Explorer visual
+- Sem clipboard, TSV, DOM scraping, mock silencioso, Expand Item como fonte principal
+- Explorer Mirror permanece no código legado, não bloqueia operação
+
+**Build:** `bom20260615a`
+
+---
+
+## Fase 4 (legado — detalhe)
+
+**Branch antiga:** `feature/frontend-consume-render-bom-service`
 
 ---
 
@@ -178,7 +193,7 @@ Seguir `docs/LEGACY-CLEANUP-PLAN.md`:
 | **1** | `feature/render-bom-service-architecture` | Docs + inventário |
 | **2** | `feature/backend-bom-service-contract-v1` | Mock `/api/3dx/bom/*` ✅ |
 | **3** | `feature/backend-dseng-structure-v1` | dseng real |
-| **4** | `feature/frontend-consume-render-bom-service` | Frontend → Render |
+| **4** | `feature/frontend-render-bom-service-v1` | Frontend → Render (SKA BOM Service) |
 | **5** | `cleanup/remove-deprecated-explorer-mirror` | Limpeza legado |
 
 **Regra:** um PR por fase; draft até revisão; não misturar frontend + backend + docs em PR gigante.
