@@ -66,26 +66,21 @@
 
 ---
 
-## Hardening final PR #20
+## Hardening final PR #20 → estabilização PR #21
 
-**Build:** `bom20260617a`  
-**Decisão:** CAMINHO B — sync honesto sem gambiarras operacionais.
+**Build ativo:** `bom20260617b` (substitui `bom20260617a` — ver `docs/RUNTIME-STABILIZATION-PR21.md`)
 
 | Regra | Implementação |
 |-------|---------------|
-| ProductExplorerBridge / postMessage | **Não é fonte operacional.** Apenas diagnóstico: *bridge disponível, mas não usado como fonte operacional*. |
-| Explorer Mirror | **Não carrega no boot principal.** Somente se `window.__BOM_DEBUG__ === true`. |
-| Expand Item | **Não carrega no boot principal.** Somente debug explícito. |
-| Fonte operacional de contexto | `PlatformAPI.getSelection()` + `ExplorerContext.refresh(false)` (sources: query-id, query-name, config-id, registry). |
-| Fonte operacional de dados | SKA BOM Service / dseng (`POST /api/3dx/bom/structure`, `credentials: omit`). |
-| Expansão visual PSE | **Sem evento oficial encontrado** — expansão automática **não prometida**. |
-| Root / depth manual | Apenas **Avançado** (fallback honesto quando contexto indisponível). |
+| ProductExplorerBridge / postMessage | **Não é fonte operacional.** Apenas diagnóstico. |
+| Explorer Mirror / Expand Item | **Não carregam no boot principal.** Somente `__BOM_DEBUG__`. |
+| Fonte operacional de contexto | PlatformAPI + ExplorerContext |
+| Fonte operacional de dados | SKA BOM Service / dseng |
+| Runtime widget | `widget-runtime-bom20260617b.js` (ES5, boot idempotente) |
+| Release manifest | `window.__BOM_RELEASE_PROBE__()` → build 17b + commit |
 
-Se PlatformAPI e ExplorerContext falharem, o dashboard exibe:
-
-> Contexto Product Explorer indisponível — modo avançado
-
-Nunca usa bridge/postMessage como fallback de sync.
+**URL widget:**
+`widget-v3-08i.html?v=bom20260617b&t=3dx&probe=<commit>`
 
 ---
 

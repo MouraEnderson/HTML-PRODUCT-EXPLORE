@@ -141,13 +141,13 @@ BOM_SERVICE_MODE=dseng
 
 ---
 
-## Fase 4b — Product Explorer sync + UX (PR #20) 🚧
+## Fase 4b — Product Explorer sync + UX (PR #20) ✅ mergeado
 
 **Branch:** `feature/final-product-explorer-sync-ux-v1` — PR #20
 
 | Item | Status |
 |------|--------|
-| Build | `bom20260617a` |
+| Build | `bom20260617a` (substituído por **17b** no PR #21) |
 | Investigação | `docs/PRODUCT-EXPLORER-SYNC-FINDINGS.md` — **CAMINHO B** |
 | Provider | `assets/js/integration/product-explorer-sync-provider.js` |
 | Script | `assets/js/bom-ska-service-hotfix-20260617a.js` |
@@ -156,7 +156,23 @@ BOM_SERVICE_MODE=dseng
 | Contagem | Fonte única `counts.totalRows`; snapshot direto (sem root duplicado) |
 | UX | Diagnostics colapsável, ResizeObserver, build 17a |
 
-**Widget:** `widget-v3-08i.html?v=bom20260617a`
+**Widget:** `widget-v3-08i.html?v=bom20260617a` (histórico — usar **17b**)
+
+---
+
+## Fase 4c — Runtime stabilization (PR #21) 🚧
+
+**Branch:** `hotfix/widget-3dx-runtime-stabilization-v1`
+
+| Item | Status |
+|------|--------|
+| Build | `bom20260617b` |
+| Runtime | `widget-runtime-bom20260617b.js` (ES5, boot idempotente) |
+| Hotfix | `bom-ska-service-hotfix-20260617b.js` (sem async/await) |
+| Manifest | `__BOM_RELEASE_PROBE__()` |
+| Docs | `docs/RUNTIME-STABILIZATION-PR21.md` |
+
+**Widget:** `widget-v3-08i.html?v=bom20260617b&probe=dc91dcf`
 
 ---
 
