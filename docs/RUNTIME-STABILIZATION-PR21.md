@@ -70,7 +70,7 @@ Após merge do PR #20 e correção do `WidgetCompilerException` (CDATA + `});` e
 | Hotfix | `bom-ska-service-hotfix-20260617b.js` — ES5, sem async/await |
 | Widget loader | `widget-v3-08i.html` mínimo + CDATA |
 | Runtime externo | `widget-runtime-bom20260617b.js` — paint/boot ES5 |
-| Cache bust | `?v=bom20260617b&c=02425bb` |
+| Cache bust | `?v=bom20260617b&c=dc91dcf` |
 | Boot | idempotente via `__BOM_WIDGET_BOOT_STATE__` |
 | Release | `__BOM_RELEASE_MANIFEST__` + `__BOM_RELEASE_PROBE__()` |
 | Product Explorer Sync | preservado (PlatformAPI + ExplorerContext) |
@@ -82,18 +82,18 @@ Após merge do PR #20 e correção do `WidgetCompilerException` (CDATA + `});` e
 
 **Navegador direto:**
 ```
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260617b&probe=02425bb
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260617b&probe=dc91dcf
 ```
 
 **3DEXPERIENCE Web Page Reader:**
 ```
-https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260617b&t=3dx&probe=02425bb
+https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260617b&t=3dx&probe=dc91dcf
 ```
 
 **Verificação no console:**
 ```javascript
 window.__BOM_RELEASE_PROBE__()
-// { build: 'bom20260617b', commit: '02425bb', ... }
+// { build: 'bom20260617b', commit: 'dc91dcf', ... }
 ```
 
 ---
@@ -130,5 +130,5 @@ Não remendar main com commits diretos.
 ## 7. Por que 17a → 17b
 
 - 17a publicado com histórico de WidgetCompilerException, cache confuso e build pill n14
-- Novo build limpa rastreabilidade release (`probe=02425bb`)
+- Novo build limpa rastreabilidade release (`probe=dc91dcf`)
 - Hotfix 17b remove `async/await` e `.finally()` da cadeia principal
