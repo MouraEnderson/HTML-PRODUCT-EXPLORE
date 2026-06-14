@@ -5,7 +5,7 @@
   var GH = typeof w.__BOM_GH_BASE__ === 'string' ? w.__BOM_GH_BASE__ : 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
   var BOM_BUILD = w.__BOM_WIDGET_BUILD__ || 'bom20260617c';
   var BASE_BUILD = w.__BOM_BASE_BUILD__ || 'bom20260607a';
-  var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || '646f0f4';
+  var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || '704cc36';
 
   w.__BOM_EXPECTED_BUILD__ = BOM_BUILD;
   w.__BOM_RUNTIME_BUILD__ = BOM_BUILD;

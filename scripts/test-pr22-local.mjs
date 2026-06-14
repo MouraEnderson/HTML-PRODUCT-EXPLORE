@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 
 const BUILD = 'bom20260617c';
-const COMMIT = '646f0f4';
+const COMMIT = '704cc36';
 const URL = `http://localhost:8080/widget-v3-08i.html?v=${BUILD}&probe=${COMMIT}`;
 const ROOT = '63FC553465A62400699E0792000086AB';
 const results = [];
