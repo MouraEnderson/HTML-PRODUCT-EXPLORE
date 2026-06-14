@@ -144,3 +144,14 @@ Não remendar main com commits diretos.
 - 17a publicado com histórico de WidgetCompilerException, cache confuso e build pill n14
 - Novo build limpa rastreabilidade release (`probe=9c1893f`)
 - Hotfix 17b remove `async/await` e `.finally()` da cadeia principal
+
+---
+
+## 8. Sucessor — PR #22 (17c)
+
+PR #21 estabilizou runtime/compilação. PR #22 (`bom20260617c`) corrige UX real no Web Page Reader:
+
+- Layout `.bom-layout-page.bom-3dx-product-dashboard`
+- Validação `normalizeCandidateRootId` antes do POST SKA
+- `renderEmptySkaState` — KPI/gráficos zerados em erro
+- Ver `docs/3DX-DASHBOARD-UX-PR22.md`

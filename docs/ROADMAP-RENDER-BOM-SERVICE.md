@@ -220,6 +220,7 @@ Seguir `docs/LEGACY-CLEANUP-PLAN.md`:
 | **3** | `feature/backend-dseng-structure-v1` | dseng real |
 | **4** | `feature/frontend-render-bom-service-v1` | Frontend → Render (SKA BOM Service) ✅ |
 | **4b** | `feature/final-product-explorer-sync-ux-v1` | Product Explorer sync + UX + contagem |
+| **4c** | `hotfix/3dx-dashboard-layout-context-empty-state-v1` | Layout 3DX + validação contexto + empty state (17c) ✅ |
 | **5** | `cleanup/remove-deprecated-explorer-mirror` | Limpeza legado |
 
 **Regra:** um PR por fase; draft até revisão; não misturar frontend + backend + docs em PR gigante.
