@@ -1,6 +1,6 @@
 import { getThreeDxConfig, getPublicEnvironmentFlags } from './threeDxConfig.js';
 import { ThreeDxDsengClient, assertDsengConfigured } from './threeDxDsengClient.js';
-import { resolveSelectionToEngItem } from './selectionResolver.js';
+import { resolveSelectionToEngItem, normalizeSearchResults } from './selectionResolver.js';
 import {
   SOURCE,
   CJ_MESA_ROOT_ID,
@@ -24,6 +24,7 @@ const ERROR_STATUS = {
   UPSTREAM_NOT_CONFIGURED: 503,
   ROOT_NOT_FOUND: 404,
   SELECTION_NOT_RESOLVED: 422,
+  SELECTION_AMBIGUOUS: 422,
   UPSTREAM_AUTH_FAILED: 502,
   UPSTREAM_AUTH_NOT_IMPLEMENTED: 502,
   UPSTREAM_DSENG_ERROR: 502,
@@ -340,16 +341,21 @@ export async function buildStructureFromRoot({ rootId, depth, includeRoot, mode 
 }
 
 function buildResolveSelectionFailure(resolution, mode = 'dseng-official', diagnosticsExtra = {}) {
+  const isAmbiguous = resolution.status === 'AMBIGUOUS';
+  const code = isAmbiguous ? 'SELECTION_AMBIGUOUS' : 'SELECTION_NOT_RESOLVED';
+  const message = isAmbiguous
+    ? 'Contexto ambíguo: mais de um EngItem encontrado. Use Avançado ou refine a seleção.'
+    : 'Não foi possível resolver a seleção do Product Explorer para um EngItem dseng válido.';
   return {
     ok: false,
     source: SOURCE,
     mode,
     error: {
-      code: 'SELECTION_NOT_RESOLVED',
-      message: 'Não foi possível resolver a seleção do Product Explorer para um EngItem dseng válido.'
+      code,
+      message
     },
     resolution: {
-      status: 'NOT_RESOLVED',
+      status: resolution.status || 'NOT_RESOLVED',
       attempts: resolution.attempts || [],
       inputSummary: resolution.inputSummary || {}
     },
@@ -358,7 +364,7 @@ function buildResolveSelectionFailure(resolution, mode = 'dseng-official', diagn
       endpointsUsed: diagnosticsExtra.endpointsUsed || [],
       durationMs: diagnosticsExtra.durationMs || 0,
       warnings: diagnosticsExtra.warnings || [],
-      errors: ['SELECTION_NOT_RESOLVED']
+      errors: [code]
     })
   };
 }
@@ -373,10 +379,26 @@ function buildResolveSelectionSuccess(structureData, resolution, mode = 'dseng-o
       strategy: resolution.strategy,
       rootId: resolution.rootId,
       rootTitle: resolution.rootTitle,
+      rootName: resolution.rootName || '',
       inputSummary: resolution.inputSummary || {},
       attempts: resolution.attempts || []
     }
   };
+}
+
+export async function searchEngItems(searchExpression, options = {}) {
+  const config = getThreeDxConfig();
+  const top = options.top == null ? 20 : Number(options.top);
+  if (config.mode === 'mock') {
+    return { totalItems: 0, member: [] };
+  }
+  const configured = assertDsengConfigured(config);
+  if (!configured.ok) {
+    throw new Error(configured.message || 'Upstream not configured');
+  }
+  const client = new ThreeDxDsengClient(config);
+  const result = await client.searchEngItems(String(searchExpression || ''), top);
+  return normalizeSearchResults(result.data);
 }
 
 function parseResolveSelectionInput(body, defaultDepth = 1, mode = 'dseng-official') {

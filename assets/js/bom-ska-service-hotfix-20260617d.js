@@ -328,7 +328,9 @@
       UPSTREAM_AUTH_NOT_IMPLEMENTED: 'Modo de autenticação 3DEXPERIENCE não configurado explicitamente.',
       ROOT_NOT_FOUND: 'RootId não encontrado ou não acessível. Verifique se o item selecionado é um Engineering Item/Physical Product válido para dseng ou use Avançado.',
       SELECTION_NOT_RESOLVED:
-        'Não foi possível resolver a seleção do Product Explorer para um EngItem dseng válido. Use Avançado ou copie o diagnóstico de contexto.',
+        'Contexto não resolvido. O Product Explorer não forneceu um identificador que pudesse ser resolvido com segurança.',
+      SELECTION_AMBIGUOUS:
+        'Contexto ambíguo: mais de um EngItem encontrado. Use Avançado ou refine a seleção.',
       UPSTREAM_DSENG_ERROR: 'Falha na chamada dseng. Ver detalhes técnicos abaixo.',
       INTERNAL_ERROR: 'Erro interno no SKA BOM Service.',
       ROOT_ID_REQUIRED: 'Informe o Root Physical ID.',
@@ -595,6 +597,7 @@
       (syncMeta.rootId ? '<br/>rootId: ' + escapeHtml(syncMeta.rootId) : '') +
       (resolution.strategy ? '<br/>resolution.strategy: ' + escapeHtml(resolution.strategy) : '') +
       (resolution.rootId ? '<br/>resolution.rootId: ' + escapeHtml(resolution.rootId) : '') +
+      (resolution.rootName ? '<br/>resolution.rootName: ' + escapeHtml(resolution.rootName) : '') +
       (resolution.rootTitle ? '<br/>resolution.rootTitle: ' + escapeHtml(resolution.rootTitle) : '') +
       (resolution.status ? '<br/>resolution.status: ' + escapeHtml(resolution.status) : '') +
       (syncMeta.lastSyncAt ? '<br/>lastSyncAt: ' + escapeHtml(syncMeta.lastSyncAt) : '') +
@@ -783,25 +786,38 @@
   function renderSelectionNotResolved(errPayload, ctxMeta) {
     var resolution = (errPayload && errPayload.resolution) || {};
     var attempts = resolution.attempts || [];
+    var errCode = (errPayload && errPayload.error && errPayload.error.code) || '';
+    var isAmbiguous = errCode === 'SELECTION_AMBIGUOUS' || resolution.status === 'AMBIGUOUS';
+    var summary = isAmbiguous ? 'Contexto ambíguo' : 'Contexto não resolvido';
     var panel = byId('skaBomDiagnostics');
     if (panel) {
       panel.classList.remove('bom-hidden');
       panel.classList.add('bom-ska-diagnostics');
       panel.innerHTML =
         '<div class="bom-ska-diag-head">' +
-        '<span class="bom-ska-diag-summary">Contexto não resolvido</span> ' +
+        '<span class="bom-ska-diag-summary">' +
+        escapeHtml(summary) +
+        '</span> ' +
         '<button type="button" class="bom-btn bom-btn-compact bom-ska-diag-toggle">Detalhes</button></div>' +
         '<div class="bom-ska-diag-details">' +
         'contextSource: ' +
         escapeHtml((ctxMeta && ctxMeta.source) || '—') +
-        '<br/>resolution.status: NOT_RESOLVED' +
+        '<br/>resolution.status: ' +
+        escapeHtml(resolution.status || (isAmbiguous ? 'AMBIGUOUS' : 'NOT_RESOLVED')) +
         (attempts.length
           ? '<br/>attempts: ' +
             escapeHtml(
               attempts
                 .slice(0, 8)
                 .map(function (a) {
-                  return (a.strategy || '?') + ' · ' + (a.candidate || '?') + ' · ' + (a.status || '?');
+                  return (
+                    (a.strategy || '?') +
+                    ' · ' +
+                    (a.input || a.candidate || '?') +
+                    ' · ' +
+                    (a.status || '?') +
+                    (a.matches != null ? ' (' + a.matches + ')' : '')
+                  );
                 })
                 .join(' | ')
             )
@@ -985,14 +1001,20 @@
         var normalized = normalizeSkaError(err);
         var code = normalized.code || '';
         var errPayload = err && err.payload ? err.payload : null;
-        renderEmptySkaState(code === 'SELECTION_NOT_RESOLVED' ? 'SELECTION_NOT_RESOLVED' : 'ERROR', {
+        renderEmptySkaState(
+          code === 'SELECTION_AMBIGUOUS'
+            ? 'SELECTION_AMBIGUOUS'
+            : code === 'SELECTION_NOT_RESOLVED'
+            ? 'SELECTION_NOT_RESOLVED'
+            : 'ERROR',
+          {
           contextMeta: lastContextMeta,
           errorCode: code,
           statusMessage: normalized.message,
           statusKind: 'error',
           tableMessage: normalized.message
         });
-        if (code === 'SELECTION_NOT_RESOLVED') {
+        if (code === 'SELECTION_NOT_RESOLVED' || code === 'SELECTION_AMBIGUOUS') {
           renderSelectionNotResolved(errPayload, lastContextMeta);
         }
         return Promise.reject(err);

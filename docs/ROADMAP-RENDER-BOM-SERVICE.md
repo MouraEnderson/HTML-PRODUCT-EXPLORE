@@ -221,6 +221,7 @@ Seguir `docs/LEGACY-CLEANUP-PLAN.md`:
 | **4** | `feature/frontend-render-bom-service-v1` | Frontend → Render (SKA BOM Service) ✅ |
 | **4b** | `feature/final-product-explorer-sync-ux-v1` | Product Explorer sync + UX + contagem |
 | **4d** | `feature/backend-product-explorer-selection-resolver-v1` | Backend resolve-selection + frontend 17d ✅ |
+| **4e** | `hotfix/resolve-pse-prd-name-label-via-dseng-search` | dseng search prd/name/label (PR #24) ✅ |
 | **5** | `cleanup/remove-deprecated-explorer-mirror` | Limpeza legado |
 
 **Regra:** um PR por fase; draft até revisão; não misturar frontend + backend + docs em PR gigante.

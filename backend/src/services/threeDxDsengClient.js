@@ -90,6 +90,19 @@ export class ThreeDxDsengClient {
     }
   }
 
+  async searchEngItems(searchStr, top = 20) {
+    const endpoint = '/dseng:EngItem/search';
+    try {
+      await this.ensureCsrf();
+      const data = await this.client.searchEngItems(searchStr, top);
+      this.recordEndpoint('GET', endpoint, 200);
+      return { ok: true, data };
+    } catch (error) {
+      this.recordEndpoint('GET', endpoint, Number(error?.status || 502));
+      throw error;
+    }
+  }
+
   getEndpointsUsed() {
     return [...this.endpointsUsed];
   }

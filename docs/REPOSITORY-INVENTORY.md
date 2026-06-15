@@ -28,7 +28,7 @@ Inventário para suportar DEC-018 e `LEGACY-CLEANUP-PLAN.md`.
 | 1 | `assets/vendor/chart.umd.min.js` | **active** | Chart.js |
 | 2 | `assets/js/bom-bundle-bom20260607a.js` | **active** | Bundle base |
 | 3 | `assets/js/integration/product-explorer-sync-provider.js` | **active** | Contexto PSE + `getRawSelectionContext` |
-| 4 | `assets/js/bom-ska-service-hotfix-20260617d.js` | **active** | resolve-selection sync + UX ES5 |
+| 4 | `assets/js/bom-ska-service-hotfix-20260617d.js` | **active** | resolve-selection sync + diagnostics PR #23/#24 |
 
 **Histórico (não carregar em produção):**
 
