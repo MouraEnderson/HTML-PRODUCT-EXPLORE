@@ -1,5 +1,6 @@
 import { getThreeDxConfig, getPublicEnvironmentFlags } from './threeDxConfig.js';
 import { ThreeDxDsengClient, assertDsengConfigured } from './threeDxDsengClient.js';
+import { resolveSelectionToEngItem } from './selectionResolver.js';
 import {
   SOURCE,
   CJ_MESA_ROOT_ID,
@@ -22,6 +23,7 @@ const ERROR_STATUS = {
   DEPTH_LIMIT_EXCEEDED: 422,
   UPSTREAM_NOT_CONFIGURED: 503,
   ROOT_NOT_FOUND: 404,
+  SELECTION_NOT_RESOLVED: 422,
   UPSTREAM_AUTH_FAILED: 502,
   UPSTREAM_AUTH_NOT_IMPLEMENTED: 502,
   UPSTREAM_DSENG_ERROR: 502,
@@ -324,6 +326,171 @@ async function resolveDsengStructure(parsed, config) {
         truncatedInstancesCount
       })
     })
+  };
+}
+
+export async function buildStructureFromRoot({ rootId, depth, includeRoot, mode = 'dseng-official' }, config) {
+  const parsed = {
+    rootId: normalizeRootId(rootId),
+    depth,
+    includeRoot: includeRoot !== false,
+    mode
+  };
+  return resolveDsengStructure(parsed, config);
+}
+
+function buildResolveSelectionFailure(resolution, mode = 'dseng-official', diagnosticsExtra = {}) {
+  return {
+    ok: false,
+    source: SOURCE,
+    mode,
+    error: {
+      code: 'SELECTION_NOT_RESOLVED',
+      message: 'Não foi possível resolver a seleção do Product Explorer para um EngItem dseng válido.'
+    },
+    resolution: {
+      status: 'NOT_RESOLVED',
+      attempts: resolution.attempts || [],
+      inputSummary: resolution.inputSummary || {}
+    },
+    diagnostics: buildDiagnostics({
+      mode,
+      endpointsUsed: diagnosticsExtra.endpointsUsed || [],
+      durationMs: diagnosticsExtra.durationMs || 0,
+      warnings: diagnosticsExtra.warnings || [],
+      errors: ['SELECTION_NOT_RESOLVED']
+    })
+  };
+}
+
+function buildResolveSelectionSuccess(structureData, resolution, mode = 'dseng-official') {
+  return {
+    ...structureData,
+    ok: true,
+    mode,
+    resolution: {
+      status: 'RESOLVED',
+      strategy: resolution.strategy,
+      rootId: resolution.rootId,
+      rootTitle: resolution.rootTitle,
+      inputSummary: resolution.inputSummary || {},
+      attempts: resolution.attempts || []
+    }
+  };
+}
+
+function parseResolveSelectionInput(body, defaultDepth = 1, mode = 'dseng-official') {
+  body = body || {};
+  const depthResult = parseDepth(body.depth, defaultDepth, mode);
+  if (!depthResult.ok) {
+    return depthResult;
+  }
+  const selection = body.selection || {};
+  return {
+    ok: true,
+    selection,
+    depth: depthResult.depth,
+    includeRoot: body.includeRoot !== false,
+    mode: body.mode || mode,
+    manualRootId: normalizeRootId(body.manualRootId || selection.manualRootId || selection.normalized?.manualRootId)
+  };
+}
+
+export async function resolveSelection(body) {
+  const config = getThreeDxConfig();
+  const started = Date.now();
+
+  if (config.mode === 'mock') {
+    const parsed = parseResolveSelectionInput(body, 1, 'mock');
+    if (!parsed.ok) {
+      return { ok: false, status: getErrorStatus(parsed.error.error.code), error: parsed.error };
+    }
+    const resolution = await resolveSelectionToEngItem(parsed.selection, {
+      manualRootId: parsed.manualRootId
+    });
+    if (!resolution.ok) {
+      return {
+        ok: false,
+        status: 422,
+        error: buildResolveSelectionFailure(resolution, 'mock', { durationMs: Date.now() - started })
+      };
+    }
+    const structure = resolveMockStructure({
+      rootId: resolution.rootId,
+      depth: parsed.depth,
+      includeRoot: parsed.includeRoot,
+      mode: 'mock'
+    });
+    if (!structure.ok) {
+      return { ok: false, status: getErrorStatus(structure.error.error.code), error: structure.error };
+    }
+    return {
+      ok: true,
+      status: 200,
+      data: buildResolveSelectionSuccess(structure.data, resolution, 'mock')
+    };
+  }
+
+  const parsed = parseResolveSelectionInput(body, 1);
+  if (!parsed.ok) {
+    return { ok: false, status: getErrorStatus(parsed.error.error.code), error: parsed.error };
+  }
+
+  if (parsed.depth > DSENG_MAX_DEPTH) {
+    return {
+      ok: false,
+      status: 422,
+      error: buildErrorResponse(
+        'DEPTH_LIMIT_EXCEEDED',
+        'depth greater than 3 is not allowed in dseng v1'
+      )
+    };
+  }
+
+  const configured = assertDsengConfigured(config);
+  if (!configured.ok) {
+    return {
+      ok: false,
+      status: getErrorStatus(configured.code),
+      error: buildErrorResponse(configured.code, configured.message)
+    };
+  }
+
+  const client = new ThreeDxDsengClient(config);
+  const resolution = await resolveSelectionToEngItem(parsed.selection, {
+    client,
+    manualRootId: parsed.manualRootId
+  });
+
+  if (!resolution.ok) {
+    return {
+      ok: false,
+      status: 422,
+      error: buildResolveSelectionFailure(resolution, parsed.mode, {
+        endpointsUsed: client.getEndpointsUsed(),
+        durationMs: Date.now() - started
+      })
+    };
+  }
+
+  const structureResult = await buildStructureFromRoot(
+    {
+      rootId: resolution.rootId,
+      depth: parsed.depth,
+      includeRoot: parsed.includeRoot,
+      mode: parsed.mode
+    },
+    config
+  );
+
+  if (!structureResult.ok) {
+    return structureResult;
+  }
+
+  return {
+    ok: true,
+    status: 200,
+    data: buildResolveSelectionSuccess(structureResult.data, resolution, parsed.mode)
   };
 }
 

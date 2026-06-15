@@ -1,7 +1,7 @@
 # Product Structure Explorer — Sync Findings
 
 **Data:** 2026-06-17  
-**Build:** `bom20260617a`  
+**Build:** `bom20260617d` (PR #23)  
 **Objetivo:** BOM Analytics acompanha Product Structure Explorer como camada analítica; dados via SKA BOM Service / dseng.
 
 ---
@@ -120,3 +120,22 @@ SKA Service fornece **rows/counts/diagnostics**.
 2. Se DS publicar evento oficial PSE→widget, migrar de poll para subscribe (CAMINHO A).
 3. PR 5 — limpeza legado mirror/clipboard do boot.
 4. Opcional: `depth` inferido por política de produto (não por contagem visual Explorer).
+
+---
+
+## 8. PR #23 — resolução no backend (decisão 2026-06-11)
+
+**Problema:** PlatformAPI/ExplorerContext frequentemente retorna título, instância ou ID não aceito diretamente por `/dseng:EngItem/{ID}`. Validar regex no frontend não entrega BOM operacional.
+
+**Decisão:**
+
+| Camada | Responsabilidade |
+|--------|------------------|
+| Frontend | Capturar contexto bruto sanitizado (`getRawSelectionContext`) |
+| Backend | `POST /api/3dx/bom/resolve-selection` → candidatos → `GET EngItem` → `/structure` |
+| Avançado | `POST /api/3dx/bom/structure` com Root Physical ID manual |
+
+**Fluxo Sincronizar:** refresh PSE → resolve-selection → render rows.  
+**Não fazer:** chamar `/structure` com título/label como rootId no sync PSE.
+
+Ver `docs/SELECTION-RESOLVER-PR23.md`.

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getSkaHealth,
   resolveStructure,
+  resolveSelection,
   resolveDiagnostic,
   getErrorStatus
 } from '../services/threeDxBomService.js';
@@ -26,6 +27,20 @@ router.get('/health', (_req, res) => {
 router.post('/structure', async (req, res) => {
   try {
     const result = await resolveStructure(req.body || {});
+    if (!result.ok) {
+      const code = result.error?.error?.code;
+      res.status(result.status || getErrorStatus(code)).json(result.error);
+      return;
+    }
+    res.json(result.data);
+  } catch (_err) {
+    sendInternalError(res);
+  }
+});
+
+router.post('/resolve-selection', async (req, res) => {
+  try {
+    const result = await resolveSelection(req.body || {});
     if (!result.ok) {
       const code = result.error?.error?.code;
       res.status(result.status || getErrorStatus(code)).json(result.error);
