@@ -2,6 +2,7 @@ import { EnoviaClient, extractMembers } from './enoviaClient.js';
 import { getThreeDxConfig } from './threeDxConfig.js';
 
 const ENG_ITEM_ENDPOINT = '/dseng:EngItem/{ID}';
+const ENG_ITEM_SEARCH_ENDPOINT = '/dseng:EngItem/search';
 const ENG_INSTANCE_ENDPOINT = '/dseng:EngItem/{ID}/dseng:EngInstance';
 
 export class ThreeDxDsengClient {
@@ -54,6 +55,19 @@ export class ThreeDxDsengClient {
     try {
       await this.ensureCsrf();
       const data = await this.client.getEngItem(id);
+      this.recordEndpoint('GET', endpoint, 200);
+      return { ok: true, data };
+    } catch (error) {
+      this.recordEndpoint('GET', endpoint, Number(error?.status || 502));
+      throw error;
+    }
+  }
+
+  async searchEngItems(searchStr, top = 20) {
+    const endpoint = ENG_ITEM_SEARCH_ENDPOINT;
+    try {
+      await this.ensureCsrf();
+      const data = await this.client.searchEngItems(searchStr, top);
       this.recordEndpoint('GET', endpoint, 200);
       return { ok: true, data };
     } catch (error) {
