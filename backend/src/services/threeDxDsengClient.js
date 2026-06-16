@@ -53,7 +53,6 @@ export class ThreeDxDsengClient {
   async getEngItem(id) {
     const endpoint = ENG_ITEM_ENDPOINT;
     try {
-      await this.ensureCsrf();
       const data = await this.client.getEngItem(id);
       this.recordEndpoint('GET', endpoint, 200);
       return { ok: true, data };
@@ -66,7 +65,6 @@ export class ThreeDxDsengClient {
   async searchEngItems(searchStr, top = 20) {
     const endpoint = ENG_ITEM_SEARCH_ENDPOINT;
     try {
-      await this.ensureCsrf();
       const data = await this.client.searchEngItems(searchStr, top);
       this.recordEndpoint('GET', endpoint, 200);
       return { ok: true, data };
@@ -79,7 +77,6 @@ export class ThreeDxDsengClient {
   async getEngInstances(parentId) {
     const endpoint = ENG_INSTANCE_ENDPOINT;
     try {
-      await this.ensureCsrf();
       const maxPages = Number(process.env.DSENG_MAX_INSTANCE_PAGES || 20);
       const data = await this.client.getAllEngInstances(parentId, {
         pageSize: 100,
