@@ -45,3 +45,52 @@ test('resolve-selection mock title-only returns NOT_RESOLVED', async () => {
   assert.equal(result.error.error.code, 'SELECTION_NOT_RESOLVED');
   assert.equal(result.error.resolution.status, 'NOT_RESOLVED');
 });
+
+test('resolve-selection surfaces expired upstream session as auth failure', async () => {
+  const originalFetch = global.fetch;
+  const originalEnv = {
+    BOM_SERVICE_MODE: process.env.BOM_SERVICE_MODE,
+    THREEDX_SPACE_URL: process.env.THREEDX_SPACE_URL,
+    THREEDX_SECURITY_CONTEXT: process.env.THREEDX_SECURITY_CONTEXT,
+    ENOVIA_COOKIE: process.env.ENOVIA_COOKIE
+  };
+
+  process.env.BOM_SERVICE_MODE = 'dseng';
+  process.env.THREEDX_SPACE_URL = 'https://example.com/enovia';
+  process.env.THREEDX_SECURITY_CONTEXT = 'ctx::Role.Org.Project';
+  process.env.ENOVIA_COOKIE = 'JSESSIONID=expired';
+  global.fetch = async () => ({
+    ok: false,
+    status: 400,
+    text: async () =>
+      JSON.stringify({
+        error: 'invalid_grant',
+        error_description: 'Invalid, expired or missing authenticated session. New service ticket required'
+      })
+  });
+
+  try {
+    const result = await resolveSelection({
+      selection: {
+        normalized: {
+          name: 'prd-R1132100929518-01103695',
+          title: 'CJ MESA 4BCS VP TOP 3DX'
+        }
+      },
+      depth: 1,
+      includeRoot: true,
+      mode: 'dseng-official'
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 502);
+    assert.equal(result.error.error.code, 'UPSTREAM_AUTH_FAILED');
+    assert.equal(result.error.diagnostics.errors[0], 'UPSTREAM_AUTH_FAILED');
+  } finally {
+    global.fetch = originalFetch;
+    for (const [key, value] of Object.entries(originalEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
