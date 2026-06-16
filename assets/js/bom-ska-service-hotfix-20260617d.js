@@ -14,6 +14,22 @@
   var lastSyncRootId = '';
   var lastSyncDepth = DEFAULT_DEPTH;
   var lastSyncTitle = '';
+  var dynamicState = {
+    lastResolvedRootId: '',
+    lastSelection: null,
+    lastResolution: null,
+    lastEndpoint: '',
+    lastDepth: DEFAULT_DEPTH,
+    lastRows: [],
+    lastCounts: null,
+    expandedNodeIds: {},
+    loadedNodeIds: {},
+    loadingNodeIds: {},
+    loadMode: 'initial',
+    partial: true,
+    maxLoadedLevel: 0,
+    lastError: ''
+  };
 
   w.__BOM_EXPECTED_BUILD__ = BUILD;
   w.__BOM_RUNTIME_BUILD__ = BUILD;
@@ -321,6 +337,273 @@
     );
   }
 
+  function cloneRow(row) {
+    var out = {};
+    row = row || {};
+    Object.keys(row).forEach(function (key) {
+      out[key] = row[key];
+    });
+    return out;
+  }
+
+  function rowNodeId(row) {
+    return s(row && (row.physicalId || row.referenceId || row.sourcePhysicalId || row.rowKey || row.instanceId));
+  }
+
+  function rowUniqueKey(row) {
+    row = row || {};
+    return s(row.rowKey) || [row.parentId || '', row.instanceId || '', row.physicalId || row.referenceId || ''].join('|');
+  }
+
+  function rebuildDynamicCounts(rows, includeRoot, depth) {
+    var levelCounts = {};
+    (rows || []).forEach(function (row) {
+      var level = Number(row.level || 0);
+      levelCounts[level] = (levelCounts[level] || 0) + 1;
+    });
+    return {
+      totalRows: (rows || []).length,
+      rootIncluded: includeRoot !== false,
+      depth: depth,
+      levelCounts: levelCounts,
+      partial: true
+    };
+  }
+
+  function maxLoadedLevel(rows) {
+    var max = 0;
+    (rows || []).forEach(function (row) {
+      var level = Number(row.level || 0);
+      if (level > max) max = level;
+    });
+    return max;
+  }
+
+  function decorateDynamicRows(rows) {
+    return (rows || []).map(function (row, idx) {
+      var out = cloneRow(row);
+      var id = rowNodeId(out);
+      var loaded = !!dynamicState.loadedNodeIds[id];
+      out.__loadedChildren = loaded;
+      out.__expanded = !!dynamicState.expandedNodeIds[id];
+      out.__loadMode = dynamicState.loadMode;
+      out.rowKey = out.rowKey || 'ska-dyn:' + idx + ':' + (out.parentId || 'root') + ':' + (out.instanceId || '') + ':' + (out.physicalId || '');
+      return out;
+    });
+  }
+
+  function replaceDynamicPayload(payload, rows, mode) {
+    payload = payload || {};
+    rows = decorateDynamicRows(rows || []);
+    payload.rows = rows;
+    payload.counts = rebuildDynamicCounts(rows, true, maxLoadedLevel(rows));
+    payload.__skaDynamicState = {
+      loadMode: mode || dynamicState.loadMode || 'incremental',
+      partial: true,
+      expandedCount: Object.keys(dynamicState.expandedNodeIds).length,
+      loadedCount: Object.keys(dynamicState.loadedNodeIds).length,
+      maxLoadedLevel: payload.counts.depth
+    };
+    dynamicState.lastRows = rows.map(cloneRow);
+    dynamicState.lastCounts = payload.counts;
+    dynamicState.maxLoadedLevel = payload.counts.depth;
+    dynamicState.loadMode = payload.__skaDynamicState.loadMode;
+    return payload;
+  }
+
+  function resetDynamicState(payload, mode, selection) {
+    var rows = (payload && payload.rows) || [];
+    var depth = Number(payload && payload.counts && payload.counts.depth != null ? payload.counts.depth : DEFAULT_DEPTH);
+    dynamicState.lastResolvedRootId = s((payload && payload.root && payload.root.id) || '');
+    dynamicState.lastSelection = selection || dynamicState.lastSelection || null;
+    dynamicState.lastResolution = (payload && payload.resolution) || dynamicState.lastResolution || null;
+    dynamicState.lastEndpoint = payload && payload.resolution ? '/resolve-selection' : '/structure';
+    dynamicState.lastDepth = depth;
+    dynamicState.lastRows = rows.map(cloneRow);
+    dynamicState.lastCounts = payload && payload.counts ? payload.counts : null;
+    dynamicState.expandedNodeIds = {};
+    dynamicState.loadedNodeIds = {};
+    dynamicState.loadingNodeIds = {};
+    dynamicState.loadMode = mode || 'initial';
+    dynamicState.partial = true;
+    dynamicState.maxLoadedLevel = maxLoadedLevel(rows);
+    dynamicState.lastError = '';
+    rows.forEach(function (row) {
+      var id = rowNodeId(row);
+      var level = Number(row.level || 0);
+      if (!id) return;
+      if (level < depth) {
+        dynamicState.loadedNodeIds[id] = true;
+        dynamicState.expandedNodeIds[id] = true;
+      }
+    });
+    if (dynamicState.lastResolvedRootId && depth >= 1) {
+      dynamicState.loadedNodeIds[dynamicState.lastResolvedRootId] = true;
+      dynamicState.expandedNodeIds[dynamicState.lastResolvedRootId] = true;
+    }
+    return replaceDynamicPayload(payload, rows, mode || 'initial');
+  }
+
+  function findDynamicRowById(id) {
+    id = s(id);
+    var rows = dynamicState.lastRows || [];
+    for (var i = 0; i < rows.length; i++) {
+      if (rowNodeId(rows[i]) === id || s(rows[i].physicalId) === id || s(rows[i].rowKey) === id) return rows[i];
+    }
+    return null;
+  }
+
+  function findInsertIndex(rows, parentIndex, parentLevel) {
+    var idx = parentIndex + 1;
+    while (idx < rows.length && Number(rows[idx].level || 0) > parentLevel) idx++;
+    return idx;
+  }
+
+  function mergeChildRows(parentRow, childPayload) {
+    var rows = (dynamicState.lastRows || []).map(cloneRow);
+    var parentId = rowNodeId(parentRow);
+    var parentIndex = -1;
+    var parentLevel = Number(parentRow && parentRow.level || 0);
+    var seen = {};
+    rows.forEach(function (row) {
+      seen[rowUniqueKey(row)] = true;
+    });
+    for (var i = 0; i < rows.length; i++) {
+      if (rowNodeId(rows[i]) === parentId || s(rows[i].rowKey) === parentId) {
+        parentIndex = i;
+        break;
+      }
+    }
+    if (parentIndex < 0) return rows;
+    var insertAt = findInsertIndex(rows, parentIndex, parentLevel);
+    var additions = [];
+    ((childPayload && childPayload.rows) || []).forEach(function (row) {
+      var child = cloneRow(row);
+      child.level = parentLevel + Number(row.level || 1);
+      child.parentId = parentId;
+      child.rowKey =
+        'dyn:' +
+        parentId +
+        ':' +
+        (child.instanceId || '') +
+        ':' +
+        (child.physicalId || child.referenceId || '') +
+        ':' +
+        child.level;
+      if (!seen[rowUniqueKey(child)]) {
+        seen[rowUniqueKey(child)] = true;
+        additions.push(child);
+      }
+    });
+    return rows.slice(0, insertAt).concat(additions, rows.slice(insertAt));
+  }
+
+  function updatePayloadRowsIncremental(rows, mode) {
+    var payload = w.__bomSkaLastPayload || {};
+    replaceDynamicPayload(payload, rows, mode || 'incremental');
+    return applySkaPayloadToUI(payload);
+  }
+
+  function normalizeDynamicBomServiceNodes() {
+    if (!w.BomService || !w.BomService.getIndex) return;
+    var index = w.BomService.getIndex() || {};
+    Object.keys(index).forEach(function (key) {
+      var node = index[key];
+      if (!node) return;
+      var ref = s(node.bomChildrenId || node.referenceId || node.referencePhysicalId || node.sourcePhysicalId || node.physicalid);
+      if (!ref || !isValidDsengPhysicalId(ref)) return;
+      if (dynamicState.loadedNodeIds[ref]) {
+        node.loaded = true;
+        node.expanded = true;
+      } else {
+        node.loaded = false;
+        node.expanded = false;
+        node.isAssembly = true;
+      }
+    });
+  }
+
+  function loadChildrenForDynamicNode(nodeId) {
+    nodeId = s(nodeId);
+    var parentRow = findDynamicRowById(nodeId);
+    var parentRef = rowNodeId(parentRow) || nodeId;
+    if (!parentRow || !isValidDsengPhysicalId(parentRef)) {
+      setStatus('Nó sem EngItem dseng válido para carregar filhos.', 'error');
+      return Promise.reject(new Error('INVALID_DYNAMIC_NODE'));
+    }
+    if (dynamicState.loadedNodeIds[parentRef]) {
+      dynamicState.expandedNodeIds[parentRef] = true;
+      return updatePayloadRowsIncremental(dynamicState.lastRows, 'incremental');
+    }
+    if (dynamicState.loadingNodeIds[parentRef]) return Promise.resolve(w.__bomSkaLastPayload);
+    dynamicState.loadingNodeIds[parentRef] = true;
+    setStatus('Carregando filhos via dseng: ' + (parentRow.title || parentRef), 'info');
+    return fetchBomStructureFromSkaService({
+      rootId: parentRef,
+      depth: 1,
+      includeRoot: false
+    })
+      .then(function (payload) {
+        var rows = mergeChildRows(parentRow, payload);
+        var current = w.__bomSkaLastPayload || {};
+        current.diagnostics = current.diagnostics || {};
+        current.diagnostics.endpointsUsed = (current.diagnostics.endpointsUsed || []).concat(
+          (payload.diagnostics && payload.diagnostics.endpointsUsed) || []
+        );
+        current.diagnostics.warnings = (current.diagnostics.warnings || []).concat(
+          'Estrutura parcial: filhos carregados sob demanda para ' + parentRef
+        );
+        dynamicState.loadedNodeIds[parentRef] = true;
+        dynamicState.expandedNodeIds[parentRef] = true;
+        dynamicState.lastEndpoint = '/structure';
+        dynamicState.loadMode = 'incremental';
+        return updatePayloadRowsIncremental(rows, 'incremental');
+      })
+      .catch(function (err) {
+        var normalized = normalizeSkaError(err);
+        dynamicState.lastError = normalized.message;
+        setStatus(normalized.message, 'error');
+        return Promise.reject(err);
+      })
+      .then(
+        function (result) {
+          delete dynamicState.loadingNodeIds[parentRef];
+          return result;
+        },
+        function (err) {
+          delete dynamicState.loadingNodeIds[parentRef];
+          throw err;
+        }
+      );
+  }
+
+  function loadNextDynamicLevel() {
+    var rows = dynamicState.lastRows || [];
+    if (!rows.length) return syncWithProductExplorer();
+    var level = dynamicState.maxLoadedLevel || maxLoadedLevel(rows);
+    var frontier = rows.filter(function (row) {
+      var id = rowNodeId(row);
+      return Number(row.level || 0) === level && id && !dynamicState.loadedNodeIds[id];
+    });
+    if (!frontier.length) {
+      setStatus('Nenhum nó pendente no nível carregado atual.', 'info');
+      return Promise.resolve(w.__bomSkaLastPayload);
+    }
+    dynamicState.loadMode = 'next-level';
+    var chain = Promise.resolve();
+    frontier.forEach(function (row) {
+      chain = chain.then(function () {
+        return loadChildrenForDynamicNode(rowNodeId(row)).catch(function () {
+          return null;
+        });
+      });
+    });
+    return chain.then(function () {
+      setStatus('Próximo nível carregado: ' + getSkaExpectedTotal(w.__bomSkaLastPayload) + ' linhas carregadas.', 'ok');
+      return w.__bomSkaLastPayload;
+    });
+  }
+
   function mapErrorMessage(code, fallback) {
     var map = {
       UPSTREAM_NOT_CONFIGURED: 'SKA BOM Service não está configurado para dseng real no Render.',
@@ -432,6 +715,8 @@
 
   function mapSkaRowsToImportItems(rows) {
     return (rows || []).map(function (row, idx) {
+      var refId = row.physicalId || row.referenceId || '';
+      var loaded = !!(row.__loadedChildren || dynamicState.loadedNodeIds[refId]);
       return {
         level: Number(row.level || 0),
         physicalid: row.physicalId || row.instanceId || row.rowKey || 'ska_' + idx,
@@ -448,9 +733,14 @@
         sourcePhysicalId: row.physicalId || '',
         parentId: row.parentId || '',
         instanceName: row.instanceName || '',
-        referenceId: row.physicalId || '',
+        referenceId: refId,
+        referencePhysicalId: refId,
+        bomChildrenId: refId,
         description: row.description || '',
-        rowKey: row.rowKey || ''
+        rowKey: row.rowKey || '',
+        isAssembly: !loaded,
+        loaded: loaded,
+        expanded: !!row.__expanded
       };
     });
   }
@@ -496,7 +786,10 @@
 
   function updateTablePager(total) {
     var pager = byId('tablePager');
-    if (pager) pager.textContent = total + ' peças';
+    if (pager) {
+      var suffix = w.__bomSkaLastPayload ? ' carregadas · estrutura parcial · modo ' + (dynamicState.loadMode || 'initial') : '';
+      pager.textContent = total + ' peças' + suffix;
+    }
   }
 
   function sumChartLegendValues(legendId) {
@@ -563,6 +856,7 @@
     var warnings = (diag.warnings || []).join(' · ');
     var errors = (diag.errors || []).join(' · ');
     var syncMeta = payload.__skaSyncMeta || {};
+    var dyn = payload.__skaDynamicState || {};
     var resolution = payload.resolution || {};
     var bridgeDiag =
       w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.getBridgeDiagnosticStatus
@@ -570,10 +864,10 @@
         : '';
     var summary =
       resolution.status === 'RESOLVED'
-        ? 'Product Explorer → SKA OK · ' + expected + ' itens'
-        : status === 'OK'
-        ? 'SKA OK · ' + expected + ' itens' + (durationMs ? ' · ' + durationMs + ' ms' : '')
-        : 'SKA ERRO · ' + expected + ' itens';
+        ? 'Product Explorer → SKA OK · ' + expected + ' itens carregados'
+      : status === 'OK'
+        ? 'SKA OK · ' + expected + ' itens carregados' + (durationMs ? ' · ' + durationMs + ' ms' : '')
+        : 'SKA ERRO · ' + expected + ' itens carregados';
 
     panel.classList.remove('bom-hidden');
     panel.classList.add('bom-ska-diagnostics');
@@ -598,6 +892,18 @@
       (resolution.rootTitle ? '<br/>resolution.rootTitle: ' + escapeHtml(resolution.rootTitle) : '') +
       (resolution.status ? '<br/>resolution.status: ' + escapeHtml(resolution.status) : '') +
       (syncMeta.lastSyncAt ? '<br/>lastSyncAt: ' + escapeHtml(syncMeta.lastSyncAt) : '') +
+      '<br/>loadMode: ' +
+      escapeHtml(dyn.loadMode || dynamicState.loadMode || 'initial') +
+      '<br/>estrutura: ' +
+      escapeHtml(dyn.partial === false ? 'completa no recorte solicitado' : 'parcial / incremental') +
+      '<br/>itensCarregados: ' +
+      escapeHtml(String(expected)) +
+      '<br/>maxLoadedLevel: ' +
+      escapeHtml(String(dyn.maxLoadedLevel != null ? dyn.maxLoadedLevel : dynamicState.maxLoadedLevel || 0)) +
+      '<br/>expandedNodeIds: ' +
+      escapeHtml(String(dyn.expandedCount != null ? dyn.expandedCount : Object.keys(dynamicState.expandedNodeIds).length)) +
+      '<br/>loadedNodeIds: ' +
+      escapeHtml(String(dyn.loadedCount != null ? dyn.loadedCount : Object.keys(dynamicState.loadedNodeIds).length)) +
       '<br/>service: SKA_BOM_SERVICE' +
       '<br/>endpointsUsed: ' +
       escapeHtml(endpoints || '(none)') +
@@ -623,11 +929,11 @@
     var level1 = (counts.levelCounts && counts.levelCounts['1']) || 0;
     var markers = [
       { tone: 'blue', label: 'Root', value: (payload.root && payload.root.title) || (payload.root && payload.root.id) || '-' },
-      { tone: 'green', label: 'Total linhas', value: expected },
-      { tone: 'purple', label: 'Profundidade', value: counts.depth != null ? counts.depth : DEFAULT_DEPTH },
+      { tone: 'green', label: 'Linhas carregadas', value: expected },
+      { tone: 'purple', label: 'Nível carregado', value: counts.depth != null ? counts.depth : DEFAULT_DEPTH },
       { tone: 'red', label: 'Nível 1', value: level1 },
       { tone: 'blue', label: 'Status', value: (payload.diagnostics && payload.diagnostics.status) || 'OK' },
-      { tone: 'green', label: 'Fonte', value: 'SKA BOM' }
+      { tone: 'green', label: 'Modo', value: (payload.__skaDynamicState && payload.__skaDynamicState.loadMode) || 'inicial' }
     ];
     grid.innerHTML = markers
       .map(function (m) {
@@ -652,9 +958,9 @@
     banner.innerHTML =
       'Fonte: <strong>SKA BOM Service</strong> / dseng · Root: <strong>' +
       escapeHtml((payload.root && payload.root.title) || '') +
-      '</strong> · linhas: <strong>' +
+      '</strong> · linhas carregadas: <strong>' +
       escapeHtml(String(expected)) +
-      '</strong>.';
+      '</strong> · estrutura parcial/incremental.';
   }
 
   function finalizeSkaUi(payload) {
@@ -713,6 +1019,7 @@
 
     var snap = buildSkaSnapshotDirect(payload, items);
     return w.BomSnapshot.applyPayload(snap).then(function () {
+      normalizeDynamicBomServiceNodes();
       if (w.App && w.App.refreshUI) w.App.refreshUI();
       if (!finalizeSkaUi(payload)) {
         return Promise.reject(new Error('COUNT_MISMATCH'));
@@ -892,6 +1199,9 @@
           rootIdUsed: params.rootId,
           validationStatus: 'VALID'
         };
+        resetDynamicState(payload, params.depth > 1 ? 'depth-' + params.depth : 'initial', {
+          manualRootId: params.rootId
+        });
         return applySkaPayloadToUI(payload);
       })
       .catch(function (err) {
@@ -971,6 +1281,7 @@
           validationStatus: 'RESOLVED',
           resolutionStrategy: payload.resolution && payload.resolution.strategy
         };
+        resetDynamicState(payload, depth > 1 ? 'depth-' + depth : 'initial', selectionPayload.selection);
         lastContextMeta = {
           source: selectionPayload.rawContext.source,
           title: lastSyncTitle,
@@ -1045,6 +1356,9 @@
     if (lastSyncRootId && isValidDsengPhysicalId(lastSyncRootId)) {
       var adv = byId('explorerObjectId');
       if (adv && !s(adv.value)) adv.value = lastSyncRootId;
+      var depthEl = byId('skaDepthInput');
+      var desiredDepth = Math.max(Number(lastSyncDepth || DEFAULT_DEPTH), Number(dynamicState.maxLoadedLevel || 0), DEFAULT_DEPTH);
+      if (depthEl && desiredDepth > Number(depthEl.value || 0)) depthEl.value = String(Math.min(desiredDepth, 3));
       return loadBomViaSkaStructure({ forceManual: true, advancedOnly: true });
     }
     return syncWithProductExplorer();
@@ -1060,6 +1374,7 @@
     var compact = root && root.clientWidth ? root.clientWidth < 980 : false;
     var syncBtn = byId('btnSyncExplorer');
     var refreshBtn = byId('btnRefreshBom');
+    var nextBtn = byId('btnLoadNextLevel');
     var badge = byId('explorerSourceBadge');
     if (syncBtn) {
       syncBtn.textContent = compact ? 'Sincronizar' : 'Sincronizar com Product Explorer';
@@ -1069,6 +1384,10 @@
     if (refreshBtn) {
       refreshBtn.textContent = compact ? 'Atualizar' : 'Atualizar BOM';
       refreshBtn.title = 'Atualizar BOM';
+    }
+    if (nextBtn) {
+      nextBtn.textContent = compact ? '+ nível' : 'Carregar próximo nível';
+      nextBtn.title = 'Carregar próximo nível via dseng';
     }
     if (badge) {
       badge.textContent = compact ? 'SKA/dseng' : 'Fonte: SKA BOM Service / dseng';
@@ -1101,10 +1420,7 @@
         area.classList.remove('bom-hidden');
         area.value = text;
       }
-      if (w.navigator && w.navigator.clipboard && w.navigator.clipboard.writeText) {
-        w.navigator.clipboard.writeText(text).catch(function () {});
-      }
-      setStatus('Diagnóstico de contexto copiado/exibido em Avançado.', 'ok');
+      setStatus('Diagnóstico de contexto exibido em Avançado.', 'ok');
     });
   }
 
@@ -1125,8 +1441,52 @@
     return syncBtn;
   }
 
+  function ensureDynamicControls() {
+    var refreshBtn = byId('btnRefreshBom');
+    if (!refreshBtn || !refreshBtn.parentNode) return;
+    var nextBtn = byId('btnLoadNextLevel');
+    if (!nextBtn) {
+      nextBtn = document.createElement('button');
+      nextBtn.type = 'button';
+      nextBtn.id = 'btnLoadNextLevel';
+      nextBtn.className = 'bom-btn bom-btn-secondary';
+      nextBtn.textContent = 'Carregar próximo nível';
+      nextBtn.title = 'Carregar sob demanda os filhos dos nós do nível carregado atual via dseng';
+      refreshBtn.parentNode.insertBefore(nextBtn, refreshBtn.nextSibling);
+    }
+    if (!nextBtn.__BOM_NEXT_LEVEL_BOUND__) {
+      nextBtn.__BOM_NEXT_LEVEL_BOUND__ = true;
+      nextBtn.addEventListener(
+        'click',
+        function (ev) {
+          if (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+          }
+          nextBtn.disabled = true;
+          loadNextDynamicLevel()
+            .catch(function () {})
+            .then(function () {
+              nextBtn.disabled = false;
+            });
+        },
+        true
+      );
+    }
+  }
+
+  function bindDynamicTableExpansion() {
+    if (!w.DataTable || typeof w.DataTable.onRowExpand !== 'function') return;
+    w.DataTable.onRowExpand(function (nodeId) {
+      return loadChildrenForDynamicNode(nodeId);
+    });
+  }
+
   function patchUiLabels() {
     ensureSyncExplorerButton();
+    ensureDynamicControls();
+    bindDynamicTableExpansion();
     var syncBtn = byId('btnSyncExplorer');
     if (syncBtn && syncBtn.textContent.indexOf('Sincronizar') < 0) {
       syncBtn.textContent = 'Sincronizar com Product Explorer';
@@ -1142,7 +1502,10 @@
       idEl.setAttribute('title', 'Root Physical ID — fallback Avançado');
     }
     var depthEl = byId('skaDepthInput');
-    if (depthEl && !s(depthEl.value)) depthEl.value = String(DEFAULT_DEPTH);
+    if (depthEl) {
+      depthEl.max = '3';
+      if (!s(depthEl.value)) depthEl.value = String(DEFAULT_DEPTH);
+    }
     var banner = byId('syncBanner');
     if (banner && !w.__bomSkaLastPayload) {
       banner.classList.remove('bom-hidden');
@@ -1405,6 +1768,21 @@
   w.assertSkaCountIntegrity = assertSkaCountIntegrity;
   w.normalizeCandidateRootId = normalizeCandidateRootId;
   w.renderEmptySkaState = renderEmptySkaState;
+  w.loadNextBomLevelFromSka = loadNextDynamicLevel;
+  w.loadBomChildrenFromSka = loadChildrenForDynamicNode;
+  w.getBomDynamicState = function () {
+    return {
+      lastResolvedRootId: dynamicState.lastResolvedRootId,
+      lastDepth: dynamicState.lastDepth,
+      loadMode: dynamicState.loadMode,
+      loadedRows: dynamicState.lastRows.length,
+      maxLoadedLevel: dynamicState.maxLoadedLevel,
+      expandedNodeIds: Object.keys(dynamicState.expandedNodeIds),
+      loadedNodeIds: Object.keys(dynamicState.loadedNodeIds),
+      partial: dynamicState.partial,
+      lastError: dynamicState.lastError
+    };
+  };
 
   /* install deferred — runtime calls __bomSkaServiceInstall */
 })();
