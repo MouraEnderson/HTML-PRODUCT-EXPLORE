@@ -40,3 +40,27 @@ test('dseng read methods do not request CSRF before GET calls', async () => {
     else process.env.AUTO_CSRF = originalAutoCsrf;
   }
 });
+
+test('invalid_grant upstream responses map to auth failure', () => {
+  const client = new ThreeDxDsengClient({
+    spaceUrl: 'https://example.com/enovia',
+    securityContext: 'ctx::Role.Org.Project',
+    authMode: 'cookie',
+    cookie: 'JSESSIONID=test-cookie',
+    csrfToken: '',
+    bearerToken: '',
+    username: '',
+    password: ''
+  });
+  const error = new Error('ENOVIA GET 400');
+  error.status = 400;
+  error.bodySummary = JSON.stringify({
+    error: 'invalid_grant',
+    error_description: 'Invalid, expired or missing authenticated session. New service ticket required'
+  });
+
+  const mapped = client.mapUpstreamError(error);
+
+  assert.equal(mapped.code, 'UPSTREAM_AUTH_FAILED');
+  assert.equal(mapped.message, 'Failed to authenticate with 3DEXPERIENCE');
+});
