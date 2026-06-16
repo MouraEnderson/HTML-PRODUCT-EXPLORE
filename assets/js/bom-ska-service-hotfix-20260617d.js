@@ -92,10 +92,11 @@
   function renderEmptyKpiPlaceholders() {
     var grid = byId('kpiGrid');
     if (!grid) return;
+    grid.classList.add('stat-markers-quad');
     var markers = [
       { tone: 'green', label: 'Total linhas', value: '0' },
-      { tone: 'blue', label: 'Maturidade', value: '—' },
-      { tone: 'purple', label: 'Proprietários', value: '—' },
+      { tone: 'blue', label: 'Maturidade', value: '0' },
+      { tone: 'purple', label: 'Proprietarios', value: '0' },
       { tone: 'blue', label: 'Fonte', value: 'SKA' }
     ];
     grid.innerHTML = markers
@@ -138,7 +139,7 @@
       tbody.innerHTML =
         '<tr class="bom-empty-row"><td colspan="12">' + escapeHtml(msg || 'Sem dados sincronizados.') + '</td></tr>';
     }
-    updateTablePager(0);
+    updateOperationalTablePager(0, 0);
     var tableLbl = byId('tableProductLabel');
     if (tableLbl) tableLbl.textContent = '-';
     var preview = byId('partPreviewMeta');
@@ -235,12 +236,21 @@
   function renderInitialEmptyState() {
     lastContextMeta = { validationStatus: 'MISSING', source: 'NONE' };
     renderEmptySkaState('INITIAL', {
-      tableMessage: 'Selecione uma estrutura no Product Explorer e clique Sincronizar.',
+      tableMessage: 'Abra ou selecione uma estrutura no Product Structure Explorer e clique em Sincronizar.',
       bannerMessage: 'Camada analítica do Product Structure Explorer. Fonte: SKA BOM Service / dseng.',
-      statusMessage: 'Aguardando Product Explorer — selecione estrutura e clique Sincronizar.',
+      statusMessage: 'Aguardando sincronizacao. Contexto ainda nao resolvido.',
       statusKind: 'info',
       contextMeta: lastContextMeta
     });
+  }
+
+  function enforceOperationalEmptyState() {
+    if (w.__bomSkaLastPayload && !w.__BOM_SKA_EMPTY_STATE__) return;
+    renderEmptyKpiPlaceholders();
+    renderEmptyChartsState();
+    renderEmptyTableMessage('Abra ou selecione uma estrutura no Product Structure Explorer e clique em Sincronizar.');
+    renderContextDiagnostics(lastContextMeta || { validationStatus: 'MISSING', source: 'NONE' }, 'INITIAL');
+    setStatus('Aguardando sincronizacao. Contexto ainda nao resolvido.', 'info');
   }
 
 
@@ -491,12 +501,19 @@
     if (matLeg) matLeg.innerHTML = '';
     var ownLeg = byId('ownersLegendScroll');
     if (ownLeg) ownLeg.innerHTML = '';
-    updateTablePager(0);
+    updateOperationalTablePager(0, 0);
   }
 
   function updateTablePager(total) {
     var pager = byId('tablePager');
     if (pager) pager.textContent = total + ' peças';
+  }
+
+  function updateOperationalTablePager(visible, total) {
+    var pager = byId('tablePager');
+    visible = Number(visible || 0);
+    total = total == null ? visible : Number(total || 0);
+    if (pager) pager.textContent = 'Exibindo ' + visible + ' de ' + total + ' linhas';
   }
 
   function sumChartLegendValues(legendId) {
@@ -618,6 +635,7 @@
   function renderSkaKpiSummary(payload) {
     var grid = byId('kpiGrid');
     if (!grid || !payload) return;
+    grid.classList.add('stat-markers-quad');
     var counts = payload.counts || {};
     var expected = getSkaExpectedTotal(payload);
     var level1 = (counts.levelCounts && counts.levelCounts['1']) || 0;
@@ -666,7 +684,7 @@
     if (lbl) lbl.textContent = rootName;
     var tableLbl = byId('tableProductLabel');
     if (tableLbl) tableLbl.textContent = rootName;
-    updateTablePager(expected);
+    updateOperationalTablePager(expected, expected);
     renderSkaKpiSummary(payload);
     renderSkaDiagnostics(payload, false);
     updateSyncBanner(payload);
@@ -688,7 +706,24 @@
     var items = prepareSkaRowsForSnapshot(payload);
     var expected = getSkaExpectedTotal(payload);
     if (!items.length) {
-      return Promise.reject(new Error('SKA BOM Service retornou 0 linhas.'));
+      renderEmptySkaState('EMPTY_RESULT', {
+        contextMeta: payload.__skaSyncMeta || lastContextMeta,
+        title: (payload.root && payload.root.title) || lastSyncTitle,
+        statusMessage: 'BOM oficial retornou 0 linhas.',
+        statusKind: 'info',
+        tableMessage: 'Abra ou selecione uma estrutura no Product Structure Explorer e clique em Sincronizar.'
+      });
+      renderSkaDiagnostics(payload, false);
+      setTimeout(function () {
+        setStatus('BOM oficial retornou 0 linhas. Sem dados sincronizados.', 'info');
+      }, 80);
+      setTimeout(function () {
+        if (w.__BOM_SKA_EMPTY_STATE__) setStatus('BOM oficial retornou 0 linhas. Sem dados sincronizados.', 'info');
+      }, 900);
+      setTimeout(function () {
+        if (w.__BOM_SKA_EMPTY_STATE__) setStatus('BOM oficial retornou 0 linhas. Sem dados sincronizados.', 'info');
+      }, 1800);
+      return Promise.resolve(payload);
     }
     if (items.length !== expected) {
       return Promise.reject(
@@ -817,6 +852,63 @@
     }
   }
 
+  function firstNonEmpty() {
+    for (var i = 0; i < arguments.length; i++) {
+      var value = s(arguments[i]);
+      if (value) return value;
+    }
+    return '';
+  }
+
+  function sanitizePlainObject(obj) {
+    var out = {};
+    var keys = Object.keys(obj || {});
+    for (var i = 0; i < keys.length; i++) out[keys[i]] = obj[keys[i]];
+    return out;
+  }
+
+  function enrichNormalizedSelection(normalized, rawCtx) {
+    normalized = sanitizePlainObject(normalized || {});
+    rawCtx = rawCtx || {};
+    var selected = rawCtx.selected || {};
+    var platformItem = selected.platformItem || {};
+    var explorerContext = selected.explorerContext || {};
+    var platformData = platformItem.data || {};
+    normalized.id = firstNonEmpty(normalized.id, normalized.selectedId, normalized.rootId, platformItem.id, platformItem.objectId, platformData.id);
+    normalized.physicalId = firstNonEmpty(
+      normalized.physicalId,
+      normalized.physicalid,
+      normalized.rootId,
+      normalized.selectedId,
+      platformItem.physicalId,
+      platformItem.physicalid,
+      platformData.physicalId,
+      explorerContext.physicalId
+    );
+    normalized.name = firstNonEmpty(
+      normalized.name,
+      platformItem.name,
+      platformData.name,
+      explorerContext.name,
+      /^prd-/i.test(normalized.id) ? normalized.id : ''
+    );
+    normalized.title = firstNonEmpty(
+      normalized.title,
+      normalized.productName,
+      normalized.rootName,
+      platformItem.title,
+      platformItem.displayName,
+      platformData.title,
+      platformData.displayName,
+      explorerContext.productName,
+      explorerContext.rootName,
+      explorerContext.displayName
+    );
+    normalized.label = firstNonEmpty(normalized.label, normalized.title, platformItem.label, platformData.label);
+    if (!normalized.name && /^prd-/i.test(normalized.physicalId)) normalized.name = normalized.physicalId;
+    return normalized;
+  }
+
   function buildExplorerSelectionPayload(manualRootId) {
     var provider = w.ProductExplorerSyncProvider;
     var rawCtx =
@@ -829,7 +921,10 @@
             timestamp: new Date().toISOString(),
             page: '3DEXPERIENCE Web Page Reader'
           };
-    var normalized = provider && provider.getContext ? provider.getContext() : rawCtx.normalized || {};
+    var normalized = enrichNormalizedSelection(
+      provider && provider.getContext ? provider.getContext() : rawCtx.normalized || {},
+      rawCtx
+    );
     return {
       selection: {
         raw: rawCtx.selected || {},
@@ -1101,10 +1196,7 @@
         area.classList.remove('bom-hidden');
         area.value = text;
       }
-      if (w.navigator && w.navigator.clipboard && w.navigator.clipboard.writeText) {
-        w.navigator.clipboard.writeText(text).catch(function () {});
-      }
-      setStatus('Diagnóstico de contexto copiado/exibido em Avançado.', 'ok');
+      setStatus('Diagnostico de contexto exibido em Avancado.', 'ok');
     });
   }
 
@@ -1143,6 +1235,11 @@
     }
     var depthEl = byId('skaDepthInput');
     if (depthEl && !s(depthEl.value)) depthEl.value = String(DEFAULT_DEPTH);
+    var diagBtn = byId('btnCopyContextDiag');
+    if (diagBtn) {
+      diagBtn.textContent = 'Mostrar diagnostico';
+      diagBtn.title = 'Mostrar diagnostico de contexto no painel Avancado';
+    }
     var banner = byId('syncBanner');
     if (banner && !w.__bomSkaLastPayload) {
       banner.classList.remove('bom-hidden');
@@ -1385,12 +1482,14 @@
       if (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.refresh) {
         w.ProductExplorerSyncProvider.refresh('post-boot');
       }
+      enforceOperationalEmptyState();
     }, 1500);
     renderInitialEmptyState();
     applyTopbarCompactLabels();
     bindTestRootButton();
     bindCopyContextDiagnosticsButton();
-    setStatus('Build ' + BUILD + ' | SKA BOM Service + resolve-selection', 'ok');
+    setStatus('Aguardando sincronizacao | Build ' + BUILD + ' | SKA BOM Service / dseng', 'info');
+    setTimeout(enforceOperationalEmptyState, 2600);
   }
 
   w.__bomSkaServiceInstall = install;
