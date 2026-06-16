@@ -38,6 +38,10 @@ export class ThreeDxDsengClient {
 
   mapUpstreamError(error) {
     const status = Number(error?.status || 0);
+    const upstreamDetail = `${error?.bodySummary || ''} ${error?.message || ''}`;
+    if (/invalid_grant|authenticated session|service ticket/i.test(upstreamDetail)) {
+      return { code: 'UPSTREAM_AUTH_FAILED', message: 'Failed to authenticate with 3DEXPERIENCE' };
+    }
     if (status === 401 || status === 403) {
       return { code: 'UPSTREAM_AUTH_FAILED', message: 'Failed to authenticate with 3DEXPERIENCE' };
     }
