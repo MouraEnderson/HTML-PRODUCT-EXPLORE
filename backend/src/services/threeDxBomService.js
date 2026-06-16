@@ -345,14 +345,25 @@ export async function buildStructureFromRoot({ rootId, depth, includeRoot, mode 
   return resolveDsengStructure(parsed, config);
 }
 
+function resolutionHasAuthFailure(resolution = {}) {
+  return (resolution.attempts || []).some((attempt) =>
+    /invalid_grant|authenticated session|service ticket/i.test(String(attempt?.message || ''))
+  );
+}
+
 function buildResolveSelectionFailure(resolution, mode = 'dseng-official', diagnosticsExtra = {}) {
+  const authFailure = resolutionHasAuthFailure(resolution);
+  const code = authFailure ? 'UPSTREAM_AUTH_FAILED' : 'SELECTION_NOT_RESOLVED';
+  const message = authFailure
+    ? 'Failed to authenticate with 3DEXPERIENCE'
+    : 'Não foi possível resolver a seleção do Product Explorer para um EngItem dseng válido.';
   return {
     ok: false,
     source: SOURCE,
     mode,
     error: {
-      code: 'SELECTION_NOT_RESOLVED',
-      message: 'Não foi possível resolver a seleção do Product Explorer para um EngItem dseng válido.'
+      code,
+      message
     },
     resolution: {
       status: 'NOT_RESOLVED',
@@ -364,7 +375,7 @@ function buildResolveSelectionFailure(resolution, mode = 'dseng-official', diagn
       endpointsUsed: diagnosticsExtra.endpointsUsed || [],
       durationMs: diagnosticsExtra.durationMs || 0,
       warnings: diagnosticsExtra.warnings || [],
-      errors: ['SELECTION_NOT_RESOLVED']
+      errors: [code]
     })
   };
 }
@@ -415,10 +426,11 @@ export async function resolveSelection(body) {
       manualRootId: parsed.manualRootId
     });
     if (!resolution.ok) {
+      const error = buildResolveSelectionFailure(resolution, 'mock', { durationMs: Date.now() - started });
       return {
         ok: false,
-        status: 422,
-        error: buildResolveSelectionFailure(resolution, 'mock', { durationMs: Date.now() - started })
+        status: getErrorStatus(error.error.code),
+        error
       };
     }
     const structure = resolveMockStructure({
@@ -469,13 +481,14 @@ export async function resolveSelection(body) {
   });
 
   if (!resolution.ok) {
+    const error = buildResolveSelectionFailure(resolution, parsed.mode, {
+      endpointsUsed: client.getEndpointsUsed(),
+      durationMs: Date.now() - started
+    });
     return {
       ok: false,
-      status: 422,
-      error: buildResolveSelectionFailure(resolution, parsed.mode, {
-        endpointsUsed: client.getEndpointsUsed(),
-        durationMs: Date.now() - started
-      })
+      status: getErrorStatus(error.error.code),
+      error
     };
   }
 
