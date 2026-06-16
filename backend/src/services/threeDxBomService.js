@@ -183,10 +183,16 @@ export function resolveMockStructure(body) {
 
 function failureFromUpstream(error, client, mode = 'dseng-official') {
   const mapped = client.mapUpstreamError(error);
+  const response = buildErrorResponse(mapped.code, mapped.message, mode);
+  const upstreamDetail = error?.bodySummary || error?.message || '';
+  if (upstreamDetail) {
+    response.diagnostics.errors.push(`upstream: ${upstreamDetail}`);
+  }
+  response.diagnostics.endpointsUsed = client.getEndpointsUsed();
   return {
     ok: false,
     status: getErrorStatus(mapped.code),
-    error: buildErrorResponse(mapped.code, mapped.message, mode)
+    error: response
   };
 }
 
