@@ -187,7 +187,7 @@ async function tryCandidateEngItem(client, candidate, strategy) {
         candidate: candidate.maskedCandidate || maskCandidate(candidate.candidate),
         endpoint,
         status: Number(error?.status || 502),
-        message: error?.message || 'EngItem lookup failed'
+        message: error?.bodySummary || error?.message || 'EngItem lookup failed'
       }
     };
   }
@@ -260,7 +260,7 @@ async function trySearchExactEngItem(client, searchStr, candidateValue, strategy
         candidate: maskCandidate(candidateValue),
         endpoint,
         status: Number(error?.status || 502),
-        message: error?.message || 'EngItem search failed'
+        message: error?.bodySummary || error?.message || 'EngItem search failed'
       }
     };
   }

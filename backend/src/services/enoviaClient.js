@@ -1,4 +1,24 @@
 const DEFAULT_TOP = 100;
+const SENSITIVE_KEY_RE = /cookie|token|authorization|password|secret|bearer|csrf/i;
+
+export function summarizeBody(body) {
+  if (body == null) return '';
+  if (typeof body === 'string') return body.slice(0, 500);
+  if (typeof body !== 'object') return String(body).slice(0, 500);
+  const out = {};
+  for (const key of Object.keys(body).slice(0, 30)) {
+    if (SENSITIVE_KEY_RE.test(key)) continue;
+    const value = body[key];
+    if (value == null || typeof value !== 'object') {
+      out[key] = value;
+    } else if (Array.isArray(value)) {
+      out[key] = value.slice(0, 5);
+    } else {
+      out[key] = summarizeBody(value);
+    }
+  }
+  return JSON.stringify(out).slice(0, 500);
+}
 
 export class EnoviaClient {
   constructor({ spaceUrl, csrfToken, securityContext, cookie, bearerToken, username, password, authMode = '' }) {
@@ -47,6 +67,7 @@ export class EnoviaClient {
       error.status = response.status;
       error.url = url;
       error.body = body;
+      error.bodySummary = summarizeBody(body);
       throw error;
     }
     return body;
