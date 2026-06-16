@@ -13,13 +13,13 @@ export class EnoviaClient {
     this.authMode = authMode || '';
   }
 
-  headers(extra = {}) {
+  headers(extra = {}, { jsonBody = true } = {}) {
     const h = {
       Accept: 'application/json',
-      'Content-Type': 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
       ...extra
     };
+    if (jsonBody) h['Content-Type'] = 'application/json';
     if (this.csrfToken) h.ENO_CSRF_TOKEN = this.csrfToken;
     if (this.securityContext) h.SecurityContext = this.securityContext;
     if (this.bearerToken) {
@@ -34,7 +34,7 @@ export class EnoviaClient {
 
   async get(path) {
     const url = `${this.spaceUrl}${path}`;
-    const response = await fetch(url, { method: 'GET', headers: this.headers() });
+    const response = await fetch(url, { method: 'GET', headers: this.headers({}, { jsonBody: false }) });
     const text = await response.text();
     let body = null;
     try {
