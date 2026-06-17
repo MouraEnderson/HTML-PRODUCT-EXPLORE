@@ -21,10 +21,21 @@ export function summarizeBody(body) {
 }
 
 export class EnoviaClient {
-  constructor({ spaceUrl, csrfToken, securityContext, cookie, bearerToken, username, password, authMode = '' }) {
+  constructor({
+    spaceUrl,
+    csrfToken,
+    csrfHeaderName = 'ENO_CSRF_TOKEN',
+    securityContext,
+    cookie,
+    bearerToken,
+    username,
+    password,
+    authMode = ''
+  }) {
     if (!spaceUrl) throw new Error('spaceUrl is required.');
     this.spaceUrl = String(spaceUrl).replace(/\/$/, '');
     this.csrfToken = csrfToken || '';
+    this.csrfHeaderName = csrfHeaderName || 'ENO_CSRF_TOKEN';
     this.securityContext = securityContext || '';
     this.cookie = cookie || '';
     this.bearerToken = bearerToken || '';
@@ -40,7 +51,7 @@ export class EnoviaClient {
       ...extra
     };
     if (jsonBody) h['Content-Type'] = 'application/json';
-    if (this.csrfToken) h.ENO_CSRF_TOKEN = this.csrfToken;
+    if (this.csrfToken) h[this.csrfHeaderName || 'ENO_CSRF_TOKEN'] = this.csrfToken;
     if (this.securityContext) h.SecurityContext = this.securityContext;
     if (this.bearerToken) {
       h.Authorization = `Bearer ${this.bearerToken}`;
@@ -73,9 +84,44 @@ export class EnoviaClient {
     return body;
   }
 
-  async getCsrf() {
+  async post(path, body = {}) {
+    const url = `${this.spaceUrl}${path}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: this.headers({}, { jsonBody: true }),
+      body: JSON.stringify(body || {})
+    });
+    const text = await response.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = text;
+    }
+    if (!response.ok) {
+      const error = new Error(`ENOVIA POST ${response.status}: ${path}`);
+      error.status = response.status;
+      error.url = url;
+      error.body = data;
+      error.bodySummary = summarizeBody(data);
+      throw error;
+    }
+    return data;
+  }
+
+  async getCsrfInfo() {
     const data = await this.get('/resources/v1/application/CSRF');
-    return data?.csrf?.value || data?.csrf || data?.token || '';
+    const csrf = data?.csrf || {};
+    if (typeof csrf === 'string') return { name: 'ENO_CSRF_TOKEN', value: csrf };
+    return {
+      name: csrf.name || data?.csrfName || 'ENO_CSRF_TOKEN',
+      value: csrf.value || data?.token || ''
+    };
+  }
+
+  async getCsrf() {
+    const data = await this.getCsrfInfo();
+    return data.value || '';
   }
 
   async searchEngItems(searchStr, top = 20) {
@@ -97,6 +143,11 @@ export class EnoviaClient {
       '$fields=dsmvcfg%3Aattribute.hasConfiguredInstance'
     ].join('&');
     return this.get(`/resources/v1/modeler/dseng/dseng:EngItem/${id}/dseng:EngInstance?${query}`);
+  }
+
+  async expandEngItem(parentId, body = {}) {
+    const id = encodeURIComponent(parentId);
+    return this.post(`/resources/v1/modeler/dseng/dseng:EngItem/${id}/expand`, body);
   }
 
   async getAllEngInstances(parentId, { pageSize = DEFAULT_TOP, maxPages = 200 } = {}) {

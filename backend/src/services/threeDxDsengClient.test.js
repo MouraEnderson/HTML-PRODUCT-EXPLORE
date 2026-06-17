@@ -64,3 +64,56 @@ test('invalid_grant upstream responses map to auth failure', () => {
   assert.equal(mapped.code, 'UPSTREAM_AUTH_FAILED');
   assert.equal(mapped.message, 'Failed to authenticate with 3DEXPERIENCE');
 });
+
+test('ExpandItem requests CSRF and posts the official expand contract', async () => {
+  const originalFetch = global.fetch;
+  const originalAutoCsrf = process.env.AUTO_CSRF;
+  const calls = [];
+
+  process.env.AUTO_CSRF = 'true';
+  global.fetch = async (url, options) => {
+    calls.push({ url: String(url), options });
+    if (String(url).includes('/resources/v1/application/CSRF')) {
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ csrf: { name: 'ENO_CSRF_TOKEN', value: 'csrf-value' } })
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ member: [], totalItems: 0 })
+    };
+  };
+
+  try {
+    const client = new ThreeDxDsengClient({
+      spaceUrl: 'https://example.com/enovia',
+      securityContext: 'ctx::Role.Org.Project',
+      authMode: 'cookie',
+      cookie: 'JSESSIONID=test-cookie',
+      csrfToken: '',
+      bearerToken: '',
+      username: '',
+      password: ''
+    });
+
+    await client.expandEngItem('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', { expandDepth: 1 });
+
+    assert.equal(calls.length, 2);
+    assert.match(calls[0].url, /\/resources\/v1\/application\/CSRF$/);
+    assert.match(calls[1].url, /\/resources\/v1\/modeler\/dseng\/dseng:EngItem\/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\/expand$/);
+    assert.equal(calls[1].options.method, 'POST');
+    assert.equal(calls[1].options.headers.ENO_CSRF_TOKEN, 'csrf-value');
+    const body = JSON.parse(calls[1].options.body);
+    assert.equal(body.expandDepth, 1);
+    assert.equal(body.withPath, true);
+    assert.deepEqual(body.type_filter_bo, ['VPMReference', 'VPMRepReference']);
+    assert.deepEqual(body.type_filter_rel, ['VPMInstance', 'VPMRepInstance']);
+  } finally {
+    global.fetch = originalFetch;
+    if (originalAutoCsrf === undefined) delete process.env.AUTO_CSRF;
+    else process.env.AUTO_CSRF = originalAutoCsrf;
+  }
+});

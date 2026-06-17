@@ -1,6 +1,6 @@
 /**
  * Product Explorer Sync Provider — CAMINHO B (hardened PR #20 + PR #23 raw context)
- * Fonte operacional de contexto: PlatformAPI.getSelection + ExplorerContext (sem bridge/postMessage).
+ * Fonte operacional de contexto: PlatformAPI.getSelection + DS/Selection + ExplorerContext.
  */
 (function (w) {
   'use strict';
@@ -11,6 +11,7 @@
   var listeners = [];
   var lastContext = null;
   var lastRawPlatformItem = null;
+  var lastRawDsSelectionItem = null;
   var lastRawExplorerContext = null;
   var debounceTimer = null;
   var pollTimer = null;
@@ -62,21 +63,35 @@
     return out;
   }
 
-  function normalizePlatformItem(item) {
+  function valueFrom(item, keys) {
+    if (!item) return '';
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i];
+      if (item[key] != null) return s(item[key]);
+      if (item.data && item.data[key] != null) return s(item.data[key]);
+      if (item.object && item.object[key] != null) return s(item.object[key]);
+    }
+    return '';
+  }
+
+  function normalizeOfficialSelectionItem(item, source) {
     if (!item) return null;
-    var pid = s(
-      item.physicalId ||
-        item.physicalid ||
-        item.id ||
-        item.objectId ||
-        (item.data && (item.data.physicalId || item.data.id))
-    );
-    var title = s(item.displayName || item.title || item.name || (item.data && item.data.displayName));
-    if (!isValidPhysicalId(pid)) return null;
+    var id = valueFrom(item, ['id', 'objectId', 'physicalId', 'physicalid', 'identifier']);
+    var pid = valueFrom(item, ['physicalId', 'physicalid', 'id', 'objectId', 'identifier']);
+    var name = valueFrom(item, ['name', 'Name']);
+    var title = valueFrom(item, ['displayName', 'title', 'label', 'name']);
+    var label = valueFrom(item, ['label', 'displayName', 'title']);
+    var type = valueFrom(item, ['type', 'objectType', 'displayType']);
+    if (!id && !pid && !name && !title && !label) return null;
     return {
-      physicalId: pid,
+      id: id,
+      physicalId: isValidPhysicalId(pid) ? pid : '',
+      rawId: pid,
+      name: name,
       title: title,
-      source: 'platform-api'
+      label: label,
+      type: type,
+      source: source
     };
   }
 
@@ -131,7 +146,7 @@
               }
               var rawItem = items[0];
               lastRawPlatformItem = rawItem;
-              resolve({ normalized: normalizePlatformItem(rawItem), raw: rawItem });
+              resolve({ normalized: normalizeOfficialSelectionItem(rawItem, 'PlatformAPI.getSelection'), raw: rawItem });
             })
             .catch(function () {
               resolve({ normalized: null, raw: null });
@@ -147,6 +162,41 @@
   function fetchPlatformSelection() {
     return fetchPlatformSelectionRaw().then(function (result) {
       return result.normalized;
+    });
+  }
+
+  function fetchDsSelectionRaw() {
+    return new Promise(function (resolve) {
+      var req = getRequire();
+      if (!req) {
+        resolve({ normalized: null, raw: null });
+        return;
+      }
+      req(
+        ['DS/Selection/Selection'],
+        function (Selection) {
+          if (!Selection || !Selection.getSelection) {
+            resolve({ normalized: null, raw: null });
+            return;
+          }
+          Selection.getSelection()
+            .then(function (items) {
+              if (!items || !items.length) {
+                resolve({ normalized: null, raw: null });
+                return;
+              }
+              var rawItem = items[0];
+              lastRawDsSelectionItem = rawItem;
+              resolve({ normalized: normalizeOfficialSelectionItem(rawItem, 'DS/Selection/Selection.getSelection'), raw: rawItem });
+            })
+            .catch(function () {
+              resolve({ normalized: null, raw: null });
+            });
+        },
+        function () {
+          resolve({ normalized: null, raw: null });
+        }
+      );
     });
   }
 
@@ -184,24 +234,84 @@
     return readExplorerContextOfficialRaw().normalized;
   }
 
-  function mergeContext(platformSel, ctxOfficial) {
-    if (platformSel && isValidPhysicalId(platformSel.physicalId)) {
+  function candidateKey(candidate) {
+    if (!candidate) return '';
+    return s(candidate.physicalId || candidate.id || candidate.rawId || candidate.name || candidate.title || candidate.label).toLowerCase();
+  }
+
+  function sameCandidate(a, b) {
+    var ka = candidateKey(a);
+    var kb = candidateKey(b);
+    return !!ka && !!kb && ka === kb;
+  }
+
+  function compactCandidate(candidate) {
+    if (!candidate) return null;
+    return {
+      id: s(candidate.id || candidate.rawId),
+      physicalId: s(candidate.physicalId),
+      name: s(candidate.name),
+      title: s(candidate.title),
+      label: s(candidate.label),
+      type: s(candidate.type),
+      source: s(candidate.source)
+    };
+  }
+
+  function mergeContext(platformSel, dsSelectionSel, ctxOfficial) {
+    var active = platformSel || dsSelectionSel || null;
+    var selectedCandidates = [];
+    if (platformSel) selectedCandidates.push(compactCandidate(platformSel));
+    if (dsSelectionSel && !sameCandidate(dsSelectionSel, platformSel)) selectedCandidates.push(compactCandidate(dsSelectionSel));
+    if (ctxOfficial && ctxOfficial.rootId) {
+      selectedCandidates.push(compactCandidate({
+        id: ctxOfficial.rootId,
+        physicalId: ctxOfficial.rootId,
+        title: ctxOfficial.title,
+        label: ctxOfficial.title,
+        source: ctxOfficial.source || 'ExplorerContext'
+      }));
+    }
+
+    if (active) {
+      var activeId = active.physicalId || active.id || active.rawId || '';
+      var rootId = ctxOfficial && ctxOfficial.rootId ? ctxOfficial.rootId : active.physicalId || '';
+      var mode = ctxOfficial && ctxOfficial.rootId && sameCandidate({ physicalId: ctxOfficial.rootId }, active)
+        ? 'root'
+        : 'selected-branch';
       return {
-        rootId: platformSel.physicalId,
-        selectedId: platformSel.physicalId,
-        title: platformSel.title,
+        rootId: rootId,
+        selectedId: activeId,
+        physicalId: active.physicalId || '',
+        name: active.name || '',
+        title: active.title || active.label || active.name || activeId,
+        label: active.label || active.title || '',
+        type: active.type || '',
         source: 'PRODUCT_EXPLORER_CONTEXT',
-        eventType: 'platform-selection',
+        selectionSource: active.source,
+        eventType: mode === 'selected-branch' ? 'selected-branch' : 'root-selection',
+        selectionMode: mode,
+        selectedCandidates: selectedCandidates.filter(Boolean),
         path: 'B',
         expansionAvailable: false,
         autoSyncAvailable: true,
-        message: 'Contexto Product Explorer detectado',
+        message: mode === 'selected-branch'
+          ? 'Seleção oficial de subconjunto detectada no Product Explorer'
+          : 'Contexto Product Explorer detectado',
         lastSyncAt: null,
         bridgeDiagnostic: getBridgeDiagnosticStatus()
       };
     }
-    if (ctxOfficial && ctxOfficial.rootId) return ctxOfficial;
-    if (ctxOfficial && ctxOfficial.title) return ctxOfficial;
+    if (ctxOfficial && ctxOfficial.rootId) {
+      ctxOfficial.selectionMode = 'root';
+      ctxOfficial.selectedCandidates = selectedCandidates.filter(Boolean);
+      return ctxOfficial;
+    }
+    if (ctxOfficial && ctxOfficial.title) {
+      ctxOfficial.selectionMode = 'fallback';
+      ctxOfficial.selectedCandidates = selectedCandidates.filter(Boolean);
+      return ctxOfficial;
+    }
     return emptyContext();
   }
 
@@ -215,10 +325,12 @@
   }
 
   function refresh(eventType) {
-    return fetchPlatformSelectionRaw()
-      .then(function (platformResult) {
+    return Promise.all([fetchPlatformSelectionRaw(), fetchDsSelectionRaw()])
+      .then(function (results) {
+        var platformResult = results[0] || {};
+        var dsSelectionResult = results[1] || {};
         var explorerResult = readExplorerContextOfficialRaw();
-        var ctx = mergeContext(platformResult.normalized, explorerResult.normalized);
+        var ctx = mergeContext(platformResult.normalized, dsSelectionResult.normalized, explorerResult.normalized);
         if (!ctx.title && platformResult.raw) {
           ctx.title = s(
             platformResult.raw.displayName ||
@@ -233,6 +345,14 @@
               platformResult.raw.id ||
               platformResult.raw.objectId ||
               platformResult.raw.displayName
+          );
+        }
+        if (!ctx.selectedId && dsSelectionResult.raw) {
+          ctx.selectedId = s(
+            dsSelectionResult.raw.physicalId ||
+              dsSelectionResult.raw.id ||
+              dsSelectionResult.raw.objectId ||
+              dsSelectionResult.raw.displayName
           );
         }
         if (eventType) ctx.eventType = eventType;
@@ -261,7 +381,8 @@
   function getRawSelectionContext() {
     var normalized = lastContext || emptyContext();
     var source = 'PlatformAPI/ExplorerContext';
-    if (normalized.source === 'EXPLORER_CONTEXT') source = 'ExplorerContext';
+    if (normalized.selectionSource) source = normalized.selectionSource;
+    else if (normalized.source === 'EXPLORER_CONTEXT') source = 'ExplorerContext';
     else if (normalized.source === 'PRODUCT_EXPLORER_CONTEXT') source = 'PlatformAPI';
     else if (normalized.source === 'NONE') source = 'NONE';
 
@@ -269,8 +390,10 @@
       source: source,
       selected: sanitizeValue({
         platformItem: lastRawPlatformItem,
+        dsSelectionItem: lastRawDsSelectionItem,
         explorerContext: lastRawExplorerContext
       }),
+      selectedCandidates: sanitizeValue(normalized.selectedCandidates || []),
       normalized: sanitizeValue(normalized),
       timestamp: new Date().toISOString(),
       page: '3DEXPERIENCE Web Page Reader'
@@ -285,11 +408,7 @@
     refresh('install');
 
     pollTimer = setInterval(function () {
-      fetchPlatformSelection().then(function (sel) {
-        if (!sel || !isValidPhysicalId(sel.physicalId)) return;
-        if (lastContext && lastContext.selectedId === sel.physicalId) return;
-        debouncedRefresh('poll-selection');
-      });
+      refresh('poll-selection');
     }, POLL_MS);
 
     if (opts.autoSync === true) {

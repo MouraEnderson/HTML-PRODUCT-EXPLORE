@@ -86,3 +86,39 @@ test('GET errors include sanitized upstream body summary', async () => {
     global.fetch = originalFetch;
   }
 });
+
+test('POST requests include JSON and configured CSRF header without exposing secrets in summaries', async () => {
+  const originalFetch = global.fetch;
+  let capturedOptions = null;
+
+  global.fetch = async (_url, options) => {
+    capturedOptions = options;
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ ok: true })
+    };
+  };
+
+  try {
+    const client = new EnoviaClient({
+      spaceUrl: 'https://example.com/enovia',
+      securityContext: 'ctx::Role.Org.Project',
+      cookie: 'JSESSIONID=test-cookie',
+      csrfToken: 'csrf-value',
+      csrfHeaderName: 'ENO_CSRF_TOKEN'
+    });
+
+    await client.post('/resources/v1/modeler/dseng/dseng:EngItem/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/expand', {
+      expandDepth: 1
+    });
+
+    assert.equal(capturedOptions.method, 'POST');
+    assert.equal(capturedOptions.headers['Content-Type'], 'application/json');
+    assert.equal(capturedOptions.headers.ENO_CSRF_TOKEN, 'csrf-value');
+    assert.equal(capturedOptions.headers.SecurityContext, 'ctx::Role.Org.Project');
+    assert.equal(JSON.parse(capturedOptions.body).expandDepth, 1);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});

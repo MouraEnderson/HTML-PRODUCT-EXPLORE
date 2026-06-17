@@ -4,6 +4,7 @@ import { getThreeDxConfig } from './threeDxConfig.js';
 const ENG_ITEM_ENDPOINT = '/dseng:EngItem/{ID}';
 const ENG_ITEM_SEARCH_ENDPOINT = '/dseng:EngItem/search';
 const ENG_INSTANCE_ENDPOINT = '/dseng:EngItem/{ID}/dseng:EngInstance';
+const ENG_ITEM_EXPAND_ENDPOINT = '/dseng:EngItem/{ID}/expand';
 
 export class ThreeDxDsengClient {
   constructor(config = getThreeDxConfig()) {
@@ -32,8 +33,9 @@ export class ThreeDxDsengClient {
     if (this.client.csrfToken || process.env.AUTO_CSRF !== 'true') {
       return;
     }
-    const data = await this.client.getCsrf();
-    this.client.csrfToken = data || '';
+    const data = await this.client.getCsrfInfo();
+    this.client.csrfToken = data?.value || '';
+    this.client.csrfHeaderName = data?.name || this.client.csrfHeaderName || 'ENO_CSRF_TOKEN';
   }
 
   mapUpstreamError(error) {
@@ -101,6 +103,25 @@ export class ThreeDxDsengClient {
       };
     } catch (error) {
       this.recordEndpoint('GET', endpoint, Number(error?.status || 502));
+      throw error;
+    }
+  }
+
+  async expandEngItem(parentId, { expandDepth = 1 } = {}) {
+    const endpoint = ENG_ITEM_EXPAND_ENDPOINT;
+    const body = {
+      expandDepth,
+      withPath: true,
+      type_filter_bo: ['VPMReference', 'VPMRepReference'],
+      type_filter_rel: ['VPMInstance', 'VPMRepInstance']
+    };
+    try {
+      await this.ensureCsrf();
+      const data = await this.client.expandEngItem(parentId, body);
+      this.recordEndpoint('POST', endpoint, 200);
+      return { ok: true, data };
+    } catch (error) {
+      this.recordEndpoint('POST', endpoint, Number(error?.status || 502));
       throw error;
     }
   }
