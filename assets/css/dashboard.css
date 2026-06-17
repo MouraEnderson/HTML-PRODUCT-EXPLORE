@@ -3018,9 +3018,9 @@ body.ui-clean .main-clean {
 
 .bom-layout-page.bom-3dx-product-dashboard .bom-ska-diagnostics {
   margin: 0;
-  padding: 3px 6px;
-  font-size: 0.66rem;
-  line-height: 1.2;
+  padding: 2px 6px;
+  font-size: 0.64rem;
+  line-height: 1.15;
   flex-shrink: 0;
   border: 1px solid var(--bom-border);
   border-radius: 4px;
@@ -3029,6 +3029,7 @@ body.ui-clean .main-clean {
   align-items: center;
   gap: 6px;
   min-height: 0;
+  max-height: 2.4em;
   overflow: hidden;
 }
 
