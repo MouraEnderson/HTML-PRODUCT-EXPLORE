@@ -2867,7 +2867,7 @@ body.ui-clean .main-clean {
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(150px, 16vw, 210px);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 38%);
   grid-template-rows: auto auto minmax(0, 1fr) !important;
   grid-template-areas:
     "header header"
@@ -2903,7 +2903,7 @@ body.ui-clean .main-clean {
   grid-area: charts;
   align-self: start;
   min-height: 0;
-  max-height: min(38vh, 220px);
+  max-height: min(28vh, 220px);
   overflow: hidden;
 }
 
@@ -2912,12 +2912,15 @@ body.ui-clean .main-clean {
   min-height: 0 !important;
   flex: 1 1 auto;
   height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-5 {
   grid-area: preview;
   min-height: 0;
   align-self: stretch;
+  overflow: hidden;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard .bom-topbar-left {

@@ -402,8 +402,13 @@
         return;
       }
       if (/Atualizar estrutura|clique Atualizar estrutura/i.test(String(msg || ''))) {
-        msg = 'Build ' + BUILD + ' | SKA BOM Service — use Sincronizar com Product Explorer ou Avançado.';
+        msg = 'Build ' + BUILD + ' | SKA BOM Service — use Sincronizar com Product Explorer.';
         kind = kind === 'error' ? 'error' : 'ok';
+      }
+      if (w.__bomSkaLastPayload && w.__BOM_DATA_SOURCE__ === DATA_SOURCE) {
+        if (/^Snapshot:/i.test(String(msg || '')) || /^Estrutura:/i.test(String(msg || ''))) {
+          return;
+        }
       }
     }
     if (w.App && w.App.setStatus) w.App.setStatus(msg, kind);
@@ -1196,7 +1201,9 @@
     var selectionNote = '';
     if (payloadMode === 'root' && sourceLabel !== 'DS/Selection' && sourceLabel !== 'PlatformAPI' && sourceLabel !== 'Avancado') {
       selectionNote =
-        ' · selecao PSE nao disponivel por API oficial; usando root atual · Dashboard exibindo root carregado; selecao especifica do Product Explorer nao detectada via API oficial';
+        ' · selecao PSE nao disponivel por API oficial; usando root atual · Product Explorer expandido pode listar mais objetos do que o depth carregado';
+    } else if (payloadMode === 'root') {
+      selectionNote = ' · root depth parcial · Explorer expandido pode listar mais objetos';
     } else if (payloadMode === 'selected-branch') {
       selectionNote = ' · ramo selecionado via API oficial';
     } else if (payloadMode === 'dashboard-row') {
@@ -1264,14 +1271,7 @@
     syncBuild();
     patchUiLabels();
     if (!assertSkaCountIntegrity(payload)) return false;
-    var syncNote =
-      payload.__skaSyncMeta && payload.__skaSyncMeta.source === 'PRODUCT_EXPLORER_CONTEXT'
-        ? 'Sincronizado com Product Explorer'
-        : 'SKA BOM Service validado';
-    setStatus(
-      syncNote + ': ' + expected + ' linhas · ' + rootName + ' · diagnostics OK',
-      'ok'
-    );
+    scheduleSkaUiReapply(payload);
     return true;
   }
 
@@ -1790,15 +1790,68 @@
     }
   }
 
+  function reapplySkaUiChrome(payload) {
+    payload = payload || w.__bomSkaLastPayload;
+    if (!payload || w.__BOM_DATA_SOURCE__ !== DATA_SOURCE) return;
+    hideEndUserChrome();
+    applyRightPanelState();
+    renderSkaKpiSummary(payload);
+    renderSkaDiagnostics(payload);
+    updateTablePager(getSkaExpectedTotal(payload));
+    apply3dxProductDashboardLayout();
+    var expected = getSkaExpectedTotal(payload);
+    var syncMeta = payload.__skaSyncMeta || {};
+    var mode = normalizeLoadMode(syncMeta.payloadMode || dynamicState.loadMode || 'root');
+    var statusEl = byId('statusBar');
+    if (statusEl) {
+      statusEl.textContent =
+        expected +
+        ' linhas dseng · modo ' +
+        mode +
+        ' · estrutura parcial · Explorer expandido pode mostrar mais objetos';
+      statusEl.className = 'bom-st bom-st-ok';
+    }
+  }
+
+  function scheduleSkaUiReapply(payload) {
+    reapplySkaUiChrome(payload);
+    [120, 400, 900].forEach(function (ms) {
+      setTimeout(function () {
+        reapplySkaUiChrome(payload);
+      }, ms);
+    });
+  }
+
+  function neutralizeLayoutFitFor3dx() {
+    if (!w.LayoutFit || w.LayoutFit.__BOM_3DX_LAYOUT_PATCHED__) return;
+    var origApply = w.LayoutFit.apply;
+    w.LayoutFit.apply = function () {
+      var page = uiRoot().querySelector && uiRoot().querySelector('.bom-layout-page.bom-3dx-product-dashboard');
+      if (page) {
+        apply3dxProductDashboardLayout();
+        if (w.ChartsManager && w.ChartsManager.scheduleResize) {
+          try {
+            w.ChartsManager.scheduleResize();
+          } catch (e) {}
+        }
+        return;
+      }
+      return origApply.apply(this, arguments);
+    };
+    w.LayoutFit.__BOM_3DX_LAYOUT_PATCHED__ = true;
+  }
+
   function apply3dxProductDashboardLayout() {
     var page = uiRoot().querySelector && uiRoot().querySelector('.bom-layout-page.bom-3dx-product-dashboard');
     if (!page) return;
+    var host = uiRoot();
+    var hostH = host && host.clientHeight ? host.clientHeight : window.innerHeight || 640;
     page.style.gridTemplateAreas =
       '"header header" "tools charts" "table preview"';
     page.style.gridTemplateRows = 'auto auto minmax(0, 1fr)';
-    page.style.gridTemplateColumns = 'minmax(0, 1fr) clamp(150px, 16vw, 210px)';
-    page.style.height = '100%';
-    page.style.maxHeight = '100%';
+    page.style.gridTemplateColumns = 'minmax(0, 1fr) minmax(280px, 38%)';
+    page.style.height = hostH + 'px';
+    page.style.maxHeight = hostH + 'px';
     var zones = {
       '.bom-zone-1': 'header',
       '.bom-zone-2': 'tools',
@@ -1822,19 +1875,36 @@
       zone4.style.height = '100%';
       zone4.style.maxHeight = '100%';
     }
+    var pageBox = page.getBoundingClientRect();
+    var header = page.querySelector('.bom-zone-1');
+    var toolsZone = page.querySelector('.bom-zone-2');
+    var headerH = header ? header.offsetHeight : 40;
+    var toolsH = toolsZone ? toolsZone.offsetHeight : 72;
+    var tableAreaH = Math.max(160, Math.floor(pageBox.height - headerH - toolsH - 12));
     var list = page.querySelector('.bom-zone-4 .bom-ebom-list');
     var tableWrap = page.querySelector('.bom-zone-4 .bom-table-wrap');
     if (list && tableWrap && zone4) {
       var head = page.querySelector('.bom-zone-4 .bom-ebom-head');
       var pager = page.querySelector('.bom-zone-4 .bom-table-pager');
-      var zone4Box = zone4.getBoundingClientRect();
+      zone4.style.minHeight = tableAreaH + 'px';
+      zone4.style.height = tableAreaH + 'px';
       var headH = head ? head.offsetHeight : 0;
       var pagerH = pager ? pager.offsetHeight : 22;
-      var listH = Math.max(120, Math.floor(zone4Box.height - headH - 4));
+      var listH = Math.max(140, tableAreaH - headH - 4);
       list.style.height = listH + 'px';
       list.style.maxHeight = listH + 'px';
-      tableWrap.style.height = Math.max(80, listH - pagerH) + 'px';
+      tableWrap.style.height = Math.max(100, listH - pagerH) + 'px';
       tableWrap.style.maxHeight = tableWrap.style.height;
+    }
+    var zone3 = page.querySelector('.bom-zone-3');
+    var zone5 = page.querySelector('.bom-zone-5');
+    if (zone3 && zone5) {
+      var chartsH = Math.max(120, Math.min(220, Math.floor(hostH * 0.28)));
+      zone3.style.maxHeight = chartsH + 'px';
+      zone3.style.height = chartsH + 'px';
+      var previewH = Math.max(100, tableAreaH - chartsH - 8);
+      zone5.style.minHeight = previewH + 'px';
+      zone5.style.height = previewH + 'px';
     }
   }
 
@@ -2062,8 +2132,13 @@
           return;
         }
         if (!w.__BOM_DEBUG__ && /Atualizar estrutura|clique Atualizar estrutura/i.test(String(msg || ''))) {
-          msg = 'Build ' + BUILD + ' | SKA BOM Service — use Sincronizar com Product Explorer ou Avançado.';
+          msg = 'Build ' + BUILD + ' | SKA BOM Service — use Sincronizar com Product Explorer.';
           kind = kind === 'error' ? 'error' : 'ok';
+        }
+        if (w.__bomSkaLastPayload && w.__BOM_DATA_SOURCE__ === DATA_SOURCE) {
+          if (/^Snapshot:/i.test(String(msg || '')) || /^Estrutura:/i.test(String(msg || ''))) {
+            return;
+          }
         }
         return origStatus.call(this, msg, kind);
       };
@@ -2085,6 +2160,7 @@
             patchUiLabels();
           } else if (w.__bomSkaLastPayload && w.__BOM_DATA_SOURCE__ === DATA_SOURCE) {
             finalizeSkaUi(w.__bomSkaLastPayload);
+            scheduleSkaUiReapply(w.__bomSkaLastPayload);
           } else {
             syncBuild();
             patchUiLabels();
@@ -2218,6 +2294,7 @@
   function install() {
     syncBuild();
     disableLegacyOperationalBlockers();
+    neutralizeLayoutFitFor3dx();
     patchAppHooks();
     installExplorerSync();
     patchUiLabels();
