@@ -201,6 +201,37 @@
     }
   }
 
+  function renderContextDiagnostics(meta, reason) {
+    meta = meta || lastContextMeta || {};
+    var panel = byId('skaBomDiagnostics');
+    if (!panel) return;
+    var summary = reason === 'INITIAL'
+      ? 'Aguardando sincronização'
+      : reason === 'CONTEXT_INVALID'
+      ? 'Contexto indisponível'
+      : reason === 'ROOT_NOT_FOUND'
+      ? 'SKA ERRO · 0 itens'
+      : 'SKA ERRO · 0 itens';
+    var detail =
+      'contextSource=' +
+      (meta.source || '-') +
+      ' | selectedTitle=' +
+      (meta.title || '-') +
+      ' | candidateRootId=' +
+      (meta.candidateRootId || '-') +
+      ' | rootIdUsed=' +
+      (meta.rootIdUsed || meta.rootId || '-') +
+      ' | validationStatus=' +
+      (meta.validationStatus || reason || '-');
+    panel.classList.remove('bom-hidden', 'bom-ska-diag-expanded');
+    panel.classList.add('bom-ska-diagnostics', 'bom-ska-diagnostics-compact');
+    panel.title = detail;
+    panel.innerHTML =
+      '<span class="bom-ska-diag-summary">' +
+      escapeHtml(summary + ' · ' + (meta.validationStatus || reason || '')) +
+      '</span>';
+  }
+
   function renderEmptySkaState(reason, details) {
     details = details || {};
     w.__bomSkaLastPayload = null;
@@ -952,6 +983,75 @@
     }
   }
 
+  function renderSkaDiagnostics(payload) {
+    var panel = byId('skaBomDiagnostics');
+    if (!panel) return;
+    var diag = (payload && payload.diagnostics) || {};
+    var expected = getSkaExpectedTotal(payload);
+    var endpoints = (diag.endpointsUsed || [])
+      .map(function (ep) {
+        return (ep.method || 'GET') + ' ' + (ep.endpoint || '?') + ' (' + (ep.status || '?') + ')';
+      })
+      .join('; ');
+    var syncMeta = payload.__skaSyncMeta || {};
+    var dyn = payload.__skaDynamicState || {};
+    var resolution = payload.resolution || {};
+    var selectedCandidatesText = (syncMeta.selectedCandidates || [])
+      .slice(0, 5)
+      .map(function (c) {
+        return [c.source || '?', c.id || c.physicalId || c.name || '?', c.title || c.label || '']
+          .filter(Boolean)
+          .join(' | ');
+      })
+      .join(' ; ');
+    var itemLabel =
+      syncMeta.selectedItemLabel ||
+      (payload.root && (payload.root.title || payload.root.id)) ||
+      resolution.rootTitle ||
+      resolution.rootId ||
+      '-';
+    var payloadMode = syncMeta.payloadMode || dyn.loadMode || dynamicState.loadMode || 'root';
+    var strategy = payload.strategy || dyn.strategy || 'expand-item';
+    var summary =
+      'Fonte: SKA BOM Service / dseng · modo: ' +
+      payloadMode +
+      ' · item: ' +
+      itemLabel +
+      ' · strategy: ' +
+      strategy +
+      ' · ' +
+      expected +
+      ' linhas · ' +
+      (dyn.partial === false ? 'recorte completo' : 'parcial');
+    var detail =
+      'payloadEndpoint=' +
+      (syncMeta.payloadEndpoint || '') +
+      ' | payloadMode=' +
+      payloadMode +
+      ' | selectionSource=' +
+      (syncMeta.selectionSource || '') +
+      ' | selectedItem=' +
+      itemLabel +
+      ' | selectedCandidates=' +
+      selectedCandidatesText +
+      ' | rootId=' +
+      (syncMeta.rootId || resolution.rootId || '') +
+      ' | resolution.status=' +
+      (resolution.status || '') +
+      ' | endpointsUsed=' +
+      (endpoints || '(none)');
+
+    panel.classList.remove('bom-hidden');
+    panel.classList.add('bom-ska-diagnostics', 'bom-ska-diagnostics-compact');
+    panel.classList.remove('bom-ska-diag-expanded');
+    panel.title = detail;
+    panel.innerHTML =
+      '<span class="bom-ska-diag-summary">' +
+      escapeHtml(summary) +
+      '</span>' +
+      (syncMeta.selectionSource ? '<span class="bom-ska-diag-chip">' + escapeHtml(syncMeta.selectionSource) + '</span>' : '');
+  }
+
   function renderSkaKpiSummary(payload) {
     var grid = byId('kpiGrid');
     if (!grid || !payload) return;
@@ -1153,6 +1253,30 @@
         });
       }
     }
+  }
+
+  function renderSelectionNotResolved(errPayload, ctxMeta) {
+    var resolution = (errPayload && errPayload.resolution) || {};
+    var attempts = resolution.attempts || [];
+    var panel = byId('skaBomDiagnostics');
+    if (!panel) return;
+    panel.classList.remove('bom-hidden', 'bom-ska-diag-expanded');
+    panel.classList.add('bom-ska-diagnostics', 'bom-ska-diagnostics-compact');
+    panel.title =
+      'contextSource=' +
+      ((ctxMeta && ctxMeta.source) || '-') +
+      ' | resolution.status=NOT_RESOLVED' +
+      (attempts.length
+        ? ' | attempts=' +
+          attempts
+            .slice(0, 8)
+            .map(function (a) {
+              return (a.strategy || '?') + ' / ' + (a.candidate || '?') + ' / ' + (a.status || '?');
+            })
+            .join(' ; ')
+        : '');
+    panel.innerHTML =
+      '<span class="bom-ska-diag-summary">Seleção específica do Product Explorer não disponível pelo contexto oficial · usando root atual ou expansão por linha</span>';
   }
 
   function buildExplorerSelectionPayload(manualRootId) {
@@ -1515,6 +1639,7 @@
   function ensureDynamicControls() {
     var refreshBtn = byId('btnRefreshBom');
     if (!refreshBtn || !refreshBtn.parentNode) return;
+    var advanced = document.querySelector('.bom-topbar-more');
     var nextBtn = byId('btnLoadNextLevel');
     if (!nextBtn) {
       nextBtn = document.createElement('button');
@@ -1523,7 +1648,13 @@
       nextBtn.className = 'bom-btn bom-btn-secondary';
       nextBtn.textContent = '+ nível global';
       nextBtn.title = 'Carrega filhos de todos os ramos carregados; use o + da linha para analisar só um subconjunto.';
-      refreshBtn.parentNode.insertBefore(nextBtn, refreshBtn.nextSibling);
+      if (advanced) {
+        advanced.appendChild(nextBtn);
+      } else {
+        refreshBtn.parentNode.insertBefore(nextBtn, refreshBtn.nextSibling);
+      }
+    } else if (advanced && nextBtn.parentNode !== advanced) {
+      advanced.appendChild(nextBtn);
     }
     if (!nextBtn.__BOM_NEXT_LEVEL_BOUND__) {
       nextBtn.__BOM_NEXT_LEVEL_BOUND__ = true;
