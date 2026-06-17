@@ -53,12 +53,27 @@
         l.id = 'bomUxHotfix20260617d';
         l.rel = 'stylesheet';
         l.type = 'text/css';
-        l.href = GH + 'assets/css/bom-ux-hotfix-20260617d.css?v=' + encodeURIComponent(BOM_BUILD) + '&c=uxfix1';
+        l.href = GH + 'assets/css/bom-ux-hotfix-20260617d.css?v=' + encodeURIComponent(BOM_BUILD) + '&c=uxfix2';
         document.getElementsByTagName('head')[0].appendChild(l);
       }
       setTimeout(inject, 250);
       setTimeout(inject, 1000);
       setTimeout(inject, 2500);
+    })();
+
+    (function loadBomUxRuntimeFix() {
+      function inject() {
+        if (document.getElementById('bomUxRuntimeHotfix20260617d')) return;
+        var s = document.createElement('script');
+        s.id = 'bomUxRuntimeHotfix20260617d';
+        s.type = 'text/javascript';
+        s.charset = 'UTF-8';
+        s.src = GH + 'assets/js/bom-ux-runtime-hotfix-20260617d.js?v=' + encodeURIComponent(BOM_BUILD) + '&c=uxfix2';
+        document.getElementsByTagName('head')[0].appendChild(s);
+      }
+      setTimeout(inject, 500);
+      setTimeout(inject, 1500);
+      setTimeout(inject, 3000);
     })();
   //]]>
   </script>
