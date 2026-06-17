@@ -2869,6 +2869,10 @@ body.ui-clean .main-clean {
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(150px, 16vw, 210px);
   grid-template-rows: auto auto minmax(0, 1fr) !important;
+  grid-template-areas:
+    "header header"
+    "tools charts"
+    "table preview";
   gap: 6px;
   padding: 4px;
   overflow: hidden;
@@ -2876,8 +2880,7 @@ body.ui-clean .main-clean {
 }
 
 .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-1 {
-  grid-column: 1 / -1;
-  grid-row: 1;
+  grid-area: header;
   min-height: 38px;
   max-height: 64px;
   display: flex;
@@ -2888,30 +2891,33 @@ body.ui-clean .main-clean {
 }
 
 .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-2 {
-  grid-column: 1;
-  grid-row: 2;
+  grid-area: tools;
   min-height: 0 !important;
+  max-height: none;
+  align-self: start;
   display: flex;
   flex-direction: column;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-3 {
-  grid-column: 2;
-  grid-row: 2;
+  grid-area: charts;
+  align-self: start;
   min-height: 0;
+  max-height: min(38vh, 220px);
+  overflow: hidden;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-4 {
-  grid-column: 1;
-  grid-row: 3;
+  grid-area: table;
   min-height: 0 !important;
   flex: 1 1 auto;
+  height: 100%;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-5 {
-  grid-column: 2;
-  grid-row: 3;
+  grid-area: preview;
   min-height: 0;
+  align-self: stretch;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard .bom-topbar-left {
@@ -2967,6 +2973,25 @@ body.ui-clean .main-clean {
 .bom-layout-page.bom-3dx-product-dashboard .bom-explorer-context-status {
   font-size: 0.68rem;
   white-space: nowrap;
+}
+
+.bom-layout-page.bom-3dx-product-dashboard .bom-topbar-more,
+.bom-layout-page.bom-3dx-product-dashboard #btnLoadNextLevel,
+.bom-layout-page.bom-3dx-product-dashboard #btnToggleRightPanel {
+  display: none !important;
+}
+
+.bom-layout-page.bom-3dx-product-dashboard > .bom-zone-2 #statusBar {
+  margin: 0;
+  padding: 2px 6px;
+  font-size: 0.65rem;
+  line-height: 1.2;
+  min-height: 0;
+  max-height: 2.6em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard .bom-sync-banner-compact {
@@ -3146,7 +3171,8 @@ body.ui-clean .main-clean {
 
 .bom-layout-page.bom-3dx-product-dashboard.bom-widget-narrow > .bom-zone-5,
 .bom-widget-narrow .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-5 {
-  display: none;
+  display: flex !important;
+  grid-area: preview;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard .bom-charts-empty-state .bom-chart-canvas-box,

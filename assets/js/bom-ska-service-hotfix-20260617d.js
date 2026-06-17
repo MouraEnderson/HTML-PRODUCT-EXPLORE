@@ -303,7 +303,7 @@
     renderEmptyKpiPlaceholders();
     renderEmptyTableMessage(
       details.tableMessage ||
-        'Selecione uma estrutura no Product Explorer e clique Sincronizar, ou use Avançado.'
+        'Selecione uma estrutura no Product Explorer e clique Sincronizar.'
     );
     var lbl = byId('selectionLabel');
     if (lbl && details.title) lbl.textContent = details.title;
@@ -1767,12 +1767,75 @@
         w.LayoutFit.apply();
       } catch (e2) {}
     }
+    apply3dxProductDashboardLayout();
   }
 
   function ensureRightPanelToggle() {
     var btn = byId('btnToggleRightPanel');
     if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
     applyRightPanelState();
+  }
+
+  function hideEndUserChrome() {
+    var advanced = uiRoot().querySelector && uiRoot().querySelector('.bom-topbar-more');
+    if (advanced) {
+      advanced.classList.add('bom-hidden');
+      advanced.setAttribute('hidden', 'hidden');
+      advanced.style.display = 'none';
+    }
+    var nextBtn = byId('btnLoadNextLevel');
+    if (nextBtn) {
+      nextBtn.classList.add('bom-hidden');
+      nextBtn.style.display = 'none';
+    }
+  }
+
+  function apply3dxProductDashboardLayout() {
+    var page = uiRoot().querySelector && uiRoot().querySelector('.bom-layout-page.bom-3dx-product-dashboard');
+    if (!page) return;
+    page.style.gridTemplateAreas =
+      '"header header" "tools charts" "table preview"';
+    page.style.gridTemplateRows = 'auto auto minmax(0, 1fr)';
+    page.style.gridTemplateColumns = 'minmax(0, 1fr) clamp(150px, 16vw, 210px)';
+    page.style.height = '100%';
+    page.style.maxHeight = '100%';
+    var zones = {
+      '.bom-zone-1': 'header',
+      '.bom-zone-2': 'tools',
+      '.bom-zone-3': 'charts',
+      '.bom-zone-4': 'table',
+      '.bom-zone-5': 'preview'
+    };
+    Object.keys(zones).forEach(function (sel) {
+      var el = page.querySelector(sel);
+      if (el) el.style.gridArea = zones[sel];
+    });
+    var zone2 = page.querySelector('.bom-zone-2');
+    var zone4 = page.querySelector('.bom-zone-4');
+    if (zone2) {
+      zone2.style.height = '';
+      zone2.style.maxHeight = '';
+      zone2.style.alignSelf = 'start';
+    }
+    if (zone4) {
+      zone4.style.minHeight = '0';
+      zone4.style.height = '100%';
+      zone4.style.maxHeight = '100%';
+    }
+    var list = page.querySelector('.bom-zone-4 .bom-ebom-list');
+    var tableWrap = page.querySelector('.bom-zone-4 .bom-table-wrap');
+    if (list && tableWrap && zone4) {
+      var head = page.querySelector('.bom-zone-4 .bom-ebom-head');
+      var pager = page.querySelector('.bom-zone-4 .bom-table-pager');
+      var zone4Box = zone4.getBoundingClientRect();
+      var headH = head ? head.offsetHeight : 0;
+      var pagerH = pager ? pager.offsetHeight : 22;
+      var listH = Math.max(120, Math.floor(zone4Box.height - headH - 4));
+      list.style.height = listH + 'px';
+      list.style.maxHeight = listH + 'px';
+      tableWrap.style.height = Math.max(80, listH - pagerH) + 'px';
+      tableWrap.style.maxHeight = tableWrap.style.height;
+    }
   }
 
   function applyTopbarCompactLabels() {
@@ -1799,6 +1862,7 @@
       badge.textContent = compact ? 'SKA/dseng' : 'Fonte: SKA BOM Service / dseng';
     }
     applyRightPanelState();
+    apply3dxProductDashboardLayout();
   }
 
   function bindTestRootButton() {
@@ -1827,7 +1891,7 @@
         area.classList.remove('bom-hidden');
         area.value = text;
       }
-      setStatus('Diagnóstico de contexto exibido em Avançado.', 'ok');
+      setStatus('Diagnóstico de contexto copiado para área técnica oculta.', 'ok');
     });
   }
 
@@ -1901,6 +1965,7 @@
     ensureSyncExplorerButton();
     ensureDynamicControls();
     ensureRightPanelToggle();
+    hideEndUserChrome();
     bindDynamicTableExpansion();
     var syncBtn = byId('btnSyncExplorer');
     if (syncBtn && syncBtn.textContent.indexOf('Sincronizar') < 0) {
@@ -1935,6 +2000,7 @@
       w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.getContext && w.ProductExplorerSyncProvider.getContext()
     );
     applyTopbarCompactLabels();
+    apply3dxProductDashboardLayout();
     bindTestRootButton();
     bindCopyContextDiagnosticsButton();
   }
@@ -2134,6 +2200,7 @@
       root.classList.toggle('bom-ultra-compact', rect.width < 900);
       root.classList.toggle('bom-short', rect.height < 650);
       applyTopbarCompactLabels();
+      apply3dxProductDashboardLayout();
     });
     ro.observe(root);
     root.__BOM_SKA_RO__ = ro;
