@@ -1,6 +1,7 @@
 import { getThreeDxConfig, getPublicEnvironmentFlags } from './threeDxConfig.js';
 import { ThreeDxDsengClient, assertDsengConfigured } from './threeDxDsengClient.js';
 import { resolveSelectionToEngItem } from './selectionResolver.js';
+import { normalizeExpandItemPayload } from './threeDxExpandItemNormalizer.js';
 import {
   SOURCE,
   CJ_MESA_ROOT_ID,
@@ -93,8 +94,10 @@ function parseStructureInput(body, defaultDepth = 1, mode = 'dseng-official') {
     ok: true,
     rootId,
     depth: depthResult.depth,
+    expandDepth: Number(body.expandDepth ?? depthResult.depth),
     includeRoot: body.includeRoot !== false,
-    mode: body.mode || mode
+    mode: body.mode || mode,
+    expandStrategy: body.expandStrategy || ''
   };
 }
 
@@ -345,6 +348,75 @@ export async function buildStructureFromRoot({ rootId, depth, includeRoot, mode 
   return resolveDsengStructure(parsed, config);
 }
 
+function parseExpandDepth(value, defaultDepth = 1, mode = 'dseng-official') {
+  const depthResult = parseDepth(value, defaultDepth, mode);
+  if (!depthResult.ok) return depthResult;
+  if (depthResult.depth < 1) {
+    return {
+      ok: false,
+      error: buildErrorResponse(
+        'INVALID_DEPTH',
+        'expandDepth must be an integer greater than or equal to one',
+        mode
+      )
+    };
+  }
+  if (depthResult.depth > DSENG_MAX_DEPTH) {
+    return {
+      ok: false,
+      error: buildErrorResponse(
+        'DEPTH_LIMIT_EXCEEDED',
+        'expandDepth greater than 3 is not allowed in dseng v1',
+        mode
+      )
+    };
+  }
+  return { ok: true, depth: depthResult.depth };
+}
+
+async function resolveDsengExpandItem(parsed, config) {
+  const started = Date.now();
+  const client = new ThreeDxDsengClient(config);
+  try {
+    const result = await client.expandEngItem(parsed.rootId, { expandDepth: parsed.expandDepth || parsed.depth || 1 });
+    const data = normalizeExpandItemPayload(result.data, {
+      rootId: parsed.rootId,
+      includeRoot: parsed.includeRoot,
+      expandDepth: parsed.expandDepth || parsed.depth || 1,
+      mode: parsed.mode || 'dseng-official',
+      endpointsUsed: client.getEndpointsUsed(),
+      durationMs: Date.now() - started
+    });
+    return { ok: true, data };
+  } catch (error) {
+    return failureFromUpstream(error, client, parsed.mode || 'dseng-official');
+  }
+}
+
+export async function buildExpandItemFromRoot({ rootId, expandDepth = 1, includeRoot, mode = 'dseng-official' }, config) {
+  const parsed = {
+    rootId: normalizeRootId(rootId),
+    expandDepth,
+    depth: expandDepth,
+    includeRoot: includeRoot !== false,
+    mode
+  };
+  if (!parsed.rootId) {
+    return {
+      ok: false,
+      status: 422,
+      error: buildErrorResponse('ROOT_ID_REQUIRED', 'rootId is required', mode)
+    };
+  }
+  const depthResult = parseExpandDepth(parsed.expandDepth, 1, mode);
+  if (!depthResult.ok) {
+    return { ok: false, status: getErrorStatus(depthResult.error.error.code), error: depthResult.error };
+  }
+  parsed.expandDepth = depthResult.depth;
+  parsed.depth = depthResult.depth;
+  return resolveDsengExpandItem(parsed, config);
+}
+
 function resolutionHasAuthFailure(resolution = {}) {
   return (resolution.attempts || []).some((attempt) =>
     /invalid_grant|authenticated session|service ticket/i.test(String(attempt?.message || ''))
@@ -407,8 +479,10 @@ function parseResolveSelectionInput(body, defaultDepth = 1, mode = 'dseng-offici
     ok: true,
     selection,
     depth: depthResult.depth,
+    expandDepth: Number(body.expandDepth ?? depthResult.depth),
     includeRoot: body.includeRoot !== false,
     mode: body.mode || mode,
+    expandStrategy: body.expandStrategy || '',
     manualRootId: normalizeRootId(body.manualRootId || selection.manualRootId || selection.normalized?.manualRootId)
   };
 }
@@ -465,6 +539,14 @@ export async function resolveSelection(body) {
     };
   }
 
+  if (parsed.expandStrategy === 'expand-item') {
+    const expandDepth = parseExpandDepth(parsed.expandDepth, parsed.depth || 1, parsed.mode);
+    if (!expandDepth.ok) {
+      return { ok: false, status: getErrorStatus(expandDepth.error.error.code), error: expandDepth.error };
+    }
+    parsed.expandDepth = expandDepth.depth;
+  }
+
   const configured = assertDsengConfigured(config);
   if (!configured.ok) {
     return {
@@ -492,15 +574,25 @@ export async function resolveSelection(body) {
     };
   }
 
-  const structureResult = await buildStructureFromRoot(
-    {
-      rootId: resolution.rootId,
-      depth: parsed.depth,
-      includeRoot: parsed.includeRoot,
-      mode: parsed.mode
-    },
-    config
-  );
+  const structureResult = parsed.expandStrategy === 'expand-item'
+    ? await buildExpandItemFromRoot(
+        {
+          rootId: resolution.rootId,
+          expandDepth: parsed.expandDepth || parsed.depth || 1,
+          includeRoot: parsed.includeRoot,
+          mode: parsed.mode
+        },
+        config
+      )
+    : await buildStructureFromRoot(
+        {
+          rootId: resolution.rootId,
+          depth: parsed.depth,
+          includeRoot: parsed.includeRoot,
+          mode: parsed.mode
+        },
+        config
+      );
 
   if (!structureResult.ok) {
     return structureResult;
@@ -540,6 +632,14 @@ export async function resolveStructure(body) {
     };
   }
 
+  if (parsed.expandStrategy === 'expand-item') {
+    const expandDepth = parseExpandDepth(parsed.expandDepth, parsed.depth || 1, parsed.mode);
+    if (!expandDepth.ok) {
+      return { ok: false, status: getErrorStatus(expandDepth.error.error.code), error: expandDepth.error };
+    }
+    parsed.expandDepth = expandDepth.depth;
+  }
+
   const configured = assertDsengConfigured(config);
   if (!configured.ok) {
     return {
@@ -549,7 +649,9 @@ export async function resolveStructure(body) {
     };
   }
 
-  const result = await resolveDsengStructure(parsed, config);
+  const result = parsed.expandStrategy === 'expand-item'
+    ? await resolveDsengExpandItem(parsed, config)
+    : await resolveDsengStructure(parsed, config);
   if (!result.ok) {
     return result;
   }

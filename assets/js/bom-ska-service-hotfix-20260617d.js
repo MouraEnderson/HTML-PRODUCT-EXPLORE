@@ -7,7 +7,6 @@
   var SKA_URL = 'https://bom-resolver.onrender.com/api/3dx/bom/structure';
   var RESOLVE_URL = 'https://bom-resolver.onrender.com/api/3dx/bom/resolve-selection';
   var DATA_SOURCE = 'ska-bom-service';
-  var DEFAULT_ROOT = '63FC553465A62400699E0792000086AB';
   var DEFAULT_DEPTH = 1;
   var SESSION_KEY = '3dx_bom_snapshot_v1';
   var guardLock = false;
@@ -400,6 +399,7 @@
     payload.__skaDynamicState = {
       loadMode: mode || dynamicState.loadMode || 'incremental',
       partial: true,
+      strategy: payload.strategy || (payload.__skaDynamicState && payload.__skaDynamicState.strategy) || 'expand-item',
       expandedCount: Object.keys(dynamicState.expandedNodeIds).length,
       loadedCount: Object.keys(dynamicState.loadedNodeIds).length,
       maxLoadedLevel: payload.counts.depth
@@ -541,7 +541,9 @@
     return fetchBomStructureFromSkaService({
       rootId: parentRef,
       depth: 1,
-      includeRoot: false
+      expandDepth: 1,
+      includeRoot: false,
+      expandStrategy: 'expand-item'
     })
       .then(function (payload) {
         var rows = mergeChildRows(parentRow, payload);
@@ -551,7 +553,7 @@
           (payload.diagnostics && payload.diagnostics.endpointsUsed) || []
         );
         current.diagnostics.warnings = (current.diagnostics.warnings || []).concat(
-          'Estrutura parcial: filhos carregados sob demanda para ' + parentRef
+          'Estrutura parcial: ramo carregado sob demanda via ExpandItem para ' + parentRef
         );
         dynamicState.loadedNodeIds[parentRef] = true;
         dynamicState.expandedNodeIds[parentRef] = true;
@@ -589,7 +591,7 @@
       setStatus('Nenhum nó pendente no nível carregado atual.', 'info');
       return Promise.resolve(w.__bomSkaLastPayload);
     }
-    dynamicState.loadMode = 'next-level';
+    dynamicState.loadMode = 'next-level-global';
     var chain = Promise.resolve();
     frontier.forEach(function (row) {
       chain = chain.then(function () {
@@ -599,7 +601,7 @@
       });
     });
     return chain.then(function () {
-      setStatus('Próximo nível carregado: ' + getSkaExpectedTotal(w.__bomSkaLastPayload) + ' linhas carregadas.', 'ok');
+      setStatus('Próximo nível global carregado: ' + getSkaExpectedTotal(w.__bomSkaLastPayload) + ' linhas carregadas.', 'ok');
       return w.__bomSkaLastPayload;
     });
   }
@@ -682,8 +684,10 @@
       body: JSON.stringify({
         rootId: opts.rootId,
         depth: opts.depth == null ? DEFAULT_DEPTH : opts.depth,
+        expandDepth: opts.expandDepth == null ? opts.depth == null ? DEFAULT_DEPTH : opts.depth : opts.expandDepth,
         includeRoot: opts.includeRoot !== false,
-        mode: 'dseng-official'
+        mode: 'dseng-official',
+        expandStrategy: opts.expandStrategy || 'expand-item'
       })
     }).then(function (response) {
       return response.text().then(function (text) {
@@ -702,9 +706,12 @@
       body: JSON.stringify({
         selection: opts.selection || {},
         depth: opts.depth == null ? DEFAULT_DEPTH : opts.depth,
+        expandDepth: opts.expandDepth == null ? opts.depth == null ? DEFAULT_DEPTH : opts.depth : opts.expandDepth,
         includeRoot: opts.includeRoot !== false,
         mode: 'dseng-official',
-        manualRootId: opts.manualRootId || undefined
+        expandStrategy: opts.expandStrategy || 'expand-item',
+        manualRootId: opts.manualRootId || undefined,
+        payloadMode: opts.payloadMode || undefined
       })
     }).then(function (response) {
       return response.text().then(function (text) {
@@ -858,6 +865,14 @@
     var syncMeta = payload.__skaSyncMeta || {};
     var dyn = payload.__skaDynamicState || {};
     var resolution = payload.resolution || {};
+    var selectedCandidatesText = (syncMeta.selectedCandidates || [])
+      .slice(0, 5)
+      .map(function (c) {
+        return [c.source || '?', c.id || c.physicalId || c.name || '?', c.title || c.label || '']
+          .filter(Boolean)
+          .join(' | ');
+      })
+      .join(' ; ');
     var bridgeDiag =
       w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.getBridgeDiagnosticStatus
         ? w.ProductExplorerSyncProvider.getBridgeDiagnosticStatus()
@@ -885,6 +900,12 @@
       escapeHtml(payload.source || syncMeta.source || 'RENDER_BOM_SERVICE') +
       ' · mode: ' +
       escapeHtml(payload.mode || 'dseng-official') +
+      '<br/>strategy: ' +
+      escapeHtml(payload.strategy || dyn.strategy || 'expand-item') +
+      (syncMeta.payloadEndpoint ? '<br/>payloadEndpoint: ' + escapeHtml(syncMeta.payloadEndpoint) : '') +
+      (syncMeta.payloadMode ? '<br/>payloadMode: ' + escapeHtml(syncMeta.payloadMode) : '') +
+      (syncMeta.selectionSource ? '<br/>selectionSource: ' + escapeHtml(syncMeta.selectionSource) : '') +
+      (syncMeta.selectedItemLabel ? '<br/>selectedItem: ' + escapeHtml(syncMeta.selectedItemLabel) : '') +
       (syncMeta.eventType ? '<br/>eventType: ' + escapeHtml(syncMeta.eventType) : '') +
       (syncMeta.rootId ? '<br/>rootId: ' + escapeHtml(syncMeta.rootId) : '') +
       (resolution.strategy ? '<br/>resolution.strategy: ' + escapeHtml(resolution.strategy) : '') +
@@ -898,12 +919,22 @@
       escapeHtml(dyn.partial === false ? 'completa no recorte solicitado' : 'parcial / incremental') +
       '<br/>itensCarregados: ' +
       escapeHtml(String(expected)) +
+      (payload.counts && payload.counts.referenceCount != null
+        ? '<br/>referenciasUnicas: ' + escapeHtml(String(payload.counts.referenceCount))
+        : '') +
+      (payload.counts && payload.counts.occurrenceCount != null
+        ? '<br/>ocorrencias: ' + escapeHtml(String(payload.counts.occurrenceCount))
+        : '') +
+      (payload.counts && payload.counts.pathCount != null
+        ? '<br/>pathsProcessados: ' + escapeHtml(String(payload.counts.pathCount))
+        : '') +
       '<br/>maxLoadedLevel: ' +
       escapeHtml(String(dyn.maxLoadedLevel != null ? dyn.maxLoadedLevel : dynamicState.maxLoadedLevel || 0)) +
       '<br/>expandedNodeIds: ' +
       escapeHtml(String(dyn.expandedCount != null ? dyn.expandedCount : Object.keys(dynamicState.expandedNodeIds).length)) +
       '<br/>loadedNodeIds: ' +
       escapeHtml(String(dyn.loadedCount != null ? dyn.loadedCount : Object.keys(dynamicState.loadedNodeIds).length)) +
+      (selectedCandidatesText ? '<br/>selectedCandidates: ' + escapeHtml(selectedCandidatesText) : '') +
       '<br/>service: SKA_BOM_SERVICE' +
       '<br/>endpointsUsed: ' +
       escapeHtml(endpoints || '(none)') +
@@ -1135,17 +1166,23 @@
             normalized: provider && provider.getContext ? provider.getContext() : {},
             timestamp: new Date().toISOString(),
             page: '3DEXPERIENCE Web Page Reader'
-          };
+    };
     var normalized = provider && provider.getContext ? provider.getContext() : rawCtx.normalized || {};
+    var payloadMode = normalized.selectionMode || (normalized.selectedId ? 'selected-branch' : 'fallback');
+    var manualForPayload = payloadMode === 'selected-branch' ? '' : manualRootId;
     return {
       selection: {
         raw: rawCtx.selected || {},
         normalized: normalized,
         source: rawCtx.source || normalized.source || 'PlatformAPI/ExplorerContext',
-        manualRootId: manualRootId || undefined
+        manualRootId: manualForPayload || undefined,
+        payloadMode: payloadMode
       },
       normalized: normalized,
-      rawContext: rawCtx
+      rawContext: rawCtx,
+      selectedCandidates: rawCtx.selectedCandidates || normalized.selectedCandidates || [],
+      payloadEndpoint: '/api/3dx/bom/resolve-selection',
+      payloadMode: payloadMode
     };
   }
 
@@ -1245,6 +1282,10 @@
       title: s(selectionPayload.normalized.title),
       candidateRootId: s(selectionPayload.normalized.selectedId || selectionPayload.normalized.rootId),
       rootIdUsed: '',
+      payloadEndpoint: selectionPayload.payloadEndpoint,
+      payloadMode: selectionPayload.payloadMode,
+      selectionSource: selectionPayload.normalized.selectionSource || selectionPayload.rawContext.source,
+      selectedCandidates: selectionPayload.selectedCandidates || [],
       validationStatus: 'RESOLVE_PENDING',
       reason: 'POST /resolve-selection'
     };
@@ -1258,7 +1299,8 @@
       selection: selectionPayload.selection,
       depth: depth,
       includeRoot: true,
-      manualRootId: manual || undefined
+      manualRootId: selectionPayload.payloadMode === 'selected-branch' ? undefined : manual || undefined,
+      payloadMode: selectionPayload.payloadMode
     })
       .then(function (payload) {
         var resolvedRoot =
@@ -1275,6 +1317,16 @@
         payload.__skaSyncMeta = {
           source: selectionPayload.rawContext.source,
           eventType: selectionPayload.normalized.eventType || 'resolve-selection',
+          payloadEndpoint: selectionPayload.payloadEndpoint,
+          payloadMode: selectionPayload.payloadMode,
+          selectionSource: selectionPayload.normalized.selectionSource || selectionPayload.rawContext.source,
+          selectedCandidates: selectionPayload.selectedCandidates || [],
+          selectedItemLabel:
+            selectionPayload.normalized.title ||
+            selectionPayload.normalized.name ||
+            selectionPayload.normalized.label ||
+            selectionPayload.normalized.selectedId ||
+            '',
           rootId: resolvedRoot,
           depth: depth,
           lastSyncAt: new Date().toISOString(),
@@ -1287,6 +1339,10 @@
           title: lastSyncTitle,
           candidateRootId: selectionPayload.normalized.selectedId || selectionPayload.normalized.rootId,
           rootIdUsed: resolvedRoot,
+          payloadEndpoint: selectionPayload.payloadEndpoint,
+          payloadMode: selectionPayload.payloadMode,
+          selectionSource: selectionPayload.normalized.selectionSource || selectionPayload.rawContext.source,
+          selectedCandidates: selectionPayload.selectedCandidates || [],
           validationStatus: 'RESOLVED',
           resolutionStrategy: payload.resolution && payload.resolution.strategy
         };
@@ -1353,12 +1409,27 @@
     if (manual && isValidDsengPhysicalId(manual)) {
       return loadBomViaSkaStructure({ forceManual: true, advancedOnly: true });
     }
+    if (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.refresh) {
+      return w.ProductExplorerSyncProvider.refresh('manual-refresh').then(function (ctx) {
+        updateExplorerContextStatus(ctx);
+        if (ctx && ctx.selectionMode === 'selected-branch') {
+          return loadBomViaResolveSelection({ payloadMode: 'selected-branch' });
+        }
+        if (lastSyncRootId && isValidDsengPhysicalId(lastSyncRootId)) {
+          var adv = byId('explorerObjectId');
+          if (adv && !s(adv.value)) adv.value = lastSyncRootId;
+          var depthEl = byId('skaDepthInput');
+          var desiredDepth = Math.max(Number(lastSyncDepth || DEFAULT_DEPTH), Number(dynamicState.maxLoadedLevel || 0), DEFAULT_DEPTH);
+          if (depthEl && desiredDepth > Number(depthEl.value || 0)) depthEl.value = String(Math.min(desiredDepth, 3));
+          setStatus('Nenhuma seleção oficial resolvível detectada; atualizando root atual.', 'info');
+          return loadBomViaSkaStructure({ forceManual: true, advancedOnly: true });
+        }
+        return loadBomViaResolveSelection({ payloadMode: ctx && ctx.selectionMode ? ctx.selectionMode : 'fallback' });
+      });
+    }
     if (lastSyncRootId && isValidDsengPhysicalId(lastSyncRootId)) {
-      var adv = byId('explorerObjectId');
-      if (adv && !s(adv.value)) adv.value = lastSyncRootId;
-      var depthEl = byId('skaDepthInput');
-      var desiredDepth = Math.max(Number(lastSyncDepth || DEFAULT_DEPTH), Number(dynamicState.maxLoadedLevel || 0), DEFAULT_DEPTH);
-      if (depthEl && desiredDepth > Number(depthEl.value || 0)) depthEl.value = String(Math.min(desiredDepth, 3));
+      var advFallback = byId('explorerObjectId');
+      if (advFallback && !s(advFallback.value)) advFallback.value = lastSyncRootId;
       return loadBomViaSkaStructure({ forceManual: true, advancedOnly: true });
     }
     return syncWithProductExplorer();
@@ -1386,8 +1457,8 @@
       refreshBtn.title = 'Atualizar BOM';
     }
     if (nextBtn) {
-      nextBtn.textContent = compact ? '+ nível' : 'Carregar próximo nível';
-      nextBtn.title = 'Carregar próximo nível via dseng';
+      nextBtn.textContent = compact ? '+ global' : '+ nível global';
+      nextBtn.title = 'Carrega filhos de todos os ramos carregados; use o + da linha para analisar só um subconjunto.';
     }
     if (badge) {
       badge.textContent = compact ? 'SKA/dseng' : 'Fonte: SKA BOM Service / dseng';
@@ -1450,8 +1521,8 @@
       nextBtn.type = 'button';
       nextBtn.id = 'btnLoadNextLevel';
       nextBtn.className = 'bom-btn bom-btn-secondary';
-      nextBtn.textContent = 'Carregar próximo nível';
-      nextBtn.title = 'Carregar sob demanda os filhos dos nós do nível carregado atual via dseng';
+      nextBtn.textContent = '+ nível global';
+      nextBtn.title = 'Carrega filhos de todos os ramos carregados; use o + da linha para analisar só um subconjunto.';
       refreshBtn.parentNode.insertBefore(nextBtn, refreshBtn.nextSibling);
     }
     if (!nextBtn.__BOM_NEXT_LEVEL_BOUND__) {
