@@ -1,0 +1,184 @@
+/* BOM Analytics UX hotfix — keeps charts/preview visible, removes the wrong collapse button and gives the E-BOM more useful space inside 3DDashboard. */
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard,
+html body .bom-widget-body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard,
+html body.bom-side-collapsed .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard,
+html body .bom-widget-body.bom-side-collapsed .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard {
+  grid-template-columns: minmax(0, 1fr) clamp(220px, 24vw, 300px) !important;
+  grid-template-rows: auto minmax(92px, auto) minmax(0, 1fr) !important;
+  gap: 5px !important;
+  padding: 3px !important;
+}
+
+/* The explicit side-panel toggle confused the workflow: charts/preview are part of the dashboard and must stay visible. */
+html body #btnToggleRightPanel {
+  display: none !important;
+}
+
+html body.bom-side-collapsed .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard > .bom-zone-2,
+html body .bom-widget-body.bom-side-collapsed .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard > .bom-zone-2 {
+  grid-column: 1 !important;
+}
+
+html body.bom-side-collapsed .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard > .bom-zone-4,
+html body .bom-widget-body.bom-side-collapsed .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard > .bom-zone-4 {
+  grid-column: 1 !important;
+}
+
+html body.bom-side-collapsed .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard > .bom-zone-3,
+html body .bom-widget-body.bom-side-collapsed .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard > .bom-zone-3 {
+  display: flex !important;
+  grid-column: 2 !important;
+  grid-row: 2 !important;
+}
+
+html body.bom-side-collapsed .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard > .bom-zone-5,
+html body .bom-widget-body.bom-side-collapsed .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard > .bom-zone-5 {
+  display: flex !important;
+  grid-column: 2 !important;
+  grid-row: 3 !important;
+}
+
+/* Remove the extra top KPI strip that looked like a useless Root/summary row and stole height from the E-BOM. */
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard #kpiGrid {
+  display: none !important;
+}
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-zone-2-scroll {
+  gap: 3px !important;
+  overflow: hidden !important;
+}
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-ska-diagnostics {
+  min-height: 22px !important;
+  max-height: 34px !important;
+  padding: 3px 6px !important;
+  line-height: 1.15 !important;
+}
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-ska-diag-summary {
+  -webkit-line-clamp: 2 !important;
+  white-space: normal !important;
+}
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-filter-bar-quad {
+  padding: 2px 5px !important;
+  gap: 3px 4px !important;
+  align-items: end !important;
+}
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-filter-bar-quad .bom-filter-item span {
+  font-size: 0.58rem !important;
+  margin-bottom: 0 !important;
+}
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-filter-bar-quad select,
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-filter-bar-quad input {
+  padding: 3px 5px !important;
+  font-size: 0.68rem !important;
+  min-height: 24px !important;
+}
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-filter-bar-quad .bom-btn {
+  padding: 4px 8px !important;
+  font-size: 0.68rem !important;
+  min-height: 24px !important;
+}
+
+/* Keep charts visible but compact and readable in the right rail. */
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-zone-3 {
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-charts-unified-scroll {
+  padding: 2px 5px 3px !important;
+  overflow: hidden auto !important;
+}
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-charts-row-quad {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 5px !important;
+}
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-chart-canvas-box {
+  height: clamp(82px, 12vh, 104px) !important;
+  min-height: 82px !important;
+  max-height: 104px !important;
+  flex-basis: clamp(82px, 12vh, 104px) !important;
+}
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .cf-pie.cf-pie-quad {
+  width: 82px !important;
+  height: 82px !important;
+}
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-chart-heading {
+  font-size: 0.7rem !important;
+  line-height: 1.05 !important;
+}
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-chart-legend-list .owners-legend-item,
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-chart-legend-list {
+  font-size: 0.6rem !important;
+}
+
+/* Keep preview visible, but do not let an unavailable 3DPlay box dominate the dashboard. */
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-zone-5 .bom-preview-body {
+  padding: 5px 7px !important;
+  overflow: auto !important;
+}
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-zone-5 #partPreviewImage {
+  min-height: 92px !important;
+  max-height: 150px !important;
+  flex: 0 0 auto !important;
+}
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-3dplay-host,
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-3dplay-2d-panel {
+  min-height: 92px !important;
+}
+
+/* E-BOM gets the priority: larger usable table, compact title/footer. */
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-zone-4 .bom-ebom-head {
+  padding: 4px 8px !important;
+}
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-zone-4 .bom-ebom-head h2 {
+  font-size: 0.82rem !important;
+}
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-table-pager {
+  padding: 5px 8px !important;
+  font-size: 0.78rem !important;
+}
+
+html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard .bom-zone-4 .bom-table-wrap {
+  min-height: 160px !important;
+}
+
+@media (max-width: 820px) {
+  html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard,
+  html body .bom-widget-body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard,
+  html body.bom-side-collapsed .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard,
+  html body .bom-widget-body.bom-side-collapsed .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto auto minmax(0, 1fr) auto !important;
+  }
+
+  html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard > .bom-zone-3,
+  html body.bom-side-collapsed .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard > .bom-zone-3,
+  html body .bom-widget-body.bom-side-collapsed .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard > .bom-zone-3 {
+    display: flex !important;
+    grid-column: 1 !important;
+    grid-row: 4 !important;
+    max-height: 130px !important;
+  }
+
+  html body .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard > .bom-zone-5,
+  html body.bom-side-collapsed .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard > .bom-zone-5,
+  html body .bom-widget-body.bom-side-collapsed .bom-root.bom-dashboard.bom-layout-page.bom-3dx-product-dashboard > .bom-zone-5 {
+    display: none !important;
+  }
+}
