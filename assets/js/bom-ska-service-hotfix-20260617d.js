@@ -143,25 +143,8 @@
   function renderEmptyKpiPlaceholders() {
     var grid = byId('kpiGrid');
     if (!grid) return;
-    var markers = [
-      { tone: 'green', label: 'Total linhas', value: '0' },
-      { tone: 'blue', label: 'Maturidade', value: '—' },
-      { tone: 'purple', label: 'Proprietários', value: '—' },
-      { tone: 'blue', label: 'Fonte', value: 'SKA' }
-    ];
-    grid.innerHTML = markers
-      .map(function (m) {
-        return (
-          '<div class="stat-marker stat-marker-' +
-          m.tone +
-          '"><span class="stat-marker-label">' +
-          escapeHtml(String(m.label)) +
-          '</span><span class="stat-marker-value">' +
-          escapeHtml(String(m.value)) +
-          '</span></div>'
-        );
-      })
-      .join('');
+    grid.innerHTML = '';
+    grid.style.display = 'none';
   }
 
   function renderEmptyChartsState() {
@@ -898,14 +881,6 @@
     updateTablePager(0);
   }
 
-  function updateTablePager(total) {
-    var pager = byId('tablePager');
-    if (pager) {
-      var suffix = w.__bomSkaLastPayload ? ' carregadas · estrutura parcial · modo ' + (dynamicState.loadMode || 'initial') : '';
-      pager.textContent = total + ' peças' + suffix;
-    }
-  }
-
   function sumChartLegendValues(legendId) {
     var el = byId(legendId);
     if (!el) return null;
@@ -931,11 +906,6 @@
     if (w.BomService && w.BomService.getNodeCount) {
       var nodes = w.BomService.getNodeCount();
       if (nodes !== expected) issues.push('BomService=' + nodes + ' esperado=' + expected);
-    }
-
-    var kpiText = byId('kpiGrid') ? byId('kpiGrid').textContent || '' : '';
-    if (kpiText.indexOf('Total linhas') >= 0 && kpiText.indexOf(String(expected)) < 0) {
-      issues.push('KPI Total linhas != ' + expected);
     }
 
     var matSum = sumChartLegendValues('maturityLegendScroll');
@@ -1130,31 +1100,9 @@
 
   function renderSkaKpiSummary(payload) {
     var grid = byId('kpiGrid');
-    if (!grid || !payload) return;
-    var counts = payload.counts || {};
-    var expected = getSkaExpectedTotal(payload);
-    var level1 = (counts.levelCounts && counts.levelCounts['1']) || 0;
-    var markers = [
-      { tone: 'blue', label: 'Root', value: (payload.root && payload.root.title) || (payload.root && payload.root.id) || '-' },
-      { tone: 'green', label: 'Linhas carregadas', value: expected },
-      { tone: 'purple', label: 'Nível carregado', value: counts.depth != null ? counts.depth : DEFAULT_DEPTH },
-      { tone: 'red', label: 'Nível 1', value: level1 },
-      { tone: 'blue', label: 'Status', value: (payload.diagnostics && payload.diagnostics.status) || 'OK' },
-      { tone: 'green', label: 'Modo', value: (payload.__skaDynamicState && payload.__skaDynamicState.loadMode) || 'inicial' }
-    ];
-    grid.innerHTML = markers
-      .map(function (m) {
-        return (
-          '<div class="stat-marker stat-marker-' +
-          m.tone +
-          '"><span class="stat-marker-label">' +
-          escapeHtml(String(m.label)) +
-          '</span><span class="stat-marker-value">' +
-          escapeHtml(String(m.value)) +
-          '</span></div>'
-        );
-      })
-      .join('');
+    if (!grid) return;
+    grid.innerHTML = '';
+    grid.style.display = 'none';
   }
 
   function updateSyncBanner(payload) {
@@ -1170,50 +1118,40 @@
       '</strong> · estrutura parcial/incremental.';
   }
 
+  function tablePagerModePhrase(mode) {
+    mode = normalizeLoadMode(mode || 'root');
+    if (mode === 'selected-branch') return 'ramo selecionado';
+    if (mode === 'dashboard-row') return 'expansao por linha';
+    if (mode === 'global') return 'expansao global';
+    return 'modo root';
+  }
+
   function updateTablePager(total) {
     var pager = byId('tablePager');
-    if (pager) {
-      var modeLabel = normalizeLoadMode(dynamicState.loadMode || 'root');
-      var suffix = w.__bomSkaLastPayload ? ' carregadas · modo ' + modeLabel + ' · estrutura parcial' : '';
-      pager.textContent = total + ' pecas' + suffix;
+    if (!pager) return;
+    if (!w.__bomSkaLastPayload) {
+      pager.textContent = total + ' pecas';
+      return;
     }
+    var syncMeta = w.__bomSkaLastPayload.__skaSyncMeta || {};
+    var dyn = w.__bomSkaLastPayload.__skaDynamicState || {};
+    var mode = normalizeLoadMode(syncMeta.payloadMode || dyn.loadMode || dynamicState.loadMode || 'root');
+    var phrase = tablePagerModePhrase(mode);
+    var extra =
+      mode === 'root' &&
+      syncMeta.selectionSource !== 'DS/Selection/Selection.getSelection' &&
+      syncMeta.selectionSource !== 'PlatformAPI.getSelection' &&
+      syncMeta.source !== 'ADVANCED_MANUAL'
+        ? ' · Explorer pode mostrar mais itens visuais'
+        : '';
+    pager.textContent = total + ' pecas carregadas · ' + phrase + ' · estrutura parcial' + extra;
   }
 
   function renderSkaKpiSummary(payload) {
     var grid = byId('kpiGrid');
-    if (!grid || !payload) return;
-    var counts = payload.counts || {};
-    var expected = getSkaExpectedTotal(payload);
-    var level1 = (counts.levelCounts && counts.levelCounts['1']) || 0;
-    var markers = [
-      { tone: 'green', label: 'Total linhas', value: expected },
-      { tone: 'blue', label: 'Referencias', value: counts.referenceCount != null ? counts.referenceCount : '-' },
-      { tone: 'purple', label: 'Nivel carregado', value: counts.depth != null ? counts.depth : DEFAULT_DEPTH },
-      { tone: 'red', label: 'Nivel 1', value: level1 },
-      { tone: 'blue', label: 'Status', value: (payload.diagnostics && payload.diagnostics.status) || 'OK' },
-      {
-        tone: 'green',
-        label: 'Modo',
-        value: normalizeLoadMode(
-          (payload.__skaSyncMeta && payload.__skaSyncMeta.payloadMode) ||
-            (payload.__skaDynamicState && payload.__skaDynamicState.loadMode) ||
-            'root'
-        )
-      }
-    ];
-    grid.innerHTML = markers
-      .map(function (m) {
-        return (
-          '<div class="stat-marker stat-marker-' +
-          m.tone +
-          '"><span class="stat-marker-label">' +
-          escapeHtml(String(m.label)) +
-          '</span><span class="stat-marker-value">' +
-          escapeHtml(String(m.value)) +
-          '</span></div>'
-        );
-      })
-      .join('');
+    if (!grid) return;
+    grid.innerHTML = '';
+    grid.style.display = 'none';
   }
 
   function updateSyncBanner(payload) {
@@ -1255,10 +1193,17 @@
     var payloadMode = normalizeLoadMode(syncMeta.payloadMode || dyn.loadMode || dynamicState.loadMode || 'root');
     var sourceLabel = shortSelectionSource(syncMeta.selectionSource || syncMeta.source || '');
     var strategy = payload.strategy || dyn.strategy || 'expand-item';
-    var selectionNote =
-      payloadMode === 'root' && sourceLabel !== 'DS/Selection' && sourceLabel !== 'PlatformAPI' && sourceLabel !== 'Avancado'
-        ? ' · selecao PSE nao disponivel por API oficial; usando root atual'
-        : '';
+    var selectionNote = '';
+    if (payloadMode === 'root' && sourceLabel !== 'DS/Selection' && sourceLabel !== 'PlatformAPI' && sourceLabel !== 'Avancado') {
+      selectionNote =
+        ' · selecao PSE nao disponivel por API oficial; usando root atual · Dashboard exibindo root carregado; selecao especifica do Product Explorer nao detectada via API oficial';
+    } else if (payloadMode === 'selected-branch') {
+      selectionNote = ' · ramo selecionado via API oficial';
+    } else if (payloadMode === 'dashboard-row') {
+      selectionNote = ' · expansao incremental por linha na dashboard';
+    } else if (payloadMode === 'global') {
+      selectionNote = ' · expansao global de todos os ramos carregados';
+    }
     var summary =
       'Fonte: dseng · modo: ' +
       payloadMode +
@@ -1271,7 +1216,7 @@
       ' · linhas: ' +
       expected +
       ' · ' +
-      (dyn.partial === false ? 'recorte completo' : 'parcial') +
+      (dyn.partial === false ? 'recorte completo' : 'estrutura parcial') +
       selectionNote;
     var detail =
       'payloadEndpoint=' +
@@ -1802,62 +1747,32 @@
   w.refreshBomFromSka = refreshBom;
   w.loadViaSkaService = syncWithProductExplorer;
 
-  function shouldAutoCollapseRightPanel(root) {
-    var width = root && root.clientWidth ? root.clientWidth : (w.innerWidth || 0);
-    return width > 0 && width < 1050;
+  function shouldAutoCollapseRightPanel() {
+    return false;
   }
 
-  function isRightPanelCollapsed(root) {
-    if (rightPanelPreference == null) rightPanelPreference = safeStorageGet(RIGHT_PANEL_KEY);
-    if (rightPanelPreference === 'collapsed') return true;
-    if (rightPanelPreference === 'open') return false;
-    return shouldAutoCollapseRightPanel(root);
+  function isRightPanelCollapsed() {
+    return false;
   }
 
   function applyRightPanelState() {
     var root = uiRoot();
-    if (!root) return;
-    var collapsed = isRightPanelCollapsed(root);
-    root.classList.toggle('bom-side-collapsed', collapsed);
-    if (document && document.body) document.body.classList.toggle('bom-side-collapsed', collapsed);
-    var btn = byId('btnToggleRightPanel');
-    if (btn) {
-      btn.textContent = collapsed ? 'Painel +' : 'Painel';
-      btn.title = collapsed ? 'Mostrar graficos e preview' : 'Recolher graficos e preview para ampliar a tabela';
-      btn.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
-    }
+    if (root) root.classList.remove('bom-side-collapsed');
+    if (document && document.body) document.body.classList.remove('bom-side-collapsed');
+    try {
+      if (w.localStorage) w.localStorage.removeItem(RIGHT_PANEL_KEY);
+    } catch (e) {}
     if (w.LayoutFit && w.LayoutFit.apply) {
       try {
         w.LayoutFit.apply();
-      } catch (e) {}
+      } catch (e2) {}
     }
   }
 
   function ensureRightPanelToggle() {
     var btn = byId('btnToggleRightPanel');
-    if (!btn) {
-      var actions = uiRoot().querySelector && uiRoot().querySelector('.bom-topbar-actions');
-      var advanced = uiRoot().querySelector && uiRoot().querySelector('.bom-topbar-more');
-      if (!actions) return null;
-      btn = document.createElement('button');
-      btn.type = 'button';
-      btn.id = 'btnToggleRightPanel';
-      btn.className = 'bom-btn bom-btn-secondary bom-btn-compact';
-      btn.setAttribute('aria-label', 'Recolher ou expandir painel direito');
-      if (advanced && advanced.parentNode === actions) actions.insertBefore(btn, advanced);
-      else actions.appendChild(btn);
-    }
-    if (!btn.__BOM_SIDE_TOGGLE_BOUND__) {
-      btn.__BOM_SIDE_TOGGLE_BOUND__ = true;
-      btn.addEventListener('click', function (ev) {
-        if (ev) ev.preventDefault();
-        rightPanelPreference = isRightPanelCollapsed(uiRoot()) ? 'open' : 'collapsed';
-        safeStorageSet(RIGHT_PANEL_KEY, rightPanelPreference);
-        applyRightPanelState();
-      });
-    }
+    if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
     applyRightPanelState();
-    return btn;
   }
 
   function applyTopbarCompactLabels() {

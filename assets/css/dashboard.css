@@ -2867,8 +2867,8 @@ body.ui-clean .main-clean {
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(150px, 17vw, 210px);
-  grid-template-rows: auto minmax(74px, auto) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) clamp(150px, 16vw, 210px);
+  grid-template-rows: auto auto minmax(0, 1fr) !important;
   gap: 6px;
   padding: 4px;
   overflow: hidden;
@@ -2890,7 +2890,7 @@ body.ui-clean .main-clean {
 .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-2 {
   grid-column: 1;
   grid-row: 2;
-  min-height: 0;
+  min-height: 0 !important;
   display: flex;
   flex-direction: column;
 }
@@ -2904,7 +2904,8 @@ body.ui-clean .main-clean {
 .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-4 {
   grid-column: 1;
   grid-row: 3;
-  min-height: 0;
+  min-height: 0 !important;
+  flex: 1 1 auto;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-5 {
@@ -3038,8 +3039,9 @@ body.ui-clean .main-clean {
 .bom-layout-page.bom-3dx-product-dashboard .bom-zone-2-scroll {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
+  min-height: 0 !important;
+  overflow: visible !important;
+  flex: 0 0 auto;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard .bom-filter-bar-quad {
@@ -3054,22 +3056,13 @@ body.ui-clean .main-clean {
 }
 
 .bom-layout-page.bom-3dx-product-dashboard #kpiGrid {
-  flex-shrink: 0;
-  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
-  padding: 2px 5px !important;
-  gap: 3px !important;
-}
-
-.bom-layout-page.bom-3dx-product-dashboard #kpiGrid .stat-marker {
-  padding: 3px 4px;
-}
-
-.bom-layout-page.bom-3dx-product-dashboard #kpiGrid .stat-marker-label {
-  font-size: 0.58rem !important;
-}
-
-.bom-layout-page.bom-3dx-product-dashboard #kpiGrid .stat-marker-value {
-  font-size: 0.86rem !important;
+  display: none !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  flex: 0 0 0 !important;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard .bom-zone-4 .bom-ebom-block,
@@ -3117,21 +3110,15 @@ body.ui-clean .main-clean {
 
 .bom-layout-page.bom-3dx-product-dashboard.bom-side-collapsed,
 .bom-side-collapsed .bom-layout-page.bom-3dx-product-dashboard {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.bom-layout-page.bom-3dx-product-dashboard.bom-side-collapsed > .bom-zone-2,
-.bom-layout-page.bom-3dx-product-dashboard.bom-side-collapsed > .bom-zone-4,
-.bom-side-collapsed .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-2,
-.bom-side-collapsed .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-4 {
-  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) clamp(150px, 16vw, 210px) !important;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard.bom-side-collapsed > .bom-zone-3,
 .bom-layout-page.bom-3dx-product-dashboard.bom-side-collapsed > .bom-zone-5,
 .bom-side-collapsed .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-3,
 .bom-side-collapsed .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-5 {
-  display: none !important;
+  display: flex !important;
+  visibility: visible !important;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard .bom-sync-banner-compact.bom-hidden,
