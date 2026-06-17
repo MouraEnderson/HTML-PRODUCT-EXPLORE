@@ -2868,19 +2868,16 @@ body.ui-clean .main-clean {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 38%);
-  grid-template-rows: auto auto minmax(0, 1fr) !important;
-  grid-template-areas:
-    "header header"
-    "tools charts"
-    "table preview";
-  gap: 6px;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  gap: 4px;
   padding: 4px;
   overflow: hidden;
   box-sizing: border-box;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-1 {
-  grid-area: header;
+  grid-row: 1;
+  grid-column: 1 / -1;
   min-height: 38px;
   max-height: 64px;
   display: flex;
@@ -2891,34 +2888,48 @@ body.ui-clean .main-clean {
 }
 
 .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-2 {
-  grid-area: tools;
+  grid-row: 2;
+  grid-column: 1;
   min-height: 0 !important;
-  max-height: none;
   align-self: start;
+  z-index: 4;
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-3 {
-  grid-area: charts;
+  grid-row: 2;
+  grid-column: 2;
   align-self: start;
+  z-index: 4;
   min-height: 0;
-  max-height: min(28vh, 220px);
-  overflow: hidden;
+  max-height: none;
+  overflow: visible;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-4 {
-  grid-area: table;
+  grid-row: 2;
+  grid-column: 1;
+  z-index: 1;
   min-height: 0 !important;
-  flex: 1 1 auto;
   height: 100%;
+  padding-top: var(--bom-tools-offset, 64px);
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-5 {
-  grid-area: preview;
+  grid-row: 2;
+  grid-column: 2;
+  z-index: 1;
   min-height: 0;
+  height: 100%;
+  padding-top: var(--bom-charts-offset, 168px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   align-self: stretch;
   overflow: hidden;
 }
@@ -3070,12 +3081,24 @@ body.ui-clean .main-clean {
   min-height: 0 !important;
   overflow: visible !important;
   flex: 0 0 auto;
+  gap: 2px;
+}
+
+.bom-layout-page.bom-3dx-product-dashboard .bom-ska-diagnostics {
+  margin: 0;
+  padding: 2px 6px;
+  font-size: 0.64rem;
+  line-height: 1.15;
+  flex-shrink: 0;
+  max-height: 2.4em;
+  overflow: hidden;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard .bom-filter-bar-quad {
   flex-shrink: 0;
-  padding: 3px 5px;
-  gap: 3px 4px;
+  padding: 2px 4px;
+  gap: 2px 4px;
+  margin: 0;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard .bom-filter-bar-quad .bom-btn {
@@ -3108,13 +3131,50 @@ body.ui-clean .main-clean {
   overflow: auto;
 }
 
+.bom-layout-page.bom-3dx-product-dashboard .bom-charts-unified-scroll {
+  overflow: visible !important;
+  max-height: none !important;
+  padding: 2px 4px 0;
+}
+
+.bom-layout-page.bom-3dx-product-dashboard .bom-chart-canvas-box {
+  height: clamp(96px, 15vh, 118px) !important;
+  min-height: 96px !important;
+  max-height: 118px !important;
+  flex: 0 0 clamp(96px, 15vh, 118px) !important;
+  overflow: visible !important;
+}
+
+.bom-layout-page.bom-3dx-product-dashboard .bom-zone-3 .bom-chart-canvas-box canvas,
+.bom-layout-page.bom-3dx-product-dashboard .bom-zone-3 .bom-chart-canvas-box > div {
+  max-height: 118px !important;
+}
+
+.bom-layout-page.bom-3dx-product-dashboard .bom-zone-3 .bom-chart-legend-list {
+  margin-top: 10px !important;
+  padding-top: 6px !important;
+  border-top: 1px solid var(--bom-border);
+}
+
 .bom-layout-page.bom-3dx-product-dashboard .bom-zone-5 .bom-preview-body {
-  padding: 5px 6px;
+  padding: 4px 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard .bom-zone-5 #partPreviewImage {
-  min-height: 72px;
-  max-height: 22vh;
+  flex: 1 1 auto;
+  min-height: 120px;
+  max-height: none !important;
+  height: auto;
+}
+
+.bom-layout-page.bom-3dx-product-dashboard .bom-zone-5 .bom-preview-meta {
+  flex: 0 0 auto;
+  margin-top: 6px;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard .bom-preview-placeholder {
