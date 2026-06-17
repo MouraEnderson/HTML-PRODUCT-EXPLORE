@@ -153,7 +153,21 @@ widget-v3-08i.html?v=bom20260617c&t=3dx&probe=<commit>
 
 ---
 
-## 9. Critério final de aceite
+## 9. Sucessor — Visual aprovado (2026-06-17)
+
+O layout evoluiu após PR #22 até o aceite visual do usuário piloto no Web Page Reader.
+
+**Documento canônico:** [`docs/3DX-DASHBOARD-VISUAL-APPROVED-20260617.md`](3DX-DASHBOARD-VISUAL-APPROVED-20260617.md)
+
+- Build: `bom20260617d`
+- Commit: `abf29bc`
+- Quadrantes: FILTRO | GRAFICO / EBOM | 3DVIEW
+- Painel, Avançado e KPI row removidos da UX final
+- LayoutFit neutralizado para o grid 3DX
+
+---
+
+## 10. Critério final de aceite (PR #22 histórico)
 
 No Web Page Reader:
 
