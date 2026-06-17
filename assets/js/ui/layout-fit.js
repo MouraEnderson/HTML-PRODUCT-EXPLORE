@@ -6,7 +6,7 @@ var LayoutFit = (function () {
   'use strict';
 
   var bound = false;
-  var MID_ROW_RATIO = 0.22;
+  var MID_ROW_RATIO = 0.18;
 
   function hostEl() {
     return window.__3DX_UI_ROOT__ || document.body;
@@ -44,12 +44,13 @@ var LayoutFit = (function () {
     var zone2 = page.querySelector('.bom-zone-2-scroll');
     var zone3row = page.querySelector('.bom-charts-row-quad');
     var zone3scroll = page.querySelector('.bom-charts-unified-scroll');
-    var needMid = 64;
+    var sideCollapsed = host.classList.contains('bom-side-collapsed') || page.classList.contains('bom-side-collapsed');
+    var needMid = 54;
     if (zone2) needMid = Math.max(needMid, zone2.scrollHeight + 6);
-    if (zone3row) needMid = Math.max(needMid, zone3row.offsetHeight + 8);
-    else if (zone3scroll) needMid = Math.max(needMid, zone3scroll.offsetHeight + 8);
-    var midCap = Math.max(78, Math.floor(bodyH * MID_ROW_RATIO));
-    var midH = Math.max(58, Math.min(midCap, needMid));
+    if (!sideCollapsed && zone3row) needMid = Math.max(needMid, zone3row.offsetHeight + 8);
+    else if (!sideCollapsed && zone3scroll) needMid = Math.max(needMid, zone3scroll.offsetHeight + 8);
+    var midCap = Math.max(64, Math.floor(bodyH * MID_ROW_RATIO));
+    var midH = Math.max(50, Math.min(midCap, needMid));
     var botH = Math.max(80, bodyH - midH - 4);
 
     page.style.display = 'grid';
@@ -81,6 +82,11 @@ var LayoutFit = (function () {
   function applyView3d(host, rowH) {
     var body = host.querySelector('.bom-zone-5 .bom-preview-body');
     if (!body) return;
+    if (host.classList.contains('bom-side-collapsed')) {
+      body.style.height = '';
+      body.style.maxHeight = '';
+      return;
+    }
     body.style.height = Math.max(56, rowH - 4) + 'px';
     body.style.maxHeight = body.style.height;
   }

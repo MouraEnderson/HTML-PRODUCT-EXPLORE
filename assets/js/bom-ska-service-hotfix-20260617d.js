@@ -29,6 +29,8 @@
     maxLoadedLevel: 0,
     lastError: ''
   };
+  var RIGHT_PANEL_KEY = 'bomAnalyticsRightPanel';
+  var rightPanelPreference = null;
 
   w.__BOM_EXPECTED_BUILD__ = BUILD;
   w.__BOM_RUNTIME_BUILD__ = BUILD;
@@ -40,6 +42,40 @@
 
   function s(v) {
     return v == null ? '' : String(v).trim();
+  }
+
+  function safeStorageGet(key) {
+    try {
+      return w.localStorage ? w.localStorage.getItem(key) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function safeStorageSet(key, value) {
+    try {
+      if (w.localStorage) w.localStorage.setItem(key, value);
+    } catch (e) {}
+  }
+
+  function normalizeLoadMode(mode) {
+    mode = s(mode || '').toLowerCase();
+    if (!mode || mode === 'initial' || mode === 'fallback' || mode.indexOf('depth-') === 0) return 'root';
+    if (mode === 'incremental') return 'dashboard-row';
+    if (mode === 'next-level-global') return 'global';
+    if (mode === 'manual-root' || mode === 'advanced') return 'root';
+    return mode;
+  }
+
+  function shortSelectionSource(source) {
+    source = s(source);
+    if (!source) return 'fallback';
+    if (/DS\/Selection/i.test(source)) return 'DS/Selection';
+    if (/PlatformAPI/i.test(source)) return 'PlatformAPI';
+    if (/ExplorerContext|EXPLORER_CONTEXT/i.test(source)) return 'ExplorerContext';
+    if (/ADVANCED_MANUAL/i.test(source)) return 'Avancado';
+    if (/PRODUCT_EXPLORER_CONTEXT/i.test(source)) return 'ProductExplorer';
+    return source;
   }
 
   var lastContextMeta = null;
@@ -230,6 +266,46 @@
       '<span class="bom-ska-diag-summary">' +
       escapeHtml(summary + ' · ' + (meta.validationStatus || reason || '')) +
       '</span>';
+  }
+
+  function renderContextDiagnostics(meta, reason) {
+    meta = meta || lastContextMeta || {};
+    var panel = byId('skaBomDiagnostics');
+    if (!panel) return;
+    var banner = byId('syncBanner');
+    if (banner) {
+      banner.classList.add('bom-hidden');
+      banner.innerHTML = '';
+    }
+    var mode = normalizeLoadMode(meta.payloadMode || dynamicState.loadMode || 'root');
+    var source = shortSelectionSource(meta.selectionSource || meta.source || '');
+    var item = meta.title || meta.selectedItemLabel || '-';
+    var status = meta.validationStatus || reason || 'MISSING';
+    var summary =
+      reason === 'INITIAL'
+        ? 'Fonte: dseng · modo: ' + mode + ' · source: ' + source + ' · item: ' + item + ' · linhas: 0 · aguardando sincronizacao'
+        : 'Fonte: dseng · modo: ' + mode + ' · source: ' + source + ' · item: ' + item + ' · linhas: 0 · ' + status;
+    if ((reason === 'CONTEXT_INVALID' || status === 'MISSING' || status === 'INVALID') && source !== 'DS/Selection' && source !== 'PlatformAPI') {
+      summary += ' · selecao PSE nao disponivel por API oficial';
+    }
+    panel.classList.remove('bom-hidden', 'bom-ska-diag-expanded');
+    panel.classList.add('bom-ska-diagnostics', 'bom-ska-diagnostics-compact');
+    panel.title =
+      'contextSource=' +
+      (meta.source || '-') +
+      ' | payloadMode=' +
+      mode +
+      ' | selectionSource=' +
+      (meta.selectionSource || '-') +
+      ' | selectedTitle=' +
+      (meta.title || '-') +
+      ' | candidateRootId=' +
+      (meta.candidateRootId || '-') +
+      ' | rootIdUsed=' +
+      (meta.rootIdUsed || meta.rootId || '-') +
+      ' | validationStatus=' +
+      status;
+    panel.innerHTML = '<span class="bom-ska-diag-summary">' + escapeHtml(summary) + '</span>';
   }
 
   function renderEmptySkaState(reason, details) {
@@ -1094,6 +1170,139 @@
       '</strong> · estrutura parcial/incremental.';
   }
 
+  function updateTablePager(total) {
+    var pager = byId('tablePager');
+    if (pager) {
+      var modeLabel = normalizeLoadMode(dynamicState.loadMode || 'root');
+      var suffix = w.__bomSkaLastPayload ? ' carregadas · modo ' + modeLabel + ' · estrutura parcial' : '';
+      pager.textContent = total + ' pecas' + suffix;
+    }
+  }
+
+  function renderSkaKpiSummary(payload) {
+    var grid = byId('kpiGrid');
+    if (!grid || !payload) return;
+    var counts = payload.counts || {};
+    var expected = getSkaExpectedTotal(payload);
+    var level1 = (counts.levelCounts && counts.levelCounts['1']) || 0;
+    var markers = [
+      { tone: 'green', label: 'Total linhas', value: expected },
+      { tone: 'blue', label: 'Referencias', value: counts.referenceCount != null ? counts.referenceCount : '-' },
+      { tone: 'purple', label: 'Nivel carregado', value: counts.depth != null ? counts.depth : DEFAULT_DEPTH },
+      { tone: 'red', label: 'Nivel 1', value: level1 },
+      { tone: 'blue', label: 'Status', value: (payload.diagnostics && payload.diagnostics.status) || 'OK' },
+      {
+        tone: 'green',
+        label: 'Modo',
+        value: normalizeLoadMode(
+          (payload.__skaSyncMeta && payload.__skaSyncMeta.payloadMode) ||
+            (payload.__skaDynamicState && payload.__skaDynamicState.loadMode) ||
+            'root'
+        )
+      }
+    ];
+    grid.innerHTML = markers
+      .map(function (m) {
+        return (
+          '<div class="stat-marker stat-marker-' +
+          m.tone +
+          '"><span class="stat-marker-label">' +
+          escapeHtml(String(m.label)) +
+          '</span><span class="stat-marker-value">' +
+          escapeHtml(String(m.value)) +
+          '</span></div>'
+        );
+      })
+      .join('');
+  }
+
+  function updateSyncBanner(payload) {
+    var banner = byId('syncBanner');
+    if (!banner) return;
+    banner.classList.add('bom-hidden');
+    banner.innerHTML = '';
+  }
+
+  function renderSkaDiagnostics(payload) {
+    var panel = byId('skaBomDiagnostics');
+    if (!panel) return;
+    payload = payload || {};
+    var diag = payload.diagnostics || {};
+    var expected = getSkaExpectedTotal(payload);
+    var endpoints = (diag.endpointsUsed || [])
+      .map(function (ep) {
+        return (ep.method || 'GET') + ' ' + (ep.endpoint || '?') + ' (' + (ep.status || '?') + ')';
+      })
+      .join('; ');
+    var syncMeta = payload.__skaSyncMeta || {};
+    var dyn = payload.__skaDynamicState || {};
+    var resolution = payload.resolution || {};
+    var candidates = syncMeta.selectedCandidates || [];
+    var selectedCandidatesText = candidates
+      .slice(0, 6)
+      .map(function (c) {
+        return [c.source || '?', c.id || c.physicalId || c.name || '?', c.title || c.label || '']
+          .filter(Boolean)
+          .join(' | ');
+      })
+      .join(' ; ');
+    var itemLabel =
+      syncMeta.selectedItemLabel ||
+      (payload.root && (payload.root.title || payload.root.id)) ||
+      resolution.rootTitle ||
+      resolution.rootId ||
+      '-';
+    var payloadMode = normalizeLoadMode(syncMeta.payloadMode || dyn.loadMode || dynamicState.loadMode || 'root');
+    var sourceLabel = shortSelectionSource(syncMeta.selectionSource || syncMeta.source || '');
+    var strategy = payload.strategy || dyn.strategy || 'expand-item';
+    var selectionNote =
+      payloadMode === 'root' && sourceLabel !== 'DS/Selection' && sourceLabel !== 'PlatformAPI' && sourceLabel !== 'Avancado'
+        ? ' · selecao PSE nao disponivel por API oficial; usando root atual'
+        : '';
+    var summary =
+      'Fonte: dseng · modo: ' +
+      payloadMode +
+      ' · source: ' +
+      sourceLabel +
+      ' · item: ' +
+      itemLabel +
+      ' · strategy: ' +
+      strategy +
+      ' · linhas: ' +
+      expected +
+      ' · ' +
+      (dyn.partial === false ? 'recorte completo' : 'parcial') +
+      selectionNote;
+    var detail =
+      'payloadEndpoint=' +
+      (syncMeta.payloadEndpoint || '') +
+      ' | payloadMode=' +
+      payloadMode +
+      ' | selectionSource=' +
+      (syncMeta.selectionSource || '') +
+      ' | selectedItem=' +
+      itemLabel +
+      ' | selectedCandidates=' +
+      selectedCandidatesText +
+      ' | rootId=' +
+      (syncMeta.rootId || resolution.rootId || '') +
+      ' | resolution.status=' +
+      (resolution.status || '') +
+      ' | endpointsUsed=' +
+      (endpoints || '(none)');
+
+    panel.classList.remove('bom-hidden');
+    panel.classList.add('bom-ska-diagnostics', 'bom-ska-diagnostics-compact');
+    panel.classList.remove('bom-ska-diag-expanded');
+    panel.title = detail;
+    panel.innerHTML =
+      '<span class="bom-ska-diag-summary">' +
+      escapeHtml(summary) +
+      '</span><span class="bom-ska-diag-chip">candidatos: ' +
+      escapeHtml(String(candidates.length)) +
+      '</span>';
+  }
+
   function finalizeSkaUi(payload) {
     var rootName = (payload.root && payload.root.title) || (payload.root && payload.root.id) || 'E-BOM';
     var expected = getSkaExpectedTotal(payload);
@@ -1279,6 +1488,36 @@
       '<span class="bom-ska-diag-summary">Seleção específica do Product Explorer não disponível pelo contexto oficial · usando root atual ou expansão por linha</span>';
   }
 
+  function renderSelectionNotResolved(errPayload, ctxMeta) {
+    var resolution = (errPayload && errPayload.resolution) || {};
+    var attempts = resolution.attempts || [];
+    var panel = byId('skaBomDiagnostics');
+    if (!panel) return;
+    var source = shortSelectionSource((ctxMeta && (ctxMeta.selectionSource || ctxMeta.source)) || 'fallback');
+    var item = (ctxMeta && ctxMeta.title) || '-';
+    panel.classList.remove('bom-hidden', 'bom-ska-diag-expanded');
+    panel.classList.add('bom-ska-diagnostics', 'bom-ska-diagnostics-compact');
+    panel.title =
+      'contextSource=' +
+      ((ctxMeta && ctxMeta.source) || '-') +
+      ' | resolution.status=NOT_RESOLVED' +
+      (attempts.length
+        ? ' | attempts=' +
+          attempts
+            .slice(0, 8)
+            .map(function (a) {
+              return (a.strategy || '?') + ' / ' + (a.candidate || '?') + ' / ' + (a.status || '?');
+            })
+            .join(' ; ')
+        : '');
+    panel.innerHTML =
+      '<span class="bom-ska-diag-summary">Fonte: dseng · modo: root · source: ' +
+      escapeHtml(source) +
+      ' · item: ' +
+      escapeHtml(item) +
+      ' · linhas: 0 · selecao PSE nao disponivel por API oficial; usando root atual ou expansao por linha</span>';
+  }
+
   function buildExplorerSelectionPayload(manualRootId) {
     var provider = w.ProductExplorerSyncProvider;
     var rawCtx =
@@ -1457,7 +1696,7 @@
           validationStatus: 'RESOLVED',
           resolutionStrategy: payload.resolution && payload.resolution.strategy
         };
-        resetDynamicState(payload, depth > 1 ? 'depth-' + depth : 'initial', selectionPayload.selection);
+        resetDynamicState(payload, selectionPayload.payloadMode || (depth > 1 ? 'depth-' + depth : 'initial'), selectionPayload.selection);
         lastContextMeta = {
           source: selectionPayload.rawContext.source,
           title: lastSyncTitle,
@@ -1563,6 +1802,63 @@
   w.refreshBomFromSka = refreshBom;
   w.loadViaSkaService = syncWithProductExplorer;
 
+  function shouldAutoCollapseRightPanel(root) {
+    var width = root && root.clientWidth ? root.clientWidth : (w.innerWidth || 0);
+    return width > 0 && width < 1050;
+  }
+
+  function isRightPanelCollapsed(root) {
+    if (rightPanelPreference == null) rightPanelPreference = safeStorageGet(RIGHT_PANEL_KEY);
+    if (rightPanelPreference === 'collapsed') return true;
+    if (rightPanelPreference === 'open') return false;
+    return shouldAutoCollapseRightPanel(root);
+  }
+
+  function applyRightPanelState() {
+    var root = uiRoot();
+    if (!root) return;
+    var collapsed = isRightPanelCollapsed(root);
+    root.classList.toggle('bom-side-collapsed', collapsed);
+    if (document && document.body) document.body.classList.toggle('bom-side-collapsed', collapsed);
+    var btn = byId('btnToggleRightPanel');
+    if (btn) {
+      btn.textContent = collapsed ? 'Painel +' : 'Painel';
+      btn.title = collapsed ? 'Mostrar graficos e preview' : 'Recolher graficos e preview para ampliar a tabela';
+      btn.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+    }
+    if (w.LayoutFit && w.LayoutFit.apply) {
+      try {
+        w.LayoutFit.apply();
+      } catch (e) {}
+    }
+  }
+
+  function ensureRightPanelToggle() {
+    var btn = byId('btnToggleRightPanel');
+    if (!btn) {
+      var actions = uiRoot().querySelector && uiRoot().querySelector('.bom-topbar-actions');
+      var advanced = uiRoot().querySelector && uiRoot().querySelector('.bom-topbar-more');
+      if (!actions) return null;
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.id = 'btnToggleRightPanel';
+      btn.className = 'bom-btn bom-btn-secondary bom-btn-compact';
+      btn.setAttribute('aria-label', 'Recolher ou expandir painel direito');
+      if (advanced && advanced.parentNode === actions) actions.insertBefore(btn, advanced);
+      else actions.appendChild(btn);
+    }
+    if (!btn.__BOM_SIDE_TOGGLE_BOUND__) {
+      btn.__BOM_SIDE_TOGGLE_BOUND__ = true;
+      btn.addEventListener('click', function (ev) {
+        if (ev) ev.preventDefault();
+        rightPanelPreference = isRightPanelCollapsed(uiRoot()) ? 'open' : 'collapsed';
+        safeStorageSet(RIGHT_PANEL_KEY, rightPanelPreference);
+        applyRightPanelState();
+      });
+    }
+    applyRightPanelState();
+    return btn;
+  }
 
   function applyTopbarCompactLabels() {
     var root = uiRoot();
@@ -1587,6 +1883,7 @@
     if (badge) {
       badge.textContent = compact ? 'SKA/dseng' : 'Fonte: SKA BOM Service / dseng';
     }
+    applyRightPanelState();
   }
 
   function bindTestRootButton() {
@@ -1688,6 +1985,7 @@
   function patchUiLabels() {
     ensureSyncExplorerButton();
     ensureDynamicControls();
+    ensureRightPanelToggle();
     bindDynamicTableExpansion();
     var syncBtn = byId('btnSyncExplorer');
     if (syncBtn && syncBtn.textContent.indexOf('Sincronizar') < 0) {
@@ -1713,6 +2011,10 @@
       banner.classList.remove('bom-hidden');
       banner.innerHTML =
         'Camada analítica do <strong>Product Structure Explorer</strong>. Fonte de dados: <strong>SKA BOM Service</strong> / dseng.';
+    }
+    if (banner) {
+      banner.classList.add('bom-hidden');
+      banner.innerHTML = '';
     }
     updateExplorerContextStatus(
       w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.getContext && w.ProductExplorerSyncProvider.getContext()
