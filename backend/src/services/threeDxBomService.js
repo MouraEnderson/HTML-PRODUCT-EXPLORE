@@ -2,6 +2,7 @@ import { getThreeDxConfig, getPublicEnvironmentFlags } from './threeDxConfig.js'
 import { ThreeDxDsengClient, assertDsengConfigured } from './threeDxDsengClient.js';
 import { resolveSelectionToEngItem } from './selectionResolver.js';
 import { normalizeExpandItemPayload } from './threeDxExpandItemNormalizer.js';
+import { attachScopeToPayload } from './scopeContract.js';
 import {
   SOURCE,
   CJ_MESA_ROOT_ID,
@@ -97,8 +98,28 @@ function parseStructureInput(body, defaultDepth = 1, mode = 'dseng-official') {
     expandDepth: Number(body.expandDepth ?? depthResult.depth),
     includeRoot: body.includeRoot !== false,
     mode: body.mode || mode,
-    expandStrategy: body.expandStrategy || ''
+    expandStrategy: body.expandStrategy || '',
+    scopeMode: body.scopeMode || body.payloadMode || '',
+    selectionSource: body.selectionSource || ''
   };
+}
+
+function scopeOptionsFromParsed(parsed, data, overrides = {}) {
+  const root = data?.root || {};
+  return {
+    mode: overrides.mode || parsed.scopeMode || 'root',
+    source: overrides.source || 'dseng',
+    item: overrides.item || root.title || root.id || parsed.rootId || '',
+    rootId: overrides.rootId || parsed.rootId || root.id || '',
+    expandStrategy: parsed.expandStrategy === 'expand-item' ? 'expand-item' : 'eng-instances',
+    expandDepth: parsed.expandDepth || parsed.depth || 1,
+    isPartial: overrides.isPartial !== false,
+    selectionSource: parsed.selectionSource || overrides.selectionSource || ''
+  };
+}
+
+function withStructureScope(data, parsed, overrides = {}) {
+  return attachScopeToPayload(data, scopeOptionsFromParsed(parsed, data, overrides));
 }
 
 function buildRootMeta(rootId) {
@@ -166,21 +187,25 @@ export function resolveMockStructure(body) {
 
   return {
     ok: true,
-    data: buildStructureSuccess({
-      mode: 'mock',
-      root: rootMeta,
-      rows,
-      depth: parsed.depth,
-      includeRoot: parsed.includeRoot,
-      diagnostics: buildDiagnostics({
+    data: withStructureScope(
+      buildStructureSuccess({
         mode: 'mock',
-        endpointsUsed: [],
-        durationMs: 0,
-        warnings: ['Mock response only. No 3DEXPERIENCE call was executed in PR 2.'],
-        errors: [],
-        levelCounts: counts.levelCounts
-      })
-    })
+        root: rootMeta,
+        rows,
+        depth: parsed.depth,
+        includeRoot: parsed.includeRoot,
+        diagnostics: buildDiagnostics({
+          mode: 'mock',
+          endpointsUsed: [],
+          durationMs: 0,
+          warnings: ['Mock response only. No 3DEXPERIENCE call was executed in PR 2.'],
+          errors: [],
+          levelCounts: counts.levelCounts
+        })
+      }),
+      parsed,
+      { mode: parsed.scopeMode || 'root', isPartial: parsed.depth > 0 }
+    )
   };
 }
 
@@ -316,25 +341,28 @@ async function resolveDsengStructure(parsed, config) {
 
   return {
     ok: true,
-    data: buildStructureSuccess({
-      mode: 'dseng-official',
-      root,
-      rows,
-      depth: parsed.depth,
-      includeRoot: parsed.includeRoot,
-      diagnostics: buildDiagnostics({
+    data: withStructureScope(
+      buildStructureSuccess({
         mode: 'dseng-official',
-        endpointsUsed: client.getEndpointsUsed(),
-        durationMs: Date.now() - started,
-        warnings,
-        errors,
-        levelCounts: counts.levelCounts,
-        missingChildReferenceIdsCount,
-        skippedInstancesCount,
-        missingChildReferenceSampleKeys,
-        truncatedInstancesCount
-      })
-    })
+        root,
+        rows,
+        depth: parsed.depth,
+        includeRoot: parsed.includeRoot,
+        diagnostics: buildDiagnostics({
+          mode: 'dseng-official',
+          endpointsUsed: client.getEndpointsUsed(),
+          durationMs: Date.now() - started,
+          warnings,
+          errors,
+          levelCounts: counts.levelCounts,
+          missingChildReferenceIdsCount,
+          skippedInstancesCount,
+          missingChildReferenceSampleKeys,
+          truncatedInstancesCount
+        })
+      }),
+      parsed
+    )
   };
 }
 
@@ -387,19 +415,25 @@ async function resolveDsengExpandItem(parsed, config) {
       endpointsUsed: client.getEndpointsUsed(),
       durationMs: Date.now() - started
     });
-    return { ok: true, data };
+    return { ok: true, data: withStructureScope(data, parsed) };
   } catch (error) {
     return failureFromUpstream(error, client, parsed.mode || 'dseng-official');
   }
 }
 
-export async function buildExpandItemFromRoot({ rootId, expandDepth = 1, includeRoot, mode = 'dseng-official' }, config) {
+export async function buildExpandItemFromRoot(
+  { rootId, expandDepth = 1, includeRoot, mode = 'dseng-official', scopeMode = '', selectionSource = '' },
+  config
+) {
   const parsed = {
     rootId: normalizeRootId(rootId),
     expandDepth,
     depth: expandDepth,
     includeRoot: includeRoot !== false,
-    mode
+    mode,
+    expandStrategy: 'expand-item',
+    scopeMode,
+    selectionSource
   };
   if (!parsed.rootId) {
     return {
@@ -483,7 +517,9 @@ function parseResolveSelectionInput(body, defaultDepth = 1, mode = 'dseng-offici
     includeRoot: body.includeRoot !== false,
     mode: body.mode || mode,
     expandStrategy: body.expandStrategy || '',
-    manualRootId: normalizeRootId(body.manualRootId || selection.manualRootId || selection.normalized?.manualRootId)
+    manualRootId: normalizeRootId(body.manualRootId || selection.manualRootId || selection.normalized?.manualRootId),
+    scopeMode: body.scopeMode || body.payloadMode || 'selected-branch',
+    selectionSource: body.selectionSource || selection.source || ''
   };
 }
 
@@ -580,7 +616,9 @@ export async function resolveSelection(body) {
           rootId: resolution.rootId,
           expandDepth: parsed.expandDepth || parsed.depth || 1,
           includeRoot: parsed.includeRoot,
-          mode: parsed.mode
+          mode: parsed.mode,
+          scopeMode: parsed.scopeMode || 'selected-branch',
+          selectionSource: parsed.selectionSource
         },
         config
       )

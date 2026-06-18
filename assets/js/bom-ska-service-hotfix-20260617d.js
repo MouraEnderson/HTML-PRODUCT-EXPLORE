@@ -6,6 +6,9 @@
   var BUILD = 'bom20260617d';
   var SKA_URL = 'https://bom-resolver.onrender.com/api/3dx/bom/structure';
   var RESOLVE_URL = 'https://bom-resolver.onrender.com/api/3dx/bom/resolve-selection';
+  var VIZ_URL = 'https://bom-resolver.onrender.com/api/3dx/visualization/resolve';
+  var LIFECYCLE_TRANSITIONS_URL = 'https://bom-resolver.onrender.com/api/3dx/lifecycle/transitions';
+  var LIFECYCLE_CHANGE_URL = 'https://bom-resolver.onrender.com/api/3dx/lifecycle/change-maturity';
   var DATA_SOURCE = 'ska-bom-service';
   var DEFAULT_DEPTH = 1;
   var SESSION_KEY = '3dx_bom_snapshot_v1';
@@ -31,6 +34,9 @@
   };
   var RIGHT_PANEL_KEY = 'bomAnalyticsRightPanel';
   var rightPanelPreference = null;
+  var activeEbomRow = null;
+  var activeLifecycleRequestId = 0;
+  var activeVisualizationRequestId = 0;
 
   w.__BOM_EXPECTED_BUILD__ = BUILD;
   w.__BOM_RUNTIME_BUILD__ = BUILD;
@@ -363,6 +369,370 @@
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
+  }
+
+  function findSkaRowForNode(node) {
+    if (!node || !w.__bomSkaLastPayload || !w.__bomSkaLastPayload.rows) return null;
+    var rows = w.__bomSkaLastPayload.rows;
+    var ref = s(node.referenceId || node.referencePhysicalId || node.sourcePhysicalId || node.physicalid);
+    var rowKey = s(node.rowKey);
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      if (rowKey && s(row.rowKey) === rowKey) return row;
+      if (ref && (s(row.referenceId) === ref || s(row.physicalId) === ref)) return row;
+    }
+    return null;
+  }
+
+  function buildActiveEbomRow(node, skaRow) {
+    node = node || {};
+    skaRow = skaRow || {};
+    var referenceId = s(skaRow.referenceId || skaRow.physicalId || node.referenceId || node.sourcePhysicalId || node.physicalid);
+    return {
+      activeEbomRow: node,
+      activeRowKey: s(skaRow.rowKey || node.rowKey),
+      activeReferenceId: referenceId,
+      activePhysicalId: referenceId,
+      activeInstanceId: s(skaRow.instanceId || node.instanceId),
+      activePath: Array.isArray(skaRow.path) ? skaRow.path.slice() : [],
+      activeTitle: s(node.title || skaRow.title || node.name),
+      activeName: s(node.name || skaRow.name || node.title),
+      activeRevision: s(node.revision || skaRow.revision),
+      activeMaturity: s(node.maturity || node.state || skaRow.maturity || skaRow.state),
+      activeOwner: s(node.owner || skaRow.owner),
+      activeType: s(node.type || node.displayType || skaRow.type),
+      activeDescription: s(node.description || skaRow.description),
+      activeState: s(node.state || node.maturity || skaRow.state || skaRow.maturity)
+    };
+  }
+
+  function getScopeModeFromPayload(payload) {
+    payload = payload || w.__bomSkaLastPayload || {};
+    var scope = payload.scope || {};
+    if (scope.mode) return scope.mode;
+    var syncMeta = payload.__skaSyncMeta || {};
+    var dyn = payload.__skaDynamicState || {};
+    return normalizeLoadMode(syncMeta.payloadMode || dyn.loadMode || dynamicState.loadMode || 'root');
+  }
+
+  function formatDsengCountLine(payload, total) {
+    payload = payload || w.__bomSkaLastPayload || {};
+    var counts = payload.counts || {};
+    var scope = payload.scope || {};
+    var loaded = counts.loadedRows != null ? counts.loadedRows : total != null ? total : counts.totalRows || 0;
+    var parts = [loaded + ' linhas dseng'];
+    if (counts.occurrenceCount != null) parts.push(counts.occurrenceCount + ' ocorrencias');
+    if (counts.uniqueReferenceCount != null) {
+      parts.push(counts.uniqueReferenceCount + ' refs unicas');
+    } else if (counts.referenceCount != null) {
+      parts.push(counts.referenceCount + ' refs');
+    }
+    parts.push(getScopeModeFromPayload(payload));
+    var depth = scope.expandDepth != null ? scope.expandDepth : payload.expandDepth;
+    if (depth == null && dynamicState.lastDepth != null) depth = dynamicState.lastDepth;
+    if (depth != null && depth !== '') parts.push('expandDepth ' + depth);
+    parts.push(scope.isPartial === false ? 'completo' : 'parcial');
+    return parts.join(' · ');
+  }
+
+  function ownerLabel(node) {
+    if (typeof w.MetricsEngine !== 'undefined' && w.MetricsEngine.ownerLabel) {
+      return w.MetricsEngine.ownerLabel(node.owner);
+    }
+    return s(node.owner || '—') || '—';
+  }
+
+  function renderEbomSidePanel(node, active, refs) {
+    if (!refs || !refs.metaEl) return;
+    active = active || buildActiveEbomRow(node, findSkaRowForNode(node));
+    refs.metaEl.innerHTML =
+      '<dl class="bom-preview-dl">' +
+      '<dt>Título</dt><dd>' +
+      escapeHtml(active.activeTitle || '—') +
+      '</dd>' +
+      '<dt>Descrição</dt><dd>' +
+      escapeHtml(active.activeDescription || '—') +
+      '</dd>' +
+      '<dt>Revisão</dt><dd>' +
+      escapeHtml(active.activeRevision || '—') +
+      '</dd>' +
+      '<dt>Proprietário</dt><dd>' +
+      escapeHtml(ownerLabel(node)) +
+      '</dd>' +
+      '<dt>Maturidade</dt><dd>' +
+      escapeHtml(active.activeMaturity || '—') +
+      '</dd>' +
+      '<dt>Estado</dt><dd>' +
+      escapeHtml(active.activeState || '—') +
+      '</dd>' +
+      '<dt>Reference ID</dt><dd class="bom-preview-id">' +
+      escapeHtml(active.activeReferenceId || '—') +
+      '</dd>' +
+      '<dt>Instance ID</dt><dd class="bom-preview-id">' +
+      escapeHtml(active.activeInstanceId || '—') +
+      '</dd>' +
+      '<dt>Path</dt><dd class="bom-preview-id">' +
+      escapeHtml((active.activePath || []).join(' > ') || '—') +
+      '</dd>' +
+      '</dl>' +
+      '<div class="bom-maturity-actions" id="bomMaturityActions">' +
+      '<button type="button" class="bom-btn bom-btn-secondary bom-btn-compact" id="btnChangeMaturity">Alterar maturidade</button>' +
+      '<p class="bom-maturity-hint" id="bomMaturityHint"></p>' +
+      '</div>';
+    bindMaturityAction(active);
+  }
+
+  function postJson(url, body) {
+    return fetch(url, {
+      method: 'POST',
+      credentials: 'omit',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {})
+    }).then(function (response) {
+      return response.text().then(function (text) {
+        var data = null;
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch (e) {
+          data = { ok: false, message: text || 'Resposta inválida' };
+        }
+        return { response: response, data: data };
+      });
+    });
+  }
+
+  function loadVisualizationForRow(active) {
+    if (!active || !active.activeReferenceId) return;
+    var reqId = ++activeVisualizationRequestId;
+    if (w.Bom3DViewer && w.Bom3DViewer.showLoading) {
+      w.Bom3DViewer.showLoading(active.activeTitle);
+    }
+    postJson(VIZ_URL, {
+      referenceId: active.activeReferenceId,
+      physicalId: active.activePhysicalId,
+      instanceId: active.activeInstanceId,
+      title: active.activeTitle,
+      name: active.activeName,
+      type: active.activeType,
+      path: active.activePath,
+      mode: 'dseng-official'
+    })
+      .then(function (result) {
+        if (reqId !== activeVisualizationRequestId) return;
+        var data = result.data || {};
+        if (data.ok && data.modelUrl) {
+          if (w.Bom3DViewer && w.Bom3DViewer.show) {
+            w.Bom3DViewer.show({
+              modelUrl: data.modelUrl,
+              format: data.format,
+              title: active.activeTitle
+            });
+          }
+          return;
+        }
+        var code = data.code || (data.error && data.error.code) || 'OFFICIAL_3D_REPRESENTATION_API_REQUIRED';
+        var msg = data.message || 'Representação 3D web não disponível para este item.';
+        if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
+          w.Bom3DViewer.showMessage(msg, code);
+        }
+      })
+      .catch(function () {
+        if (reqId !== activeVisualizationRequestId) return;
+        if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
+          w.Bom3DViewer.showMessage(
+            'Representação 3D web não disponível para este item.',
+            'VISUALIZATION_REQUEST_FAILED'
+          );
+        }
+      });
+  }
+
+  function updateMaturityHint(text, kind) {
+    var hint = byId('bomMaturityHint');
+    if (!hint) return;
+    hint.textContent = text || '';
+    hint.className = 'bom-maturity-hint';
+    if (kind === 'err') hint.classList.add('bom-maturity-hint-err');
+    if (kind === 'ok') hint.classList.add('bom-maturity-hint-ok');
+  }
+
+  function loadLifecycleForRow(active) {
+    if (!active || !active.activeReferenceId) return;
+    var reqId = ++activeLifecycleRequestId;
+    updateMaturityHint('Consultando transições permitidas…', 'ok');
+    postJson(LIFECYCLE_TRANSITIONS_URL, {
+      referenceId: active.activeReferenceId,
+      physicalId: active.activePhysicalId,
+      currentState: active.activeMaturity || active.activeState,
+      type: active.activeType,
+      mode: 'dseng-official'
+    })
+      .then(function (result) {
+        if (reqId !== activeLifecycleRequestId) return;
+        var data = result.data || {};
+        if (data.code === 'OFFICIAL_LIFECYCLE_API_REQUIRED') {
+          updateMaturityHint(
+            'API oficial de lifecycle não configurada. Estado atual: ' +
+              ((data.item && data.item.currentState) || active.activeMaturity || '—'),
+            'warn'
+          );
+          return;
+        }
+        if (data.transitions && data.transitions.length) {
+          updateMaturityHint(data.transitions.length + ' transição(ões) disponível(is).', 'ok');
+          return;
+        }
+        updateMaturityHint(data.message || 'Nenhuma transição retornada.', 'warn');
+      })
+      .catch(function () {
+        if (reqId !== activeLifecycleRequestId) return;
+        updateMaturityHint('Falha ao consultar transições de maturidade.', 'err');
+      });
+  }
+
+  function closeMaturityModal() {
+    var modal = byId('bomMaturityModal');
+    if (modal) modal.remove();
+  }
+
+  function openMaturityModal(active, lifecycleData) {
+    closeMaturityModal();
+    lifecycleData = lifecycleData || {};
+    var current =
+      (lifecycleData.item && lifecycleData.item.currentState) ||
+      active.activeMaturity ||
+      active.activeState ||
+      '—';
+    var modal = document.createElement('div');
+    modal.id = 'bomMaturityModal';
+    modal.className = 'bom-maturity-modal';
+    modal.innerHTML =
+      '<div class="bom-maturity-modal-card" role="dialog" aria-modal="true">' +
+      '<h3>Alterar maturidade (PLM)</h3>' +
+      '<p><strong>Item:</strong> ' +
+      escapeHtml(active.activeTitle) +
+      '</p>' +
+      '<p><strong>Revisão:</strong> ' +
+      escapeHtml(active.activeRevision || '—') +
+      '</p>' +
+      '<p><strong>Estado atual:</strong> ' +
+      escapeHtml(current) +
+      '</p>' +
+      '<label class="bom-filter-item"><span>Estado destino</span>' +
+      '<input type="text" id="bomMaturityTargetState" class="bom-input" placeholder="ex.: RELEASED" /></label>' +
+      '<p class="bom-maturity-warning">Operação oficial no 3DEXPERIENCE. Requer confirmação e permissão PLM.</p>' +
+      '<div class="bom-maturity-modal-actions">' +
+      '<button type="button" class="bom-btn bom-btn-secondary" id="bomMaturityCancel">Cancelar</button>' +
+      '<button type="button" class="bom-btn bom-btn-primary" id="bomMaturityConfirm">Confirmar mudança</button>' +
+      '</div>' +
+      '<p class="bom-maturity-modal-status" id="bomMaturityModalStatus"></p>' +
+      '</div>';
+    uiRoot().appendChild(modal);
+    var cancelBtn = byId('bomMaturityCancel');
+    var confirmBtn = byId('bomMaturityConfirm');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', function () {
+        closeMaturityModal();
+      });
+    }
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', function () {
+        var target = s(byId('bomMaturityTargetState') && byId('bomMaturityTargetState').value);
+        var statusEl = byId('bomMaturityModalStatus');
+        if (!target) {
+          if (statusEl) statusEl.textContent = 'Informe o estado destino.';
+          return;
+        }
+        if (statusEl) statusEl.textContent = 'Executando mudança via backend…';
+        postJson(LIFECYCLE_CHANGE_URL, {
+          referenceId: active.activeReferenceId,
+          physicalId: active.activePhysicalId,
+          currentState: current,
+          targetState: target,
+          confirm: true,
+          mode: 'dseng-official'
+        })
+          .then(function (result) {
+            var data = result.data || {};
+            if (data.ok) {
+              if (statusEl) statusEl.textContent = 'Maturidade atualizada. Recarregando dashboard…';
+              closeMaturityModal();
+              refreshBom().catch(function () {});
+              return;
+            }
+            var code = data.code || (data.error && data.error.code) || 'LIFECYCLE_ERROR';
+            var msg = data.message || 'Transição não permitida ou API oficial indisponível.';
+            if (statusEl) statusEl.textContent = code + ': ' + msg;
+            updateMaturityHint(code + ': ' + msg, 'err');
+          })
+          .catch(function () {
+            if (statusEl) statusEl.textContent = 'Falha na chamada de lifecycle.';
+          });
+      });
+    }
+  }
+
+  function bindMaturityAction(active) {
+    var btn = byId('btnChangeMaturity');
+    if (!btn || btn.__BOM_MATURITY_BOUND__) return;
+    btn.__BOM_MATURITY_BOUND__ = true;
+    btn.addEventListener('click', function () {
+      postJson(LIFECYCLE_TRANSITIONS_URL, {
+        referenceId: active.activeReferenceId,
+        physicalId: active.activePhysicalId,
+        currentState: active.activeMaturity || active.activeState,
+        type: active.activeType,
+        mode: 'dseng-official'
+      })
+        .then(function (result) {
+          openMaturityModal(active, result.data || {});
+        })
+        .catch(function () {
+          openMaturityModal(active, {
+            code: 'LIFECYCLE_REQUEST_FAILED',
+            item: { currentState: active.activeMaturity || active.activeState }
+          });
+        });
+    });
+  }
+
+  function handleEbomRowSelect(node) {
+    if (!node) return;
+    var skaRow = findSkaRowForNode(node);
+    activeEbomRow = buildActiveEbomRow(node, skaRow);
+    w.__bomActiveEbomRow = activeEbomRow;
+
+    var refs = w.PartPreview && w.PartPreview.ensureRefs && w.PartPreview.ensureRefs();
+    if (!refs || !refs.panel) return;
+
+    if (refs.hintEl) refs.hintEl.style.display = 'none';
+    if (refs.titleEl) refs.titleEl.textContent = activeEbomRow.activeTitle || activeEbomRow.activeName || 'Peça';
+    renderEbomSidePanel(node, activeEbomRow, refs);
+    refs.panel.classList.add('bom-preview-active');
+    loadVisualizationForRow(activeEbomRow);
+    loadLifecycleForRow(activeEbomRow);
+  }
+
+  function patchPartPreviewForSka() {
+    if (!w.PartPreview || w.PartPreview.__SKA_EBOM_PATCHED__) return;
+    var origShow = w.PartPreview.show;
+    var origClear = w.PartPreview.clear;
+    w.PartPreview.show = function (node) {
+      if (w.__BOM_DATA_SOURCE__ !== DATA_SOURCE) {
+        return origShow.apply(this, arguments);
+      }
+      handleEbomRowSelect(node);
+    };
+    w.PartPreview.clear = function () {
+      activeEbomRow = null;
+      w.__bomActiveEbomRow = null;
+      if (w.Bom3DViewer && w.Bom3DViewer.clear) w.Bom3DViewer.clear();
+      return origClear.apply(this, arguments);
+    };
+    w.PartPreview.__SKA_EBOM_PATCHED__ = true;
+    if (w.Bom3DViewer && w.Bom3DViewer.init) {
+      w.Bom3DViewer.init('#partPreviewImage');
+    }
   }
 
   function formatBuildPillLabel(b) {
@@ -1138,18 +1508,17 @@
       pager.textContent = total + ' pecas';
       return;
     }
+    var line = formatDsengCountLine(w.__bomSkaLastPayload, total);
     var syncMeta = w.__bomSkaLastPayload.__skaSyncMeta || {};
-    var dyn = w.__bomSkaLastPayload.__skaDynamicState || {};
-    var mode = normalizeLoadMode(syncMeta.payloadMode || dyn.loadMode || dynamicState.loadMode || 'root');
-    var phrase = tablePagerModePhrase(mode);
+    var mode = getScopeModeFromPayload(w.__bomSkaLastPayload);
     var extra =
       mode === 'root' &&
       syncMeta.selectionSource !== 'DS/Selection/Selection.getSelection' &&
       syncMeta.selectionSource !== 'PlatformAPI.getSelection' &&
       syncMeta.source !== 'ADVANCED_MANUAL'
-        ? ' · Explorer pode mostrar mais itens visuais'
+        ? ' · Explorer visual pode diferir do recorte dseng'
         : '';
-    pager.textContent = total + ' pecas carregadas · ' + phrase + ' · estrutura parcial' + extra;
+    pager.textContent = line + extra;
   }
 
   function renderSkaKpiSummary(payload) {
@@ -1800,15 +2169,9 @@
     updateTablePager(getSkaExpectedTotal(payload));
     apply3dxProductDashboardLayout();
     var expected = getSkaExpectedTotal(payload);
-    var syncMeta = payload.__skaSyncMeta || {};
-    var mode = normalizeLoadMode(syncMeta.payloadMode || dynamicState.loadMode || 'root');
     var statusEl = byId('statusBar');
     if (statusEl) {
-      statusEl.textContent =
-        expected +
-        ' linhas dseng · modo ' +
-        mode +
-        ' · estrutura parcial · Explorer expandido pode mostrar mais objetos';
+      statusEl.textContent = formatDsengCountLine(payload, expected) + ' · Explorer visual pode diferir do recorte dseng';
       statusEl.className = 'bom-st bom-st-ok';
     }
   }
@@ -2351,6 +2714,7 @@
     disableLegacyOperationalBlockers();
     neutralizeLayoutFitFor3dx();
     patchAppHooks();
+    patchPartPreviewForSka();
     installExplorerSync();
     patchUiLabels();
     bindSyncButtons();
@@ -2363,6 +2727,7 @@
       syncBuild();
       bindSyncButtons();
       patchUiLabels();
+      patchPartPreviewForSka();
       if (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.refresh) {
         w.ProductExplorerSyncProvider.refresh('post-boot');
       }
@@ -2400,6 +2765,9 @@
       partial: dynamicState.partial,
       lastError: dynamicState.lastError
     };
+  };
+  w.getActiveEbomRow = function () {
+    return activeEbomRow;
   };
 
   /* install deferred — runtime calls __bomSkaServiceInstall */

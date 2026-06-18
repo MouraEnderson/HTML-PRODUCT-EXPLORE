@@ -3261,3 +3261,94 @@ body.ui-clean .main-clean {
 .bom-explorer-context-warn {
   color: #ed6c02;
 }
+
+.bom-3d-canvas-shell,
+.bom-3d-canvas-host {
+  width: 100%;
+  height: 100%;
+  min-height: 180px;
+}
+
+.bom-3d-canvas-host canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+.bom-3d-canvas-loading,
+.bom-3d-canvas-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  padding: 12px;
+  text-align: center;
+  color: var(--bom-muted, #666);
+  font-size: 0.78rem;
+}
+
+.bom-3d-canvas-empty-code {
+  font-size: 0.68rem;
+  opacity: 0.85;
+  margin-top: 6px;
+}
+
+.bom-3d-canvas-status {
+  margin: 4px 0 0;
+  font-size: 0.66rem;
+  color: var(--bom-muted, #666);
+}
+
+.bom-maturity-actions {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bom-maturity-hint {
+  margin: 0;
+  font-size: 0.66rem;
+  color: var(--bom-muted, #666);
+}
+
+.bom-maturity-hint-err {
+  color: #c62828;
+}
+
+.bom-maturity-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.bom-maturity-modal-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  width: min(420px, 92vw);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.bom-maturity-warning {
+  font-size: 0.72rem;
+  color: #b45309;
+}
+
+.bom-maturity-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.bom-maturity-modal-status {
+  font-size: 0.7rem;
+  margin-top: 8px;
+  color: #333;
+}

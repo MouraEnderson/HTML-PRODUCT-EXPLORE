@@ -196,23 +196,34 @@
 
   function startBundle() {
     var q = assetVersionQuery();
-    loadScript(GH + 'assets/vendor/chart.umd.min.js' + q, true, function () {
-      loadScript(GH + 'assets/js/bom-bundle-' + BASE_BUILD + '.js' + q, false, function (err) {
-        if (err) {
-          setBar('Erro ao carregar bundle base.', 'error');
-          return;
-        }
-        loadScript(GH + 'assets/js/integration/product-explorer-sync-provider.js' + q, false, function (errSync) {
-          if (errSync) {
-            setBar('Erro ao carregar Product Explorer sync provider.', 'error');
-            return;
-          }
-          loadScript(GH + 'assets/js/bom-ska-service-hotfix-20260617d.js' + q, false, function (err3) {
-            if (err3) {
-              setBar('Erro ao carregar SKA BOM Service hotfix.', 'error');
-              return;
-            }
-            loadDebugLegacyScripts(finishBoot);
+    var threeBase = 'https://cdn.jsdelivr.net/npm/three@0.128.0';
+    loadScript(threeBase + '/build/three.min.js', true, function () {
+      loadScript(threeBase + '/examples/js/loaders/GLTFLoader.js', true, function () {
+        loadScript(threeBase + '/examples/js/loaders/OBJLoader.js', true, function () {
+          loadScript(threeBase + '/examples/js/loaders/STLLoader.js', true, function () {
+            loadScript(GH + 'assets/js/ui/bom-3d-viewer.js' + q, true, function () {
+              loadScript(GH + 'assets/vendor/chart.umd.min.js' + q, true, function () {
+                loadScript(GH + 'assets/js/bom-bundle-' + BASE_BUILD + '.js' + q, false, function (err) {
+                  if (err) {
+                    setBar('Erro ao carregar bundle base.', 'error');
+                    return;
+                  }
+                  loadScript(GH + 'assets/js/integration/product-explorer-sync-provider.js' + q, false, function (errSync) {
+                    if (errSync) {
+                      setBar('Erro ao carregar Product Explorer sync provider.', 'error');
+                      return;
+                    }
+                    loadScript(GH + 'assets/js/bom-ska-service-hotfix-20260617d.js' + q, false, function (err3) {
+                      if (err3) {
+                        setBar('Erro ao carregar SKA BOM Service hotfix.', 'error');
+                        return;
+                      }
+                      loadDebugLegacyScripts(finishBoot);
+                    });
+                  });
+                });
+              });
+            });
           });
         });
       });
