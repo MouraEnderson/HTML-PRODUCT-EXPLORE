@@ -16,6 +16,101 @@ function isRepReference(item) {
   return /VPMRepReference/i.test(str(item?.type || item?.displayType));
 }
 
+function is3DShape(item) {
+  return /3DShape|ds3sh/i.test(str(item?.type || item?.displayType));
+}
+
+function collectExpandObjects(client, referenceId, expandDepth, endpointsUsed, attempts) {
+  const found = { shapes: [], repRefs: [] };
+  const body = {
+    expandDepth,
+    withPath: true,
+    type_filter_bo: ['VPMReference', 'VPMRepReference', '3DShape'],
+    type_filter_rel: ['VPMInstance', 'VPMRepInstance']
+  };
+  return client.expandEngItem(referenceId, body).then((expand) => {
+    endpointsUsed.push(...client.getEndpointsUsed());
+    const members = extractMembers(expand.data);
+    members.forEach((member) => {
+      if (is3DShape(member)) found.shapes.push(member);
+      if (isRepReference(member)) found.repRefs.push(member);
+    });
+    attempts.push({
+      step: `dseng:expand depth=${expandDepth}`,
+      status: 200,
+      shapeCount: found.shapes.length,
+      repCount: found.repRefs.length,
+      memberCount: members.length
+    });
+    return found;
+  });
+}
+
+async function tryResolveFromShape(client, {
+  refId,
+  physId,
+  shapeId,
+  title,
+  spaceUrl,
+  attempts,
+  endpointsUsed
+}) {
+  try {
+    await client.client.get3DShape(shapeId);
+    endpointsUsed.push({ method: 'GET', endpoint: `/ds3sh:3DShape/${shapeId}`, status: 200 });
+  } catch (shapeMetaErr) {
+    attempts.push({
+      step: `ds3sh:get ${shapeId}`,
+      status: Number(shapeMetaErr?.status || 502),
+      summary: shapeMetaErr?.bodySummary || shapeMetaErr?.message
+    });
+  }
+  await client.ensureCsrf();
+  const locate = await client.client.locateDerivedOutputs(
+    buildLocatePayload(shapeId, '3DShape', spaceUrl)
+  );
+  endpointsUsed.push({ method: 'POST', endpoint: '/dsdo:DerivedOutputs/Locate', status: 200 });
+  const files = extractDerivedOutputFiles(locate);
+  attempts.push({
+    step: `dsdo via 3DShape ${shapeId}`,
+    status: 200,
+    fileCount: files.length,
+    formats: files.map((f) => f.format || f.fileName).slice(0, 8)
+  });
+  const best = pickBestWebFile(files);
+  if (!best) return null;
+  const ticketPayload = await client.client.getDerivedOutputDownloadTicket(
+    best.parentId || shapeId,
+    best.id,
+    {}
+  );
+  const ticketUrl = extractDownloadUrl(ticketPayload);
+  if (!ticketUrl) return null;
+  const binary = await downloadFromTicket(client, ticketUrl, endpointsUsed);
+  const cached = putModelCache({
+    referenceId: refId,
+    format: best.format,
+    buffer: binary.buffer,
+    fileName: best.fileName
+  });
+  return {
+    ok: true,
+    format: best.format,
+    contentType: binary.contentType || guessContentType(best.format),
+    cacheKey: cached.key,
+    source: {
+      referenceId: refId,
+      physicalId: physId,
+      representationId: shapeId,
+      representationType: '3DShape',
+      fileName: best.fileName,
+      title
+    },
+    attempts,
+    endpointsUsed
+  };
+}
+
 function buildLocatePayload(referenceId, type, spaceUrl) {
   const source = String(spaceUrl || '').replace(/\/$/, '');
   return {
@@ -318,6 +413,78 @@ export async function resolveRepresentationForItem({
     });
     attempts.push({
       step: 'dsdo:DerivedOutputs/Locate',
+      status: Number(error?.status || 502),
+      summary: error?.bodySummary || error?.message
+    });
+  }
+
+  // 2b) dseng expand depth 2 — discover linked 3DShape (not in EngRepInstance)
+  try {
+    const expanded = await collectExpandObjects(client, refId, 2, endpointsUsed, attempts);
+    for (const shape of expanded.shapes.slice(0, 5)) {
+      const shapeId = objectId(shape);
+      if (!shapeId) continue;
+      const resolved = await tryResolveFromShape(client, {
+        refId,
+        physId,
+        shapeId,
+        title: itemTitle || str(shape.title || shape.name),
+        spaceUrl,
+        attempts,
+        endpointsUsed
+      });
+      if (resolved?.ok) return resolved;
+    }
+    if (expanded.repRefs.length) {
+      for (const rep of expanded.repRefs.slice(0, 3)) {
+        const repId = objectId(rep);
+        if (!repId) continue;
+        try {
+          await client.ensureCsrf();
+          const locate = await client.client.locateDerivedOutputs(
+            buildLocatePayload(repId, 'VPMRepReference', spaceUrl)
+          );
+          const files = extractDerivedOutputFiles(locate);
+          const best = pickBestWebFile(files);
+          if (!best) continue;
+          const ticketPayload = await client.client.getDerivedOutputDownloadTicket(repId, best.id, {});
+          const ticketUrl = extractDownloadUrl(ticketPayload);
+          if (!ticketUrl) continue;
+          const binary = await downloadFromTicket(client, ticketUrl, endpointsUsed);
+          const cached = putModelCache({
+            referenceId: refId,
+            format: best.format,
+            buffer: binary.buffer,
+            fileName: best.fileName
+          });
+          return {
+            ok: true,
+            format: best.format,
+            contentType: binary.contentType,
+            cacheKey: cached.key,
+            source: {
+              referenceId: refId,
+              physicalId: physId,
+              representationId: repId,
+              representationType: 'VPMRepReference',
+              fileName: best.fileName,
+              title: itemTitle
+            },
+            attempts,
+            endpointsUsed
+          };
+        } catch (repErr) {
+          attempts.push({
+            step: `dsdo via expand VPMRepReference ${repId}`,
+            status: Number(repErr?.status || 502),
+            summary: repErr?.bodySummary || repErr?.message
+          });
+        }
+      }
+    }
+  } catch (error) {
+    attempts.push({
+      step: 'dseng:expand depth=2',
       status: Number(error?.status || 502),
       summary: error?.bodySummary || error?.message
     });
