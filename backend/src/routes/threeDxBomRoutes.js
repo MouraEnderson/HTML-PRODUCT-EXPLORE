@@ -8,6 +8,7 @@ import {
 } from '../services/threeDxBomService.js';
 import { buildInternalErrorResponse } from '../services/threeDxBomNormalizer.js';
 import { getThreeDxConfig } from '../services/threeDxConfig.js';
+import { runUpstreamMatrix } from '../services/threeDxUpstreamMatrix.js';
 
 const router = Router();
 
@@ -61,6 +62,15 @@ router.post('/diagnostic', async (req, res) => {
       return;
     }
     res.json(result.data);
+  } catch (_err) {
+    sendInternalError(res);
+  }
+});
+
+router.post('/upstream-matrix', async (req, res) => {
+  try {
+    const data = await runUpstreamMatrix(req.body || {});
+    res.json(data);
   } catch (_err) {
     sendInternalError(res);
   }

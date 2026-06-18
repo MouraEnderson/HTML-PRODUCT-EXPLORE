@@ -222,6 +222,11 @@ export class EnoviaClient {
     return this.get(`/resources/v1/modeler/dseng/dseng:EngItem/search?$searchStr=${q}&$top=${top}`);
   }
 
+  async search3DShape(searchStr, top = 20) {
+    const q = encodeURIComponent(searchStr);
+    return this.get(`/resources/v1/modeler/ds3sh/ds3sh:3DShape/search?$searchStr=${q}&$top=${top}`);
+  }
+
   async getEngItem(id) {
     return this.get(`/resources/v1/modeler/dseng/dseng:EngItem/${encodeURIComponent(id)}`);
   }

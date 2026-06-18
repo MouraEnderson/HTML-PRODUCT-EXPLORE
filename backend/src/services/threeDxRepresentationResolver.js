@@ -172,6 +172,73 @@ export async function resolveRepresentationForItem({
 
   const objectType = str(type || item?.type || 'VPMReference');
   const spaceUrl = client.client.spaceUrl;
+  const itemTitle = str(title || item?.title || '');
+  const itemName = str(item?.name || '');
+
+  // 0) ds3sh search by title/name
+  for (const query of [itemTitle, itemName].filter(Boolean)) {
+    try {
+      const search = await client.client.search3DShape(query, 10);
+      endpointsUsed.push({ method: 'GET', endpoint: '/ds3sh:3DShape/search', status: 200 });
+      const shapes = extractMembers(search);
+      attempts.push({ step: `ds3sh:search ${query}`, status: 200, count: shapes.length });
+      for (const shape of shapes.slice(0, 3)) {
+        const shapeId = objectId(shape);
+        if (!shapeId) continue;
+        try {
+          await client.ensureCsrf();
+          const locate = await client.client.locateDerivedOutputs(
+            buildLocatePayload(shapeId, '3DShape', spaceUrl)
+          );
+          const files = extractDerivedOutputFiles(locate);
+          const best = pickBestWebFile(files);
+          if (!best) continue;
+          const ticketPayload = await client.client.getDerivedOutputDownloadTicket(
+            best.parentId || shapeId,
+            best.id,
+            {}
+          );
+          const ticketUrl = extractDownloadUrl(ticketPayload);
+          if (!ticketUrl) continue;
+          const binary = await downloadFromTicket(client, ticketUrl, endpointsUsed);
+          const cached = putModelCache({
+            referenceId: refId,
+            format: best.format,
+            buffer: binary.buffer,
+            fileName: best.fileName
+          });
+          return {
+            ok: true,
+            format: best.format,
+            contentType: binary.contentType || guessContentType(best.format),
+            cacheKey: cached.key,
+            source: {
+              referenceId: refId,
+              physicalId: physId,
+              representationId: shapeId,
+              representationType: 'ds3sh:3DShape',
+              fileName: best.fileName,
+              title: itemTitle
+            },
+            attempts,
+            endpointsUsed
+          };
+        } catch (shapeErr) {
+          attempts.push({
+            step: `ds3sh derived ${shapeId}`,
+            status: Number(shapeErr?.status || 502),
+            summary: shapeErr?.bodySummary || shapeErr?.message
+          });
+        }
+      }
+    } catch (searchErr) {
+      attempts.push({
+        step: `ds3sh:search ${query}`,
+        status: Number(searchErr?.status || 502),
+        summary: searchErr?.bodySummary || searchErr?.message
+      });
+    }
+  }
 
   // 1) dsdo:DerivedOutputs/Locate
   try {
