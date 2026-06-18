@@ -266,6 +266,10 @@ export class EnoviaClient {
     );
   }
 
+  async createDerivedOutputJob(body = {}) {
+    return this.post('/resources/v1/modeler/dsdo/dsdo:DerivedOutputJobs', body);
+  }
+
   async locateCadRepresentation(body = {}) {
     return this.post('/resources/v1/modeler/dsxcad/dsxcad:Representation/locate', body);
   }

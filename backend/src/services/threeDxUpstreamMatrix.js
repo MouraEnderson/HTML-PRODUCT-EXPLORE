@@ -121,7 +121,35 @@ export async function runUpstreamMatrix({ referenceId, title = '', name = '' } =
     await tryCall('dseng:invoke ChangeMaturity', () => client.client.invokeDsengGlobal('dseng:ChangeMaturity', body), attempts);
   }
 
-  const dslcPaths = [
+  const shapeIds = ['63FC553465A62400699DB30C00004EF7', '2C56DEE5E1E943068A77F7E8B2F0AB7B'];
+  for (const shapeId of shapeIds) {
+    await tryCall(`ds3sh:get ${shapeId}`, () => client.client.get3DShape(shapeId), attempts);
+    const jobBodies = [
+      {
+        data: [
+          {
+            id: shapeId,
+            identifier: shapeId,
+            type: '3DShape',
+            source: spaceUrl,
+            format: 'glb'
+          }
+        ]
+      },
+      {
+        referencedObject: {
+          source: spaceUrl,
+          type: '3DShape',
+          identifier: shapeId,
+          relativePath: `/resources/v1/modeler/ds3sh/ds3sh:3DShape/${shapeId}`
+        },
+        derivedFormat: 'GLB'
+      }
+    ];
+    for (const body of jobBodies) {
+      await tryCall(`dsdo:DerivedOutputJobs ${shapeId}`, () => client.client.createDerivedOutputJob(body), attempts);
+    }
+  }
     '/resources/v1/modeler/dslc/dslc:changeMaturity',
     '/resources/v1/modeler/dslc/invoke/dslc:changeMaturity',
     '/resources/v1/modeler/dslc/dslc:Lifecycle/changeMaturity'
