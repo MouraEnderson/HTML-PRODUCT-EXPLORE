@@ -6,29 +6,327 @@ import {
   unwrapEngItemPayload,
   buildErrorResponse
 } from './threeDxBomNormalizer.js';
+import { extractMembers } from './enoviaClient.js';
 
 function str(value) {
   return value == null ? '' : String(value).trim();
 }
 
-function itemContext(body = {}) {
+const INVOKE_TRANSITION_CANDIDATES = [
+  'dseng:GetNextStates',
+  'dseng:getNextStates',
+  'dseng:GetTransitions',
+  'dseng:getTransitions',
+  'dseng:GetMaturityTransitions',
+  'dseng:getMaturityTransitions',
+  'dseng:GetLifecycleTransitions',
+  'dseng:NextStates'
+];
+
+const INVOKE_CHANGE_CANDIDATES = [
+  'dseng:ChangeMaturity',
+  'dseng:changeMaturity',
+  'dseng:Promote',
+  'dseng:promote',
+  'dseng:Demote',
+  'dseng:demote',
+  'dseng:SetState',
+  'dseng:setState'
+];
+
+const STATE_API_VARIANTS = {
+  IN_WORK: ['IN_WORK', 'In Work', 'InWork', 'PRIVATE'],
+  FROZEN: ['FROZEN', 'Frozen'],
+  RELEASED: ['RELEASED', 'Released']
+};
+
+function normalizeStateKey(value) {
+  const raw = str(value).toUpperCase().replace(/\s+/g, '_');
+  if (raw === 'INWORK') return 'IN_WORK';
+  if (raw === 'PRIVATE') return 'IN_WORK';
+  return raw;
+}
+
+function targetStateVariants(targetState) {
+  const key = normalizeStateKey(targetState);
+  const variants = STATE_API_VARIANTS[key] || [];
+  const all = [str(targetState), ...variants];
+  return [...new Set(all.filter(Boolean))];
+}
+
+function normalizeTransitions(payload, currentState = '') {
+  const members = extractMembers(payload);
+  if (members.length) {
+    return members.map((item, idx) => ({
+      id: str(item.id || item.name || item.transition || `t${idx}`),
+      label: str(item.label || item.title || item.name || item.transition || item.to),
+      from: str(item.from || item.currentState || item.sourceState || currentState),
+      to: str(item.to || item.targetState || item.state),
+      action: str(item.action || item.transition || item.name || 'promote')
+    }));
+  }
+  if (Array.isArray(payload?.transitions)) {
+    return payload.transitions.map((item, idx) => ({
+      id: str(item.id || `t${idx}`),
+      label: str(item.label || item.to || item.targetState),
+      from: str(item.from || item.currentState || currentState),
+      to: str(item.to || item.targetState),
+      action: str(item.action || item.transition || 'promote')
+    }));
+  }
+  if (Array.isArray(payload?.nextStates)) {
+    return payload.nextStates.map((state) => ({
+      id: str(state),
+      label: str(state),
+      from: str(currentState),
+      to: str(state),
+      action: 'promote'
+    }));
+  }
+  return [];
+}
+
+function buildEngItemInvokeArray(referenceId, spaceUrl, extra = {}) {
+  const source = String(spaceUrl || '').replace(/\/$/, '');
+  return [
+    {
+      identifier: referenceId,
+      type: 'dseng:EngItem',
+      source: source || '3DSpace',
+      relativePath: `/resources/v1/modeler/dseng/dseng:EngItem/${referenceId}`,
+      ...extra
+    }
+  ];
+}
+
+async function tryInvokeList(client, referenceId, invokeName, body, endpointsUsed, attempts) {
+  try {
+    await client.ensureCsrf();
+    const data = await client.client.invokeEngItem(referenceId, invokeName, body);
+    endpointsUsed.push({
+      method: 'POST',
+      endpoint: `/dseng:EngItem/${referenceId}/invoke/${invokeName}`,
+      status: 200
+    });
+    const transitions = normalizeTransitions(data);
+    attempts.push({
+      invoke: invokeName,
+      scope: 'item',
+      status: 200,
+      transitionCount: transitions.length
+    });
+    return { ok: true, data, transitions };
+  } catch (error) {
+    endpointsUsed.push({
+      method: 'POST',
+      endpoint: `/dseng:EngItem/${referenceId}/invoke/${invokeName}`,
+      status: Number(error?.status || 502)
+    });
+    attempts.push({
+      invoke: invokeName,
+      scope: 'item',
+      status: Number(error?.status || 502),
+      summary: error?.bodySummary || error?.message
+    });
+    return { ok: false, error };
+  }
+}
+
+async function tryInvokeGlobal(client, invokeName, body, endpointsUsed, attempts) {
+  try {
+    await client.ensureCsrf();
+    const data = await client.client.invokeDsengGlobal(invokeName, body);
+    endpointsUsed.push({
+      method: 'POST',
+      endpoint: `/dseng/invoke/${invokeName}`,
+      status: 200
+    });
+    attempts.push({
+      invoke: invokeName,
+      scope: 'global',
+      status: 200
+    });
+    return { ok: true, data };
+  } catch (error) {
+    endpointsUsed.push({
+      method: 'POST',
+      endpoint: `/dseng/invoke/${invokeName}`,
+      status: Number(error?.status || 502)
+    });
+    attempts.push({
+      invoke: invokeName,
+      scope: 'global',
+      status: Number(error?.status || 502),
+      summary: error?.bodySummary || error?.message
+    });
+    return { ok: false, error };
+  }
+}
+
+export async function discoverLifecycleTransitions(client, referenceId, currentState) {
+  const endpointsUsed = [];
+  const attempts = [];
+  const body = { currentState, state: currentState };
+
+  for (const invokeName of INVOKE_TRANSITION_CANDIDATES) {
+    const result = await tryInvokeList(client, referenceId, invokeName, body, endpointsUsed, attempts);
+    if (result.ok && result.transitions.length) {
+      return {
+        ok: true,
+        transitions: result.transitions,
+        invokeName,
+        endpointsUsed,
+        attempts
+      };
+    }
+  }
+
+  for (const invokeName of ['dseng:getNextStates', 'dseng:GetNextStates']) {
+    const globalBody = buildEngItemInvokeArray(referenceId, client.client.spaceUrl, {
+      currentState,
+      state: currentState
+    });
+    const global = await tryInvokeGlobal(client, invokeName, globalBody, endpointsUsed, attempts);
+    if (global.ok) {
+      const transitions = normalizeTransitions(global.data, currentState);
+      if (transitions.length) {
+        return {
+          ok: true,
+          transitions,
+          invokeName,
+          endpointsUsed,
+          attempts
+        };
+      }
+    }
+  }
+
   return {
-    referenceId: str(body.referenceId || body.physicalId),
-    physicalId: str(body.physicalId || body.referenceId),
-    currentState: str(body.currentState || body.state || body.maturity),
-    type: str(body.type || 'VPMReference'),
-    policy: str(body.policy),
-    title: str(body.title),
-    revision: str(body.revision)
+    ok: false,
+    transitions: [],
+    endpointsUsed,
+    attempts,
+    code: 'LIFECYCLE_TRANSITIONS_UNAVAILABLE'
+  };
+}
+
+async function readItemState(client, referenceId) {
+  const itemResult = await client.getEngItem(referenceId);
+  const item = normalizeEngItem(unwrapEngItemPayload(itemResult.data));
+  return {
+    item,
+    state: str(item.state || item.maturity)
+  };
+}
+
+function statesMatch(left, right) {
+  return normalizeStateKey(left) === normalizeStateKey(right);
+}
+
+export async function executeLifecycleChange(client, referenceId, {
+  currentState,
+  targetState,
+  transition,
+  action
+}) {
+  const endpointsUsed = [];
+  const attempts = [];
+  const desired = str(targetState);
+  const variants = targetStateVariants(desired);
+
+  for (const invokeName of INVOKE_CHANGE_CANDIDATES) {
+    for (const apiTarget of variants) {
+      const payloads = [
+        { currentState, targetState: apiTarget, transition, action, state: apiTarget },
+        { currentState, nextState: apiTarget, transition },
+        { state: apiTarget },
+        { targetState: apiTarget }
+      ];
+      for (const body of payloads) {
+        const result = await tryInvokeList(
+          client,
+          referenceId,
+          invokeName,
+          body,
+          endpointsUsed,
+          attempts
+        );
+        if (!result.ok) continue;
+        const read = await readItemState(client, referenceId);
+        if (desired && statesMatch(read.state, desired)) {
+          return {
+            ok: true,
+            invokeName,
+            previousState: currentState,
+            newState: read.state,
+            item: read.item,
+            endpointsUsed,
+            attempts
+          };
+        }
+      }
+    }
+  }
+
+  for (const invokeName of ['dseng:changeMaturity', 'dseng:ChangeMaturity']) {
+    for (const apiTarget of variants) {
+      const globalBody = buildEngItemInvokeArray(referenceId, client.client.spaceUrl, {
+        targetState: apiTarget,
+        transition,
+        action
+      });
+      const global = await tryInvokeGlobal(client, invokeName, globalBody, endpointsUsed, attempts);
+      if (!global.ok) continue;
+      const read = await readItemState(client, referenceId);
+      if (desired && statesMatch(read.state, desired)) {
+        return {
+          ok: true,
+          invokeName,
+          previousState: currentState,
+          newState: read.state,
+          item: read.item,
+          endpointsUsed,
+          attempts
+        };
+      }
+      attempts.push({
+        invoke: invokeName,
+        scope: 'global',
+        status: 200,
+        verified: false,
+        stateAfter: read.state
+      });
+    }
+  }
+
+  const finalRead = await readItemState(client, referenceId);
+  if (desired && statesMatch(finalRead.state, desired) && !statesMatch(finalRead.state, currentState)) {
+    return {
+      ok: true,
+      invokeName: 'verified-state-only',
+      previousState: currentState,
+      newState: finalRead.state,
+      item: finalRead.item,
+      endpointsUsed,
+      attempts
+    };
+  }
+
+  return {
+    ok: false,
+    code: 'TRANSITION_NOT_PERMITTED',
+    endpointsUsed,
+    attempts,
+    stateAfter: finalRead.state
   };
 }
 
 export async function getLifecycleTransitions(body = {}) {
   const config = getThreeDxConfig();
   const mode = body.mode || config.mode || 'dseng-official';
-  const ctx = itemContext(body);
+  const referenceId = str(body.referenceId || body.physicalId);
 
-  if (!ctx.referenceId) {
+  if (!referenceId) {
     return {
       ok: false,
       status: 422,
@@ -45,8 +343,7 @@ export async function getLifecycleTransitions(body = {}) {
         source: SOURCE,
         mode,
         code: 'OFFICIAL_LIFECYCLE_API_REQUIRED',
-        message: 'Mudança de maturidade requer API oficial de lifecycle não configurada.',
-        item: ctx,
+        message: 'Modo mock não executa lifecycle real.',
         transitions: []
       }
     };
@@ -63,35 +360,61 @@ export async function getLifecycleTransitions(body = {}) {
   }
 
   const client = new ThreeDxDsengClient(config);
-
   try {
-    const itemResult = await client.getEngItem(ctx.referenceId);
+    const itemResult = await client.getEngItem(referenceId);
     const item = normalizeEngItem(unwrapEngItemPayload(itemResult.data));
-    const currentState = ctx.currentState || item.state || item.maturity || '';
+    const currentState = str(body.currentState || item.state || item.maturity);
+
+    const discovered = await discoverLifecycleTransitions(client, referenceId, currentState);
+    if (!discovered.ok || !discovered.transitions.length) {
+      return {
+        ok: false,
+        status: 501,
+        data: {
+          ok: false,
+          source: SOURCE,
+          mode,
+          code: discovered.code || 'LIFECYCLE_TRANSITIONS_UNAVAILABLE',
+          message:
+            'Nenhuma transição oficial retornada pelo tenant. Tentativas invoke dseng documentadas em diagnostics.',
+          referenceId,
+          currentState,
+          item: {
+            id: item.id,
+            title: item.title,
+            revision: item.revision,
+            currentState
+          },
+          transitions: [],
+          diagnostics: {
+            endpointsUsed: [...client.getEndpointsUsed(), ...discovered.endpointsUsed],
+            attempts: discovered.attempts
+          }
+        }
+      };
+    }
 
     return {
-      ok: false,
-      status: 501,
+      ok: true,
+      status: 200,
       data: {
-        ok: false,
+        ok: true,
         source: SOURCE,
         mode,
-        code: 'OFFICIAL_LIFECYCLE_API_REQUIRED',
-        message:
-          'Transições de maturidade requerem API oficial Dassault (lifecycle/maturity) não configurada neste serviço.',
+        referenceId,
+        currentState,
+        policy: str(item.policy),
+        transitions: discovered.transitions,
         item: {
-          referenceId: ctx.referenceId,
-          physicalId: ctx.physicalId || item.id,
-          title: ctx.title || item.title,
-          revision: ctx.revision || item.revision,
-          currentState,
-          type: ctx.type || item.type || 'VPMReference'
+          id: item.id,
+          title: item.title,
+          revision: item.revision,
+          currentState
         },
-        transitions: [],
         diagnostics: {
-          endpointsUsed: client.getEndpointsUsed(),
-          note:
-            'Estado atual foi lido via dseng:EngItem. Promote/demote exige endpoint oficial de lifecycle (ex.: 3DSpace/modeler/dslc ou equivalente tenant).'
+          endpointsUsed: [...client.getEndpointsUsed(), ...discovered.endpointsUsed],
+          attempts: discovered.attempts,
+          invokeName: discovered.invokeName
         }
       }
     };
@@ -110,11 +433,12 @@ export async function getLifecycleTransitions(body = {}) {
 export async function changeMaturity(body = {}) {
   const config = getThreeDxConfig();
   const mode = body.mode || config.mode || 'dseng-official';
-  const ctx = itemContext(body);
+  const referenceId = str(body.referenceId || body.physicalId);
   const targetState = str(body.targetState);
   const transition = str(body.transition);
+  const action = str(body.action || body.transition);
 
-  if (!ctx.referenceId) {
+  if (!referenceId) {
     return {
       ok: false,
       status: 422,
@@ -140,11 +464,7 @@ export async function changeMaturity(body = {}) {
     return {
       ok: false,
       status: 422,
-      data: buildErrorResponse(
-        'TARGET_STATE_REQUIRED',
-        'targetState or transition is required',
-        mode
-      )
+      data: buildErrorResponse('TARGET_STATE_REQUIRED', 'targetState or transition is required', mode)
     };
   }
 
@@ -157,8 +477,7 @@ export async function changeMaturity(body = {}) {
         source: SOURCE,
         mode,
         code: 'OFFICIAL_LIFECYCLE_API_REQUIRED',
-        message: 'Mudança de maturidade requer API oficial de lifecycle não configurada.',
-        item: ctx
+        message: 'Modo mock não executa mudança real de maturidade.'
       }
     };
   }
@@ -174,34 +493,65 @@ export async function changeMaturity(body = {}) {
   }
 
   const client = new ThreeDxDsengClient(config);
-
   try {
-    const itemResult = await client.getEngItem(ctx.referenceId);
+    const itemResult = await client.getEngItem(referenceId);
     const item = normalizeEngItem(unwrapEngItemPayload(itemResult.data));
-    const currentState = ctx.currentState || item.state || item.maturity || '';
+    const currentState = str(body.currentState || item.state || item.maturity);
+
+    const exec = await executeLifecycleChange(client, referenceId, {
+      currentState,
+      targetState,
+      transition,
+      action
+    });
+
+    if (!exec.ok) {
+      const code = exec.code || 'TRANSITION_NOT_PERMITTED';
+      return {
+        ok: false,
+        status: code === 'TRANSITION_NOT_PERMITTED' ? 403 : 501,
+        data: {
+          ok: false,
+          source: SOURCE,
+          mode,
+          code,
+          message:
+            code === 'TRANSITION_NOT_PERMITTED'
+              ? 'Transição não permitida ou invoke oficial de maturidade não confirmou mudança de estado.'
+              : 'Mudança de maturidade não executada.',
+          referenceId,
+          previousState: currentState,
+          targetState: targetState || transition,
+          stateAfter: exec.stateAfter || currentState,
+          diagnostics: {
+            endpointsUsed: [...client.getEndpointsUsed(), ...exec.endpointsUsed],
+            attempts: exec.attempts
+          }
+        }
+      };
+    }
 
     return {
-      ok: false,
-      status: 501,
+      ok: true,
+      status: 200,
       data: {
-        ok: false,
+        ok: true,
         source: SOURCE,
         mode,
-        code: 'OFFICIAL_LIFECYCLE_API_REQUIRED',
-        message:
-          'Mudança de maturidade não executada: API oficial de lifecycle/promote não configurada.',
-        item: {
-          referenceId: ctx.referenceId,
-          physicalId: ctx.physicalId || item.id,
-          title: ctx.title || item.title,
-          revision: ctx.revision || item.revision,
-          currentState,
-          targetState: targetState || transition,
-          type: ctx.type || item.type || 'VPMReference'
+        referenceId,
+        previousState: exec.previousState,
+        newState: exec.newState,
+        transition: transition || action || exec.invokeName,
+        updatedItem: {
+          id: exec.item.id,
+          title: exec.item.title,
+          revision: exec.item.revision,
+          state: exec.newState
         },
         diagnostics: {
-          endpointsUsed: client.getEndpointsUsed(),
-          note: 'Nenhuma alteração foi aplicada no PLM.'
+          endpointsUsed: [...client.getEndpointsUsed(), ...exec.endpointsUsed],
+          attempts: exec.attempts,
+          invokeName: exec.invokeName
         }
       }
     };
@@ -215,4 +565,19 @@ export async function changeMaturity(body = {}) {
       data: response
     };
   }
+}
+
+export async function probeLifecycle(body = {}) {
+  const referenceId = str(body.referenceId || body.physicalId || '63FC553465A62400699DB567');
+  const transitionsResult = await getLifecycleTransitions({
+    ...body,
+    referenceId,
+    mode: 'dseng-official'
+  });
+  return {
+    referenceId,
+    transitionsOk: transitionsResult.ok,
+    transitions: transitionsResult.data?.transitions || [],
+    diagnostics: transitionsResult.data?.diagnostics || transitionsResult.data
+  };
 }

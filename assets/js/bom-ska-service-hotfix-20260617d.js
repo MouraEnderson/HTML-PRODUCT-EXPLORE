@@ -392,7 +392,7 @@
       activeEbomRow: node,
       activeRowKey: s(skaRow.rowKey || node.rowKey),
       activeReferenceId: referenceId,
-      activePhysicalId: referenceId,
+      activePhysicalId: s(skaRow.physicalId || node.sourcePhysicalId || node.physicalid || referenceId),
       activeInstanceId: s(skaRow.instanceId || node.instanceId),
       activePath: Array.isArray(skaRow.path) ? skaRow.path.slice() : [],
       activeTitle: s(node.title || skaRow.title || node.name),
@@ -402,7 +402,8 @@
       activeOwner: s(node.owner || skaRow.owner),
       activeType: s(node.type || node.displayType || skaRow.type),
       activeDescription: s(node.description || skaRow.description),
-      activeState: s(node.state || node.maturity || skaRow.state || skaRow.maturity)
+      activeState: s(node.state || node.maturity || skaRow.state || skaRow.maturity),
+      activeRepReferenceId: s(skaRow.repReferenceId || '')
     };
   }
 
@@ -570,16 +571,20 @@
       .then(function (result) {
         if (reqId !== activeLifecycleRequestId) return;
         var data = result.data || {};
-        if (data.code === 'OFFICIAL_LIFECYCLE_API_REQUIRED') {
+        if (data.code === 'OFFICIAL_LIFECYCLE_API_REQUIRED' || data.code === 'LIFECYCLE_TRANSITIONS_UNAVAILABLE') {
           updateMaturityHint(
-            'API oficial de lifecycle não configurada. Estado atual: ' +
+            'Transições oficiais indisponíveis no tenant. Estado atual: ' +
               ((data.item && data.item.currentState) || active.activeMaturity || '—'),
             'warn'
           );
           return;
         }
-        if (data.transitions && data.transitions.length) {
+        if (data.ok && data.transitions && data.transitions.length) {
           updateMaturityHint(data.transitions.length + ' transição(ões) disponível(is).', 'ok');
+          return;
+        }
+        if (data.ok) {
+          updateMaturityHint('Transições consultadas.', 'ok');
           return;
         }
         updateMaturityHint(data.message || 'Nenhuma transição retornada.', 'warn');
@@ -603,9 +608,43 @@
       active.activeMaturity ||
       active.activeState ||
       '—';
+    var transitions = Array.isArray(lifecycleData.transitions)
+      ? lifecycleData.transitions.filter(function (t) {
+          return !t.inferred;
+        })
+      : [];
+    if (!transitions.length && lifecycleData.code) {
+      var status = byId('bomMaturityModalStatus');
+      if (status) {
+        status.textContent =
+          lifecycleData.message || 'Nenhuma transição oficial disponível para este item.';
+      }
+    }
     var modal = document.createElement('div');
     modal.id = 'bomMaturityModal';
     modal.className = 'bom-maturity-modal';
+    var transitionsHtml = '';
+    if (transitions.length) {
+      transitionsHtml =
+        '<label class="bom-filter-item"><span>Transição permitida</span>' +
+        '<select id="bomMaturityTransition" class="bom-input">' +
+        transitions
+          .map(function (t, idx) {
+            return (
+              '<option value="' +
+              idx +
+              '">' +
+              escapeHtml(t.label || t.to || t.action) +
+              (t.inferred ? ' (validar)' : '') +
+              '</option>'
+            );
+          })
+          .join('') +
+        '</select></label>';
+    } else {
+      transitionsHtml =
+        '<p class="bom-maturity-warning">Nenhuma transição oficial retornada pela API. Operação bloqueada.</p>';
+    }
     modal.innerHTML =
       '<div class="bom-maturity-modal-card" role="dialog" aria-modal="true">' +
       '<h3>Alterar maturidade (PLM)</h3>' +
@@ -618,8 +657,7 @@
       '<p><strong>Estado atual:</strong> ' +
       escapeHtml(current) +
       '</p>' +
-      '<label class="bom-filter-item"><span>Estado destino</span>' +
-      '<input type="text" id="bomMaturityTargetState" class="bom-input" placeholder="ex.: RELEASED" /></label>' +
+      transitionsHtml +
       '<p class="bom-maturity-warning">Operação oficial no 3DEXPERIENCE. Requer confirmação e permissão PLM.</p>' +
       '<div class="bom-maturity-modal-actions">' +
       '<button type="button" class="bom-btn bom-btn-secondary" id="bomMaturityCancel">Cancelar</button>' +
@@ -636,11 +674,29 @@
       });
     }
     if (confirmBtn) {
+      if (!transitions.length) {
+        confirmBtn.disabled = true;
+      }
       confirmBtn.addEventListener('click', function () {
-        var target = s(byId('bomMaturityTargetState') && byId('bomMaturityTargetState').value);
+        var target = '';
+        var transition = '';
+        var action = '';
+        var selectEl = byId('bomMaturityTransition');
+        if (selectEl && transitions.length) {
+          var picked = transitions[Number(selectEl.value)] || transitions[0];
+          target = s(picked.to || picked.targetState);
+          transition = s(picked.id || picked.label);
+          action = s(picked.action || 'promote');
+        } else {
+          target = s(byId('bomMaturityTargetState') && byId('bomMaturityTargetState').value);
+        }
         var statusEl = byId('bomMaturityModalStatus');
-        if (!target) {
-          if (statusEl) statusEl.textContent = 'Informe o estado destino.';
+        if (!transitions.length) {
+          if (statusEl) statusEl.textContent = 'Nenhuma transição oficial disponível.';
+          return;
+        }
+        if (!target && !transition) {
+          if (statusEl) statusEl.textContent = 'Selecione uma transição ou informe o estado destino.';
           return;
         }
         if (statusEl) statusEl.textContent = 'Executando mudança via backend…';
@@ -649,6 +705,8 @@
           physicalId: active.activePhysicalId,
           currentState: current,
           targetState: target,
+          transition: transition,
+          action: action,
           confirm: true,
           mode: 'dseng-official'
         })
@@ -657,6 +715,10 @@
             if (data.ok) {
               if (statusEl) statusEl.textContent = 'Maturidade atualizada. Recarregando dashboard…';
               closeMaturityModal();
+              if (activeEbomRow) {
+                activeEbomRow.activeMaturity = data.newState || target;
+                activeEbomRow.activeState = data.newState || target;
+              }
               refreshBom().catch(function () {});
               return;
             }
@@ -821,12 +883,28 @@
 
   function rebuildDynamicCounts(rows, includeRoot, depth) {
     var levelCounts = {};
+    var refs = {};
+    var instanceCount = 0;
+    var pathCount = 0;
     (rows || []).forEach(function (row) {
       var level = Number(row.level || 0);
       levelCounts[level] = (levelCounts[level] || 0) + 1;
+      var ref = s(row.referenceId || row.physicalId);
+      if (ref) refs[ref] = true;
+      if (row.instanceId) instanceCount += 1;
+      if (row.path && row.path.length) pathCount += 1;
     });
+    var occurrenceCount = (rows || []).filter(function (row) {
+      return Number(row.level || 0) > 0;
+    }).length;
     return {
       totalRows: (rows || []).length,
+      loadedRows: (rows || []).length,
+      occurrenceCount: occurrenceCount,
+      referenceCount: Object.keys(refs).length,
+      uniqueReferenceCount: Object.keys(refs).length,
+      instanceCount: instanceCount,
+      pathCount: pathCount,
       rootIncluded: includeRoot !== false,
       depth: depth,
       levelCounts: levelCounts,
@@ -861,6 +939,16 @@
     rows = decorateDynamicRows(rows || []);
     payload.rows = rows;
     payload.counts = rebuildDynamicCounts(rows, true, maxLoadedLevel(rows));
+    payload.scope = {
+      mode: mode === 'incremental' || mode === 'dashboard-row' ? 'dashboard-row' : mode || 'root',
+      source: 'dseng',
+      item: (payload.root && (payload.root.title || payload.root.id)) || '',
+      rootId: (payload.root && payload.root.id) || dynamicState.lastResolvedRootId || '',
+      expandStrategy: 'expand-item',
+      expandDepth: payload.counts.depth || dynamicState.lastDepth || DEFAULT_DEPTH,
+      isPartial: true
+    };
+    payload.partial = true;
     payload.__skaDynamicState = {
       loadMode: mode || dynamicState.loadMode || 'incremental',
       partial: true,

@@ -14,6 +14,19 @@ var Bom3DViewer = (function () {
   var statusEl = null;
   var resizeObserver = null;
 
+  function escapeText(value) {
+    return String(value == null ? '' : value);
+  }
+
+  function clearNode(node) {
+    while (node && node.firstChild) node.removeChild(node.firstChild);
+  }
+
+  function setText(el, text) {
+    if (!el) return;
+    el.textContent = escapeText(text);
+  }
+
   function hasThree() {
     return typeof window.THREE !== 'undefined' && window.THREE.WebGLRenderer;
   }
@@ -154,13 +167,20 @@ var Bom3DViewer = (function () {
     var canvasHost = ensureHost('#partPreviewImage');
     if (!canvasHost) return;
     disposeScene();
-    canvasHost.innerHTML =
-      '<div class="bom-3d-canvas-empty">' +
-      '<p class="bom-3d-canvas-empty-title">' +
-      String(msg || 'Representação 3D web não disponível para este item.') +
-      '</p>' +
-      (code ? '<p class="bom-3d-canvas-empty-code">' + String(code) + '</p>' : '') +
-      '</div>';
+    clearNode(canvasHost);
+    var wrap = document.createElement('div');
+    wrap.className = 'bom-3d-canvas-empty';
+    var title = document.createElement('p');
+    title.className = 'bom-3d-canvas-empty-title';
+    setText(title, msg || 'Representação 3D web não disponível para este item.');
+    wrap.appendChild(title);
+    if (code) {
+      var codeEl = document.createElement('p');
+      codeEl.className = 'bom-3d-canvas-empty-code';
+      setText(codeEl, code);
+      wrap.appendChild(codeEl);
+    }
+    canvasHost.appendChild(wrap);
     setStatus(code || '', 'warn');
   }
 
@@ -168,10 +188,14 @@ var Bom3DViewer = (function () {
     var canvasHost = ensureHost('#partPreviewImage');
     if (!canvasHost) return;
     disposeScene();
-    canvasHost.innerHTML =
-      '<div class="bom-3d-canvas-loading">Carregando representação 3D' +
-      (title ? ' — ' + String(title) : '') +
-      '…</div>';
+    clearNode(canvasHost);
+    var loading = document.createElement('div');
+    loading.className = 'bom-3d-canvas-loading';
+    setText(
+      loading,
+      'Carregando representação 3D' + (title ? ' — ' + title : '') + '…'
+    );
+    canvasHost.appendChild(loading);
     setStatus('Carregando representação 3D…', 'ok');
   }
 
@@ -282,8 +306,11 @@ var Bom3DViewer = (function () {
   function clear() {
     disposeScene();
     if (hostEl) {
-      hostEl.innerHTML =
-        '<span class="bom-preview-placeholder">Clique numa linha da E-BOM para visualização 3D</span>';
+      clearNode(hostEl);
+      var placeholder = document.createElement('span');
+      placeholder.className = 'bom-preview-placeholder';
+      setText(placeholder, 'Clique numa linha da E-BOM para visualização 3D');
+      hostEl.appendChild(placeholder);
     }
     setStatus('', 'ok');
   }

@@ -196,12 +196,24 @@
 
   function startBundle() {
     var q = assetVersionQuery();
-    var threeBase = 'https://cdn.jsdelivr.net/npm/three@0.128.0';
-    loadScript(threeBase + '/build/three.min.js', true, function () {
-      loadScript(threeBase + '/examples/js/loaders/GLTFLoader.js', true, function () {
-        loadScript(threeBase + '/examples/js/loaders/OBJLoader.js', true, function () {
-          loadScript(threeBase + '/examples/js/loaders/STLLoader.js', true, function () {
-            loadScript(GH + 'assets/js/ui/bom-3d-viewer.js' + q, true, function () {
+    var vendor = GH + 'assets/vendor/';
+    loadScript(vendor + 'three.min.js' + q, false, function (errThree) {
+      if (errThree) {
+        setBar('Erro ao carregar Three.js local.', 'error');
+        return;
+      }
+      loadScript(vendor + 'GLTFLoader.js' + q, false, function (errGltf) {
+        if (errGltf) {
+          setBar('Erro ao carregar GLTFLoader.', 'error');
+          return;
+        }
+        loadScript(vendor + 'OBJLoader.js' + q, true, function () {
+          loadScript(vendor + 'STLLoader.js' + q, true, function () {
+            loadScript(GH + 'assets/js/ui/bom-3d-viewer.js' + q, false, function (errViewer) {
+              if (errViewer) {
+                setBar('Erro ao carregar bom-3d-viewer.', 'error');
+                return;
+              }
               loadScript(GH + 'assets/vendor/chart.umd.min.js' + q, true, function () {
                 loadScript(GH + 'assets/js/bom-bundle-' + BASE_BUILD + '.js' + q, false, function (err) {
                   if (err) {

@@ -1,29 +1,29 @@
 import { getThreeDxConfig } from './threeDxConfig.js';
 import { ThreeDxDsengClient, assertDsengConfigured } from './threeDxDsengClient.js';
-import { extractMembers, objectId } from './enoviaClient.js';
+import { buildErrorResponse, SOURCE } from './threeDxBomNormalizer.js';
 import {
-  SOURCE,
-  normalizeEngItem,
-  unwrapEngItemPayload,
-  buildErrorResponse
-} from './threeDxBomNormalizer.js';
+  resolveRepresentationForItem,
+  getCachedModelByKey,
+  createDsengClient
+} from './threeDxRepresentationResolver.js';
 
 function str(value) {
   return value == null ? '' : String(value).trim();
 }
 
-function isRepReference(item) {
-  const type = str(item?.type || item?.displayType);
-  return /VPMRepReference/i.test(type);
+function publicModelUrl(req, cacheKey) {
+  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+  const host = req.headers['x-forwarded-host'] || req.get('host');
+  return `${proto}://${host}/api/3dx/visualization/model/${cacheKey}`;
 }
 
-export async function resolveVisualization(body = {}) {
+export async function resolveVisualization(body = {}, req = null) {
   const config = getThreeDxConfig();
   const mode = body.mode || config.mode || 'dseng-official';
-  const referenceId = str(body.referenceId || body.physicalId);
-  const physicalId = str(body.physicalId || body.referenceId);
+  const referenceId = str(body.referenceId);
+  const physicalId = str(body.physicalId);
 
-  if (!referenceId) {
+  if (!referenceId && !physicalId) {
     return {
       ok: false,
       status: 422,
@@ -40,8 +40,7 @@ export async function resolveVisualization(body = {}) {
         source: SOURCE,
         mode,
         code: 'OFFICIAL_3D_REPRESENTATION_API_REQUIRED',
-        message:
-          'Representação 3D web não disponível sem API oficial/conversão configurada.',
+        message: 'Modo mock não fornece malha 3D real.',
         diagnostics: { mock: true }
       }
     };
@@ -57,74 +56,57 @@ export async function resolveVisualization(body = {}) {
     };
   }
 
-  const client = new ThreeDxDsengClient(config);
-  const endpointsUsed = [];
-
+  const client = createDsengClient(config);
   try {
-    const itemResult = await client.getEngItem(referenceId);
-    endpointsUsed.push(...client.getEndpointsUsed());
-    const item = normalizeEngItem(unwrapEngItemPayload(itemResult.data));
+    const result = await resolveRepresentationForItem({
+      client,
+      referenceId: referenceId || physicalId,
+      physicalId: physicalId || referenceId,
+      type: body.type,
+      title: body.title
+    });
 
-    let repReferences = [];
-    try {
-      const expandResult = await client.expandEngItem(referenceId, { expandDepth: 1 });
-      endpointsUsed.push(...client.getEndpointsUsed());
-      const members = extractMembers(expandResult.data);
-      repReferences = members.filter(isRepReference).map((member) => ({
-        id: objectId(member),
-        title: str(member.title || member.name),
-        type: str(member.type)
-      }));
-    } catch (_expandError) {
-      // expand optional for diagnostics only
-    }
-
-    if (repReferences.length) {
+    if (result.ok) {
+      const modelUrl = req ? publicModelUrl(req, result.cacheKey) : `/api/3dx/visualization/model/${result.cacheKey}`;
       return {
-        ok: false,
-        status: 422,
+        ok: true,
+        status: 200,
         data: {
-          ok: false,
+          ok: true,
           source: SOURCE,
           mode,
-          code: 'NO_WEB_VIEWABLE_FORMAT',
-          message:
-            'Representação 3D associada encontrada via dseng, mas nenhum formato web (GLB/glTF/OBJ/STL) está disponível sem API oficial de download/conversão.',
-          item: {
-            id: item.id,
-            title: item.title,
-            revision: item.revision,
-            state: item.state
-          },
-          representations: repReferences.slice(0, 10),
+          format: result.format,
+          contentType: result.contentType,
+          modelUrl,
+          sourceMeta: result.source,
           diagnostics: {
-            endpointsUsed,
-            repCount: repReferences.length
+            endpointsUsed: result.endpointsUsed,
+            attempts: result.attempts
           }
         }
       };
     }
 
+    const code = result.code || 'OFFICIAL_3D_REPRESENTATION_API_REQUIRED';
+    const status = code === 'NO_WEB_VIEWABLE_FORMAT' ? 422 : 501;
     return {
       ok: false,
-      status: 501,
+      status,
       data: {
         ok: false,
         source: SOURCE,
         mode,
-        code: 'OFFICIAL_3D_REPRESENTATION_API_REQUIRED',
+        code,
         message:
-          'Representação 3D web não disponível sem API oficial/conversão configurada.',
-        item: {
-          id: item.id || physicalId,
-          title: item.title || body.title || '',
-          revision: item.revision,
-          state: item.state
-        },
+          code === 'NO_WEB_VIEWABLE_FORMAT'
+            ? 'Representação encontrada, mas sem formato web renderizável (GLB/glTF/OBJ/STL).'
+            : 'Representação 3D web não disponível após tentativas dsdo/dsxcad/dseng.',
+        item: result.item,
+        representations: result.representations,
+        files: result.files,
         diagnostics: {
-          endpointsUsed,
-          note:
-            'ExpandItem/dseng fornece estrutura e referências; download de malha 3D web requer API oficial Dassault (3DSpace/VPMRep/ticket) não configurada neste serviço.'
+          endpointsUsed: result.endpointsUsed,
+          attempts: result.attempts
         }
       }
     };
@@ -138,4 +120,42 @@ export async function resolveVisualization(body = {}) {
       data: response
     };
   }
+}
+
+export function streamCachedModel(cacheKey, res) {
+  const cached = getCachedModelByKey(cacheKey);
+  if (!cached) {
+    res.status(404).json({
+      ok: false,
+      code: 'MODEL_NOT_FOUND',
+      message: 'Modelo em cache expirado ou inexistente.'
+    });
+    return false;
+  }
+  res.setHeader('Content-Type', cached.contentType || 'application/octet-stream');
+  res.setHeader('Cache-Control', 'private, max-age=300');
+  res.status(200).send(cached.buffer);
+  return true;
+}
+
+export async function probeVisualization(body = {}) {
+  const config = getThreeDxConfig();
+  const referenceId = str(body.referenceId || body.physicalId || '63FC553465A62400699DB567');
+  const client = createDsengClient(config);
+  const result = await resolveRepresentationForItem({
+    client,
+    referenceId,
+    physicalId: referenceId,
+    type: body.type || 'VPMReference',
+    title: body.title || ''
+  });
+  return {
+    ok: result.ok,
+    referenceId,
+    code: result.code || (result.ok ? 'OK' : 'FAILED'),
+    attempts: result.attempts || [],
+    endpointsUsed: result.endpointsUsed || client.getEndpointsUsed(),
+    format: result.format || null,
+    cacheKey: result.cacheKey || null
+  };
 }

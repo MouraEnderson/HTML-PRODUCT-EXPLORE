@@ -1,5 +1,9 @@
 import { Router } from 'express';
-import { resolveVisualization } from '../services/threeDxVisualizationService.js';
+import {
+  resolveVisualization,
+  streamCachedModel,
+  probeVisualization
+} from '../services/threeDxVisualizationService.js';
 import { buildInternalErrorResponse } from '../services/threeDxBomNormalizer.js';
 import { getThreeDxConfig } from '../services/threeDxConfig.js';
 
@@ -12,8 +16,25 @@ function sendInternalError(res) {
 
 router.post('/resolve', async (req, res) => {
   try {
-    const result = await resolveVisualization(req.body || {});
+    const result = await resolveVisualization(req.body || {}, req);
     res.status(result.status || (result.ok ? 200 : 422)).json(result.data);
+  } catch (_err) {
+    sendInternalError(res);
+  }
+});
+
+router.post('/probe', async (req, res) => {
+  try {
+    const data = await probeVisualization(req.body || {});
+    res.json(data);
+  } catch (_err) {
+    sendInternalError(res);
+  }
+});
+
+router.get('/model/:cacheKey', async (req, res) => {
+  try {
+    streamCachedModel(req.params.cacheKey, res);
   } catch (_err) {
     sendInternalError(res);
   }
@@ -21,11 +42,14 @@ router.post('/resolve', async (req, res) => {
 
 router.get('/representations/:referenceId', async (req, res) => {
   try {
-    const result = await resolveVisualization({
-      ...(req.body || {}),
-      referenceId: req.params.referenceId,
-      physicalId: req.params.referenceId
-    });
+    const result = await resolveVisualization(
+      {
+        ...(req.body || {}),
+        referenceId: req.params.referenceId,
+        physicalId: req.params.referenceId
+      },
+      req
+    );
     res.status(result.status || (result.ok ? 200 : 422)).json(result.data);
   } catch (_err) {
     sendInternalError(res);

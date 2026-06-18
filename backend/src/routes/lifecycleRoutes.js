@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getLifecycleTransitions, changeMaturity } from '../services/threeDxLifecycleService.js';
+import { getLifecycleTransitions, changeMaturity, probeLifecycle } from '../services/threeDxLifecycleService.js';
 import { buildInternalErrorResponse } from '../services/threeDxBomNormalizer.js';
 import { getThreeDxConfig } from '../services/threeDxConfig.js';
 
@@ -23,6 +23,15 @@ router.post('/change-maturity', async (req, res) => {
   try {
     const result = await changeMaturity(req.body || {});
     res.status(result.status || (result.ok ? 200 : 422)).json(result.data);
+  } catch (_err) {
+    sendInternalError(res);
+  }
+});
+
+router.post('/probe', async (req, res) => {
+  try {
+    const data = await probeLifecycle(req.body || {});
+    res.json(data);
   } catch (_err) {
     sendInternalError(res);
   }

@@ -8,7 +8,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node --test src/**/*.test.js"
+    "test": "node --test src/**/*.test.js",
+    "probe:tenant": "node scripts/probe-tenant-3d-lifecycle.mjs"
   },
   "engines": {
     "node": ">=20"
