@@ -78,6 +78,7 @@ export async function resolveVisualization(body = {}, req = null) {
           format: result.format,
           contentType: result.contentType,
           modelUrl,
+          source: result.source,
           sourceMeta: result.source,
           diagnostics: {
             endpointsUsed: result.endpointsUsed,

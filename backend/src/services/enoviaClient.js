@@ -165,6 +165,39 @@ export class EnoviaClient {
     return this.request('GET', path, { binary: true });
   }
 
+  async fetchBinaryUrl(url) {
+    const absolute = String(url || '').trim();
+    if (!absolute) throw new Error('fetchBinaryUrl requires a URL');
+    const response = await fetch(absolute, {
+      method: 'GET',
+      headers: this.headers({}, { jsonBody: false }),
+      redirect: 'follow'
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      let parsed = text;
+      try {
+        parsed = text ? JSON.parse(text) : text;
+      } catch {
+        parsed = text;
+      }
+      const error = new Error(`ENOVIA GET ${response.status}: ${absolute}`);
+      error.status = response.status;
+      error.url = absolute;
+      error.body = parsed;
+      error.bodySummary = summarizeBody(parsed);
+      throw error;
+    }
+    const buffer = await response.arrayBuffer();
+    return {
+      ok: true,
+      status: response.status,
+      contentType: response.headers.get('content-type') || 'application/octet-stream',
+      buffer,
+      finalUrl: response.url || absolute
+    };
+  }
+
   async postBinary(path, body = {}) {
     return this.request('POST', path, { body, jsonBody: true, binary: true });
   }

@@ -541,7 +541,9 @@ export async function changeMaturity(body = {}) {
         referenceId,
         previousState: exec.previousState,
         newState: exec.newState,
+        targetState: targetState || exec.newState,
         transition: transition || action || exec.invokeName,
+        verified: statesMatch(exec.newState, targetState || exec.newState),
         updatedItem: {
           id: exec.item.id,
           title: exec.item.title,

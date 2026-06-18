@@ -109,9 +109,27 @@ async function downloadFromTicket(client, ticketUrl, endpointsUsed) {
   }
   try {
     const parsed = new URL(url);
-    const pathWithQuery = `${parsed.pathname}${parsed.search}`;
-    const result = await client.client.getBinary(pathWithQuery);
-    endpointsUsed.push({ method: 'GET', endpoint: pathWithQuery, status: result.status || 200 });
+    const spaceHost = (() => {
+      try {
+        return new URL(client.client.spaceUrl).hostname;
+      } catch (_) {
+        return '';
+      }
+    })();
+    const crossHost = spaceHost && parsed.hostname !== spaceHost;
+    const result = crossHost
+      ? await client.client.fetchBinaryUrl(url)
+      : await client.client.getBinary(`${parsed.pathname}${parsed.search}`);
+    const endpointLabel = crossHost
+      ? `${parsed.hostname}${parsed.pathname}${parsed.search}`.slice(0, 200)
+      : `${parsed.pathname}${parsed.search}`;
+    endpointsUsed.push({
+      method: 'GET',
+      endpoint: endpointLabel,
+      status: result.status || 200,
+      ticketHost: parsed.hostname,
+      crossHost
+    });
     return result;
   } catch (error) {
     endpointsUsed.push({
