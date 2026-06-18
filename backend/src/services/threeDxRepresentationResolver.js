@@ -39,6 +39,7 @@ function collectExpandObjects(client, referenceId, expandDepth, endpointsUsed, a
       step: `dseng:expand depth=${expandDepth}`,
       status: 200,
       shapeCount: found.shapes.length,
+      shapeIds: found.shapes.map((s) => objectId(s)).filter(Boolean).slice(0, 8),
       repCount: found.repRefs.length,
       memberCount: members.length
     });

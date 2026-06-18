@@ -502,7 +502,46 @@
     });
   }
 
-  function loadVisualizationForRow(active) {
+  function formatVisualizationBlockMessage(data, code) {
+    var attempts = (data.diagnostics && data.diagnostics.attempts) || [];
+    var hasShapes = attempts.some(function (a) {
+      return (a.shapeCount && a.shapeCount > 0) || String(a.step || '').indexOf('3DShape') >= 0;
+    });
+    if (code === 'NO_WEB_VIEWABLE_FORMAT' || (hasShapes && code === 'OFFICIAL_3D_REPRESENTATION_API_REQUIRED')) {
+      return (
+        'Representação 3D web não disponível neste tenant. ' +
+        'Foram encontrados objetos 3DShape, mas nenhum Derived Output GLB/glTF/OBJ/STL foi retornado.'
+      );
+    }
+    if (code === 'OFFICIAL_3D_REPRESENTATION_API_REQUIRED') {
+      return (
+        'Representação 3D web não disponível neste tenant. ' +
+        'O backend tentou dseng/dsdo/ds3sh/dsxcad sem obter arquivo renderizável.'
+      );
+    }
+    return data.message || 'Representação 3D web não disponível para este item.';
+  }
+
+  function formatMaturityBlockHint(data, active) {
+    var state = (data.item && data.item.currentState) || active.activeMaturity || '—';
+    if (data.code === 'LIFECYCLE_TRANSITIONS_UNAVAILABLE' || data.code === 'OFFICIAL_LIFECYCLE_API_REQUIRED') {
+      return (
+        'Maturidade indisponível: o tenant/API não retornou transições oficiais para este item. Estado atual: ' +
+        state
+      );
+    }
+    return data.message || 'Nenhuma transição retornada.';
+  }
+
+  function setMaturityButtonBlocked(blocked) {
+    var btn = byId('btnChangeMaturity');
+    if (!btn) return;
+    btn.disabled = !!blocked;
+    btn.title = blocked
+      ? 'Maturidade indisponível neste tenant — API não retornou transições oficiais.'
+      : 'Alterar maturidade no 3DEXPERIENCE';
+  }
+
     if (!active || !active.activeReferenceId) return;
     var reqId = ++activeVisualizationRequestId;
     if (w.Bom3DViewer && w.Bom3DViewer.showLoading) {
@@ -532,7 +571,7 @@
           return;
         }
         var code = data.code || (data.error && data.error.code) || 'OFFICIAL_3D_REPRESENTATION_API_REQUIRED';
-        var msg = data.message || 'Representação 3D web não disponível para este item.';
+        var msg = formatVisualizationBlockMessage(data, code);
         if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
           w.Bom3DViewer.showMessage(msg, code);
         }
@@ -541,7 +580,7 @@
         if (reqId !== activeVisualizationRequestId) return;
         if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
           w.Bom3DViewer.showMessage(
-            'Representação 3D web não disponível para este item.',
+            'Representação 3D web não disponível neste tenant. Falha na chamada ao backend.',
             'VISUALIZATION_REQUEST_FAILED'
           );
         }
@@ -572,15 +611,14 @@
         if (reqId !== activeLifecycleRequestId) return;
         var data = result.data || {};
         if (data.code === 'OFFICIAL_LIFECYCLE_API_REQUIRED' || data.code === 'LIFECYCLE_TRANSITIONS_UNAVAILABLE') {
-          updateMaturityHint(
-            'Transições oficiais indisponíveis no tenant. Estado atual: ' +
-              ((data.item && data.item.currentState) || active.activeMaturity || '—'),
-            'warn'
-          );
+          updateMaturityHint(formatMaturityBlockHint(data, active), 'warn');
+          setMaturityButtonBlocked(true);
           return;
         }
+        setMaturityButtonBlocked(false);
         if (data.ok && data.transitions && data.transitions.length) {
           updateMaturityHint(data.transitions.length + ' transição(ões) disponível(is).', 'ok');
+          setMaturityButtonBlocked(false);
           return;
         }
         if (data.ok) {
@@ -617,7 +655,8 @@
       var status = byId('bomMaturityModalStatus');
       if (status) {
         status.textContent =
-          lifecycleData.message || 'Nenhuma transição oficial disponível para este item.';
+          lifecycleData.message ||
+          'Maturidade indisponível: o tenant/API não retornou transições oficiais para este item.';
       }
     }
     var modal = document.createElement('div');
@@ -643,7 +682,7 @@
         '</select></label>';
     } else {
       transitionsHtml =
-        '<p class="bom-maturity-warning">Nenhuma transição oficial retornada pela API. Operação bloqueada.</p>';
+        '<p class="bom-maturity-warning">Maturidade indisponível: o tenant/API não retornou transições oficiais para este item. Operação bloqueada.</p>';
     }
     modal.innerHTML =
       '<div class="bom-maturity-modal-card" role="dialog" aria-modal="true">' +
