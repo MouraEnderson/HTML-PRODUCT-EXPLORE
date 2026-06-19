@@ -1,3 +1,5 @@
+import { sanitizeSpaceUrl } from './threeDxCasAuth.js';
+
 function trimSlash(value) {
   return String(value || '').trim().replace(/\/$/, '');
 }
@@ -7,23 +9,33 @@ function hasCredentialPair(username, password) {
 }
 
 function resolveAuth({ bearerToken, cookie, username, password, authModeEnv }) {
+  const hasUserPass = hasCredentialPair(username, password);
   if (bearerToken) {
-    return { authMode: 'bearer', authConfigured: true, needsExplicitMode: false };
+    return { authMode: 'bearer', authConfigured: true, needsExplicitMode: false, casFallback: false };
+  }
+  if (hasUserPass && (authModeEnv === 'cas' || authModeEnv === 'auto' || !cookie)) {
+    return { authMode: 'cas', authConfigured: true, needsExplicitMode: false, casFallback: false };
   }
   if (cookie) {
-    return { authMode: 'cookie', authConfigured: true, needsExplicitMode: false };
+    return {
+      authMode: 'cookie',
+      authConfigured: true,
+      needsExplicitMode: false,
+      casFallback: hasUserPass && authModeEnv !== 'cookie-only'
+    };
   }
-  if (authModeEnv === 'basic' && hasCredentialPair(username, password)) {
-    return { authMode: 'basic', authConfigured: true, needsExplicitMode: false };
+  if (authModeEnv === 'basic' && hasUserPass) {
+    return { authMode: 'basic', authConfigured: true, needsExplicitMode: false, casFallback: false };
   }
-  if (hasCredentialPair(username, password)) {
-    return { authMode: 'none', authConfigured: false, needsExplicitMode: true };
+  if (hasUserPass) {
+    return { authMode: 'none', authConfigured: false, needsExplicitMode: true, casFallback: false };
   }
-  return { authMode: 'none', authConfigured: false, needsExplicitMode: false };
+  return { authMode: 'none', authConfigured: false, needsExplicitMode: false, casFallback: false };
 }
 
 export function getThreeDxConfig() {
-  const spaceUrl = trimSlash(process.env.THREEDX_SPACE_URL || process.env.SPACE_URL || '');
+  const spaceUrl = sanitizeSpaceUrl(process.env.THREEDX_SPACE_URL || process.env.SPACE_URL || '');
+  const passportUrl = trimSlash(process.env.THREEDX_PASSPORT_URL || '');
   const securityContext = String(
     process.env.THREEDX_SECURITY_CONTEXT || process.env.SECURITY_CONTEXT || ''
   ).trim();
@@ -56,6 +68,7 @@ export function getThreeDxConfig() {
     mode,
     bomServiceMode,
     spaceUrl,
+    passportUrl,
     securityContext,
     username,
     password,
@@ -66,6 +79,7 @@ export function getThreeDxConfig() {
     authModeEnv,
     authConfigured: auth.authConfigured,
     authNeedsExplicitMode: auth.needsExplicitMode,
+    casFallback: auth.casFallback,
     usernameConfigured,
     passwordConfigured,
     credentialsConfigured: auth.authConfigured,
@@ -86,6 +100,8 @@ export function getPublicEnvironmentFlags(config = getThreeDxConfig()) {
     credentialsMode = 'bearer';
   } else if (config.authMode === 'cookie') {
     credentialsMode = 'cookie';
+  } else if (config.authMode === 'cas') {
+    credentialsMode = 'cas';
   } else if (config.authMode === 'basic') {
     credentialsMode = 'basic';
   }
