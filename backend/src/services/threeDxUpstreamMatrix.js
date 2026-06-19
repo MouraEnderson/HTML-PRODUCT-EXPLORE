@@ -150,6 +150,8 @@ export async function runUpstreamMatrix({ referenceId, title = '', name = '' } =
       await tryCall(`dsdo:DerivedOutputJobs ${shapeId}`, () => client.client.createDerivedOutputJob(body), attempts);
     }
   }
+
+  const dslcPaths = [
     '/resources/v1/modeler/dslc/dslc:changeMaturity',
     '/resources/v1/modeler/dslc/invoke/dslc:changeMaturity',
     '/resources/v1/modeler/dslc/dslc:Lifecycle/changeMaturity'
