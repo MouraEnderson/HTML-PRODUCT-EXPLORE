@@ -3,7 +3,30 @@
 **Para:** Administrador 3DEXPERIENCE / Suporte Dassault  
 **Tenant piloto:** R1132100929518  
 **Widget:** BOM Analytics (GitHub Pages + backend Render)  
-**Data:** 2026-06-18
+**Data:** 2026-06-18 (atualizado após correção de regressão)
+
+---
+
+## Dashboard regression corrected (2026-06-18)
+
+**Commit de correção:** `7dcae3b` (branch `cursor/fix-dashboard-regression-bom20260617d`)
+
+**Causa raiz:** no commit `63ee892`, a declaração `function loadVisualizationForRow(active)` foi removida acidentalmente ao adicionar helpers de mensagem 3D/maturidade. O corpo da função ficou órfão → **SyntaxError** em `bom-ska-service-hotfix-20260617d.js` → `__bomSkaServiceInstall` nunca executava → E-BOM vazia, badge **Parcial 0/5**, footer **0 de 0**, layout sem inicialização correta.
+
+**Correção:** restaurada a linha `function loadVisualizationForRow(active) {` antes do corpo existente. Uma linha; sem alteração de build (`bom20260617d`), link oficial ou CSS.
+
+**Evidência pós-correção (backend inalterado):**
+
+| Teste | Resultado |
+|-------|-----------|
+| `npm test` | 33/33 PASS |
+| `/api/3dx/bom/health` | `ok:true`, `mode:dseng-official` |
+| `/api/3dx/bom/structure` CJ MESA depth=1 | **5 rows**, `totalRows:5` |
+| `node --check` hotfix | SYNTAX OK |
+
+**Status visual:** a quebra de proporção (gráficos grandes, painel espremido) era efeito colateral do hotfix não carregar; após deploy da correção, o runtime volta a aplicar layout/sync. Nenhuma reversão de CSS foi necessária.
+
+**Link oficial inalterado:** `widget-v3-08i.html?v=bom20260617d`
 
 ---
 
@@ -38,6 +61,24 @@ Precisamos renderizar modelos reais no viewer próprio da dashboard, **sem 3DPla
 | 3DShape #2 | `2C56DEE5E1E943068A77F7E8B2F0AB7B` |
 | Vidro (UI) | `63FC553465A62400699DB30C00004EB9` |
 
+**Endpoints candidatos (documentação pública + probe tenant):**
+
+| Serviço | Endpoint candidato | Método | Payload resumido | Notas |
+|---------|-------------------|--------|------------------|-------|
+| dsdo | `/resources/v1/modeler/dsdo/dsdo:DerivedOutputs/Locate` | POST | `{ type, id }` VPMReference ou 3DShape | **200, fileCount:0** no tenant |
+| dsdo | `/resources/v1/modeler/dsdo/dsdo:DerivedOutputs/DownloadTicket` | POST | ticket após Locate | Requer arquivo em Locate |
+| FCS | URL absoluta do ticket (host FCS) | GET | ticket da resposta DownloadTicket | Cross-host; backend já implementa |
+| dseng | `/resources/v1/modeler/dseng/dseng:EngItem/{id}/expand` | POST | depth=2, filter 3DShape | Encontra shapes; **sem arquivo web** |
+| dsxcad | `/resources/v1/modeler/dsxcad/dsxcad:Representation/locate` | POST | referencedObject EngItem | **400** neste tenant |
+| ds3sh | `/resources/v1/modeler/ds3sh/ds3sh:3DShape/{id}` | GET | shape id | Metadados OK; sem GLB |
+
+**Fontes pesquisadas (2026-06-18):**
+
+- [Derived Outputs Web Services](https://media.3ds.com/support/documentation/developer/Cloud/en/DSDoc.htm?show=CAADerivedOutputsWS/dsdo_v1.htm)
+- [Deep Dive: Derived Outputs](https://visiativ.co.uk/news-resources/deep-dive-derived-outputs-3dexperience/) — requer Derived Format Converter + regras no Platform Manager
+- [Setting Up Derived Outputs for SOLIDWORKS](https://www.javelin-tech.com/blog/2025/09/setting-up-derived-outputs-for-solidworks-files-on-the-3dexperience-platform/) — GLB/glTF configurável via admin
+- [COExperience: Public Web Services](https://www.coe.org/Content-Center/Content-Center-Details/coexperience-session-wrap-up-exploring-3dexperience-public-web-services) — OpenAPI 3DSpace + FCS
+
 **Precisamos que o tenant:**
 
 - [ ] Tenha **Derived Format** para peças **mecânicas** (SOLIDWORKS / Physical Product / 3DShape), **não apenas Allegro PCB→CGR**.
@@ -63,9 +104,11 @@ Esperado: `"ok": true`, `"format": "glb"` (ou gltf/obj/stl), `"modelUrl": "..."`
 
 ---
 
-## Pedido 2 — Maturidade / lifecycle
+## Pedido 2 — Maturidade / lifecycle (direta, sem Change Action)
 
-Precisamos **mudar maturidade real** de EngItem via backend REST.
+Precisamos **mudar maturidade real** de EngItem via backend REST — **transição direta no item**, sem Change Action e sem ECO obrigatório.
+
+**Premissa:** itens não-configurados (EngItem/VPMReference padrão) devem permitir promote/demote via API de lifecycle/maturity. Change Action é caminho de **itens configurados** ou processo controlado — **não** é o fluxo principal deste widget.
 
 **O que já sabemos:**
 
@@ -82,16 +125,38 @@ Precisamos **mudar maturidade real** de EngItem via backend REST.
 - [ ] Confirmação de **role** (Author vs Leader) e **security context**.
 - [ ] Confirmação se cookie de serviço pode executar ou se exige sessão interativa.
 
-**Perguntas fechadas:**
+**Endpoints candidatos (documentação pública + código backend):**
 
-- [ ] Derived Output GLB/glTF está habilitado para Physical Product?
-- [ ] Derived Format Converter está habilitado?
-- [ ] Existe DownloadTicket para 3DShape via dsdo?
-- [ ] Existe endpoint lifecycle REST para EngItem?
-- [ ] Qual payload de changeMaturity?
-- [ ] Qual security context / role é exigido?
-- [ ] Conta atual pode promover/demover?
-- [ ] Precisa reserva/lock no item?
+| Serviço | Endpoint candidato | Método | Notas |
+|---------|-------------------|--------|-------|
+| dseng (per-item) | `/resources/v1/modeler/dseng/dseng:EngItem/{id}/invoke/dseng:GetNextStates` | POST | Lista transições; **404** neste tenant |
+| dseng (per-item) | `.../invoke/dseng:changeMaturity` | POST | Executa transição; **404** neste tenant |
+| dseng (global) | `/resources/v1/modeler/dseng/invoke/dseng:changeMaturity` | POST | Array EngItem + targetState; **500** neste tenant |
+| dslc | `/resources/v1/modeler/dslc/dslc:changeMaturity` | POST | **404** neste tenant |
+| C++ API (referência) | `CATAdpMaturityServices::ApplyMaturityTransition` | — | Não REST; confirma modelo de transição direta por grafo de maturidade |
+
+**Fontes pesquisadas (2026-06-18):**
+
+- [3DEXPERIENCE Web Services Postman Primer](https://3dswym.3dexperience.3ds.com/post/enovia-user-community/3dexperience-web-services-postman-primer_TGle4SV2RFOt9z8alqjtKw) — auth CAS, CSRF obrigatório em POST/PUT/DELETE
+- [Derived Outputs Web Services (dsdo)](https://media.3ds.com/support/documentation/developer/Cloud/en/DSDoc.htm?show=CAADerivedOutputsWS/dsdo_v1.htm) — requer 3DEXPERIENCE ID
+- [ws3dx.dsdo SDK](https://github.com/3ds-cpe-emed/ws3dx-dotnet/tree/main/ws3dx.dsdo) — família dsdo oficial
+- PDFs tenant-unblock: traces/FCS/service URL; **não** trazem payload pronto de maturity
+
+**Perguntas fechadas (obrigatórias):**
+
+1. Qual endpoint REST oficial muda maturidade **diretamente** de EngItem/VPMReference no tenant Cloud?
+2. Qual payload exato (array vs objeto, `targetState` Frozen vs FROZEN)?
+3. Qual ID usar (physicalId vs referenceId)?
+4. Precisa CSRF token 3DSpace?
+5. Precisa lock/reservation no item?
+6. Qual security context (`ctx::VPLMProjectLeader.Company Name.CS_IMPLANTACAO` é suficiente)?
+7. A conta de serviço atual tem permissão de promote/demote?
+8. Como consultar transições diretas permitidas (equivalente GUI “Changing Maturity”)?
+9. Como confirmar estado final após invoke?
+10. Derived Output GLB/glTF está habilitado para Physical Product?
+11. Derived Format Converter está habilitado?
+12. Qual endpoint retorna DownloadTicket/FCS para 3DShape?
+13. Por que `dsdo:Locate` retorna `fileCount:0` apesar de existirem 3DShape?
 
 **Validação após configuração:**
 
