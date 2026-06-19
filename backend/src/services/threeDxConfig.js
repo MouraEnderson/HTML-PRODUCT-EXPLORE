@@ -1,7 +1,28 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { sanitizeSpaceUrl } from './threeDxCasAuth.js';
 
 function trimSlash(value) {
   return String(value || '').trim().replace(/\/$/, '');
+}
+
+function readSecretFile(name) {
+  const paths = [`/etc/secrets/${name}`, `/run/secrets/${name}`];
+  for (const filePath of paths) {
+    try {
+      if (existsSync(filePath)) {
+        return readFileSync(filePath, 'utf8').trim();
+      }
+    } catch {
+      // ignore unreadable secret mount
+    }
+  }
+  return '';
+}
+
+function envOrSecret(name) {
+  const fromEnv = String(process.env[name] || '').trim();
+  if (fromEnv) return fromEnv;
+  return readSecretFile(name);
 }
 
 function hasCredentialPair(username, password) {
@@ -39,11 +60,11 @@ export function getThreeDxConfig() {
   const securityContext = String(
     process.env.THREEDX_SECURITY_CONTEXT || process.env.SECURITY_CONTEXT || ''
   ).trim();
-  const username = String(process.env.THREEDX_USERNAME || '').trim();
-  const password = String(process.env.THREEDX_PASSWORD || '').trim();
-  const bearerToken = String(process.env.ENOVIA_BEARER_TOKEN || '').trim();
-  const cookie = String(process.env.ENOVIA_COOKIE || '').trim();
-  const csrfToken = String(process.env.ENO_CSRF_TOKEN || '').trim();
+  const username = envOrSecret('THREEDX_USERNAME');
+  const password = envOrSecret('THREEDX_PASSWORD');
+  const bearerToken = envOrSecret('ENOVIA_BEARER_TOKEN');
+  const cookie = envOrSecret('ENOVIA_COOKIE');
+  const csrfToken = envOrSecret('ENO_CSRF_TOKEN');
   const bomServiceMode = String(process.env.BOM_SERVICE_MODE || '').trim().toLowerCase();
   const authModeEnv = String(process.env.THREEDX_AUTH_MODE || '').trim().toLowerCase();
 
