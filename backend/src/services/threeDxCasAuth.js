@@ -1,4 +1,6 @@
 const SESSION_TTL_MS = 90 * 60 * 1000;
+const BROWSER_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
 const sessionCache = new Map();
 
@@ -94,7 +96,7 @@ function loginPathsForPassport(passportUrl) {
 async function fetchWithJar(jar, url, options = {}) {
   const headers = {
     Accept: 'application/json',
-    'User-Agent': 'Mozilla/5.0 (compatible; BOM-Analytics-Resolver/1.0)',
+    'User-Agent': BROWSER_USER_AGENT,
     ...(options.headers || {})
   };
   const cookieHeader = jar.header();

@@ -99,8 +99,10 @@ export async function getSkaAuthHealth() {
     const mapped = client.mapUpstreamError(error);
     auth.error = mapped.message;
     auth.sessionExpired = mapped.code === 'UPSTREAM_AUTH_FAILED';
-    if (auth.sessionExpired && config.authMode === 'cookie' && !config.casFallback) {
-      auth.error = '3DEXPERIENCE session expired. Configure THREEDX_USERNAME/THREEDX_PASSWORD with THREEDX_AUTH_MODE=cas on Render.';
+    auth.cookieConfigured = Boolean(config.cookie);
+    if (auth.sessionExpired && config.authMode === 'cas' && !config.cookie) {
+      auth.hint =
+        '3DPassport may block server-side CAS from Render. Add ENOVIA_COOKIE (fresh browser session) as Render secret, or use Openness Agent.';
     }
   }
 
