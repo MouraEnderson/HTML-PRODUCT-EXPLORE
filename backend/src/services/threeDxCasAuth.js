@@ -32,6 +32,10 @@ class CookieJar {
     const lines = typeof response.headers.getSetCookie === 'function'
       ? response.headers.getSetCookie()
       : [];
+    if (!lines.length) {
+      const raw = response.headers.get('set-cookie');
+      if (raw) lines.push(...raw.split(/,(?=[^;]+?=)/));
+    }
     for (const line of lines) {
       const [pair] = String(line).split(';');
       const idx = pair.indexOf('=');
@@ -229,6 +233,24 @@ function extractLoginTicket(payload) {
   return match ? match[1] : '';
 }
 
+async function fetchLoginTicket(jar, passportUrl, loginPath) {
+  const url = `${passportUrl}${loginPath}?action=get_auth_params`;
+  const headerSets = [
+    { Accept: 'application/json' },
+    { Accept: 'application/json, text/plain, */*' },
+    { Accept: '*/*' }
+  ];
+  let lastPayload = null;
+  for (const headers of headerSets) {
+    const ticketResponse = await fetchWithJar(jar, url, { method: 'GET', headers });
+    const ticketPayload = await readResponse(ticketResponse);
+    lastPayload = ticketPayload;
+    const lt = extractLoginTicket(ticketPayload);
+    if (lt) return { lt, ticketPayload };
+  }
+  return { lt: '', ticketPayload: lastPayload };
+}
+
 async function casLoginWithPath({
   jar,
   passportUrl,
@@ -239,13 +261,7 @@ async function casLoginWithPath({
   username,
   password
 }) {
-  const ticketResponse = await fetchWithJar(
-    jar,
-    `${passportUrl}${loginPath}?action=get_auth_params`,
-    { method: 'GET', headers: { Accept: 'application/json' } }
-  );
-  const ticketPayload = await readResponse(ticketResponse);
-  const lt = extractLoginTicket(ticketPayload);
+  const { lt, ticketPayload } = await fetchLoginTicket(jar, passportUrl, loginPath);
   if (!lt) {
     if (ticketPayload.status === 403) {
       throw new Error('CAS_PASSPORT_BLOCKED: 3DPassport blocked server login (403). Use fresh ENOVIA_COOKIE or whitelist Render IP.');

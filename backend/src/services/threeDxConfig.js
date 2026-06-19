@@ -54,14 +54,31 @@ function resolveAuth({ bearerToken, cookie, username, password, authModeEnv }) {
   return { authMode: 'none', authConfigured: false, needsExplicitMode: false, casFallback: false };
 }
 
+function stripEnvAssignment(value, key) {
+  const raw = String(value || '').replace(/^\uFEFF/, '').trim();
+  const prefix = `${key}=`;
+  if (raw.toLowerCase().startsWith(prefix.toLowerCase())) {
+    return raw.slice(prefix.length).trim();
+  }
+  return raw;
+}
+
+function sanitizePassportUrl(value) {
+  const raw = stripEnvAssignment(value, 'THREEDX_PASSPORT_URL');
+  const match = raw.match(/https:\/\/r\d+-[a-z0-9]+\.iam\.3dexperience\.3ds\.com/i);
+  if (match) return match[0].replace(/\/$/, '');
+  return trimSlash(raw);
+}
+
 export function getThreeDxConfig() {
   const spaceUrl = sanitizeSpaceUrl(process.env.THREEDX_SPACE_URL || process.env.SPACE_URL || '');
-  const passportUrl = trimSlash(process.env.THREEDX_PASSPORT_URL || '');
-  const securityContext = String(
-    process.env.THREEDX_SECURITY_CONTEXT || process.env.SECURITY_CONTEXT || ''
-  ).trim();
-  const username = envOrSecret('THREEDX_USERNAME');
-  const password = envOrSecret('THREEDX_PASSWORD');
+  const passportUrl = sanitizePassportUrl(process.env.THREEDX_PASSPORT_URL || '');
+  const securityContext = stripEnvAssignment(
+    process.env.THREEDX_SECURITY_CONTEXT || process.env.SECURITY_CONTEXT || '',
+    'THREEDX_SECURITY_CONTEXT'
+  );
+  const username = stripEnvAssignment(envOrSecret('THREEDX_USERNAME'), 'THREEDX_USERNAME');
+  const password = stripEnvAssignment(envOrSecret('THREEDX_PASSWORD'), 'THREEDX_PASSWORD');
   const bearerToken = envOrSecret('ENOVIA_BEARER_TOKEN');
   const cookie = envOrSecret('ENOVIA_COOKIE');
   const csrfToken = envOrSecret('ENO_CSRF_TOKEN');

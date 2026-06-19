@@ -54,8 +54,13 @@ export function getSkaHealth() {
       configured: config.authConfigured,
       mode: config.authMode,
       casFallback: Boolean(config.casFallback),
+      cookieConfigured: Boolean(config.cookie),
       usernameConfigured: Boolean(config.usernameConfigured),
       passwordConfigured: Boolean(config.passwordConfigured)
+    },
+    deploy: {
+      commit: String(process.env.RENDER_GIT_COMMIT || process.env.GITHUB_SHA || '').slice(0, 12),
+      service: String(process.env.RENDER_SERVICE_NAME || '')
     }
   };
 }
