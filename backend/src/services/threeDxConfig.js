@@ -63,15 +63,23 @@ function stripEnvAssignment(value, key) {
   return raw;
 }
 
+function stripSecurityContext(value) {
+  let raw = stripEnvAssignment(String(value || ''), 'THREEDX_SECURITY_CONTEXT');
+  raw = stripEnvAssignment(raw, 'SECURITY_CONTEXT');
+  const hadNewline = /[\r\n]/.test(raw);
+  const normalized = raw.replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  return { normalized, hadNewline };
+}
+
 export function getThreeDxConfig() {
   const spaceUrl = sanitizeSpaceUrl(process.env.THREEDX_SPACE_URL || process.env.SPACE_URL || '');
   const rawPassportUrl = stripEnvAssignment(envOrSecret('THREEDX_PASSPORT_URL'), 'THREEDX_PASSPORT_URL');
   const passportUrl = sanitizePassportUrl(rawPassportUrl);
   const passportUrlIgnored = Boolean(rawPassportUrl && !passportUrl);
-  const securityContext = stripEnvAssignment(
-    process.env.THREEDX_SECURITY_CONTEXT || process.env.SECURITY_CONTEXT || '',
-    'THREEDX_SECURITY_CONTEXT'
-  );
+  const securityContextRaw = envOrSecret('THREEDX_SECURITY_CONTEXT') || envOrSecret('SECURITY_CONTEXT') || process.env.SECURITY_CONTEXT || '';
+  const securityContextParsed = stripSecurityContext(securityContextRaw);
+  const securityContext = securityContextParsed.normalized;
+  const securityContextHadNewline = securityContextParsed.hadNewline;
   const securityContextValid = /^ctx::/.test(securityContext);
   const username = stripEnvAssignment(envOrSecret('THREEDX_USERNAME'), 'THREEDX_USERNAME');
   const password = stripEnvAssignment(envOrSecret('THREEDX_PASSWORD'), 'THREEDX_PASSWORD');
@@ -106,6 +114,7 @@ export function getThreeDxConfig() {
     passportUrlIgnored,
     securityContext,
     securityContextValid,
+    securityContextHadNewline,
     username,
     password,
     bearerToken,

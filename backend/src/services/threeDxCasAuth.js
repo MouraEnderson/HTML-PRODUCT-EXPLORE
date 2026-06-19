@@ -364,25 +364,7 @@ function loginRejectedPayload(payload) {
   return /authentication failed|invalid credentials|bad credentials|login error|incorrect password|login \| 3dexperience id|title>login/i.test(text);
 }
 
-async function casLoginWithPath({
-  jar,
-  passportUrl,
-  loginPath,
-  spaceUrl,
-  securityContext,
-  username,
-  password
-}) {
-  const serviceUrl = `${spaceUrl}/resources/v1/application/CSRF`;
-  const { lt, ticketPayload } = await fetchLoginTicket(jar, passportUrl, loginPath);
-  if (!lt) {
-    if (ticketPayload.status === 403) {
-      throw new Error('CAS_PASSPORT_BLOCKED: 3DPassport blocked server login (403)');
-    }
-    throw new Error(`CAS login ticket unavailable (${ticketPayload.status})`);
-  }
-
-  const loginUrl = `${passportUrl}${loginPath}?service=${encodeURIComponent(serviceUrl)}`;
+async function postCasLogin(jar, { passportUrl, loginPath, loginUrl, lt, username, password }) {
   const loginBody = new URLSearchParams({
     lt,
     username,
@@ -418,15 +400,23 @@ async function casLoginWithPath({
     }
   }
 
-  let finalResponse = await followRedirects(jar, loginResponse, loginUrl, 16);
+  return loginResponse;
+}
+
+async function fetchCsrfSession(jar, serviceUrl, spaceUrl) {
+  let csrfResponse = await fetchWithJar(jar, serviceUrl, {
+    method: 'GET',
+    headers: { Accept: JSON_ACCEPT }
+  });
+  let finalResponse = await followRedirects(jar, csrfResponse, serviceUrl, 16);
   let csrf = extractCsrf(finalResponse);
 
   if (!csrf.value || !finalResponse.ok) {
-    const csrfResponse = await fetchWithJar(jar, serviceUrl, {
+    csrfResponse = await fetchWithJar(jar, serviceUrl, {
       method: 'GET',
       headers: { Accept: JSON_ACCEPT }
     });
-    finalResponse = await readResponse(csrfResponse);
+    finalResponse = await followRedirects(jar, csrfResponse, serviceUrl, 16);
     csrf = extractCsrf(finalResponse);
   }
 
@@ -454,6 +444,63 @@ async function casLoginWithPath({
     csrfToken: csrf.value || '',
     csrfHeaderName: csrf.name || 'ENO_CSRF_TOKEN'
   };
+}
+
+async function casLoginWithPath({
+  jar,
+  passportUrl,
+  loginPath,
+  spaceUrl,
+  securityContext,
+  username,
+  password
+}) {
+  void securityContext;
+  const serviceUrl = `${spaceUrl}/resources/v1/application/CSRF`;
+  const { lt, ticketPayload } = await fetchLoginTicket(jar, passportUrl, loginPath);
+  if (!lt) {
+    if (ticketPayload.status === 403) {
+      throw new Error('CAS_PASSPORT_BLOCKED: 3DPassport blocked server login (403)');
+    }
+    throw new Error(`CAS login ticket unavailable (${ticketPayload.status})`);
+  }
+
+  try {
+    const serviceLoginUrl = `${passportUrl}${loginPath}?service=${encodeURIComponent(serviceUrl)}`;
+    const serviceLoginResponse = await postCasLogin(jar, {
+      passportUrl,
+      loginPath,
+      loginUrl: serviceLoginUrl,
+      lt,
+      username,
+      password
+    });
+    await followRedirects(jar, serviceLoginResponse, serviceLoginUrl, 16);
+    return await fetchCsrfSession(jar, serviceUrl, spaceUrl);
+  } catch (error) {
+    const msg = String(error?.message || '');
+    if (!/CAS service authentication failed \(401\)|CAS CSRF token unavailable \(401\)|invalid_grant|authenticated session/i.test(msg)) {
+      throw error;
+    }
+  }
+
+  const freshJar = new CookieJar();
+  const retryTicket = await fetchLoginTicket(freshJar, passportUrl, loginPath);
+  if (!retryTicket.lt) {
+    throw new Error(`CAS login ticket unavailable (${retryTicket.ticketPayload.status})`);
+  }
+
+  const passportLoginUrl = `${passportUrl}${loginPath}`;
+  const passportLoginResponse = await postCasLogin(freshJar, {
+    passportUrl,
+    loginPath,
+    loginUrl: passportLoginUrl,
+    lt: retryTicket.lt,
+    username,
+    password
+  });
+  await followRedirects(freshJar, passportLoginResponse, passportLoginUrl, 16);
+  return await fetchCsrfSession(freshJar, serviceUrl, spaceUrl);
 }
 
 export async function getCasCredentials(config, options = {}) {

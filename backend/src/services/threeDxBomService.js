@@ -60,7 +60,8 @@ export function getSkaHealth() {
       passwordConfigured: Boolean(config.passwordConfigured),
       passportUrlConfigured: Boolean(config.passportUrl),
       passportUrlIgnored: Boolean(config.passportUrlIgnored),
-      securityContextValid: Boolean(config.securityContextValid)
+      securityContextValid: Boolean(config.securityContextValid),
+      securityContextHadNewline: Boolean(config.securityContextHadNewline)
     },
     deploy: {
       commit: String(process.env.RENDER_GIT_COMMIT || process.env.GITHUB_SHA || '').slice(0, 12),
@@ -97,6 +98,11 @@ export async function getSkaAuthHealth() {
       auth.passportUrlIgnored = true;
       auth.hint =
         'THREEDX_PASSPORT_URL on Render is invalid (dashboard/ifwe URL). Remove it or set https://r<TENANT>-eu1.iam.3dexperience.3ds.com';
+    }
+    if (config.securityContextHadNewline) {
+      auth.securityContextHadNewline = true;
+      auth.hint =
+        'SECURITY_CONTEXT had line break in Render. Use single line: ctx::VPLMProjectLeader.Company Name.CS_IMPLANTACAO';
     }
     try {
       const creds = await getCasCredentials(config, { forceRefresh: true });
