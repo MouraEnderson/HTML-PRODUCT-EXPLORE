@@ -80,8 +80,19 @@ async function readResponse(response) {
   };
 }
 
+function loginPathsForPassport(passportUrl) {
+  if (/\.iam\.3dexperience\.3ds\.com/i.test(passportUrl)) {
+    return ['/login'];
+  }
+  return ['/login', '/iam/login'];
+}
+
 async function fetchWithJar(jar, url, options = {}) {
-  const headers = { ...(options.headers || {}) };
+  const headers = {
+    Accept: 'application/json',
+    'User-Agent': 'Mozilla/5.0 (compatible; BOM-Analytics-Resolver/1.0)',
+    ...(options.headers || {})
+  };
   const cookieHeader = jar.header();
   if (cookieHeader) headers.Cookie = cookieHeader;
   const response = await fetch(url, {
@@ -186,7 +197,7 @@ export async function casLogin(config, { forceRefresh = false } = {}) {
 async function casLoginOnce({ passportUrl, spaceUrl, securityContext, username, password }) {
   const jar = new CookieJar();
   const serviceUrl = `${spaceUrl}/resources/v1/application/CSRF`;
-  const loginPaths = ['/login', '/iam/login'];
+  const loginPaths = loginPathsForPassport(passportUrl);
   let lastError = null;
 
   for (const loginPath of loginPaths) {
@@ -227,6 +238,9 @@ async function casLoginWithPath({
   const ticketPayload = await readResponse(ticketResponse);
   const lt = ticketPayload.json?.lt;
   if (!lt) {
+    if (ticketPayload.status === 403) {
+      throw new Error('CAS_PASSPORT_BLOCKED: 3DPassport blocked server login (403). Use fresh ENOVIA_COOKIE or whitelist Render IP.');
+    }
     throw new Error(`CAS login ticket unavailable (${ticketPayload.status})`);
   }
 

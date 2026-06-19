@@ -32,13 +32,24 @@ export class ThreeDxDsengClient {
     if (this._authReady && !forceRefresh) return;
 
     if (this.config.authMode === 'cas' || this._authModeInUse === 'cas') {
-      const creds = await getCasCredentials(this.config, { forceRefresh });
-      this.client.cookie = creds.cookie;
-      this.client.csrfToken = creds.csrfToken || this.client.csrfToken || '';
-      this.client.csrfHeaderName = creds.csrfHeaderName || this.client.csrfHeaderName;
-      this._authModeInUse = 'cas';
-      this._authReady = true;
-      return;
+      try {
+        const creds = await getCasCredentials(this.config, { forceRefresh });
+        this.client.cookie = creds.cookie;
+        this.client.csrfToken = creds.csrfToken || this.client.csrfToken || '';
+        this.client.csrfHeaderName = creds.csrfHeaderName || this.client.csrfHeaderName;
+        this._authModeInUse = 'cas';
+        this._authReady = true;
+        return;
+      } catch (error) {
+        const msg = String(error?.message || '');
+        if (/CAS_PASSPORT_BLOCKED|login ticket unavailable \(403\)/i.test(msg) && this.config.cookie) {
+          this.client.cookie = this.config.cookie;
+          this._authModeInUse = 'cookie';
+          this._authReady = true;
+          return;
+        }
+        throw error;
+      }
     }
 
     if (this.config.authMode === 'cookie') {
@@ -99,7 +110,7 @@ export class ThreeDxDsengClient {
     if (/invalid_grant|authenticated session|service ticket/i.test(upstreamDetail)) {
       return { code: 'UPSTREAM_AUTH_FAILED', message: 'Failed to authenticate with 3DEXPERIENCE' };
     }
-    if (/CAS service authentication failed|CAS login rejected|CAS CSRF token unavailable/i.test(upstreamDetail)) {
+    if (/CAS service authentication failed|CAS login rejected|CAS CSRF token unavailable|CAS_PASSPORT_BLOCKED|login ticket unavailable \(403\)/i.test(upstreamDetail)) {
       return { code: 'UPSTREAM_AUTH_FAILED', message: 'Failed to authenticate with 3DEXPERIENCE' };
     }
     if (status === 401 || status === 403) {
