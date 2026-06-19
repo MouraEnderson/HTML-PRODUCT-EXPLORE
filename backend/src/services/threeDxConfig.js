@@ -72,6 +72,7 @@ export function getThreeDxConfig() {
     process.env.THREEDX_SECURITY_CONTEXT || process.env.SECURITY_CONTEXT || '',
     'THREEDX_SECURITY_CONTEXT'
   );
+  const securityContextValid = /^ctx::/.test(securityContext);
   const username = stripEnvAssignment(envOrSecret('THREEDX_USERNAME'), 'THREEDX_USERNAME');
   const password = stripEnvAssignment(envOrSecret('THREEDX_PASSWORD'), 'THREEDX_PASSWORD');
   const bearerToken = envOrSecret('ENOVIA_BEARER_TOKEN');
@@ -104,6 +105,7 @@ export function getThreeDxConfig() {
     passportUrl,
     passportUrlIgnored,
     securityContext,
+    securityContextValid,
     username,
     password,
     bearerToken,

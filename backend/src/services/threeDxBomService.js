@@ -59,7 +59,8 @@ export function getSkaHealth() {
       usernameConfigured: Boolean(config.usernameConfigured),
       passwordConfigured: Boolean(config.passwordConfigured),
       passportUrlConfigured: Boolean(config.passportUrl),
-      passportUrlIgnored: Boolean(config.passportUrlIgnored)
+      passportUrlIgnored: Boolean(config.passportUrlIgnored),
+      securityContextValid: Boolean(config.securityContextValid)
     },
     deploy: {
       commit: String(process.env.RENDER_GIT_COMMIT || process.env.GITHUB_SHA || '').slice(0, 12),
@@ -112,6 +113,14 @@ export async function getSkaAuthHealth() {
       if (auth.sessionExpired) {
         auth.hint =
           'CAS rejected THREEDX_USERNAME/THREEDX_PASSWORD on Render. Update credentials (no dashboard URLs, no quotes).';
+      } else if (/CAS service authentication failed \(401\)/i.test(auth.casLoginError || '')) {
+        auth.hint =
+          '3DPassport login succeeded but 3DSpace returned 401. Verify THREEDX_SECURITY_CONTEXT and user access to that collab space.';
+      }
+      if (!config.securityContextValid) {
+        auth.securityContextInvalid = true;
+        auth.hint =
+          'THREEDX_SECURITY_CONTEXT must start with ctx:: (example: ctx::VPLMProjectLeader.Company Name.CS_IMPLANTACAO).';
       }
       return { ...base, ok: false, auth };
     }
