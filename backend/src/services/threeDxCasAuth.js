@@ -236,7 +236,7 @@ export async function casLogin(config, { forceRefresh = false } = {}) {
       return record;
     } catch (error) {
       lastError = error;
-      if (isCredentialRejection(error)) {
+      if (isCredentialRejection(error) || !isTicketUnavailable(error)) {
         throw error;
       }
     }
