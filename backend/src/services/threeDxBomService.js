@@ -49,7 +49,60 @@ export function getSkaHealth() {
     source: SOURCE,
     version: 'v1',
     mode,
-    upstream: config.upstream
+    upstream: config.upstream,
+    auth: {
+      configured: config.authConfigured,
+      mode: config.authMode,
+      casFallback: Boolean(config.casFallback),
+      usernameConfigured: Boolean(config.usernameConfigured),
+      passwordConfigured: Boolean(config.passwordConfigured)
+    }
+  };
+}
+
+export async function getSkaAuthHealth() {
+  const base = getSkaHealth();
+  const config = getThreeDxConfig();
+  const auth = {
+    configured: config.authConfigured,
+    mode: config.authMode,
+    casFallback: Boolean(config.casFallback),
+    usernameConfigured: Boolean(config.usernameConfigured),
+    passwordConfigured: Boolean(config.passwordConfigured),
+    dsengReachable: false,
+    canReadKnownRoot: false,
+    knownRootId: CJ_MESA_ROOT_ID,
+    sessionExpired: false,
+    error: null
+  };
+
+  const configuredCheck = assertDsengConfigured(config);
+  if (!configuredCheck.ok) {
+    auth.error = configuredCheck.message;
+    return { ...base, ok: false, auth };
+  }
+
+  const client = new ThreeDxDsengClient(config);
+  try {
+    const result = await client.getEngItem(CJ_MESA_ROOT_ID);
+    auth.dsengReachable = true;
+    auth.canReadKnownRoot = Boolean(result?.ok);
+    if (!auth.canReadKnownRoot) {
+      auth.error = 'Known root EngItem was not readable';
+    }
+  } catch (error) {
+    const mapped = client.mapUpstreamError(error);
+    auth.error = mapped.message;
+    auth.sessionExpired = mapped.code === 'UPSTREAM_AUTH_FAILED';
+    if (auth.sessionExpired && config.authMode === 'cookie' && !config.casFallback) {
+      auth.error = '3DEXPERIENCE session expired. Configure THREEDX_USERNAME/THREEDX_PASSWORD with THREEDX_AUTH_MODE=cas on Render.';
+    }
+  }
+
+  return {
+    ...base,
+    ok: auth.canReadKnownRoot,
+    auth
   };
 }
 

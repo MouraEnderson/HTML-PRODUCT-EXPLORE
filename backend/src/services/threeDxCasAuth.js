@@ -1,0 +1,227 @@
+const SESSION_TTL_MS = 90 * 60 * 1000;
+
+const sessionCache = new Map();
+
+function trimSlash(value) {
+  return String(value || '').trim().replace(/\/$/, '');
+}
+
+export function sanitizeSpaceUrl(value) {
+  const raw = String(value || '').trim();
+  const match = raw.match(/https:\/\/r\d+-[a-z0-9]+-space\.3dexperience\.3ds\.com\/enovia/i);
+  if (match) return match[0].replace(/\/$/, '');
+  return trimSlash(raw);
+}
+
+export function derivePassportCandidates(spaceUrl, explicitPassportUrl = '') {
+  if (explicitPassportUrl) return [trimSlash(explicitPassportUrl)];
+  const match = String(spaceUrl).match(/https:\/\/(r\d+)-([a-z0-9]+)-space\.3dexperience\.3ds\.com/i);
+  if (!match) return [];
+  const tenant = match[1].toLowerCase();
+  const spaceRegion = match[2].toLowerCase();
+  const regions = [...new Set([spaceRegion, 'eu1', 'us1'])];
+  return regions.map((region) => `https://${tenant}-${region}.iam.3dexperience.3ds.com`);
+}
+
+class CookieJar {
+  constructor() {
+    this.map = new Map();
+  }
+
+  ingest(response) {
+    const lines = typeof response.headers.getSetCookie === 'function'
+      ? response.headers.getSetCookie()
+      : [];
+    for (const line of lines) {
+      const [pair] = String(line).split(';');
+      const idx = pair.indexOf('=');
+      if (idx < 1) continue;
+      const name = pair.slice(0, idx).trim();
+      const value = pair.slice(idx + 1).trim();
+      if (name) this.map.set(name, value);
+    }
+  }
+
+  header() {
+    return [...this.map.entries()].map(([name, value]) => `${name}=${value}`).join('; ');
+  }
+
+  has(name) {
+    return this.map.has(name);
+  }
+}
+
+function parseJsonSafe(text) {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function extractCsrf(payload) {
+  const csrf = payload?.csrf;
+  if (typeof csrf === 'string') return { name: 'ENO_CSRF_TOKEN', value: csrf };
+  return {
+    name: csrf?.name || payload?.csrfName || 'ENO_CSRF_TOKEN',
+    value: csrf?.value || payload?.token || ''
+  };
+}
+
+async function readResponse(response) {
+  const text = await response.text();
+  return {
+    status: response.status,
+    ok: response.ok,
+    headers: response.headers,
+    text,
+    json: parseJsonSafe(text)
+  };
+}
+
+async function fetchWithJar(jar, url, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  const cookieHeader = jar.header();
+  if (cookieHeader) headers.Cookie = cookieHeader;
+  const response = await fetch(url, {
+    ...options,
+    headers,
+    redirect: 'manual'
+  });
+  jar.ingest(response);
+  return response;
+}
+
+async function followRedirects(jar, startResponse, maxHops = 12) {
+  let response = startResponse;
+  for (let hop = 0; hop < maxHops; hop += 1) {
+    const status = response.status;
+    if (status < 300 || status >= 400) {
+      return readResponse(response);
+    }
+    const location = response.headers.get('location');
+    if (!location) {
+      return readResponse(response);
+    }
+    response = await fetchWithJar(jar, location, { method: 'GET' });
+  }
+  return readResponse(response);
+}
+
+function cacheKey(config) {
+  return [
+    sanitizeSpaceUrl(config.spaceUrl),
+    String(config.securityContext || ''),
+    String(config.username || ''),
+    trimSlash(config.passportUrl || '')
+  ].join('|');
+}
+
+export function invalidateCasSession(config = {}) {
+  sessionCache.delete(cacheKey(config));
+}
+
+export async function casLogin(config, { forceRefresh = false } = {}) {
+  const spaceUrl = sanitizeSpaceUrl(config.spaceUrl);
+  const username = String(config.username || '').trim();
+  const password = String(config.password || '').trim();
+  const securityContext = String(config.securityContext || '').trim();
+  if (!spaceUrl || !username || !password) {
+    throw new Error('CAS login requires spaceUrl, username and password');
+  }
+
+  const key = cacheKey({ ...config, spaceUrl });
+  const cached = sessionCache.get(key);
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) {
+    return cached;
+  }
+
+  const passportCandidates = derivePassportCandidates(spaceUrl, config.passportUrl);
+  if (!passportCandidates.length) {
+    throw new Error('Unable to derive 3DPassport URL from THREEDX_SPACE_URL');
+  }
+
+  let lastError = null;
+  for (const passportUrl of passportCandidates) {
+    try {
+      const session = await casLoginOnce({
+        passportUrl,
+        spaceUrl,
+        securityContext,
+        username,
+        password
+      });
+      const record = {
+        ...session,
+        passportUrl,
+        expiresAt: Date.now() + SESSION_TTL_MS
+      };
+      sessionCache.set(key, record);
+      return record;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('CAS login failed for all passport URL candidates');
+}
+
+async function casLoginOnce({ passportUrl, spaceUrl, securityContext, username, password }) {
+  const jar = new CookieJar();
+  const serviceUrl = `${spaceUrl}/resources/v1/application/CSRF`;
+
+  const ticketResponse = await fetchWithJar(
+    jar,
+    `${passportUrl}/login?action=get_auth_params`,
+    { method: 'GET' }
+  );
+  const ticketPayload = await readResponse(ticketResponse);
+  const lt = ticketPayload.json?.lt;
+  if (!lt) {
+    throw new Error(`CAS login ticket unavailable (${ticketPayload.status})`);
+  }
+
+  const loginBody = new URLSearchParams({ lt, username, password }).toString();
+  const loginResponse = await fetchWithJar(
+    jar,
+    `${passportUrl}/login?service=${encodeURIComponent(serviceUrl)}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+        ...(securityContext ? { SecurityContext: securityContext } : {})
+      },
+      body: loginBody
+    }
+  );
+
+  const finalResponse = await followRedirects(jar, loginResponse);
+  const csrf = extractCsrf(finalResponse.json);
+  const cookieHeader = jar.header();
+
+  if (!cookieHeader) {
+    throw new Error('CAS login completed without session cookies');
+  }
+  if (finalResponse.status === 401 || finalResponse.status === 403) {
+    throw new Error(`CAS service authentication failed (${finalResponse.status})`);
+  }
+  if (/invalid_grant|login|passport/i.test(finalResponse.text || '')) {
+    throw new Error('CAS login returned authentication error from 3DSpace');
+  }
+
+  return {
+    cookieHeader,
+    csrfToken: csrf.value || '',
+    csrfHeaderName: csrf.name || 'ENO_CSRF_TOKEN'
+  };
+}
+
+export async function getCasCredentials(config, options = {}) {
+  const session = await casLogin(config, options);
+  return {
+    cookie: session.cookieHeader,
+    csrfToken: session.csrfToken || '',
+    csrfHeaderName: session.csrfHeaderName || 'ENO_CSRF_TOKEN'
+  };
+}

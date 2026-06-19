@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   getSkaHealth,
+  getSkaAuthHealth,
   resolveStructure,
   resolveSelection,
   resolveDiagnostic,
@@ -20,6 +21,15 @@ function sendInternalError(res) {
 router.get('/health', (_req, res) => {
   try {
     res.json(getSkaHealth());
+  } catch (_err) {
+    sendInternalError(res);
+  }
+});
+
+router.get('/health/authcheck', async (_req, res) => {
+  try {
+    const result = await getSkaAuthHealth();
+    res.status(result.ok ? 200 : 503).json(result);
   } catch (_err) {
     sendInternalError(res);
   }
