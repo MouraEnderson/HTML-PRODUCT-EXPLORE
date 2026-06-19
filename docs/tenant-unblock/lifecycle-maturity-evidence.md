@@ -3,7 +3,14 @@
 **Projeto:** BOM Analytics 3DEXPERIENCE  
 **Repositório:** MouraEnderson/HTML-PRODUCT-EXPLORE  
 **Data de referência:** 2026-06-18  
-**Commit main:** `dfbcf15`
+**Commit main (pré-correção):** `63ee892`  
+**Commit correção dashboard:** `7dcae3b`
+
+---
+
+## 0. Dashboard regression (corrigida)
+
+Antes da correção `7dcae3b`, SyntaxError no hotfix impedia todo o serviço SKA de instalar → E-BOM 0 linhas. **Não confundir** bloqueio de maturidade (seção abaixo) com essa regressão de frontend, já corrigida.
 
 ---
 
@@ -136,7 +143,36 @@ e manteve stateAfter = IN_WORK.
 
 ---
 
-## 6. Perguntas para admin / Dassault
+## 6. Pesquisa de endpoints — maturidade direta (sem Change Action)
+
+**Premissa:** maturidade direta no EngItem/VPMReference; Change Action **não** é caminho principal (aplica-se a itens configurados ou processo controlado).
+
+### 6.1 Candidatos REST (oficiais dseng/dslc)
+
+| Endpoint | Método | Payload típico | Status tenant R1132100929518 |
+|----------|--------|----------------|------------------------------|
+| `POST .../dseng:EngItem/{id}/invoke/dseng:GetNextStates` | POST | `{ currentState }` | **404** URI not Found |
+| `POST .../dseng:EngItem/{id}/invoke/dseng:changeMaturity` | POST | `{ targetState, transition }` | **404** |
+| `POST .../dseng/invoke/dseng:changeMaturity` | POST | `[{ identifier, type, source, targetState }]` | **500** Internal Error |
+| `POST .../dslc/dslc:changeMaturity` | POST | `{ identifier, targetState }` | **404** |
+
+Headers esperados (Cloud REST): cookie CAS + `ENO_CSRF_TOKEN` em mutações ([Postman Primer DS](https://3dswym.3dexperience.3ds.com/post/enovia-user-community/3dexperience-web-services-postman-primer_TGle4SV2RFOt9z8alqjtKw)).
+
+### 6.2 Referência C++ (não REST, confirma modelo)
+
+`CATAdpMaturityServices::GetStateAndPossibleTransitions` / `ApplyMaturityTransition` — transição direta por grafo de maturidade do tipo de objeto ([CATAdpMaturityServices](http://www.q-solid.com/CATIA_Doc/generated/refman/CATPLMIntegrationAccess/class_CATAdpMaturityServices_51381.htm)).
+
+### 6.3 PDFs tenant-unblock
+
+PDFs 3DEXPERIENCE Platform (Upgrade Guide, Monitoring, Trace Dictionary) ajudam com traces/F12/FCS/service URL — **não** expõem endpoint REST pronto de changeMaturity.
+
+### 6.4 Conclusão pesquisa
+
+**Status maturidade direta: FAIL** no tenant piloto. Candidatos oficiais identificados (dseng invoke); nenhum respondeu com transições ou mudança de estado. Requer confirmação Dassault do contrato REST Cloud R2026x.
+
+---
+
+## 7. Perguntas para admin / Dassault
 
 1. Qual **endpoint REST oficial** muda maturidade de **EngItem/VPMReference** neste tenant (Cloud)?
 2. Qual **payload correto** para `changeMaturity` (array vs objeto, `targetState` Frozen vs FROZEN)?

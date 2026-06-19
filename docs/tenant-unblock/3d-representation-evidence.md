@@ -3,7 +3,14 @@
 **Projeto:** BOM Analytics 3DEXPERIENCE  
 **Repositório:** MouraEnderson/HTML-PRODUCT-EXPLORE  
 **Data de referência:** 2026-06-18  
-**Commit main:** `dfbcf15`
+**Commit main (pré-correção):** `63ee892`  
+**Commit correção dashboard:** `7dcae3b`
+
+---
+
+## 0. Dashboard regression (corrigida)
+
+SyntaxError no hotfix (`loadVisualizationForRow` sem declaração) quebrou instalação do serviço SKA → E-BOM vazia. Corrigido em `7dcae3b`. Bloqueio 3D (dsdo fileCount:0) permanece independente.
 
 ---
 
@@ -128,7 +135,40 @@ Formatos como **CGR** ou **authoringvisu** (regras Allegro→CGR no Platform Man
 
 ---
 
-## 6. Perguntas para admin / Dassault
+## 6. Pesquisa de endpoints — 3D real (sem 3DPlay)
+
+### 6.1 Pipeline oficial candidato
+
+```txt
+dseng:EngItem → dsdo:DerivedOutputs/Locate → dsdo:DerivedOutputs/DownloadTicket → FCS GET → GLB/glTF/OBJ/STL
+```
+
+Documentação: [Derived Outputs Web Services (dsdo_v1)](https://media.3ds.com/support/documentation/developer/Cloud/en/DSDoc.htm?show=CAADerivedOutputsWS/dsdo_v1.htm) — requer login 3DEXPERIENCE ID.
+
+SDK referência: [ws3dx.dsdo](https://github.com/3ds-cpe-emed/ws3dx-dotnet/tree/main/ws3dx.dsdo).
+
+### 6.2 Pré-requisitos tenant (fontes DS/community)
+
+- **Derived Format Management** — regra Origin/Type/Target (GLB/glTF) no Platform Manager ([Javelin SOLIDWORKS DO guide](https://www.javelin-tech.com/blog/2025/09/setting-up-derived-outputs-for-solidworks-files-on-the-3dexperience-platform/))
+- **Derived Format Converter** instalado e em execução ([Visiativ Deep Dive](https://visiativ.co.uk/news-resources/deep-dive-derived-outputs-3dexperience/))
+- Geração em save, maturity promote ou job assíncrono — sem isso `Locate` retorna vazio
+
+### 6.3 Formatos
+
+| Formato | Viewer BOM Analytics | dsdo neste tenant |
+|---------|---------------------|-------------------|
+| GLB/glTF | ✅ suportado | **não gerado** |
+| OBJ/STL | ✅ suportado | **não gerado** |
+| CGR/3DXML | ❌ não suportado | possível em outros tenants (Allegro PCB) |
+| STEP | ❌ não suportado | requer conversor backend |
+
+### 6.4 Conclusão pesquisa
+
+**Status 3D real: FAIL** no tenant piloto. API dsdo responde 200 mas **fileCount:0**; 3DShape existe via expand. Bloqueio é **configuração Derived Output + Converter**, não viewer Three.js.
+
+---
+
+## 7. Perguntas para admin / Dassault
 
 1. Este tenant possui **Derived Output** configurado para **GLB/glTF/OBJ/STL** em Physical Product / 3DShape / VPMReference?
 2. O **Derived Format Converter** está instalado e em execução?
@@ -140,7 +180,7 @@ Formatos como **CGR** ou **authoringvisu** (regras Allegro→CGR no Platform Man
 
 ---
 
-## 7. Opções de desbloqueio
+## 8. Opções de desbloqueio
 
 | Opção | Descrição | Impacto no widget |
 |-------|-----------|-------------------|
@@ -151,7 +191,7 @@ Formatos como **CGR** ou **authoringvisu** (regras Allegro→CGR no Platform Man
 
 ---
 
-## 8. Reteste
+## 9. Reteste
 
 ```bash
 cd backend
