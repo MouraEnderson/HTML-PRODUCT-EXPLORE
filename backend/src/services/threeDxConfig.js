@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { sanitizeSpaceUrl } from './threeDxCasAuth.js';
+import { sanitizeSpaceUrl, sanitizePassportUrl } from './threeDxCasAuth.js';
 
 function trimSlash(value) {
   return String(value || '').trim().replace(/\/$/, '');
@@ -63,16 +63,11 @@ function stripEnvAssignment(value, key) {
   return raw;
 }
 
-function sanitizePassportUrl(value) {
-  const raw = stripEnvAssignment(value, 'THREEDX_PASSPORT_URL');
-  const match = raw.match(/https:\/\/r\d+-[a-z0-9]+\.iam\.3dexperience\.3ds\.com/i);
-  if (match) return match[0].replace(/\/$/, '');
-  return trimSlash(raw);
-}
-
 export function getThreeDxConfig() {
   const spaceUrl = sanitizeSpaceUrl(process.env.THREEDX_SPACE_URL || process.env.SPACE_URL || '');
-  const passportUrl = sanitizePassportUrl(process.env.THREEDX_PASSPORT_URL || '');
+  const rawPassportUrl = stripEnvAssignment(envOrSecret('THREEDX_PASSPORT_URL'), 'THREEDX_PASSPORT_URL');
+  const passportUrl = sanitizePassportUrl(rawPassportUrl);
+  const passportUrlIgnored = Boolean(rawPassportUrl && !passportUrl);
   const securityContext = stripEnvAssignment(
     process.env.THREEDX_SECURITY_CONTEXT || process.env.SECURITY_CONTEXT || '',
     'THREEDX_SECURITY_CONTEXT'
@@ -107,6 +102,7 @@ export function getThreeDxConfig() {
     bomServiceMode,
     spaceUrl,
     passportUrl,
+    passportUrlIgnored,
     securityContext,
     username,
     password,

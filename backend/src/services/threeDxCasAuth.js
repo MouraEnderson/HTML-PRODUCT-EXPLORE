@@ -18,8 +18,17 @@ export function sanitizeSpaceUrl(value) {
   return trimSlash(raw);
 }
 
+export function sanitizePassportUrl(value) {
+  const raw = String(value || '').replace(/^\uFEFF/, '').trim();
+  const stripped = raw.replace(/^THREEDX_PASSPORT_URL=/i, '').trim();
+  const match = stripped.match(/https:\/\/r\d+-[a-z0-9]+\.iam\.3dexperience\.3ds\.com/i);
+  if (match) return match[0].replace(/\/$/, '');
+  return '';
+}
+
 export function derivePassportCandidates(spaceUrl, explicitPassportUrl = '') {
-  if (explicitPassportUrl) return [trimSlash(explicitPassportUrl)];
+  const explicit = sanitizePassportUrl(explicitPassportUrl);
+  if (explicit) return [explicit];
   const match = String(spaceUrl).match(/https:\/\/(r\d+)-([a-z0-9]+)-space\.3dexperience\.3ds\.com/i);
   if (!match) return [];
   const tenant = match[1].toLowerCase();

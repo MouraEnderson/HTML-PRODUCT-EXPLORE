@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   derivePassportCandidates,
   sanitizeSpaceUrl,
+  sanitizePassportUrl,
   casLogin,
   invalidateCasSession,
   probeCasAuth
@@ -23,6 +24,25 @@ test('derivePassportCandidates builds tenant iam hosts', () => {
   assert.equal(candidates[0], 'https://r1132100929518-eu1.iam.3dexperience.3ds.com');
   assert.ok(candidates.includes('https://r1132100929518-us1.iam.3dexperience.3ds.com'));
   assert.ok(candidates.includes('https://r1132100929518-eu1.iam.3dexperience.3ds.com'));
+});
+
+test('sanitizePassportUrl rejects dashboard/ifwe URLs and keeps iam hosts', () => {
+  assert.equal(
+    sanitizePassportUrl('https://r1132100929518-us1-ifwe.3dexperience.3ds.com/#dashboard:abc'),
+    ''
+  );
+  assert.equal(
+    sanitizePassportUrl('https://r1132100929518-eu1.iam.3dexperience.3ds.com'),
+    'https://r1132100929518-eu1.iam.3dexperience.3ds.com'
+  );
+});
+
+test('derivePassportCandidates ignores invalid explicit passport URL', () => {
+  const candidates = derivePassportCandidates(
+    'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia',
+    'https://r1132100929518-us1-ifwe.3dexperience.3ds.com/#dashboard:abc'
+  );
+  assert.equal(candidates[0], 'https://r1132100929518-eu1.iam.3dexperience.3ds.com');
 });
 
 test('casLogin stores session cookies and csrf token', async () => {

@@ -57,7 +57,9 @@ export function getSkaHealth() {
       casFallback: Boolean(config.casFallback),
       cookieConfigured: Boolean(config.cookie),
       usernameConfigured: Boolean(config.usernameConfigured),
-      passwordConfigured: Boolean(config.passwordConfigured)
+      passwordConfigured: Boolean(config.passwordConfigured),
+      passportUrlConfigured: Boolean(config.passportUrl),
+      passportUrlIgnored: Boolean(config.passportUrlIgnored)
     },
     deploy: {
       commit: String(process.env.RENDER_GIT_COMMIT || process.env.GITHUB_SHA || '').slice(0, 12),
@@ -90,6 +92,11 @@ export async function getSkaAuthHealth() {
 
   if (config.authMode === 'cas') {
     auth.casProbe = await probeCasAuth(config);
+    if (config.passportUrlIgnored) {
+      auth.passportUrlIgnored = true;
+      auth.hint =
+        'THREEDX_PASSPORT_URL on Render is invalid (dashboard/ifwe URL). Remove it or set https://r<TENANT>-eu1.iam.3dexperience.3ds.com';
+    }
   }
 
   const client = new ThreeDxDsengClient(config);
