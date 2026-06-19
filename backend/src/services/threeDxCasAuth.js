@@ -1,6 +1,9 @@
 const SESSION_TTL_MS = 90 * 60 * 1000;
 const BROWSER_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+const BROWSER_ACCEPT =
+  'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8';
+const JSON_ACCEPT = 'application/json, text/plain, */*';
 
 const sessionCache = new Map();
 
@@ -30,7 +33,7 @@ class CookieJar {
     this.map = new Map();
   }
 
-  ingest(response) {
+  ingest(response, requestUrl = '') {
     const lines = typeof response.headers.getSetCookie === 'function'
       ? response.headers.getSetCookie()
       : [];
@@ -46,6 +49,7 @@ class CookieJar {
       const value = pair.slice(idx + 1).trim();
       if (name) this.map.set(name, value);
     }
+    void requestUrl;
   }
 
   header() {
@@ -54,6 +58,10 @@ class CookieJar {
 
   has(name) {
     return this.map.has(name);
+  }
+
+  hasSsoCookie() {
+    return this.has('CASTGC') || this.has('CATSTGC');
   }
 }
 
@@ -67,11 +75,11 @@ function parseJsonSafe(text) {
 }
 
 function extractCsrf(payload) {
-  const csrf = payload?.csrf;
+  const csrf = payload?.json?.csrf;
   if (typeof csrf === 'string') return { name: 'ENO_CSRF_TOKEN', value: csrf };
   return {
-    name: csrf?.name || payload?.csrfName || 'ENO_CSRF_TOKEN',
-    value: csrf?.value || payload?.token || ''
+    name: csrf?.name || payload?.json?.csrfName || 'ENO_CSRF_TOKEN',
+    value: csrf?.value || payload?.json?.token || ''
   };
 }
 
@@ -81,6 +89,7 @@ async function readResponse(response) {
     status: response.status,
     ok: response.ok,
     headers: response.headers,
+    contentType: response.headers.get('content-type') || '',
     text,
     json: parseJsonSafe(text)
   };
@@ -88,14 +97,27 @@ async function readResponse(response) {
 
 function loginPathsForPassport(passportUrl) {
   if (/\.iam\.3dexperience\.3ds\.com/i.test(passportUrl)) {
-    return ['/login'];
+    return ['/login', '/cas/login'];
   }
-  return ['/login', '/iam/login'];
+  return ['/login', '/iam/login', '/cas/login'];
+}
+
+function resolveRedirectUrl(currentUrl, location) {
+  const raw = String(location || '').trim();
+  if (!raw) return '';
+  try {
+    return new URL(raw, currentUrl).href;
+  } catch {
+    return raw;
+  }
+}
+
+function normalizeCredential(value) {
+  return String(value || '').replace(/^\uFEFF/, '').trim();
 }
 
 async function fetchWithJar(jar, url, options = {}) {
   const headers = {
-    Accept: 'application/json',
     'User-Agent': BROWSER_USER_AGENT,
     ...(options.headers || {})
   };
@@ -106,16 +128,13 @@ async function fetchWithJar(jar, url, options = {}) {
     headers,
     redirect: 'manual'
   });
-  jar.ingest(response);
+  jar.ingest(response, url);
   return response;
 }
 
-function normalizeCredential(value) {
-  return String(value || '').replace(/^\uFEFF/, '').trim();
-}
-
-async function followRedirects(jar, startResponse, maxHops = 12, { securityContext = '', spaceUrl = '' } = {}) {
+async function followRedirects(jar, startResponse, startUrl, maxHops = 16, { securityContext = '', spaceUrl = '' } = {}) {
   let response = startResponse;
+  let currentUrl = startUrl;
   const spaceHost = (() => {
     try {
       return spaceUrl ? new URL(spaceUrl).host : '';
@@ -133,11 +152,12 @@ async function followRedirects(jar, startResponse, maxHops = 12, { securityConte
     if (!location) {
       return readResponse(response);
     }
-    const headers = { Accept: 'application/json' };
-    if (securityContext && spaceHost && location.includes(spaceHost)) {
+    currentUrl = resolveRedirectUrl(currentUrl, location);
+    const headers = { Accept: JSON_ACCEPT };
+    if (securityContext && spaceHost && currentUrl.includes(spaceHost)) {
       headers.SecurityContext = securityContext;
     }
-    response = await fetchWithJar(jar, location, { method: 'GET', headers });
+    response = await fetchWithJar(jar, currentUrl, { method: 'GET', headers });
   }
   return readResponse(response);
 }
@@ -201,19 +221,17 @@ export async function casLogin(config, { forceRefresh = false } = {}) {
 }
 
 async function casLoginOnce({ passportUrl, spaceUrl, securityContext, username, password }) {
-  const jar = new CookieJar();
-  const serviceUrl = `${spaceUrl}/resources/v1/application/CSRF`;
   const loginPaths = loginPathsForPassport(passportUrl);
   let lastError = null;
 
   for (const loginPath of loginPaths) {
+    const jar = new CookieJar();
     try {
       return await casLoginWithPath({
         jar,
         passportUrl,
         loginPath,
         spaceUrl,
-        serviceUrl,
         securityContext,
         username,
         password
@@ -231,16 +249,19 @@ function extractLoginTicket(payload) {
   if (json && typeof json.lt === 'string' && json.lt) return json.lt;
   if (json?.response && typeof json.response.lt === 'string' && json.response.lt) return json.response.lt;
   const text = String(payload?.text || '');
-  const match = text.match(/"lt"\s*:\s*"([^"]+)"/);
-  return match ? match[1] : '';
+  const jsonMatch = text.match(/"lt"\s*:\s*"([^"]+)"/);
+  if (jsonMatch) return jsonMatch[1];
+  const htmlMatch = text.match(/name=["']lt["'][^>]*value=["']([^"']+)["']/i)
+    || text.match(/value=["']([^"']+)["'][^>]*name=["']lt["']/i);
+  return htmlMatch ? htmlMatch[1] : '';
 }
 
 async function fetchLoginTicket(jar, passportUrl, loginPath) {
   const url = `${passportUrl}${loginPath}?action=get_auth_params`;
   const headerSets = [
-    { Accept: 'application/json' },
-    { Accept: 'application/json, text/plain, */*' },
-    { Accept: '*/*' }
+    { Accept: JSON_ACCEPT, 'X-Requested-With': 'XMLHttpRequest' },
+    { Accept: JSON_ACCEPT },
+    { Accept: BROWSER_ACCEPT }
   ];
   let lastPayload = null;
   for (const headers of headerSets) {
@@ -248,9 +269,14 @@ async function fetchLoginTicket(jar, passportUrl, loginPath) {
     const ticketPayload = await readResponse(ticketResponse);
     lastPayload = ticketPayload;
     const lt = extractLoginTicket(ticketPayload);
-    if (lt) return { lt, ticketPayload };
+    if (lt) return { lt, ticketPayload, loginPath };
   }
-  return { lt: '', ticketPayload: lastPayload };
+  return { lt: '', ticketPayload: lastPayload, loginPath };
+}
+
+function loginRejectedPayload(payload) {
+  const text = String(payload?.text || '').toLowerCase();
+  return /authentication failed|invalid credentials|bad credentials|login error|incorrect password/i.test(text);
 }
 
 async function casLoginWithPath({
@@ -258,56 +284,77 @@ async function casLoginWithPath({
   passportUrl,
   loginPath,
   spaceUrl,
-  serviceUrl,
   securityContext,
   username,
   password
 }) {
+  const serviceUrl = `${spaceUrl}/resources/v1/application/CSRF`;
   const { lt, ticketPayload } = await fetchLoginTicket(jar, passportUrl, loginPath);
   if (!lt) {
     if (ticketPayload.status === 403) {
-      throw new Error('CAS_PASSPORT_BLOCKED: 3DPassport blocked server login (403). Use fresh ENOVIA_COOKIE or whitelist Render IP.');
+      throw new Error('CAS_PASSPORT_BLOCKED: 3DPassport blocked server login (403)');
     }
     throw new Error(`CAS login ticket unavailable (${ticketPayload.status})`);
   }
 
-  const loginBody = new URLSearchParams({ lt, username, password }).toString();
-  const loginResponse = await fetchWithJar(
-    jar,
-    `${passportUrl}${loginPath}?service=${encodeURIComponent(serviceUrl)}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-        Accept: 'application/json'
-      },
-      body: loginBody
-    }
-  );
+  const loginUrl = `${passportUrl}${loginPath}?service=${encodeURIComponent(serviceUrl)}`;
+  const loginBody = new URLSearchParams({
+    lt,
+    username,
+    password,
+    rememberMe: 'no'
+  }).toString();
+  const loginResponse = await fetchWithJar(jar, loginUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+      Accept: BROWSER_ACCEPT,
+      Origin: passportUrl,
+      Referer: `${passportUrl}${loginPath}`
+    },
+    body: loginBody
+  });
 
-  if (loginResponse.status === 200 && !loginResponse.headers.get('location')) {
+  const loginStatus = loginResponse.status;
+  const hasRedirect = Boolean(loginResponse.headers.get('location'));
+  const hasSsoBeforeRedirect = jar.hasSsoCookie();
+
+  if (loginStatus === 401 || loginStatus === 403) {
     throw new Error('CAS login rejected — verify THREEDX_USERNAME and THREEDX_PASSWORD');
   }
 
-  let finalResponse = await followRedirects(jar, loginResponse, 12, { securityContext, spaceUrl });
-  let csrf = extractCsrf(finalResponse.json);
+  if (loginStatus === 200 && !hasRedirect && !hasSsoBeforeRedirect) {
+    const loginPayload = await readResponse(loginResponse);
+    if (loginRejectedPayload(loginPayload)) {
+      throw new Error('CAS login rejected — verify THREEDX_USERNAME and THREEDX_PASSWORD');
+    }
+    if (!jar.hasSsoCookie()) {
+      throw new Error('CAS login rejected — verify THREEDX_USERNAME and THREEDX_PASSWORD');
+    }
+  }
+
+  let finalResponse = await followRedirects(jar, loginResponse, loginUrl, 16, { securityContext, spaceUrl });
+  let csrf = extractCsrf(finalResponse);
 
   if (!csrf.value || !finalResponse.ok) {
     const csrfResponse = await fetchWithJar(jar, serviceUrl, {
       method: 'GET',
       headers: {
-        Accept: 'application/json',
+        Accept: JSON_ACCEPT,
         ...(securityContext ? { SecurityContext: securityContext } : {})
       }
     });
     finalResponse = await readResponse(csrfResponse);
-    csrf = extractCsrf(finalResponse.json);
+    csrf = extractCsrf(finalResponse);
   }
 
   const cookieHeader = jar.header();
 
   if (!cookieHeader) {
     throw new Error('CAS login completed without session cookies');
+  }
+  if (!jar.hasSsoCookie() && !jar.has('JSESSIONID')) {
+    throw new Error('CAS login completed without SSO or session cookies');
   }
   if (finalResponse.status === 401 || finalResponse.status === 403) {
     throw new Error(`CAS service authentication failed (${finalResponse.status})`);
@@ -333,4 +380,61 @@ export async function getCasCredentials(config, options = {}) {
     csrfToken: session.csrfToken || '',
     csrfHeaderName: session.csrfHeaderName || 'ENO_CSRF_TOKEN'
   };
+}
+
+export async function probeCasAuth(config = {}) {
+  const spaceUrl = sanitizeSpaceUrl(config.spaceUrl);
+  const username = normalizeCredential(config.username);
+  const password = normalizeCredential(config.password);
+  const passportCandidates = derivePassportCandidates(spaceUrl, config.passportUrl);
+  const probe = {
+    spaceUrl: Boolean(spaceUrl),
+    usernameConfigured: Boolean(username),
+    passwordConfigured: Boolean(password),
+    passportCandidates: passportCandidates.length,
+    steps: []
+  };
+
+  if (!spaceUrl || !username || !password || !passportCandidates.length) {
+    probe.error = 'CAS probe requires spaceUrl, username and password';
+    return probe;
+  }
+
+  for (const passportUrl of passportCandidates) {
+    const loginPaths = loginPathsForPassport(passportUrl);
+    for (const loginPath of loginPaths) {
+      const jar = new CookieJar();
+      const step = {
+        passportUrl,
+        loginPath,
+        ticketStatus: 0,
+        ticketContentType: '',
+        hasLt: false,
+        bodyLength: 0,
+        hasPassportSession: false
+      };
+      try {
+        const { lt, ticketPayload } = await fetchLoginTicket(jar, passportUrl, loginPath);
+        step.ticketStatus = ticketPayload.status;
+        step.ticketContentType = ticketPayload.contentType;
+        step.bodyLength = String(ticketPayload.text || '').length;
+        step.hasLt = Boolean(lt);
+        step.hasPassportSession = jar.has('JSESSIONID');
+        probe.steps.push(step);
+        if (lt) {
+          probe.selectedPassport = passportUrl;
+          probe.selectedLoginPath = loginPath;
+          probe.ticketOk = true;
+          return probe;
+        }
+      } catch (error) {
+        step.error = String(error?.message || error);
+        probe.steps.push(step);
+      }
+    }
+  }
+
+  probe.ticketOk = false;
+  probe.error = 'CAS login ticket unavailable on all passport candidates';
+  return probe;
 }

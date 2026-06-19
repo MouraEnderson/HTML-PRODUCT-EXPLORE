@@ -1,5 +1,6 @@
 import { getThreeDxConfig, getPublicEnvironmentFlags } from './threeDxConfig.js';
 import { ThreeDxDsengClient, assertDsengConfigured } from './threeDxDsengClient.js';
+import { probeCasAuth } from './threeDxCasAuth.js';
 import { resolveSelectionToEngItem } from './selectionResolver.js';
 import { normalizeExpandItemPayload } from './threeDxExpandItemNormalizer.js';
 import { attachScopeToPayload } from './scopeContract.js';
@@ -87,6 +88,10 @@ export async function getSkaAuthHealth() {
     return { ...base, ok: false, auth };
   }
 
+  if (config.authMode === 'cas') {
+    auth.casProbe = await probeCasAuth(config);
+  }
+
   const client = new ThreeDxDsengClient(config);
   try {
     const result = await client.getEngItem(CJ_MESA_ROOT_ID);
@@ -99,10 +104,10 @@ export async function getSkaAuthHealth() {
     const mapped = client.mapUpstreamError(error);
     auth.error = mapped.message;
     auth.sessionExpired = mapped.code === 'UPSTREAM_AUTH_FAILED';
-    auth.cookieConfigured = Boolean(config.cookie);
-    if (auth.sessionExpired && config.authMode === 'cas' && !config.cookie) {
+    auth.upstreamDetail = String(error?.message || '').slice(0, 240);
+    if (auth.sessionExpired && config.authMode === 'cas') {
       auth.hint =
-        '3DPassport may block server-side CAS from Render. Add ENOVIA_COOKIE (fresh browser session) as Render secret, or use Openness Agent.';
+        'Verify THREEDX_USERNAME/THREEDX_PASSWORD on Render and ensure 3DPassport allows server-side CAS login.';
     }
   }
 

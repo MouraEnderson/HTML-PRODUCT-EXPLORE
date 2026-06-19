@@ -32,27 +32,13 @@ export class ThreeDxDsengClient {
     if (this._authReady && !forceRefresh) return;
 
     if (this.config.authMode === 'cas' || this._authModeInUse === 'cas') {
-      try {
-        const creds = await getCasCredentials(this.config, { forceRefresh });
-        this.client.cookie = creds.cookie;
-        this.client.csrfToken = creds.csrfToken || this.client.csrfToken || '';
-        this.client.csrfHeaderName = creds.csrfHeaderName || this.client.csrfHeaderName;
-        this._authModeInUse = 'cas';
-        this._authReady = true;
-        return;
-      } catch (error) {
-        const msg = String(error?.message || '');
-        const casBlocked = /CAS_PASSPORT_BLOCKED|login ticket unavailable \(403\)/i.test(msg);
-        const casTicketFailed = /CAS login ticket unavailable/i.test(msg);
-        const casRejected = /CAS service authentication failed|CAS login rejected/i.test(msg);
-        if ((casBlocked || casRejected || casTicketFailed) && this.config.cookie) {
-          this.client.cookie = this.config.cookie;
-          this._authModeInUse = 'cookie';
-          this._authReady = true;
-          return;
-        }
-        throw error;
-      }
+      const creds = await getCasCredentials(this.config, { forceRefresh });
+      this.client.cookie = creds.cookie;
+      this.client.csrfToken = creds.csrfToken || this.client.csrfToken || '';
+      this.client.csrfHeaderName = creds.csrfHeaderName || this.client.csrfHeaderName;
+      this._authModeInUse = 'cas';
+      this._authReady = true;
+      return;
     }
 
     if (this.config.authMode === 'cookie') {

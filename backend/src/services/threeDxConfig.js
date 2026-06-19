@@ -34,15 +34,15 @@ function resolveAuth({ bearerToken, cookie, username, password, authModeEnv }) {
   if (bearerToken) {
     return { authMode: 'bearer', authConfigured: true, needsExplicitMode: false, casFallback: false };
   }
-  if (hasUserPass && (authModeEnv === 'cas' || authModeEnv === 'auto' || !cookie)) {
+  if (hasUserPass && authModeEnv !== 'cookie-only' && authModeEnv !== 'cookie') {
     return { authMode: 'cas', authConfigured: true, needsExplicitMode: false, casFallback: false };
   }
-  if (cookie) {
+  if (cookie && (authModeEnv === 'cookie' || authModeEnv === 'cookie-only' || !hasUserPass)) {
     return {
       authMode: 'cookie',
       authConfigured: true,
       needsExplicitMode: false,
-      casFallback: hasUserPass && authModeEnv !== 'cookie-only'
+      casFallback: false
     };
   }
   if (authModeEnv === 'basic' && hasUserPass) {
