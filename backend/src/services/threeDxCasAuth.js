@@ -19,7 +19,7 @@ export function derivePassportCandidates(spaceUrl, explicitPassportUrl = '') {
   if (!match) return [];
   const tenant = match[1].toLowerCase();
   const spaceRegion = match[2].toLowerCase();
-  const regions = [...new Set([spaceRegion, 'eu1', 'us1'])];
+  const regions = [...new Set([spaceRegion === 'us1' ? 'eu1' : spaceRegion, 'eu1', 'us1'])];
   return regions.map((region) => `https://${tenant}-${region}.iam.3dexperience.3ds.com`);
 }
 
@@ -220,6 +220,15 @@ async function casLoginOnce({ passportUrl, spaceUrl, securityContext, username, 
   throw lastError || new Error('CAS login failed for all passport login paths');
 }
 
+function extractLoginTicket(payload) {
+  const json = payload?.json;
+  if (json && typeof json.lt === 'string' && json.lt) return json.lt;
+  if (json?.response && typeof json.response.lt === 'string' && json.response.lt) return json.response.lt;
+  const text = String(payload?.text || '');
+  const match = text.match(/"lt"\s*:\s*"([^"]+)"/);
+  return match ? match[1] : '';
+}
+
 async function casLoginWithPath({
   jar,
   passportUrl,
@@ -236,7 +245,7 @@ async function casLoginWithPath({
     { method: 'GET', headers: { Accept: 'application/json' } }
   );
   const ticketPayload = await readResponse(ticketResponse);
-  const lt = ticketPayload.json?.lt;
+  const lt = extractLoginTicket(ticketPayload);
   if (!lt) {
     if (ticketPayload.status === 403) {
       throw new Error('CAS_PASSPORT_BLOCKED: 3DPassport blocked server login (403). Use fresh ENOVIA_COOKIE or whitelist Render IP.');

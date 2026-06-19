@@ -561,7 +561,17 @@ function parseResolveSelectionInput(body, defaultDepth = 1, mode = 'dseng-offici
   if (!depthResult.ok) {
     return depthResult;
   }
-  const selection = body.selection || {};
+  let selection = body.selection || {};
+  if ((!selection.normalized && !selection.raw) && (body.title || body.name)) {
+    selection = {
+      normalized: {
+        title: String(body.title || '').trim(),
+        name: String(body.name || '').trim(),
+        source: body.selectionSource || 'API_FLAT'
+      },
+      source: body.selectionSource || 'API_FLAT'
+    };
+  }
   return {
     ok: true,
     selection,

@@ -12,6 +12,9 @@
   var DATA_SOURCE = 'ska-bom-service';
   var DEFAULT_DEPTH = 1;
   var SESSION_KEY = '3dx_bom_snapshot_v1';
+  var LAST_GOOD_CONTEXT_KEY = 'bomAnalytics:lastGoodContext:bom20260617d';
+  var DEFAULT_SPACE_URL = 'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia';
+  var BOOT_CONTEXT_WAIT_MS = 1000;
   var guardLock = false;
   var lastSyncRootId = '';
   var lastSyncDepth = DEFAULT_DEPTH;
@@ -62,6 +65,107 @@
     try {
       if (w.localStorage) w.localStorage.setItem(key, value);
     } catch (e) {}
+  }
+
+  function getTenantSlug() {
+    var m = String(DEFAULT_SPACE_URL).match(/\/\/(r\d+-[a-z0-9]+)-space\./i);
+    return m ? m[1].toLowerCase() : 'r1132100929518-us1';
+  }
+
+  function parseLastGoodContext(raw) {
+    if (!raw) return null;
+    try {
+      var ctx = JSON.parse(raw);
+      if (!ctx || typeof ctx !== 'object') return null;
+      if (ctx.build && ctx.build !== BUILD) return null;
+      if (ctx.tenant && ctx.tenant !== getTenantSlug()) return null;
+      if (!isValidDsengPhysicalId(ctx.rootId)) return null;
+      return ctx;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function loadLastGoodContext() {
+    return parseLastGoodContext(safeStorageGet(LAST_GOOD_CONTEXT_KEY));
+  }
+
+  function buildLastGoodContextRecord(payload, resolved) {
+    payload = payload || {};
+    resolved = resolved || {};
+    var root = payload.root || {};
+    return {
+      build: BUILD,
+      tenant: getTenantSlug(),
+      spaceUrl: DEFAULT_SPACE_URL,
+      rootId: s(resolved.rootId || root.id),
+      rootTitle: s(resolved.rootTitle || root.title || lastSyncTitle),
+      rootName: s(resolved.rootName || ''),
+      mode: 'dseng-official',
+      expandStrategy: 'expand-item',
+      depth: Number(resolved.depth != null ? resolved.depth : lastSyncDepth || DEFAULT_DEPTH),
+      expandDepth: Number(
+        resolved.expandDepth != null
+          ? resolved.expandDepth
+          : resolved.depth != null
+          ? resolved.depth
+          : lastSyncDepth || DEFAULT_DEPTH
+      ),
+      includeRoot: resolved.includeRoot !== false,
+      lastSuccessAt: new Date().toISOString()
+    };
+  }
+
+  function shouldPersistLastGoodContext(payload) {
+    if (!payload || payload.ok === false) return false;
+    var total = getSkaExpectedTotal(payload);
+    var rows = payload.rows || [];
+    var rootId = s((payload.root && payload.root.id) || lastSyncRootId);
+    if (!isValidDsengPhysicalId(rootId)) return false;
+    if (!rows.length || total <= 0) return false;
+    return true;
+  }
+
+  function persistLastGoodContext(payload, resolved) {
+    if (!shouldPersistLastGoodContext(payload)) return;
+    safeStorageSet(LAST_GOOD_CONTEXT_KEY, JSON.stringify(buildLastGoodContextRecord(payload, resolved)));
+  }
+
+  function applyLastGoodContextToUi(saved, warning) {
+    if (!saved) return false;
+    var adv = byId('explorerObjectId');
+    if (adv) adv.value = saved.rootId;
+    var depthEl = byId('skaDepthInput');
+    if (depthEl && saved.depth) depthEl.value = String(saved.depth);
+    lastSyncRootId = saved.rootId;
+    lastSyncDepth = saved.depth || DEFAULT_DEPTH;
+    lastSyncTitle = saved.rootTitle || '';
+    lastContextMeta = {
+      source: 'LAST_GOOD_CONTEXT',
+      title: saved.rootTitle,
+      candidateRootId: saved.rootName || saved.rootTitle,
+      rootIdUsed: saved.rootId,
+      validationStatus: 'VALID',
+      fallbackWarning: warning || ''
+    };
+    updateExplorerContextStatus({
+      rootId: saved.rootId,
+      title: saved.rootTitle,
+      source: 'LAST_GOOD_CONTEXT'
+    });
+    if (warning) showFallbackBanner(warning);
+    return true;
+  }
+
+  function showFallbackBanner(message) {
+    var banner = byId('syncBanner');
+    if (!banner || !message) return;
+    banner.classList.remove('bom-hidden');
+    banner.innerHTML = escapeHtml(message);
+  }
+
+  function hasRenderableSkaPayload() {
+    return !!(w.__bomSkaLastPayload && getSkaExpectedTotal(w.__bomSkaLastPayload) > 0);
   }
 
   function normalizeLoadMode(mode) {
@@ -299,6 +403,25 @@
 
   function renderEmptySkaState(reason, details) {
     details = details || {};
+    if (details.preserveGoodState !== false && hasRenderableSkaPayload()) {
+      renderContextDiagnostics(details.contextMeta || lastContextMeta, reason);
+      if (details.bannerMessage) showFallbackBanner(details.bannerMessage);
+      setStatus(
+        details.statusMessage || 'Estrutura anterior mantida — contexto do Product Explorer incompleto.',
+        details.statusKind || 'info'
+      );
+      return;
+    }
+    if (details.preserveGoodState !== false) {
+      var savedCtx = loadLastGoodContext();
+      if (savedCtx && !details.skipLastGoodRetry) {
+        details.skipLastGoodRetry = true;
+        tryLoadFromLastGoodContext({ silent: true }, null, 'contexto parcial do Product Explorer').catch(function () {
+          renderEmptySkaState(reason, { preserveGoodState: false, skipLastGoodRetry: true });
+        });
+        return;
+      }
+    }
     w.__bomSkaLastPayload = null;
     w.__BOM_SKA_EMPTY_STATE__ = true;
     try {
@@ -1768,6 +1891,12 @@
     syncBuild();
     patchUiLabels();
     if (!assertSkaCountIntegrity(payload)) return false;
+    persistLastGoodContext(payload, {
+      rootId: (payload.root && payload.root.id) || lastSyncRootId,
+      rootTitle: (payload.root && payload.root.title) || lastSyncTitle,
+      depth: lastSyncDepth,
+      expandDepth: lastSyncDepth
+    });
     scheduleSkaUiReapply(payload);
     return true;
   }
@@ -1814,13 +1943,22 @@
     var el = byId('explorerContextStatus');
     if (!el) return;
     ctx = ctx || (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.getContext()) || {};
+    var saved = loadLastGoodContext();
     if (ctx.rootId && ctx.title && isValidDsengPhysicalId(ctx.rootId)) {
       el.textContent = 'Contexto detectado';
       el.title = ctx.title;
       el.className = 'bom-explorer-context-status bom-explorer-context-ok';
+    } else if (saved && saved.rootTitle && (ctx.title || ctx.rootId)) {
+      el.textContent = 'Contexto parcial — root salvo disponível';
+      el.title = (ctx.title || ctx.rootId || '') + ' · último root: ' + saved.rootTitle;
+      el.className = 'bom-explorer-context-status bom-explorer-context-warn';
     } else if (ctx.rootId || ctx.title) {
       el.textContent = 'Contexto sem rootId dseng válido';
       el.title = ctx.title || ctx.rootId || '';
+      el.className = 'bom-explorer-context-status bom-explorer-context-warn';
+    } else if (saved && saved.rootTitle) {
+      el.textContent = 'Usando último root salvo';
+      el.title = saved.rootTitle + ' (' + saved.rootId + ')';
       el.className = 'bom-explorer-context-status bom-explorer-context-warn';
     } else if (ctx.path === 'C') {
       el.textContent = 'Contexto indisponível';
@@ -1831,13 +1969,267 @@
       el.className = 'bom-explorer-context-status';
     }
     var adv = byId('explorerObjectId');
-    if (adv && ctx.rootId && !s(adv.value)) adv.value = ctx.rootId;
+    if (adv && ctx.rootId && isValidDsengPhysicalId(ctx.rootId) && !s(adv.value)) adv.value = ctx.rootId;
+    else if (adv && saved && saved.rootId && !s(adv.value)) adv.value = saved.rootId;
   }
 
   function getDepthFromInput() {
     var el = byId('skaDepthInput');
     var d = el ? Number(el.value) : DEFAULT_DEPTH;
     return isFinite(d) && d > 0 ? d : DEFAULT_DEPTH;
+  }
+
+  function resolveRootForBomLoad(opts) {
+    opts = opts || {};
+    var ctx =
+      opts.ctx ||
+      (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.getContext && w.ProductExplorerSyncProvider.getContext()) ||
+      {};
+    var manual = s(opts.manualRootId || (byId('explorerObjectId') && byId('explorerObjectId').value));
+    var depth = opts.depth != null ? opts.depth : getDepthFromInput();
+    var saved = loadLastGoodContext();
+
+    if (manual && isValidDsengPhysicalId(manual)) {
+      return {
+        ok: true,
+        rootId: manual,
+        depth: depth,
+        title: s(ctx.title) || lastSyncTitle || (saved && saved.rootTitle) || '',
+        source: 'ADVANCED_MANUAL',
+        useResolveSelection: false,
+        saved: saved
+      };
+    }
+
+    var pseNorm = normalizeCandidateRootId(ctx, '');
+    if (pseNorm.ok) {
+      return {
+        ok: true,
+        rootId: pseNorm.rootId,
+        depth: depth,
+        title: pseNorm.title || lastSyncTitle,
+        source: pseNorm.source || 'PRODUCT_EXPLORER_CONTEXT',
+        useResolveSelection: false,
+        saved: saved
+      };
+    }
+
+    var hasPseHints =
+      !!s(ctx.title) ||
+      !!s(ctx.name) ||
+      !!s(ctx.selectedId) ||
+      (ctx.selectedCandidates && ctx.selectedCandidates.length);
+    if (hasPseHints && opts.allowResolveSelection !== false && !opts.preferSaved) {
+      return {
+        ok: false,
+        rootId: '',
+        depth: depth,
+        title: s(ctx.title) || s(ctx.name) || lastSyncTitle,
+        source: 'RESOLVE_SELECTION',
+        useResolveSelection: true,
+        saved: saved,
+        pseNorm: pseNorm
+      };
+    }
+
+    if (saved && isValidDsengPhysicalId(saved.rootId)) {
+      return {
+        ok: true,
+        rootId: saved.rootId,
+        depth: saved.depth || depth,
+        expandDepth: saved.expandDepth || saved.depth || depth,
+        title: saved.rootTitle || lastSyncTitle,
+        rootName: saved.rootName || '',
+        source: 'LAST_GOOD_CONTEXT',
+        useResolveSelection: false,
+        saved: saved,
+        fallbackWarning:
+          'Product Explorer não forneceu rootId dseng oficial. Usando último root válido salvo: ' +
+          (saved.rootTitle || saved.rootId) +
+          '.'
+      };
+    }
+
+    return {
+      ok: false,
+      rootId: '',
+      depth: depth,
+      title: pseNorm.title || lastSyncTitle,
+      source: 'NONE',
+      useResolveSelection: false,
+      saved: saved,
+      pseNorm: pseNorm
+    };
+  }
+
+  function loadBomViaStructureWithRoot(opts) {
+    opts = opts || {};
+    var syncBtn = byId('btnSyncExplorer');
+    var refreshBtn = byId('btnRefreshBom');
+    if (syncBtn) syncBtn.disabled = true;
+    if (refreshBtn) refreshBtn.disabled = true;
+
+    if (!opts.rootId || !isValidDsengPhysicalId(opts.rootId)) {
+      if (syncBtn) syncBtn.disabled = false;
+      if (refreshBtn) refreshBtn.disabled = false;
+      return Promise.reject(new Error('ROOT_ID_REQUIRED'));
+    }
+
+    clearStateBeforeSkaApply();
+    w.__BOM_SKA_EMPTY_STATE__ = false;
+    if (!opts.silent) setStatus('Carregando via SKA BOM Service (/structure)…', 'info');
+
+    return fetchBomStructureFromSkaService({
+      rootId: opts.rootId,
+      depth: opts.depth == null ? DEFAULT_DEPTH : opts.depth,
+      expandDepth: opts.expandDepth == null ? opts.depth : opts.expandDepth,
+      includeRoot: opts.includeRoot !== false
+    })
+      .then(function (payload) {
+        lastSyncRootId = opts.rootId;
+        lastSyncDepth = opts.depth == null ? DEFAULT_DEPTH : opts.depth;
+        lastSyncTitle = (payload.root && payload.root.title) || opts.title || '';
+        payload.__skaSyncMeta = {
+          source: opts.source || 'STRUCTURE',
+          eventType: opts.source === 'LAST_GOOD_CONTEXT' ? 'last-good-context' : 'structure',
+          rootId: opts.rootId,
+          depth: opts.depth,
+          lastSyncAt: new Date().toISOString(),
+          validationStatus: 'VALID',
+          fallbackWarning: opts.fallbackWarning || ''
+        };
+        lastContextMeta = {
+          source: opts.source || 'STRUCTURE',
+          title: lastSyncTitle,
+          candidateRootId: opts.rootName || opts.title || opts.rootId,
+          rootIdUsed: opts.rootId,
+          validationStatus: 'VALID',
+          fallbackWarning: opts.fallbackWarning || ''
+        };
+        if (opts.fallbackWarning) showFallbackBanner(opts.fallbackWarning);
+        resetDynamicState(payload, opts.depth > 1 ? 'depth-' + opts.depth : 'initial', {
+          manualRootId: opts.rootId
+        });
+        persistLastGoodContext(payload, {
+          rootId: opts.rootId,
+          rootTitle: lastSyncTitle,
+          rootName: opts.rootName || '',
+          depth: opts.depth,
+          expandDepth: opts.expandDepth
+        });
+        return applySkaPayloadToUI(payload);
+      })
+      .catch(function (err) {
+        if (opts.source === 'LAST_GOOD_CONTEXT') {
+          return Promise.reject(err);
+        }
+        return tryLoadFromLastGoodContext({ silent: opts.silent }, err, 'structure falhou').then(function (loaded) {
+          if (loaded) return loaded;
+          var normalized = normalizeSkaError(err);
+          renderEmptySkaState(normalized.code === 'ROOT_NOT_FOUND' ? 'ROOT_NOT_FOUND' : 'ERROR', {
+            contextMeta: lastContextMeta,
+            errorCode: normalized.code,
+            statusMessage: normalized.message,
+            statusKind: 'error',
+            tableMessage: normalized.message,
+            preserveGoodState: true
+          });
+          return Promise.reject(err);
+        });
+      })
+      .then(
+        function (result) {
+          if (syncBtn) syncBtn.disabled = false;
+          if (refreshBtn) refreshBtn.disabled = false;
+          return result;
+        },
+        function (err) {
+          if (syncBtn) syncBtn.disabled = false;
+          if (refreshBtn) refreshBtn.disabled = false;
+          throw err;
+        }
+      );
+  }
+
+  function tryLoadFromLastGoodContext(opts, priorErr, reason) {
+    opts = opts || {};
+    var saved = loadLastGoodContext();
+    if (!saved || !isValidDsengPhysicalId(saved.rootId)) {
+      if (priorErr) return Promise.reject(priorErr);
+      return Promise.resolve(null);
+    }
+    if (hasRenderableSkaPayload() && lastSyncRootId === saved.rootId) {
+      return Promise.resolve(w.__bomSkaLastPayload);
+    }
+    var warning =
+      'Product Explorer não forneceu rootId dseng oficial. Usando último root válido salvo: ' +
+      (saved.rootTitle || saved.rootId) +
+      (reason ? ' (' + reason + ').' : '.');
+    applyLastGoodContextToUi(saved, warning);
+    if (!opts.silent) setStatus(warning, 'info');
+    return loadBomViaStructureWithRoot({
+      rootId: saved.rootId,
+      depth: saved.depth || getDepthFromInput(),
+      expandDepth: saved.expandDepth || saved.depth || getDepthFromInput(),
+      source: 'LAST_GOOD_CONTEXT',
+      title: saved.rootTitle,
+      rootName: saved.rootName || '',
+      silent: opts.silent,
+      fallbackWarning: warning
+    }).catch(function (err) {
+      if (priorErr) return Promise.reject(priorErr);
+      return Promise.reject(err);
+    });
+  }
+
+  function loadBomWithRootResolution(opts) {
+    opts = opts || {};
+    var resolved = resolveRootForBomLoad(opts);
+
+    if (resolved.useResolveSelection) {
+      return loadBomViaResolveSelection(opts).catch(function (err) {
+        return tryLoadFromLastGoodContext(opts, err, 'resolve-selection falhou');
+      });
+    }
+
+    if (resolved.ok && resolved.rootId) {
+      return loadBomViaStructureWithRoot({
+        rootId: resolved.rootId,
+        depth: resolved.depth,
+        expandDepth: resolved.expandDepth || resolved.depth,
+        source: resolved.source,
+        title: resolved.title,
+        rootName: resolved.rootName || '',
+        silent: opts.silent,
+        fallbackWarning: resolved.fallbackWarning || ''
+      });
+    }
+
+    return tryLoadFromLastGoodContext(opts, null, 'contexto sem rootId').then(function (loaded) {
+      if (loaded) return loaded;
+      var msg =
+        'Contexto sem rootId dseng válido. Informe Root Physical ID em Avançado ou sincronize com estrutura válida no Product Explorer.';
+      renderEmptySkaState('CONTEXT_INVALID', {
+        contextMeta: lastContextMeta || resolved.pseNorm || {},
+        preserveGoodState: true,
+        title: resolved.title,
+        statusMessage: msg,
+        statusKind: 'error',
+        tableMessage: msg
+      });
+      return Promise.reject(new Error('ROOT_UNRESOLVED'));
+    });
+  }
+
+  function bootLoadFromContextOrPersisted() {
+    if (hasRenderableSkaPayload()) return;
+    var saved = loadLastGoodContext();
+    if (saved) {
+      applyLastGoodContextToUi(saved);
+    }
+    loadBomWithRootResolution({ silent: true, preferSaved: !!saved }).catch(function () {
+      if (!saved) renderInitialEmptyState();
+    });
   }
 
   function resolveSyncParams(opts) {
@@ -1848,9 +2240,15 @@
     var manual = opts.forceManual ? s(byId('explorerObjectId') && byId('explorerObjectId').value) : '';
     if (!manual && opts.advancedOnly) manual = s(byId('explorerObjectId') && byId('explorerObjectId').value);
     var norm = normalizeCandidateRootId(ctx, manual);
-    if (!norm.ok && !manual && lastSyncRootId && isValidDsengPhysicalId(lastSyncRootId)) {
-      norm = normalizeCandidateRootId({}, lastSyncRootId);
-      norm.source = 'LAST_SYNC';
+    if (!norm.ok && !manual) {
+      var saved = loadLastGoodContext();
+      if (saved && isValidDsengPhysicalId(saved.rootId)) {
+        norm = normalizeCandidateRootId({ title: saved.rootTitle }, saved.rootId);
+        norm.source = 'LAST_GOOD_CONTEXT';
+      } else if (lastSyncRootId && isValidDsengPhysicalId(lastSyncRootId)) {
+        norm = normalizeCandidateRootId({}, lastSyncRootId);
+        norm.source = 'LAST_SYNC';
+      }
     }
     lastContextMeta = {
       source: norm.source,
@@ -1994,11 +2392,6 @@
   function loadBomViaSkaStructure(opts) {
     opts = opts || {};
     var params = resolveSyncParams({ forceManual: true, advancedOnly: true });
-    var syncBtn = byId('btnSyncExplorer');
-    var refreshBtn = byId('btnRefreshBom');
-    if (syncBtn) syncBtn.disabled = true;
-    if (refreshBtn) refreshBtn.disabled = true;
-
     if (!params.rootId || !params.validation || !params.validation.ok) {
       var invMsg = 'Informe um Root Physical ID dseng válido em Avançado.';
       renderEmptySkaState('CONTEXT_INVALID', {
@@ -2006,70 +2399,19 @@
         title: params.title,
         statusMessage: invMsg,
         statusKind: 'error',
-        tableMessage: invMsg
+        tableMessage: invMsg,
+        preserveGoodState: true
       });
-      if (syncBtn) syncBtn.disabled = false;
-      if (refreshBtn) refreshBtn.disabled = false;
       return Promise.reject(new Error('CONTEXT_INVALID'));
     }
-
-    clearStateBeforeSkaApply();
-    w.__BOM_SKA_EMPTY_STATE__ = false;
-    if (!opts.silent) setStatus('Carregando via SKA BOM Service (/structure)…', 'info');
-
-    return fetchBomStructureFromSkaService({
+    return loadBomViaStructureWithRoot({
       rootId: params.rootId,
       depth: params.depth,
-      includeRoot: true
-    })
-      .then(function (payload) {
-        lastSyncRootId = params.rootId;
-        lastSyncDepth = params.depth;
-        lastSyncTitle = (payload.root && payload.root.title) || params.title || '';
-        payload.__skaSyncMeta = {
-          source: 'ADVANCED_MANUAL',
-          eventType: 'advanced-structure',
-          rootId: params.rootId,
-          depth: params.depth,
-          lastSyncAt: new Date().toISOString(),
-          validationStatus: 'VALID'
-        };
-        lastContextMeta = {
-          source: 'ADVANCED_MANUAL',
-          title: lastSyncTitle,
-          candidateRootId: params.rootId,
-          rootIdUsed: params.rootId,
-          validationStatus: 'VALID'
-        };
-        resetDynamicState(payload, params.depth > 1 ? 'depth-' + params.depth : 'initial', {
-          manualRootId: params.rootId
-        });
-        return applySkaPayloadToUI(payload);
-      })
-      .catch(function (err) {
-        var normalized = normalizeSkaError(err);
-        var code = normalized.code || '';
-        renderEmptySkaState(code === 'ROOT_NOT_FOUND' ? 'ROOT_NOT_FOUND' : 'ERROR', {
-          contextMeta: lastContextMeta,
-          errorCode: code,
-          statusMessage: normalized.message,
-          statusKind: 'error',
-          tableMessage: normalized.message
-        });
-        return Promise.reject(err);
-      })
-      .then(
-        function (result) {
-          if (syncBtn) syncBtn.disabled = false;
-          if (refreshBtn) refreshBtn.disabled = false;
-          return result;
-        },
-        function (err) {
-          if (syncBtn) syncBtn.disabled = false;
-          if (refreshBtn) refreshBtn.disabled = false;
-          throw err;
-        }
-      );
+      expandDepth: params.depth,
+      source: params.source || 'ADVANCED_MANUAL',
+      title: params.title,
+      silent: opts.silent
+    });
   }
 
   function loadBomViaResolveSelection(opts) {
@@ -2151,23 +2493,34 @@
           validationStatus: 'RESOLVED',
           resolutionStrategy: payload.resolution && payload.resolution.strategy
         };
+        persistLastGoodContext(payload, {
+          rootId: resolvedRoot,
+          rootTitle: lastSyncTitle,
+          rootName: selectionPayload.normalized.name || '',
+          depth: depth,
+          expandDepth: depth
+        });
         return applySkaPayloadToUI(payload);
       })
       .catch(function (err) {
-        var normalized = normalizeSkaError(err);
-        var code = normalized.code || '';
-        var errPayload = err && err.payload ? err.payload : null;
-        renderEmptySkaState(code === 'SELECTION_NOT_RESOLVED' ? 'SELECTION_NOT_RESOLVED' : 'ERROR', {
-          contextMeta: lastContextMeta,
-          errorCode: code,
-          statusMessage: normalized.message,
-          statusKind: 'error',
-          tableMessage: normalized.message
+        return tryLoadFromLastGoodContext(opts, err, 'resolve-selection falhou').then(function (loaded) {
+          if (loaded) return loaded;
+          var normalized = normalizeSkaError(err);
+          var code = normalized.code || '';
+          var errPayload = err && err.payload ? err.payload : null;
+          renderEmptySkaState(code === 'SELECTION_NOT_RESOLVED' ? 'SELECTION_NOT_RESOLVED' : 'ERROR', {
+            contextMeta: lastContextMeta,
+            errorCode: code,
+            statusMessage: normalized.message,
+            statusKind: 'error',
+            tableMessage: normalized.message,
+            preserveGoodState: true
+          });
+          if (code === 'SELECTION_NOT_RESOLVED') {
+            renderSelectionNotResolved(errPayload, lastContextMeta);
+          }
+          return Promise.reject(err);
         });
-        if (code === 'SELECTION_NOT_RESOLVED') {
-          renderSelectionNotResolved(errPayload, lastContextMeta);
-        }
-        return Promise.reject(err);
       })
       .then(
         function (result) {
@@ -2188,13 +2541,13 @@
     if (opts.forceManual || opts.advancedOnly) {
       return loadBomViaSkaStructure(opts);
     }
-    return loadBomViaResolveSelection(opts);
+    return loadBomWithRootResolution(opts);
   }
 
   function syncWithProductExplorer(opts) {
     opts = opts || {};
     if (!w.ProductExplorerSyncProvider || !w.ProductExplorerSyncProvider.refresh) {
-      return loadBomViaResolveSelection(opts);
+      return loadBomWithRootResolution(opts);
     }
     return w.ProductExplorerSyncProvider.refresh('manual-sync').then(function (ctx) {
       updateExplorerContextStatus(ctx);
@@ -2205,7 +2558,7 @@
         rootIdUsed: '',
         validationStatus: 'RESOLVE_PENDING'
       };
-      return loadBomViaResolveSelection(opts);
+      return loadBomWithRootResolution({ ctx: ctx, silent: opts.silent });
     });
   }
 
@@ -2218,26 +2571,14 @@
       return w.ProductExplorerSyncProvider.refresh('manual-refresh').then(function (ctx) {
         updateExplorerContextStatus(ctx);
         if (ctx && ctx.selectionMode === 'selected-branch') {
-          return loadBomViaResolveSelection({ payloadMode: 'selected-branch' });
+          return loadBomViaResolveSelection({ payloadMode: 'selected-branch' }).catch(function (err) {
+            return tryLoadFromLastGoodContext({}, err, 'refresh selected-branch falhou');
+          });
         }
-        if (lastSyncRootId && isValidDsengPhysicalId(lastSyncRootId)) {
-          var adv = byId('explorerObjectId');
-          if (adv && !s(adv.value)) adv.value = lastSyncRootId;
-          var depthEl = byId('skaDepthInput');
-          var desiredDepth = Math.max(Number(lastSyncDepth || DEFAULT_DEPTH), Number(dynamicState.maxLoadedLevel || 0), DEFAULT_DEPTH);
-          if (depthEl && desiredDepth > Number(depthEl.value || 0)) depthEl.value = String(Math.min(desiredDepth, 3));
-          setStatus('Nenhuma seleção oficial resolvível detectada; atualizando root atual.', 'info');
-          return loadBomViaSkaStructure({ forceManual: true, advancedOnly: true });
-        }
-        return loadBomViaResolveSelection({ payloadMode: ctx && ctx.selectionMode ? ctx.selectionMode : 'fallback' });
+        return loadBomWithRootResolution({ ctx: ctx });
       });
     }
-    if (lastSyncRootId && isValidDsengPhysicalId(lastSyncRootId)) {
-      var advFallback = byId('explorerObjectId');
-      if (advFallback && !s(advFallback.value)) advFallback.value = lastSyncRootId;
-      return loadBomViaSkaStructure({ forceManual: true, advancedOnly: true });
-    }
-    return syncWithProductExplorer();
+    return loadBomWithRootResolution({});
   }
 
   w.loadViaExplorerSync = syncWithProductExplorer;
@@ -2859,8 +3200,15 @@
       if (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.refresh) {
         w.ProductExplorerSyncProvider.refresh('post-boot');
       }
+      setTimeout(bootLoadFromContextOrPersisted, BOOT_CONTEXT_WAIT_MS);
     }, 1500);
-    renderInitialEmptyState();
+    var savedBoot = loadLastGoodContext();
+    if (savedBoot) {
+      applyLastGoodContextToUi(savedBoot);
+      setStatus('Recuperando último root válido salvo…', 'info');
+    } else {
+      renderInitialEmptyState();
+    }
     applyTopbarCompactLabels();
     bindTestRootButton();
     bindCopyContextDiagnosticsButton();
@@ -2878,6 +3226,8 @@
   w.refreshBomFromSka = refreshBom;
   w.assertSkaCountIntegrity = assertSkaCountIntegrity;
   w.normalizeCandidateRootId = normalizeCandidateRootId;
+  w.resolveRootForBomLoad = resolveRootForBomLoad;
+  w.loadLastGoodContext = loadLastGoodContext;
   w.renderEmptySkaState = renderEmptySkaState;
   w.loadNextBomLevelFromSka = loadNextDynamicLevel;
   w.loadBomChildrenFromSka = loadChildrenForDynamicNode;

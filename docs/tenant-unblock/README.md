@@ -9,6 +9,7 @@ Pacote técnico para desbloquear **3D real** (sem 3DPlay) e **maturidade real** 
 | [3d-representation-evidence.md](./3d-representation-evidence.md) | Evidências e bloqueio 3D |
 | [lifecycle-maturity-evidence.md](./lifecycle-maturity-evidence.md) | Evidências e bloqueio maturidade |
 | [admin-dassault-checklist.md](./admin-dassault-checklist.md) | Checklist para enviar ao admin/Dassault |
+| [dashboard-root-resolution.md](./dashboard-root-resolution.md) | RootResolver, lastGoodContext e E-BOM estável |
 
 ## Probe reexecutável
 

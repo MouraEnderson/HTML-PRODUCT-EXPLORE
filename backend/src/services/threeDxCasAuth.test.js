@@ -19,6 +19,7 @@ test('derivePassportCandidates builds tenant iam hosts', () => {
   const candidates = derivePassportCandidates(
     'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia'
   );
+  assert.equal(candidates[0], 'https://r1132100929518-eu1.iam.3dexperience.3ds.com');
   assert.ok(candidates.includes('https://r1132100929518-us1.iam.3dexperience.3ds.com'));
   assert.ok(candidates.includes('https://r1132100929518-eu1.iam.3dexperience.3ds.com'));
 });

@@ -207,27 +207,36 @@
     w.ExplorerContext.refresh(false);
     var ctx = w.ExplorerContext.get();
     lastRawExplorerContext = ctx || null;
-    if (!ctx || !ctx.hasValidPhysicalId) return { normalized: null, raw: ctx || null };
+    if (!ctx) return { normalized: null, raw: null };
+    var title = s(ctx.productName || ctx.rootName || ctx.displayName);
+    var name = s(ctx.name || ctx.objectName || '');
+    var physicalId = s(ctx.physicalId);
     var src = s(ctx.source);
-    if (ALLOWED_EXPLORER_CONTEXT_SOURCES.indexOf(src) < 0) {
-      return { normalized: null, raw: ctx || null };
-    }
-    return {
-      normalized: {
-        rootId: s(ctx.physicalId),
-        selectedId: s(ctx.physicalId),
-        title: s(ctx.productName || ctx.rootName || ctx.displayName),
-        source: 'EXPLORER_CONTEXT',
-        eventType: 'context',
-        path: 'B',
-        expansionAvailable: false,
-        autoSyncAvailable: true,
-        message: 'Contexto Product Explorer detectado',
-        lastSyncAt: null,
-        bridgeDiagnostic: getBridgeDiagnosticStatus()
-      },
-      raw: ctx
+    var base = {
+      rootId: isValidPhysicalId(physicalId) ? physicalId : '',
+      selectedId: isValidPhysicalId(physicalId) ? physicalId : s(ctx.selectedId || name || title),
+      physicalId: isValidPhysicalId(physicalId) ? physicalId : '',
+      name: name,
+      title: title,
+      source: 'EXPLORER_CONTEXT',
+      eventType: 'context',
+      path: 'B',
+      expansionAvailable: false,
+      autoSyncAvailable: true,
+      message: ctx.hasValidPhysicalId
+        ? 'Contexto Product Explorer detectado'
+        : 'Contexto Product Explorer parcial (titulo sem rootId dseng)',
+      lastSyncAt: null,
+      bridgeDiagnostic: getBridgeDiagnosticStatus()
     };
+    if (ctx.hasValidPhysicalId && ALLOWED_EXPLORER_CONTEXT_SOURCES.indexOf(src) >= 0) {
+      return { normalized: base, raw: ctx };
+    }
+    if (title || name) {
+      base.selectionMode = 'fallback';
+      return { normalized: base, raw: ctx };
+    }
+    return { normalized: null, raw: ctx };
   }
 
   function readExplorerContextOfficial() {
@@ -307,10 +316,34 @@
       ctxOfficial.selectedCandidates = selectedCandidates.filter(Boolean);
       return ctxOfficial;
     }
-    if (ctxOfficial && ctxOfficial.title) {
-      ctxOfficial.selectionMode = 'fallback';
+    if (ctxOfficial && (ctxOfficial.title || ctxOfficial.name)) {
+      ctxOfficial.selectionMode = ctxOfficial.selectionMode || 'fallback';
       ctxOfficial.selectedCandidates = selectedCandidates.filter(Boolean);
+      if (!ctxOfficial.source) ctxOfficial.source = 'EXPLORER_CONTEXT';
       return ctxOfficial;
+    }
+    if (selectedCandidates.length) {
+      var hint = selectedCandidates[0] || {};
+      return {
+        rootId: '',
+        selectedId: s(hint.id || hint.physicalId || hint.name || hint.title),
+        physicalId: s(hint.physicalId),
+        name: s(hint.name),
+        title: s(hint.title || hint.label || hint.name),
+        label: s(hint.label || hint.title),
+        type: s(hint.type),
+        source: 'PRODUCT_EXPLORER_CONTEXT',
+        selectionSource: s(hint.source),
+        eventType: 'partial-context',
+        selectionMode: 'fallback',
+        selectedCandidates: selectedCandidates.filter(Boolean),
+        path: 'B',
+        expansionAvailable: false,
+        autoSyncAvailable: true,
+        message: 'Contexto parcial do Product Explorer (sem rootId dseng)',
+        lastSyncAt: null,
+        bridgeDiagnostic: getBridgeDiagnosticStatus()
+      };
     }
     return emptyContext();
   }
