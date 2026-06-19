@@ -542,6 +542,7 @@
       : 'Alterar maturidade no 3DEXPERIENCE';
   }
 
+  function loadVisualizationForRow(active) {
     if (!active || !active.activeReferenceId) return;
     var reqId = ++activeVisualizationRequestId;
     if (w.Bom3DViewer && w.Bom3DViewer.showLoading) {
