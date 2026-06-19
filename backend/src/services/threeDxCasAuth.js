@@ -189,6 +189,14 @@ export function invalidateCasSession(config = {}) {
   sessionCache.delete(cacheKey(config));
 }
 
+function isCredentialRejection(error) {
+  return /CAS login rejected/i.test(String(error?.message || ''));
+}
+
+function isTicketUnavailable(error) {
+  return /login ticket unavailable/i.test(String(error?.message || ''));
+}
+
 export async function casLogin(config, { forceRefresh = false } = {}) {
   const spaceUrl = sanitizeSpaceUrl(config.spaceUrl);
   const username = normalizeCredential(config.username);
@@ -228,6 +236,9 @@ export async function casLogin(config, { forceRefresh = false } = {}) {
       return record;
     } catch (error) {
       lastError = error;
+      if (isCredentialRejection(error)) {
+        throw error;
+      }
     }
   }
 
@@ -237,6 +248,7 @@ export async function casLogin(config, { forceRefresh = false } = {}) {
 async function casLoginOnce({ passportUrl, spaceUrl, securityContext, username, password }) {
   const loginPaths = loginPathsForPassport(passportUrl);
   let lastError = null;
+  let lastTicketError = null;
 
   for (const loginPath of loginPaths) {
     const jar = new CookieJar();
@@ -252,10 +264,18 @@ async function casLoginOnce({ passportUrl, spaceUrl, securityContext, username, 
       });
     } catch (error) {
       lastError = error;
+      if (isCredentialRejection(error)) {
+        throw error;
+      }
+      if (isTicketUnavailable(error)) {
+        lastTicketError = error;
+        continue;
+      }
+      throw error;
     }
   }
 
-  throw lastError || new Error('CAS login failed for all passport login paths');
+  throw lastTicketError || lastError || new Error('CAS login failed for all passport login paths');
 }
 
 function extractLoginTicket(payload) {
@@ -290,7 +310,7 @@ async function fetchLoginTicket(jar, passportUrl, loginPath) {
 
 function loginRejectedPayload(payload) {
   const text = String(payload?.text || '').toLowerCase();
-  return /authentication failed|invalid credentials|bad credentials|login error|incorrect password/i.test(text);
+  return /authentication failed|invalid credentials|bad credentials|login error|incorrect password|login \| 3dexperience id|title>login/i.test(text);
 }
 
 async function casLoginWithPath({

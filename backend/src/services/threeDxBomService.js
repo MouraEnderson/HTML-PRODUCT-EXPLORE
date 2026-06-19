@@ -109,6 +109,10 @@ export async function getSkaAuthHealth() {
       auth.sessionExpired = /CAS login rejected|CAS service authentication failed|invalid_grant|authenticated session/i.test(
         auth.casLoginError
       );
+      if (auth.sessionExpired) {
+        auth.hint =
+          'CAS rejected THREEDX_USERNAME/THREEDX_PASSWORD on Render. Update credentials (no dashboard URLs, no quotes).';
+      }
       return { ...base, ok: false, auth };
     }
   }
