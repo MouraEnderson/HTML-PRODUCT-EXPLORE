@@ -42,7 +42,9 @@ export class ThreeDxDsengClient {
         return;
       } catch (error) {
         const msg = String(error?.message || '');
-        if (/CAS_PASSPORT_BLOCKED|login ticket unavailable \(403\)/i.test(msg) && this.config.cookie) {
+        const casBlocked = /CAS_PASSPORT_BLOCKED|login ticket unavailable \(403\)/i.test(msg);
+        const casRejected = /CAS service authentication failed|CAS login rejected/i.test(msg);
+        if ((casBlocked || casRejected) && this.config.cookie) {
           this.client.cookie = this.config.cookie;
           this._authModeInUse = 'cookie';
           this._authReady = true;
