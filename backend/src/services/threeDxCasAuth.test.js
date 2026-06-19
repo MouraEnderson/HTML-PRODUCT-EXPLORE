@@ -6,7 +6,8 @@ import {
   sanitizePassportUrl,
   casLogin,
   invalidateCasSession,
-  probeCasAuth
+  probeCasAuth,
+  CookieJar
 } from './threeDxCasAuth.js';
 
 test('sanitizeSpaceUrl extracts embedded enovia URL', () => {
@@ -144,6 +145,28 @@ test('casLogin extracts lt from HTML login form', async () => {
     global.fetch = originalFetch;
     invalidateCasSession(config);
   }
+});
+
+test('cookie jar scopes cookies to request host', () => {
+  const jar = new CookieJar();
+  jar.ingest({
+    headers: {
+      getSetCookie: () => ['JSESSIONID=passport; Path=/; Secure; HttpOnly']
+    }
+  }, 'https://r1132100929518-eu1.iam.3dexperience.3ds.com/login');
+  jar.ingest({
+    headers: {
+      getSetCookie: () => ['JSESSIONID=space; Path=/enovia; Secure; HttpOnly']
+    }
+  }, 'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia/resources/v1/application/CSRF');
+
+  const passportCookies = jar.headerForUrl('https://r1132100929518-eu1.iam.3dexperience.3ds.com/login');
+  const spaceCookies = jar.headerForUrl('https://r1132100929518-us1-space.3dexperience.3ds.com/enovia/resources/v1/application/CSRF');
+
+  assert.match(passportCookies, /JSESSIONID=passport/);
+  assert.doesNotMatch(passportCookies, /JSESSIONID=space/);
+  assert.match(spaceCookies, /JSESSIONID=space/);
+  assert.doesNotMatch(spaceCookies, /JSESSIONID=passport/);
 });
 
 test('probeCasAuth reports ticket diagnostics without secrets', async () => {

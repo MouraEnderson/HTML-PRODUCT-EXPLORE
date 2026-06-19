@@ -107,15 +107,13 @@ export async function getSkaAuthHealth() {
       auth.casLoginOk = false;
       auth.casLoginError = String(error?.message || error).slice(0, 300);
       auth.error = auth.casLoginError;
-      auth.sessionExpired = /CAS login rejected|CAS service authentication failed|invalid_grant|authenticated session/i.test(
-        auth.casLoginError
-      );
-      if (auth.sessionExpired) {
+      auth.sessionExpired = /CAS login rejected|invalid_grant|authenticated session/i.test(auth.casLoginError);
+      if (/CAS login rejected/i.test(auth.casLoginError)) {
         auth.hint =
           'CAS rejected THREEDX_USERNAME/THREEDX_PASSWORD on Render. Update credentials (no dashboard URLs, no quotes).';
-      } else if (/CAS service authentication failed \(401\)/i.test(auth.casLoginError || '')) {
+      } else if (/CAS service authentication failed \(401\)/i.test(auth.casLoginError)) {
         auth.hint =
-          '3DPassport login succeeded but 3DSpace returned 401. Verify THREEDX_SECURITY_CONTEXT and user access to that collab space.';
+          '3DPassport OK, 3DSpace CSRF returned 401. Verify THREEDX_SECURITY_CONTEXT and user access to CS_IMPLANTACAO.';
       }
       if (!config.securityContextValid) {
         auth.securityContextInvalid = true;

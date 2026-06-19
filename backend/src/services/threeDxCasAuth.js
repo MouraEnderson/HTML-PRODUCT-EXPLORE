@@ -37,9 +37,40 @@ export function derivePassportCandidates(spaceUrl, explicitPassportUrl = '') {
   return regions.map((region) => `https://${tenant}-${region}.iam.3dexperience.3ds.com`);
 }
 
-class CookieJar {
+function parseSetCookieLine(line, requestUrl) {
+  const parts = String(line).split(';').map((part) => part.trim());
+  const [nameValue] = parts;
+  const idx = nameValue.indexOf('=');
+  if (idx < 1) return null;
+  const name = nameValue.slice(0, idx).trim();
+  const value = nameValue.slice(idx + 1).trim();
+  let domain = '';
+  let path = '/';
+  for (const part of parts.slice(1)) {
+    const lower = part.toLowerCase();
+    if (lower.startsWith('domain=')) domain = part.slice(7).trim().toLowerCase();
+    else if (lower.startsWith('path=')) path = part.slice(5).trim() || '/';
+  }
+  if (!domain) {
+    try {
+      domain = new URL(requestUrl).hostname.toLowerCase();
+    } catch {
+      domain = '';
+    }
+  }
+  return { name, value, domain, path };
+}
+
+function hostMatchesCookie(hostname, cookieDomain) {
+  const host = String(hostname || '').toLowerCase();
+  const domain = String(cookieDomain || '').toLowerCase().replace(/^\./, '');
+  if (!host || !domain) return false;
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
+export class CookieJar {
   constructor() {
-    this.map = new Map();
+    this.cookies = [];
   }
 
   ingest(response, requestUrl = '') {
@@ -51,26 +82,54 @@ class CookieJar {
       if (raw) lines.push(...raw.split(/,(?=[^;]+?=)/));
     }
     for (const line of lines) {
-      const [pair] = String(line).split(';');
-      const idx = pair.indexOf('=');
-      if (idx < 1) continue;
-      const name = pair.slice(0, idx).trim();
-      const value = pair.slice(idx + 1).trim();
-      if (name) this.map.set(name, value);
+      const parsed = parseSetCookieLine(line, requestUrl);
+      if (!parsed?.name) continue;
+      this.cookies = this.cookies.filter(
+        (cookie) => !(cookie.name === parsed.name && cookie.domain === parsed.domain && cookie.path === parsed.path)
+      );
+      this.cookies.push(parsed);
     }
-    void requestUrl;
+  }
+
+  headerForUrl(url) {
+    let hostname = '';
+    let pathname = '/';
+    try {
+      const parsed = new URL(url);
+      hostname = parsed.hostname;
+      pathname = parsed.pathname || '/';
+    } catch {
+      return '';
+    }
+    const matched = new Map();
+    for (const cookie of this.cookies) {
+      if (!hostMatchesCookie(hostname, cookie.domain)) continue;
+      if (!pathname.startsWith(cookie.path || '/')) continue;
+      matched.set(cookie.name, cookie.value);
+    }
+    return [...matched.entries()].map(([name, value]) => `${name}=${value}`).join('; ');
   }
 
   header() {
-    return [...this.map.entries()].map(([name, value]) => `${name}=${value}`).join('; ');
+    const matched = new Map();
+    for (const cookie of this.cookies) {
+      matched.set(cookie.name, cookie.value);
+    }
+    return [...matched.entries()].map(([name, value]) => `${name}=${value}`).join('; ');
   }
 
   has(name) {
-    return this.map.has(name);
+    return this.cookies.some((cookie) => cookie.name === name);
   }
 
   hasSsoCookie() {
     return this.has('CASTGC') || this.has('CATSTGC');
+  }
+
+  hasHostSession(hostname) {
+    return this.cookies.some(
+      (cookie) => cookie.name === 'JSESSIONID' && hostMatchesCookie(hostname, cookie.domain)
+    );
   }
 }
 
@@ -130,7 +189,7 @@ async function fetchWithJar(jar, url, options = {}) {
     'User-Agent': BROWSER_USER_AGENT,
     ...(options.headers || {})
   };
-  const cookieHeader = jar.header();
+  const cookieHeader = jar.headerForUrl(url);
   if (cookieHeader) headers.Cookie = cookieHeader;
   try {
     const response = await fetch(url, {
@@ -146,16 +205,9 @@ async function fetchWithJar(jar, url, options = {}) {
   }
 }
 
-async function followRedirects(jar, startResponse, startUrl, maxHops = 16, { securityContext = '', spaceUrl = '' } = {}) {
+async function followRedirects(jar, startResponse, startUrl, maxHops = 16) {
   let response = startResponse;
   let currentUrl = startUrl;
-  const spaceHost = (() => {
-    try {
-      return spaceUrl ? new URL(spaceUrl).host : '';
-    } catch {
-      return '';
-    }
-  })();
 
   for (let hop = 0; hop < maxHops; hop += 1) {
     const status = response.status;
@@ -167,11 +219,10 @@ async function followRedirects(jar, startResponse, startUrl, maxHops = 16, { sec
       return readResponse(response);
     }
     currentUrl = resolveRedirectUrl(currentUrl, location);
-    const headers = { Accept: JSON_ACCEPT };
-    if (securityContext && spaceHost && currentUrl.includes(spaceHost)) {
-      headers.SecurityContext = securityContext;
-    }
-    response = await fetchWithJar(jar, currentUrl, { method: 'GET', headers });
+    response = await fetchWithJar(jar, currentUrl, {
+      method: 'GET',
+      headers: { Accept: JSON_ACCEPT }
+    });
   }
   return readResponse(response);
 }
@@ -367,27 +418,25 @@ async function casLoginWithPath({
     }
   }
 
-  let finalResponse = await followRedirects(jar, loginResponse, loginUrl, 16, { securityContext, spaceUrl });
+  let finalResponse = await followRedirects(jar, loginResponse, loginUrl, 16);
   let csrf = extractCsrf(finalResponse);
 
   if (!csrf.value || !finalResponse.ok) {
     const csrfResponse = await fetchWithJar(jar, serviceUrl, {
       method: 'GET',
-      headers: {
-        Accept: JSON_ACCEPT,
-        ...(securityContext ? { SecurityContext: securityContext } : {})
-      }
+      headers: { Accept: JSON_ACCEPT }
     });
     finalResponse = await readResponse(csrfResponse);
     csrf = extractCsrf(finalResponse);
   }
 
-  const cookieHeader = jar.header();
+  const spaceHost = new URL(spaceUrl).hostname;
+  const cookieHeader = jar.headerForUrl(serviceUrl) || jar.headerForUrl(spaceUrl);
 
   if (!cookieHeader) {
     throw new Error('CAS login completed without session cookies');
   }
-  if (!jar.hasSsoCookie() && !jar.has('JSESSIONID')) {
+  if (!jar.hasSsoCookie() && !jar.hasHostSession(spaceHost)) {
     throw new Error('CAS login completed without SSO or session cookies');
   }
   if (finalResponse.status === 401 || finalResponse.status === 403) {
