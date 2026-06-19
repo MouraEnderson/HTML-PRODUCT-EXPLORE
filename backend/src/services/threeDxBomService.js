@@ -1,6 +1,6 @@
 import { getThreeDxConfig, getPublicEnvironmentFlags } from './threeDxConfig.js';
 import { ThreeDxDsengClient, assertDsengConfigured } from './threeDxDsengClient.js';
-import { probeCasAuth } from './threeDxCasAuth.js';
+import { getCasCredentials, probeCasAuth } from './threeDxCasAuth.js';
 import { resolveSelectionToEngItem } from './selectionResolver.js';
 import { normalizeExpandItemPayload } from './threeDxExpandItemNormalizer.js';
 import { attachScopeToPayload } from './scopeContract.js';
@@ -96,6 +96,20 @@ export async function getSkaAuthHealth() {
       auth.passportUrlIgnored = true;
       auth.hint =
         'THREEDX_PASSPORT_URL on Render is invalid (dashboard/ifwe URL). Remove it or set https://r<TENANT>-eu1.iam.3dexperience.3ds.com';
+    }
+    try {
+      const creds = await getCasCredentials(config, { forceRefresh: true });
+      auth.casLoginOk = true;
+      auth.casHasCsrf = Boolean(creds.csrfToken);
+      auth.casHasCookie = Boolean(creds.cookie);
+    } catch (error) {
+      auth.casLoginOk = false;
+      auth.casLoginError = String(error?.message || error).slice(0, 300);
+      auth.error = auth.casLoginError;
+      auth.sessionExpired = /CAS login rejected|CAS service authentication failed|invalid_grant|authenticated session/i.test(
+        auth.casLoginError
+      );
+      return { ...base, ok: false, auth };
     }
   }
 

@@ -132,13 +132,18 @@ async function fetchWithJar(jar, url, options = {}) {
   };
   const cookieHeader = jar.header();
   if (cookieHeader) headers.Cookie = cookieHeader;
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    redirect: 'manual'
-  });
-  jar.ingest(response, url);
-  return response;
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      redirect: 'manual'
+    });
+    jar.ingest(response, url);
+    return response;
+  } catch (error) {
+    const safeUrl = String(url).replace(/ticket=[^&]+/gi, 'ticket=***');
+    throw new Error(`CAS fetch failed for ${safeUrl}: ${error.message}`);
+  }
 }
 
 async function followRedirects(jar, startResponse, startUrl, maxHops = 16, { securityContext = '', spaceUrl = '' } = {}) {
