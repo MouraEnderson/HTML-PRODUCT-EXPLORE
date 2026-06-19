@@ -20,7 +20,7 @@ function readSecretFile(name) {
 }
 
 function envOrSecret(name) {
-  const fromEnv = String(process.env[name] || '').trim();
+  const fromEnv = String(process.env[name] || '').replace(/^\uFEFF/, '').trim();
   if (fromEnv) return fromEnv;
   return readSecretFile(name);
 }

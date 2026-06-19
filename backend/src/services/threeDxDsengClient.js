@@ -99,6 +99,9 @@ export class ThreeDxDsengClient {
     if (/invalid_grant|authenticated session|service ticket/i.test(upstreamDetail)) {
       return { code: 'UPSTREAM_AUTH_FAILED', message: 'Failed to authenticate with 3DEXPERIENCE' };
     }
+    if (/CAS service authentication failed|CAS login rejected|CAS CSRF token unavailable/i.test(upstreamDetail)) {
+      return { code: 'UPSTREAM_AUTH_FAILED', message: 'Failed to authenticate with 3DEXPERIENCE' };
+    }
     if (status === 401 || status === 403) {
       return { code: 'UPSTREAM_AUTH_FAILED', message: 'Failed to authenticate with 3DEXPERIENCE' };
     }

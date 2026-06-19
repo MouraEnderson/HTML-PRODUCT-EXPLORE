@@ -93,8 +93,20 @@ async function fetchWithJar(jar, url, options = {}) {
   return response;
 }
 
-async function followRedirects(jar, startResponse, maxHops = 12) {
+function normalizeCredential(value) {
+  return String(value || '').replace(/^\uFEFF/, '').trim();
+}
+
+async function followRedirects(jar, startResponse, maxHops = 12, { securityContext = '', spaceUrl = '' } = {}) {
   let response = startResponse;
+  const spaceHost = (() => {
+    try {
+      return spaceUrl ? new URL(spaceUrl).host : '';
+    } catch {
+      return '';
+    }
+  })();
+
   for (let hop = 0; hop < maxHops; hop += 1) {
     const status = response.status;
     if (status < 300 || status >= 400) {
@@ -104,7 +116,11 @@ async function followRedirects(jar, startResponse, maxHops = 12) {
     if (!location) {
       return readResponse(response);
     }
-    response = await fetchWithJar(jar, location, { method: 'GET' });
+    const headers = { Accept: 'application/json' };
+    if (securityContext && spaceHost && location.includes(spaceHost)) {
+      headers.SecurityContext = securityContext;
+    }
+    response = await fetchWithJar(jar, location, { method: 'GET', headers });
   }
   return readResponse(response);
 }
@@ -124,9 +140,9 @@ export function invalidateCasSession(config = {}) {
 
 export async function casLogin(config, { forceRefresh = false } = {}) {
   const spaceUrl = sanitizeSpaceUrl(config.spaceUrl);
-  const username = String(config.username || '').trim();
-  const password = String(config.password || '').trim();
-  const securityContext = String(config.securityContext || '').trim();
+  const username = normalizeCredential(config.username);
+  const password = normalizeCredential(config.password);
+  const securityContext = normalizeCredential(config.securityContext);
   if (!spaceUrl || !username || !password) {
     throw new Error('CAS login requires spaceUrl, username and password');
   }
@@ -170,11 +186,43 @@ export async function casLogin(config, { forceRefresh = false } = {}) {
 async function casLoginOnce({ passportUrl, spaceUrl, securityContext, username, password }) {
   const jar = new CookieJar();
   const serviceUrl = `${spaceUrl}/resources/v1/application/CSRF`;
+  const loginPaths = ['/login', '/iam/login'];
+  let lastError = null;
 
+  for (const loginPath of loginPaths) {
+    try {
+      return await casLoginWithPath({
+        jar,
+        passportUrl,
+        loginPath,
+        spaceUrl,
+        serviceUrl,
+        securityContext,
+        username,
+        password
+      });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('CAS login failed for all passport login paths');
+}
+
+async function casLoginWithPath({
+  jar,
+  passportUrl,
+  loginPath,
+  spaceUrl,
+  serviceUrl,
+  securityContext,
+  username,
+  password
+}) {
   const ticketResponse = await fetchWithJar(
     jar,
-    `${passportUrl}/login?action=get_auth_params`,
-    { method: 'GET' }
+    `${passportUrl}${loginPath}?action=get_auth_params`,
+    { method: 'GET', headers: { Accept: 'application/json' } }
   );
   const ticketPayload = await readResponse(ticketResponse);
   const lt = ticketPayload.json?.lt;
@@ -185,19 +233,36 @@ async function casLoginOnce({ passportUrl, spaceUrl, securityContext, username, 
   const loginBody = new URLSearchParams({ lt, username, password }).toString();
   const loginResponse = await fetchWithJar(
     jar,
-    `${passportUrl}/login?service=${encodeURIComponent(serviceUrl)}`,
+    `${passportUrl}${loginPath}?service=${encodeURIComponent(serviceUrl)}`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-        ...(securityContext ? { SecurityContext: securityContext } : {})
+        Accept: 'application/json'
       },
       body: loginBody
     }
   );
 
-  const finalResponse = await followRedirects(jar, loginResponse);
-  const csrf = extractCsrf(finalResponse.json);
+  if (loginResponse.status === 200 && !loginResponse.headers.get('location')) {
+    throw new Error('CAS login rejected — verify THREEDX_USERNAME and THREEDX_PASSWORD');
+  }
+
+  let finalResponse = await followRedirects(jar, loginResponse, 12, { securityContext, spaceUrl });
+  let csrf = extractCsrf(finalResponse.json);
+
+  if (!csrf.value || !finalResponse.ok) {
+    const csrfResponse = await fetchWithJar(jar, serviceUrl, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        ...(securityContext ? { SecurityContext: securityContext } : {})
+      }
+    });
+    finalResponse = await readResponse(csrfResponse);
+    csrf = extractCsrf(finalResponse.json);
+  }
+
   const cookieHeader = jar.header();
 
   if (!cookieHeader) {
@@ -206,7 +271,10 @@ async function casLoginOnce({ passportUrl, spaceUrl, securityContext, username, 
   if (finalResponse.status === 401 || finalResponse.status === 403) {
     throw new Error(`CAS service authentication failed (${finalResponse.status})`);
   }
-  if (/invalid_grant|login|passport/i.test(finalResponse.text || '')) {
+  if (!csrf.value && !finalResponse.ok) {
+    throw new Error(`CAS CSRF token unavailable (${finalResponse.status})`);
+  }
+  if (/invalid_grant|authenticated session|service ticket/i.test(finalResponse.text || '')) {
     throw new Error('CAS login returned authentication error from 3DSpace');
   }
 
