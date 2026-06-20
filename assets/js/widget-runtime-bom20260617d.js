@@ -22,6 +22,7 @@
     bundle: 'bom-bundle-' + BASE_BUILD + '.js',
     provider: 'product-explorer-sync-provider.js',
     hotfix: 'bom-ska-service-hotfix-20260617d.js',
+    wafProbe: 'wafdata-probe-bom20260617d.js',
     dataSource: 'ska-bom-service'
   };
   w.__BOM_RELEASE_PROBE__ = function () {
@@ -230,7 +231,9 @@
                         setBar('Erro ao carregar SKA BOM Service hotfix.', 'error');
                         return;
                       }
-                      loadDebugLegacyScripts(finishBoot);
+                      loadScript(GH + 'assets/js/wafdata-probe-bom20260617d.js' + q, true, function () {
+                        loadDebugLegacyScripts(finishBoot);
+                      });
                     });
                   });
                 });

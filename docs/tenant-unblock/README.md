@@ -10,6 +10,15 @@ Pacote técnico para desbloquear **3D real** (sem 3DPlay) e **maturidade real** 
 | [lifecycle-maturity-evidence.md](./lifecycle-maturity-evidence.md) | Evidências e bloqueio maturidade |
 | [admin-dassault-checklist.md](./admin-dassault-checklist.md) | Checklist para enviar ao admin/Dassault |
 | [dashboard-root-resolution.md](./dashboard-root-resolution.md) | RootResolver, lastGoodContext e E-BOM estável |
+| [wafdata-session-validation.md](./wafdata-session-validation.md) | **Probe WAFData** — sessão usuário no 3DDashboard vs Render CAS |
+
+## Probe WAFData (console no widget)
+
+```js
+window.__bomWafProbe.runAll()
+```
+
+Botão opcional: **Avançado → Testar sessão 3DX**. Sem cookie manual; sem Render CAS.
 
 ## Probe reexecutável
 
