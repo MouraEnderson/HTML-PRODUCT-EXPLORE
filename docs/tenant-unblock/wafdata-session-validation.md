@@ -67,18 +67,38 @@ window.__bomWafProbe.constants
 
 | Campo | Valor |
 |-------|--------|
-| Data | _preencher_ |
+| Data | 2026-06-20 |
 | Frame | Web Page Reader / 3DDashboard |
 | Usuário | enderson.moura@ska.com.br |
-| **1. WAFData disponível** | _true/false — source_ |
-| **2. GET root status** | _200 / erro_ |
-| **3. Expand status** | _200 / erro — rowsDetected_ |
-| **4. CSRF necessário?** | _sim/não_ |
-| **5. dsdo Locate** | _fileCount / formats_ |
-| **6. Maturity read-only** | _current / transitions_ |
-| **7. pass** | _true/false_ |
+| **1. WAFData disponível** | _pendente no 3DDashboard — cloud sem sessão_ |
+| **2. GET root status** | _pendente_ |
+| **3. Expand status** | _pendente_ |
+| **4. CSRF necessário?** | _pendente_ |
+| **5. dsdo Locate** | _pendente_ |
+| **6. Maturity read-only** | _pendente_ |
+| **7. pass** | _pendente_ |
 
-### Evidência console (colar JSON sanitizado)
+### Evidência automática (cloud agent — 2026-06-20)
+
+**3DDashboard (Playwright headless):** redirecionou para login 3DPassport — **sem sessão** no browser da cloud.
+
+**Widget GitHub Pages direto (sem 3DDashboard):**
+
+```json
+{
+  "wafAvailable": false,
+  "error": "WAFData module not available in Web Page Reader frame (require missing)",
+  "pass": false
+}
+```
+
+→ Esperado fora do 3DDashboard. O teste decisivo **só** roda no iframe do dashboard com usuário logado.
+
+### Evidência console (colar após run no 3DDashboard)
+
+```js
+window.__bomWafProbe.runAll()
+```
 
 ```json
 (paste aqui o resultado de runAll())
