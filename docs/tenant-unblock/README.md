@@ -10,6 +10,7 @@ Pacote técnico para desbloquear **3D real** (sem 3DPlay) e **maturidade real** 
 | [lifecycle-maturity-evidence.md](./lifecycle-maturity-evidence.md) | Evidências e bloqueio maturidade |
 | [admin-dassault-checklist.md](./admin-dassault-checklist.md) | Checklist para enviar ao admin/Dassault |
 | [dashboard-root-resolution.md](./dashboard-root-resolution.md) | RootResolver, lastGoodContext e E-BOM estável |
+| [../STATUS-CAS-AUTH-E-BOM-20260619.md](../STATUS-CAS-AUTH-E-BOM-20260619.md) | **Status CAS Auth + E-BOM** — o que funciona, erros, pendências |
 
 ## Probe reexecutável
 
@@ -43,10 +44,34 @@ curl -s -X POST https://bom-resolver.onrender.com/api/3dx/lifecycle/transitions 
 Aceite 3D: `ok:true`, `format` ∈ glb/gltf/obj/stl, `modelUrl` presente.  
 Aceite maturidade: `ok:true`, `transitions` não vazio.
 
-## Status atual (última execução)
+## Status atual (última execução — 2026-06-19)
 
-- **3D real:** FAIL — tenant sem Derived Output web
-- **Maturidade real:** FAIL — invoke lifecycle 404/500
-- **Widget / E-BOM / regressão CJ MESA:** OK
+| Área | Status | Detalhe |
+|------|--------|---------|
+| **CAS Auth Render → 3DSpace** | ❌ FAIL | Passport OK (`ticketOk`); CSRF 401: `tenant 'r1132100929518' does not exist` |
+| **E-BOM `/structure` (CJ MESA)** | ❌ FAIL | Bloqueado por auth upstream (`UPSTREAM_AUTH_FAILED`) |
+| **Frontend root resolution** | ✅ OK | `bom20260617d`, lastGoodContext, boot auto-load |
+| **Backend código + testes** | ✅ OK | 43/43 PASS; fluxo CAS alinhado Postman Primer |
+| **3D real** | ❌ FAIL | Tenant sem Derived Output web |
+| **Maturidade real** | ❌ FAIL | invoke lifecycle 404/500 |
 
-Commit de referência: `dfbcf15` (main).
+Commit Render (deploy): `19919c5`. Documentação completa: [STATUS-CAS-AUTH-E-BOM-20260619.md](../STATUS-CAS-AUTH-E-BOM-20260619.md).
+
+### Validação CAS (Render)
+
+```bash
+curl -s https://bom-resolver.onrender.com/api/3dx/bom/health/authcheck
+```
+
+Esperado após desbloqueio: `casLoginOk: true`, `canReadKnownRoot: true`.
+
+### Teste decisivo (PC local — Postman ou probe)
+
+```powershell
+cd backend
+$env:THREEDX_USERNAME = "enderson.moura@ska.com.br"
+$env:THREEDX_PASSWORD = "..."
+npm run probe:postman-cas
+```
+
+Collection: `postman/CAS-Login-Tenant-R1132100929518.postman_collection.json`

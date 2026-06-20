@@ -30,6 +30,35 @@
 
 ---
 
+## Pedido 0 — CAS Auth server-side (Render) — BLOQUEANTE
+
+**Status (2026-06-19):** Passport aceita login; 3DSpace retorna 401 no CSRF com `tenant 'r1132100929518' does not exist`. Space URL no Render está correta (`*-us1-space*`). Usuário `enderson.moura@ska.com.br` é admin na plataforma.
+
+**Documentação completa:** [STATUS-CAS-AUTH-E-BOM-20260619.md](../STATUS-CAS-AUTH-E-BOM-20260619.md)
+
+**Precisamos que o tenant / suporte 3DS confirme:**
+
+- [ ] O usuário é **membro nativo** do tenant R1132100929518 (não apenas cross-company)?
+- [ ] Opção **"Restrict Usage to this Platform"** está desabilitada no tenant de origem?
+- [ ] CAS **server-side** (Postman / integração cloud) é permitido para este usuário?
+- [ ] IP externo (Render.com) precisa de whitelist ou deve usar **Openness Agent Cloud**?
+- [ ] Roles/licenças ativas incluem acesso a **Web Services REST** (não só UI dashboard)?
+
+**Teste no PC do cliente (antes de SR):**
+
+Importar `postman/CAS-Login-Tenant-R1132100929518.*` → executar requests 0→1→2 (Login Ticket → CAS Service Login → GET CSRF).
+
+Se CSRF falhar **localmente igual ao Render**, é configuração tenant/plataforma — não bug de código.
+
+**Validação após desbloqueio:**
+
+```bash
+curl -s https://bom-resolver.onrender.com/api/3dx/bom/health/authcheck
+# casLoginOk: true, canReadKnownRoot: true
+```
+
+---
+
 ## Contexto
 
 O widget **BOM Analytics** lista E-BOM via dseng, permite selecionar linhas e deve:
