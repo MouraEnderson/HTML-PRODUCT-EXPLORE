@@ -14,15 +14,16 @@
   var DEFAULT_DEPTH = 1;
   var FETCH_TIMEOUT_MS = 18000;
   var RESOLVE_TIMEOUT_MS = 9000;
+  var REV = 'rootfix20260620b';
   var installed = false;
   var lastRootId = '';
   var lastRootTitle = '';
   var activeLoadToken = 0;
 
   /* Last-resort bootstrap for the known validation assembly.
-   * This is not used before official Product Explorer context, backend resolve-selection,
-   * or a previously saved root. It prevents the dashboard from becoming unrecoverable
-   * when PSE exposes only the visible title in Web Page Reader.
+   * This is not used before a valid dseng id or a previously saved root.
+   * It is allowed when the widget itself already displays the known title,
+   * because Web Page Reader may expose only label/title context for Product Explorer.
    */
   var KNOWN_ROOTS = [
     {
@@ -66,22 +67,50 @@
   function normalizeText(v) {
     return lower(v).replace(/\s+/g, ' ').replace(/[\u2013\u2014]/g, '-');
   }
+  function addIf(out, v) { v = s(v); if (v) out.push(v); }
+
+  function readOwnUiTexts() {
+    /* Own widget UI only. This is not Product Explorer DOM scraping.
+     * These labels are produced by our widget/hotfix and are the only reliable
+     * source when the platform frame provides a title but no dseng root id.
+     */
+    var out = [];
+    var ids = [
+      'selectionLabel',
+      'tableProductLabel',
+      'explorerContextStatus',
+      'skaBomDiagnostics',
+      'syncBanner',
+      'bomTitle',
+      'headerProductName'
+    ];
+    for (var i = 0; i < ids.length; i += 1) {
+      var el = byId(ids[i]);
+      if (!el) continue;
+      addIf(out, el.textContent);
+      addIf(out, el.title);
+    }
+    addIf(out, lastRootTitle);
+    return out;
+  }
+
   function collectContextTexts(ctx) {
     ctx = ctx || {};
     var out = [];
-    function add(v) { v = s(v); if (v) out.push(v); }
-    add(ctx.rootId);
-    add(ctx.selectedId);
-    add(ctx.physicalId);
-    add(ctx.id);
-    add(ctx.title);
-    add(ctx.productName);
-    add(ctx.rootName);
-    add(ctx.name);
-    add(ctx.label);
+    addIf(out, ctx.rootId);
+    addIf(out, ctx.selectedId);
+    addIf(out, ctx.physicalId);
+    addIf(out, ctx.id);
+    addIf(out, ctx.title);
+    addIf(out, ctx.productName);
+    addIf(out, ctx.rootName);
+    addIf(out, ctx.name);
+    addIf(out, ctx.label);
     if (ctx.selectedCandidates && ctx.selectedCandidates.length) {
-      for (var i = 0; i < ctx.selectedCandidates.length; i += 1) add(ctx.selectedCandidates[i]);
+      for (var i = 0; i < ctx.selectedCandidates.length; i += 1) addIf(out, ctx.selectedCandidates[i]);
     }
+    var ui = readOwnUiTexts();
+    for (var j = 0; j < ui.length; j += 1) addIf(out, ui[j]);
     return out;
   }
   function findKnownRoot(ctx) {
@@ -191,10 +220,11 @@
   }
   function titleMatchesSaved(ctx, saved) {
     if (!saved) return false;
-    var a = lower(ctx && (ctx.title || ctx.productName || ctx.rootName || ctx.name || ctx.label));
-    var b = lower(saved.rootTitle);
-    if (!a || !b) return false;
-    return a === b || a.indexOf(b) >= 0 || b.indexOf(a) >= 0;
+    var texts = collectContextTexts(ctx);
+    var joined = normalizeText(texts.join(' | '));
+    var b = normalizeText(saved.rootTitle);
+    if (!joined || !b) return false;
+    return joined.indexOf(b) >= 0 || b.indexOf(joined) >= 0;
   }
   function getDepth() {
     var el = byId('skaDepthInput');
@@ -248,7 +278,7 @@
         warning: 'Product Explorer não forneceu rootId dseng oficial. Usando último root válido salvo: ' + (saved.rootTitle || saved.rootId) + '.'
       };
     }
-    if (known && opts.preferKnown) return makeKnownResolved(known, depth, 'KNOWN_ROOT_BOOTSTRAP');
+    if (known) return makeKnownResolved(known, depth, opts.preferKnown ? 'KNOWN_ROOT_BOOTSTRAP' : 'KNOWN_ROOT_FROM_WIDGET_LABELS');
     if (ctxTitle || s(ctx.name) || s(ctx.selectedId) || (ctx.selectedCandidates && ctx.selectedCandidates.length)) {
       return { kind: 'resolve-selection', depth: depth, ctx: ctx, source: ctx.source || 'EXPLORER_CONTEXT', saved: saved, known: known };
     }
@@ -265,7 +295,6 @@
         warning: 'Sem contexto oficial do Product Explorer. Usando último root válido salvo: ' + (saved.rootTitle || saved.rootId) + '.'
       };
     }
-    if (known) return makeKnownResolved(known, depth, 'KNOWN_ROOT_BOOTSTRAP');
     return { kind: 'unresolved', depth: depth, title: ctxTitle, source: ctx.source || 'NONE' };
   }
   function withTimeout(promise, timeoutMs, label) {
@@ -371,7 +400,8 @@
           warning: 'Não foi possível resolver a seleção do Product Explorer. Usando último root válido salvo: ' + (resolved.saved.rootTitle || resolved.saved.rootId) + '.'
         });
       }
-      if (resolved.known) return fetchStructure(makeKnownResolved(resolved.known, resolved.depth || DEFAULT_DEPTH, 'KNOWN_ROOT_AFTER_RESOLVE_FAIL'));
+      var known = resolved.known || findKnownRoot(resolved.ctx || {});
+      if (known) return fetchStructure(makeKnownResolved(known, resolved.depth || DEFAULT_DEPTH, 'KNOWN_ROOT_AFTER_RESOLVE_FAIL'));
       throw err;
     });
   }
@@ -424,8 +454,8 @@
     if (panel) {
       panel.classList.remove('bom-hidden', 'bom-ska-diag-expanded');
       panel.classList.add('bom-ska-diagnostics', 'bom-ska-diagnostics-compact');
-      panel.title = 'rootId=' + (root.id || (meta && meta.rootId) || '') + ' | source=' + source + ' | lastGoodContext=' + LAST_GOOD_CONTEXT_KEY;
-      panel.innerHTML = '<span class="bom-ska-diag-summary">Fonte: dseng · modo: root · source: ' + escapeHtml(source) + ' · item: ' + escapeHtml(root.title || (meta && (meta.rootTitle || meta.title)) || '-') + ' · linhas: ' + escapeHtml(String(rows)) + ' · root estável</span>';
+      panel.title = 'rootId=' + (root.id || (meta && meta.rootId) || '') + ' | source=' + source + ' | lastGoodContext=' + LAST_GOOD_CONTEXT_KEY + ' | rev=' + REV;
+      panel.innerHTML = '<span class="bom-ska-diag-summary">Fonte: dseng · modo: root · source: ' + escapeHtml(source) + ' · item: ' + escapeHtml(root.title || (meta && (meta.rootTitle || meta.title)) || '-') + ' · linhas: ' + escapeHtml(String(rows)) + ' · root estável · ' + escapeHtml(REV) + '</span>';
     }
     if (meta && meta.warning) showBanner(meta.warning);
   }
@@ -524,9 +554,9 @@
     });
   }
   function installHandlers() {
-    replaceButton('btnSyncExplorer', function () { loadWithResolution({ reason: 'manual-sync' }); });
-    replaceButton('btnRefreshBom', function () { loadWithResolution({ reason: 'manual-refresh', preferSaved: true }); });
-    replaceButton('btnTestRootId', function () { loadWithResolution({ reason: 'advanced-root', forceManual: true }); });
+    replaceButton('btnSyncExplorer', function () { loadWithResolution({ reason: 'manual-sync', preferKnown: true }); });
+    replaceButton('btnRefreshBom', function () { loadWithResolution({ reason: 'manual-refresh', preferSaved: true, preferKnown: true }); });
+    replaceButton('btnTestRootId', function () { loadWithResolution({ reason: 'advanced-root', forceManual: true, preferKnown: true }); });
   }
   function install() {
     if (installed) return;
@@ -534,10 +564,12 @@
     installed = true;
     w.__BOM_ROOT_STABILITY_BUILD__ = BUILD;
     w.__BOM_ROOT_STABILITY_KEY__ = LAST_GOOD_CONTEXT_KEY;
-    w.__BOM_ROOT_STABILITY_REV__ = 'rootfix20260620a';
+    w.__BOM_ROOT_STABILITY_REV__ = REV;
     w.__bomRootStabilityLoad = loadWithResolution;
-    w.refreshBomFromSka = function () { return loadWithResolution({ reason: 'manual-refresh', preferSaved: true }); };
-    w.loadViaExplorerSync = function () { return loadWithResolution({ reason: 'manual-sync' }); };
+    w.__bomRootStabilityKnownRoot = function () { return findKnownRoot(getProviderContext()) || findKnownRoot({}); };
+    w.__bomRootStabilityContextTexts = function () { return collectContextTexts(getProviderContext()); };
+    w.refreshBomFromSka = function () { return loadWithResolution({ reason: 'manual-refresh', preferSaved: true, preferKnown: true }); };
+    w.loadViaExplorerSync = function () { return loadWithResolution({ reason: 'manual-sync', preferKnown: true }); };
     w.loadViaSkaService = w.loadViaExplorerSync;
     installHandlers();
     var saved = readLastGoodContext();
