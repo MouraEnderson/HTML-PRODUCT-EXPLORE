@@ -403,6 +403,22 @@ async function postCasLogin(jar, { passportUrl, loginPath, loginUrl, lt, usernam
   return loginResponse;
 }
 
+function summarizeAuthBody(text) {
+  const raw = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!raw) return '';
+  if (raw.startsWith('{')) {
+    try {
+      const json = JSON.parse(raw);
+      const code = json.error || json.code || json.response;
+      const desc = json.error_description || json.message || json.description;
+      return [code, desc].filter(Boolean).join(': ').slice(0, 180);
+    } catch {
+      // fall through
+    }
+  }
+  return raw.slice(0, 180);
+}
+
 async function finalizeCasSession(jar, serviceUrl, spaceUrl, finalResponse) {
   const csrf = extractCsrf(finalResponse);
   const spaceHost = new URL(spaceUrl).hostname;
@@ -415,7 +431,12 @@ async function finalizeCasSession(jar, serviceUrl, spaceUrl, finalResponse) {
     throw new Error('CAS login completed without SSO or session cookies');
   }
   if (finalResponse.status === 401 || finalResponse.status === 403) {
-    throw new Error(`CAS service authentication failed (${finalResponse.status})`);
+    const detail = summarizeAuthBody(finalResponse.text);
+    throw new Error(
+      detail
+        ? `CAS service authentication failed (${finalResponse.status}): ${detail}`
+        : `CAS service authentication failed (${finalResponse.status})`
+    );
   }
   if (!csrf.value && !finalResponse.ok) {
     throw new Error(`CAS CSRF token unavailable (${finalResponse.status})`);
@@ -486,6 +507,10 @@ async function casLoginWithPath({
       username,
       password
     });
+    const redirectLocation = serviceLoginResponse.headers.get('location') || '';
+    if (serviceLoginResponse.status >= 300 && serviceLoginResponse.status < 400 && !/ticket=ST-/i.test(redirectLocation)) {
+      throw new Error('CAS login rejected — verify THREEDX_USERNAME and THREEDX_PASSWORD');
+    }
     const serviceFinalResponse = await followRedirects(jar, serviceLoginResponse, serviceLoginUrl, 16);
     const serviceCsrf = extractCsrf(serviceFinalResponse);
     if (serviceCsrf.value && serviceFinalResponse.ok) {
