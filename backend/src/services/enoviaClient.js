@@ -1,3 +1,5 @@
+import { isValidThreeDxSpaceUrl } from './threeDxUrlValidation.js';
+
 const DEFAULT_TOP = 100;
 const SENSITIVE_KEY_RE = /cookie|token|authorization|password|secret|bearer|csrf/i;
 
@@ -33,7 +35,11 @@ export class EnoviaClient {
     authMode = ''
   }) {
     if (!spaceUrl) throw new Error('spaceUrl is required.');
-    this.spaceUrl = String(spaceUrl).replace(/\/$/, '');
+    const normalizedSpaceUrl = String(spaceUrl).replace(/\/$/, '');
+    if (!isValidThreeDxSpaceUrl(normalizedSpaceUrl)) {
+      throw new Error('INVALID_THREEDX_SPACE_URL');
+    }
+    this.spaceUrl = normalizedSpaceUrl;
     this.csrfToken = csrfToken || '';
     this.csrfHeaderName = csrfHeaderName || 'ENO_CSRF_TOKEN';
     this.securityContext = securityContext || '';

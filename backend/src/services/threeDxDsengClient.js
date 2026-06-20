@@ -1,4 +1,5 @@
 import { EnoviaClient, extractMembers } from './enoviaClient.js';
+import { isValidThreeDxSpaceUrl } from './threeDxUrlValidation.js';
 import { getThreeDxConfig } from './threeDxConfig.js';
 import { getCasCredentials, invalidateCasSession } from './threeDxCasAuth.js';
 
@@ -198,7 +199,14 @@ export class ThreeDxDsengClient {
 }
 
 export function assertDsengConfigured(config = getThreeDxConfig()) {
-  if (!config.spaceUrl || !config.securityContext) {
+  if (!config.spaceUrl || !isValidThreeDxSpaceUrl(config.spaceUrl)) {
+    return {
+      ok: false,
+      code: 'INVALID_THREEDX_SPACE_URL',
+      message: '3DEXPERIENCE space URL is missing or invalid'
+    };
+  }
+  if (!config.securityContext) {
     return {
       ok: false,
       code: 'UPSTREAM_NOT_CONFIGURED',

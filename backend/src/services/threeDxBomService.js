@@ -1,6 +1,7 @@
 import { getThreeDxConfig, getPublicEnvironmentFlags } from './threeDxConfig.js';
 import { ThreeDxDsengClient, assertDsengConfigured } from './threeDxDsengClient.js';
 import { getCasCredentials, probeCasAuth } from './threeDxCasAuth.js';
+import { classifyUpstreamAuthFailure } from './threeDxUrlValidation.js';
 import { resolveSelectionToEngItem } from './selectionResolver.js';
 import { normalizeExpandItemPayload } from './threeDxExpandItemNormalizer.js';
 import { attachScopeToPayload } from './scopeContract.js';
@@ -50,6 +51,12 @@ export function getSkaHealth() {
     source: SOURCE,
     version: 'v1',
     mode,
+    spaceUrlHost: config.spaceUrlHost || '',
+    spaceUrlPath: config.spaceUrlPath || '/enovia',
+    passportUrlHost: config.passportUrlHost || '',
+    authMode: config.authMode,
+    securityContextConfigured: Boolean(config.securityContext),
+    credentialsConfigured: Boolean(config.authConfigured),
     upstream: config.upstream,
     auth: {
       configured: config.authConfigured,
@@ -61,6 +68,11 @@ export function getSkaHealth() {
       passportUrlConfigured: Boolean(config.passportUrl),
       passportUrlIgnored: Boolean(config.passportUrlIgnored),
       spaceUrlHost: config.spaceUrlHost || '',
+      spaceUrlPath: config.spaceUrlPath || '/enovia',
+      spaceUrlValid: Boolean(config.spaceUrlValid),
+      spaceUrlUsedDefault: Boolean(config.spaceUrlUsedDefault),
+      spaceUrlRejectedHost: config.spaceUrlRejectedHost || '',
+      spaceUrlConfigError: config.spaceUrlConfigError || null,
       spaceUrlDerivedFromIfwe: Boolean(config.spaceUrlDerivedFromIfwe),
       spaceUrlInvalid: Boolean(config.spaceUrlInvalid),
       securityContextValid: Boolean(config.securityContextValid),
@@ -82,6 +94,11 @@ export async function getSkaAuthHealth() {
     casFallback: Boolean(config.casFallback),
     usernameConfigured: Boolean(config.usernameConfigured),
     passwordConfigured: Boolean(config.passwordConfigured),
+    spaceUrlHostUsed: config.spaceUrlHost || '',
+    spaceUrlPathUsed: config.spaceUrlPath || '/enovia',
+    spaceUrlConfigError: config.spaceUrlConfigError || null,
+    spaceUrlRejectedHost: config.spaceUrlRejectedHost || '',
+    spaceUrlUsedDefault: Boolean(config.spaceUrlUsedDefault),
     dsengReachable: false,
     canReadKnownRoot: false,
     knownRootId: CJ_MESA_ROOT_ID,
@@ -89,9 +106,15 @@ export async function getSkaAuthHealth() {
     error: null
   };
 
+  if (config.spaceUrlConfigError === 'INVALID_THREEDX_SPACE_URL') {
+    auth.hint =
+      `THREEDX_SPACE_URL rejected host "${config.spaceUrlRejectedHost}". Runtime uses ${config.spaceUrlHost}. Remove GitHub/widget URLs from Render env.`;
+  }
+
   const configuredCheck = assertDsengConfigured(config);
   if (!configuredCheck.ok) {
     auth.error = configuredCheck.message;
+    auth.errorCode = configuredCheck.code || 'UPSTREAM_NOT_CONFIGURED';
     return { ...base, ok: false, auth };
   }
 
@@ -126,13 +149,18 @@ export async function getSkaAuthHealth() {
       auth.casLoginOk = false;
       auth.casLoginError = String(error?.message || error).slice(0, 300);
       auth.error = auth.casLoginError;
+      const classified = classifyUpstreamAuthFailure(auth.casLoginError);
+      auth.errorType = classified.errorType;
+      auth.upstreamStatus = classified.upstreamStatus;
+      auth.receivedLoginHtml = classified.receivedLoginHtml;
       auth.sessionExpired = /CAS login rejected|invalid_grant|authenticated session/i.test(auth.casLoginError);
       if (/CAS login rejected/i.test(auth.casLoginError)) {
         auth.hint =
           'CAS rejected THREEDX_USERNAME/THREEDX_PASSWORD on Render. Update credentials (no dashboard URLs, no quotes).';
       } else if (/tenant .* does not exist/i.test(auth.casLoginError)) {
-        auth.hint =
-          'THREEDX_SPACE_URL must be *-space* (not ifwe/dashboard). Use https://r1132100929518-us1-space.3dexperience.3ds.com/enovia';
+        auth.hint = /-space\.3dexperience\.3ds\.com$/i.test(config.spaceUrlHost || '')
+          ? '3DSpace rejected tenant binding after CAS login (401). Contact 3DS admin — not a GitHub/space URL misconfiguration.'
+          : 'THREEDX_SPACE_URL must be *-space* (not ifwe/dashboard). Use https://r1132100929518-us1-space.3dexperience.3ds.com/enovia';
       } else if (/CAS service authentication failed \(401\)/i.test(auth.casLoginError)) {
         auth.hint =
           '3DPassport OK, 3DSpace CSRF returned 401. Verify THREEDX_SECURITY_CONTEXT and user access to CS_IMPLANTACAO.';
@@ -159,6 +187,10 @@ export async function getSkaAuthHealth() {
     auth.error = mapped.message;
     auth.sessionExpired = mapped.code === 'UPSTREAM_AUTH_FAILED';
     auth.upstreamDetail = String(error?.message || '').slice(0, 240);
+    const classified = classifyUpstreamAuthFailure(auth.upstreamDetail);
+    auth.errorType = classified.errorType;
+    auth.upstreamStatus = Number(error?.status || classified.upstreamStatus || 0) || classified.upstreamStatus;
+    auth.receivedLoginHtml = classified.receivedLoginHtml;
     if (auth.sessionExpired && config.authMode === 'cas') {
       auth.hint =
         'Verify THREEDX_USERNAME/THREEDX_PASSWORD on Render and ensure 3DPassport allows server-side CAS login.';

@@ -19,7 +19,7 @@ test('dseng read methods do not request CSRF before GET calls', async () => {
 
   try {
     const client = new ThreeDxDsengClient({
-      spaceUrl: 'https://example.com/enovia',
+      spaceUrl: 'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia',
       securityContext: 'ctx::Role.Org.Project',
       authMode: 'cookie',
       cookie: 'JSESSIONID=test-cookie',
@@ -43,7 +43,7 @@ test('dseng read methods do not request CSRF before GET calls', async () => {
 
 test('invalid_grant upstream responses map to auth failure', () => {
   const client = new ThreeDxDsengClient({
-    spaceUrl: 'https://example.com/enovia',
+    spaceUrl: 'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia',
     securityContext: 'ctx::Role.Org.Project',
     authMode: 'cookie',
     cookie: 'JSESSIONID=test-cookie',
@@ -89,7 +89,7 @@ test('ExpandItem requests CSRF and posts the official expand contract', async ()
 
   try {
     const client = new ThreeDxDsengClient({
-      spaceUrl: 'https://example.com/enovia',
+      spaceUrl: 'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia',
       securityContext: 'ctx::Role.Org.Project',
       authMode: 'cookie',
       cookie: 'JSESSIONID=test-cookie',

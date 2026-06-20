@@ -9,8 +9,13 @@ function now() {
   return Date.now();
 }
 
+import { isValidThreeDxSpaceUrl } from './threeDxUrlValidation.js';
+
 function cleanBaseUrl(v) {
-  return String(v || '').replace(/\/+$/, '');
+  const raw = String(v || '').replace(/\/+$/, '');
+  if (!raw) return '';
+  if (!isValidThreeDxSpaceUrl(raw)) return '';
+  return raw;
 }
 
 function enc(v) {

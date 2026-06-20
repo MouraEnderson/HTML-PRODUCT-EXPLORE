@@ -3,8 +3,13 @@
  * Retorna uma única tentativa POST para execução via WAFData no widget.
  */
 
+import { isValidThreeDxSpaceUrl } from './threeDxUrlValidation.js';
+
 function cleanBaseUrl(v) {
-  return String(v || '').replace(/\/+$/, '');
+  const raw = String(v || '').replace(/\/+$/, '');
+  if (!raw) return '';
+  if (!isValidThreeDxSpaceUrl(raw)) return '';
+  return raw;
 }
 
 function enc(v) {

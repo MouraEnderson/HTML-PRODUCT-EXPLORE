@@ -25,6 +25,13 @@ test('sanitizeSpaceUrl derives space host from ifwe dashboard URL', () => {
   );
 });
 
+test('sanitizeSpaceUrl rejects GitHub Pages widget URL', () => {
+  assert.equal(
+    sanitizeSpaceUrl('https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/assets/js'),
+    ''
+  );
+});
+
 test('derivePassportCandidates builds tenant iam hosts', () => {
   const candidates = derivePassportCandidates(
     'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia'

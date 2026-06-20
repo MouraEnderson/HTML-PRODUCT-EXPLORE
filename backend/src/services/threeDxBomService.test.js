@@ -56,7 +56,7 @@ test('resolve-selection surfaces expired upstream session as auth failure', asyn
   };
 
   process.env.BOM_SERVICE_MODE = 'dseng';
-  process.env.THREEDX_SPACE_URL = 'https://example.com/enovia';
+  process.env.THREEDX_SPACE_URL = 'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia';
   process.env.THREEDX_SECURITY_CONTEXT = 'ctx::Role.Org.Project';
   process.env.ENOVIA_COOKIE = 'JSESSIONID=expired';
   global.fetch = async () => ({

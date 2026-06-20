@@ -7,43 +7,41 @@ const JSON_ACCEPT = 'application/json, text/plain, */*';
 
 const sessionCache = new Map();
 
+import {
+  DEFAULT_THREEDX_SPACE_URL,
+  extractSanitizedSpaceCandidate,
+  isValidThreeDxSpaceUrl,
+  resolveThreeDxSpaceUrl
+} from './threeDxUrlValidation.js';
+
+export { DEFAULT_THREEDX_SPACE_URL, isValidThreeDxSpaceUrl, resolveThreeDxSpaceUrl };
+
 function trimSlash(value) {
   return String(value || '').trim().replace(/\/$/, '');
 }
 
 export function sanitizeSpaceUrl(value) {
-  const raw = String(value || '').trim();
-  const spaceMatch = raw.match(/https:\/\/(r\d+)-([a-z0-9]+)-space\.3dexperience\.3ds\.com(?:\/enovia)?/i);
-  if (spaceMatch) {
-    const tenant = spaceMatch[1].toLowerCase();
-    const region = spaceMatch[2].toLowerCase();
-    return `https://${tenant}-${region}-space.3dexperience.3ds.com/enovia`;
+  const candidate = extractSanitizedSpaceCandidate(value);
+  if (isValidThreeDxSpaceUrl(candidate)) {
+    return trimSlash(candidate);
   }
-  const ifweMatch = raw.match(/https:\/\/(r\d+)-([a-z0-9]+)-ifwe\.3dexperience\.3ds\.com/i);
-  if (ifweMatch) {
-    const tenant = ifweMatch[1].toLowerCase();
-    const region = ifweMatch[2].toLowerCase();
-    return `https://${tenant}-${region}-space.3dexperience.3ds.com/enovia`;
-  }
-  if (/-ifwe\.|#dashboard/i.test(raw)) return '';
-  return trimSlash(raw);
+  return '';
 }
 
 export function parseSpaceUrlMeta(value) {
   const raw = String(value || '').trim();
-  const sanitized = sanitizeSpaceUrl(raw);
-  let host = '';
-  try {
-    host = sanitized ? new URL(sanitized).hostname : '';
-  } catch {
-    host = '';
-  }
+  const resolved = resolveThreeDxSpaceUrl(raw);
   return {
-    rawConfigured: Boolean(raw),
-    sanitized,
-    host,
-    derivedFromIfwe: /-ifwe\./i.test(raw) && /-space\./i.test(sanitized),
-    invalidIfweOrDashboard: /-ifwe\.|#dashboard/i.test(raw) && !sanitized
+    rawConfigured: resolved.rawConfigured,
+    sanitized: resolved.spaceUrl,
+    host: resolved.spaceUrlHost,
+    path: resolved.spaceUrlPath,
+    valid: resolved.spaceUrlValid,
+    usedDefault: resolved.spaceUrlUsedDefault,
+    configError: resolved.spaceUrlConfigError,
+    rejectedHost: resolved.spaceUrlRejectedHost,
+    derivedFromIfwe: resolved.spaceUrlDerivedFromIfwe,
+    invalidIfweOrDashboard: resolved.spaceUrlInvalid && /-ifwe\.|#dashboard/i.test(raw)
   };
 }
 

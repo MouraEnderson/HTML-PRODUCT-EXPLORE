@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { sanitizeSpaceUrl, sanitizePassportUrl, parseSpaceUrlMeta } from './threeDxCasAuth.js';
-
-function trimSlash(value) {
-  return String(value || '').trim().replace(/\/$/, '');
-}
+import {
+  DEFAULT_THREEDX_SPACE_URL,
+  parsePassportUrlMeta,
+  resolveThreeDxSpaceUrl
+} from './threeDxUrlValidation.js';
 
 function readSecretFile(name) {
   const paths = [`/etc/secrets/${name}`, `/run/secrets/${name}`];
@@ -72,15 +72,15 @@ function stripSecurityContext(value) {
 }
 
 export function getThreeDxConfig() {
-  const rawSpaceUrl = envOrSecret('THREEDX_SPACE_URL') || envOrSecret('SPACE_URL') || process.env.SPACE_URL || '';
-  const spaceMeta = parseSpaceUrlMeta(rawSpaceUrl);
-  const spaceUrl = spaceMeta.sanitized;
-  const spaceUrlDerivedFromIfwe = spaceMeta.derivedFromIfwe;
-  const spaceUrlInvalid = spaceMeta.invalidIfweOrDashboard;
-  const spaceUrlHost = spaceMeta.host;
-  const rawPassportUrl = stripEnvAssignment(envOrSecret('THREEDX_PASSPORT_URL'), 'THREEDX_PASSPORT_URL');
-  const passportUrl = sanitizePassportUrl(rawPassportUrl);
-  const passportUrlIgnored = Boolean(rawPassportUrl && !passportUrl);
+  const rawThreeDxSpaceUrl = stripEnvAssignment(envOrSecret('THREEDX_SPACE_URL'), 'THREEDX_SPACE_URL');
+  const rawLegacySpaceUrl = stripEnvAssignment(envOrSecret('SPACE_URL'), 'SPACE_URL');
+  const spaceSourceRaw = rawThreeDxSpaceUrl || rawLegacySpaceUrl;
+  const spaceResolved = resolveThreeDxSpaceUrl(spaceSourceRaw);
+  const passportRaw = stripEnvAssignment(envOrSecret('THREEDX_PASSPORT_URL'), 'THREEDX_PASSPORT_URL');
+  const passportMeta = parsePassportUrlMeta(passportRaw);
+  const passportUrl = passportMeta.passportUrl;
+  const passportUrlHost = passportMeta.passportUrlHost;
+  const passportUrlIgnored = passportMeta.passportUrlIgnored;
   const securityContextRaw = envOrSecret('THREEDX_SECURITY_CONTEXT') || envOrSecret('SECURITY_CONTEXT') || process.env.SECURITY_CONTEXT || '';
   const securityContextParsed = stripSecurityContext(securityContextRaw);
   const securityContext = securityContextParsed.normalized;
@@ -98,7 +98,7 @@ export function getThreeDxConfig() {
   const passwordConfigured = Boolean(password);
   const auth = resolveAuth({ bearerToken, cookie, username, password, authModeEnv });
 
-  const isConfigured = Boolean(spaceUrl && securityContext && auth.authConfigured);
+  const isConfigured = Boolean(spaceResolved.spaceUrl && securityContext && auth.authConfigured);
 
   let mode;
   if (bomServiceMode === 'mock') {
@@ -114,11 +114,18 @@ export function getThreeDxConfig() {
   return {
     mode,
     bomServiceMode,
-    spaceUrl,
-    spaceUrlHost,
-    spaceUrlDerivedFromIfwe,
-    spaceUrlInvalid,
+    spaceUrl: spaceResolved.spaceUrl,
+    spaceUrlHost: spaceResolved.spaceUrlHost,
+    spaceUrlPath: spaceResolved.spaceUrlPath,
+    spaceUrlValid: spaceResolved.spaceUrlValid,
+    spaceUrlUsedDefault: spaceResolved.spaceUrlUsedDefault,
+    spaceUrlRejectedHost: spaceResolved.spaceUrlRejectedHost,
+    spaceUrlConfigError: spaceResolved.spaceUrlConfigError,
+    spaceUrlDerivedFromIfwe: spaceResolved.spaceUrlDerivedFromIfwe,
+    spaceUrlInvalid: spaceResolved.spaceUrlInvalid,
+    defaultSpaceUrl: DEFAULT_THREEDX_SPACE_URL,
     passportUrl,
+    passportUrlHost,
     passportUrlIgnored,
     securityContext,
     securityContextValid,
@@ -138,7 +145,7 @@ export function getThreeDxConfig() {
     credentialsConfigured: auth.authConfigured,
     isConfigured,
     upstream: {
-      spaceUrlConfigured: Boolean(spaceUrl),
+      spaceUrlConfigured: Boolean(spaceResolved.spaceUrl),
       securityContextConfigured: Boolean(securityContext),
       credentialsConfigured: auth.authConfigured
     }

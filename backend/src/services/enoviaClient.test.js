@@ -17,7 +17,7 @@ test('GET requests omit Content-Type header', async () => {
 
   try {
     const client = new EnoviaClient({
-      spaceUrl: 'https://example.com/enovia',
+      spaceUrl: 'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia',
       securityContext: 'ctx::Role.Org.Project',
       cookie: 'JSESSIONID=test-cookie'
     });
@@ -68,7 +68,7 @@ test('GET errors include sanitized upstream body summary', async () => {
 
   try {
     const client = new EnoviaClient({
-      spaceUrl: 'https://example.com/enovia',
+      spaceUrl: 'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia',
       securityContext: 'ctx::Role.Org.Project',
       cookie: 'JSESSIONID=test-cookie'
     });
@@ -102,7 +102,7 @@ test('POST requests include JSON and configured CSRF header without exposing sec
 
   try {
     const client = new EnoviaClient({
-      spaceUrl: 'https://example.com/enovia',
+      spaceUrl: 'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia',
       securityContext: 'ctx::Role.Org.Project',
       cookie: 'JSESSIONID=test-cookie',
       csrfToken: 'csrf-value',
