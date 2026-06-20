@@ -13,9 +13,38 @@ function trimSlash(value) {
 
 export function sanitizeSpaceUrl(value) {
   const raw = String(value || '').trim();
-  const match = raw.match(/https:\/\/r\d+-[a-z0-9]+-space\.3dexperience\.3ds\.com\/enovia/i);
-  if (match) return match[0].replace(/\/$/, '');
+  const spaceMatch = raw.match(/https:\/\/(r\d+)-([a-z0-9]+)-space\.3dexperience\.3ds\.com(?:\/enovia)?/i);
+  if (spaceMatch) {
+    const tenant = spaceMatch[1].toLowerCase();
+    const region = spaceMatch[2].toLowerCase();
+    return `https://${tenant}-${region}-space.3dexperience.3ds.com/enovia`;
+  }
+  const ifweMatch = raw.match(/https:\/\/(r\d+)-([a-z0-9]+)-ifwe\.3dexperience\.3ds\.com/i);
+  if (ifweMatch) {
+    const tenant = ifweMatch[1].toLowerCase();
+    const region = ifweMatch[2].toLowerCase();
+    return `https://${tenant}-${region}-space.3dexperience.3ds.com/enovia`;
+  }
+  if (/-ifwe\.|#dashboard/i.test(raw)) return '';
   return trimSlash(raw);
+}
+
+export function parseSpaceUrlMeta(value) {
+  const raw = String(value || '').trim();
+  const sanitized = sanitizeSpaceUrl(raw);
+  let host = '';
+  try {
+    host = sanitized ? new URL(sanitized).hostname : '';
+  } catch {
+    host = '';
+  }
+  return {
+    rawConfigured: Boolean(raw),
+    sanitized,
+    host,
+    derivedFromIfwe: /-ifwe\./i.test(raw) && /-space\./i.test(sanitized),
+    invalidIfweOrDashboard: /-ifwe\.|#dashboard/i.test(raw) && !sanitized
+  };
 }
 
 export function sanitizePassportUrl(value) {

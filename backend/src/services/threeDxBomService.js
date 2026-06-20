@@ -60,6 +60,9 @@ export function getSkaHealth() {
       passwordConfigured: Boolean(config.passwordConfigured),
       passportUrlConfigured: Boolean(config.passportUrl),
       passportUrlIgnored: Boolean(config.passportUrlIgnored),
+      spaceUrlHost: config.spaceUrlHost || '',
+      spaceUrlDerivedFromIfwe: Boolean(config.spaceUrlDerivedFromIfwe),
+      spaceUrlInvalid: Boolean(config.spaceUrlInvalid),
       securityContextValid: Boolean(config.securityContextValid),
       securityContextHadNewline: Boolean(config.securityContextHadNewline)
     },
@@ -99,6 +102,16 @@ export async function getSkaAuthHealth() {
       auth.hint =
         'THREEDX_PASSPORT_URL on Render is invalid (dashboard/ifwe URL). Remove it or set https://r<TENANT>-eu1.iam.3dexperience.3ds.com';
     }
+    if (config.spaceUrlDerivedFromIfwe) {
+      auth.spaceUrlDerivedFromIfwe = true;
+      auth.hint =
+        'THREEDX_SPACE_URL was dashboard/ifwe URL — auto-derived to *-space*. Save explicit space URL on Render.';
+    }
+    if (config.spaceUrlInvalid) {
+      auth.spaceUrlInvalid = true;
+      auth.hint =
+        'THREEDX_SPACE_URL invalid. Set https://r1132100929518-us1-space.3dexperience.3ds.com/enovia (never ifwe/dashboard).';
+    }
     if (config.securityContextHadNewline) {
       auth.securityContextHadNewline = true;
       auth.hint =
@@ -117,6 +130,9 @@ export async function getSkaAuthHealth() {
       if (/CAS login rejected/i.test(auth.casLoginError)) {
         auth.hint =
           'CAS rejected THREEDX_USERNAME/THREEDX_PASSWORD on Render. Update credentials (no dashboard URLs, no quotes).';
+      } else if (/tenant .* does not exist/i.test(auth.casLoginError)) {
+        auth.hint =
+          'THREEDX_SPACE_URL must be *-space* (not ifwe/dashboard). Use https://r1132100929518-us1-space.3dexperience.3ds.com/enovia';
       } else if (/CAS service authentication failed \(401\)/i.test(auth.casLoginError)) {
         auth.hint =
           '3DPassport OK, 3DSpace CSRF returned 401. Verify THREEDX_SECURITY_CONTEXT and user access to CS_IMPLANTACAO.';

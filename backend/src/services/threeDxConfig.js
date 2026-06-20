@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { sanitizeSpaceUrl, sanitizePassportUrl } from './threeDxCasAuth.js';
+import { sanitizeSpaceUrl, sanitizePassportUrl, parseSpaceUrlMeta } from './threeDxCasAuth.js';
 
 function trimSlash(value) {
   return String(value || '').trim().replace(/\/$/, '');
@@ -72,7 +72,12 @@ function stripSecurityContext(value) {
 }
 
 export function getThreeDxConfig() {
-  const spaceUrl = sanitizeSpaceUrl(process.env.THREEDX_SPACE_URL || process.env.SPACE_URL || '');
+  const rawSpaceUrl = envOrSecret('THREEDX_SPACE_URL') || envOrSecret('SPACE_URL') || process.env.SPACE_URL || '';
+  const spaceMeta = parseSpaceUrlMeta(rawSpaceUrl);
+  const spaceUrl = spaceMeta.sanitized;
+  const spaceUrlDerivedFromIfwe = spaceMeta.derivedFromIfwe;
+  const spaceUrlInvalid = spaceMeta.invalidIfweOrDashboard;
+  const spaceUrlHost = spaceMeta.host;
   const rawPassportUrl = stripEnvAssignment(envOrSecret('THREEDX_PASSPORT_URL'), 'THREEDX_PASSPORT_URL');
   const passportUrl = sanitizePassportUrl(rawPassportUrl);
   const passportUrlIgnored = Boolean(rawPassportUrl && !passportUrl);
@@ -110,6 +115,9 @@ export function getThreeDxConfig() {
     mode,
     bomServiceMode,
     spaceUrl,
+    spaceUrlHost,
+    spaceUrlDerivedFromIfwe,
+    spaceUrlInvalid,
     passportUrl,
     passportUrlIgnored,
     securityContext,

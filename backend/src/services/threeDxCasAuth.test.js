@@ -18,6 +18,13 @@ test('sanitizeSpaceUrl extracts embedded enovia URL', () => {
   );
 });
 
+test('sanitizeSpaceUrl derives space host from ifwe dashboard URL', () => {
+  assert.equal(
+    sanitizeSpaceUrl('https://r1132100929518-us1-ifwe.3dexperience.3ds.com/#dashboard:abc'),
+    'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia'
+  );
+});
+
 test('derivePassportCandidates builds tenant iam hosts', () => {
   const candidates = derivePassportCandidates(
     'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia'
