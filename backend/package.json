@@ -9,7 +9,8 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test src/**/*.test.js",
-    "probe:tenant": "node scripts/probe-tenant-3d-lifecycle.mjs"
+    "probe:tenant": "node scripts/probe-tenant-3d-lifecycle.mjs",
+    "probe:postman-cas": "node scripts/postman-cas-probe.mjs"
   },
   "engines": {
     "node": ">=20"
