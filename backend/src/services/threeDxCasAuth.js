@@ -403,23 +403,8 @@ async function postCasLogin(jar, { passportUrl, loginPath, loginUrl, lt, usernam
   return loginResponse;
 }
 
-async function fetchCsrfSession(jar, serviceUrl, spaceUrl) {
-  let csrfResponse = await fetchWithJar(jar, serviceUrl, {
-    method: 'GET',
-    headers: { Accept: JSON_ACCEPT }
-  });
-  let finalResponse = await followRedirects(jar, csrfResponse, serviceUrl, 16);
-  let csrf = extractCsrf(finalResponse);
-
-  if (!csrf.value || !finalResponse.ok) {
-    csrfResponse = await fetchWithJar(jar, serviceUrl, {
-      method: 'GET',
-      headers: { Accept: JSON_ACCEPT }
-    });
-    finalResponse = await followRedirects(jar, csrfResponse, serviceUrl, 16);
-    csrf = extractCsrf(finalResponse);
-  }
-
+async function finalizeCasSession(jar, serviceUrl, spaceUrl, finalResponse) {
+  const csrf = extractCsrf(finalResponse);
   const spaceHost = new URL(spaceUrl).hostname;
   const cookieHeader = jar.headerForUrl(serviceUrl) || jar.headerForUrl(spaceUrl);
 
@@ -446,6 +431,33 @@ async function fetchCsrfSession(jar, serviceUrl, spaceUrl) {
   };
 }
 
+async function fetchCsrfSession(jar, serviceUrl, spaceUrl, securityContext = '') {
+  const csrfHeaders = { Accept: JSON_ACCEPT };
+  if (securityContext) csrfHeaders.SecurityContext = securityContext;
+
+  let csrfResponse = await fetchWithJar(jar, serviceUrl, {
+    method: 'GET',
+    headers: csrfHeaders
+  });
+  let finalResponse = await followRedirects(jar, csrfResponse, serviceUrl, 16);
+  if (finalResponse.ok && extractCsrf(finalResponse).value) {
+    return finalizeCasSession(jar, serviceUrl, spaceUrl, finalResponse);
+  }
+
+  if (securityContext) {
+    csrfResponse = await fetchWithJar(jar, serviceUrl, {
+      method: 'GET',
+      headers: { Accept: JSON_ACCEPT }
+    });
+    finalResponse = await followRedirects(jar, csrfResponse, serviceUrl, 16);
+    if (finalResponse.ok && extractCsrf(finalResponse).value) {
+      return finalizeCasSession(jar, serviceUrl, spaceUrl, finalResponse);
+    }
+  }
+
+  return finalizeCasSession(jar, serviceUrl, spaceUrl, finalResponse);
+}
+
 async function casLoginWithPath({
   jar,
   passportUrl,
@@ -455,7 +467,6 @@ async function casLoginWithPath({
   username,
   password
 }) {
-  void securityContext;
   const serviceUrl = `${spaceUrl}/resources/v1/application/CSRF`;
   const { lt, ticketPayload } = await fetchLoginTicket(jar, passportUrl, loginPath);
   if (!lt) {
@@ -475,8 +486,12 @@ async function casLoginWithPath({
       username,
       password
     });
-    await followRedirects(jar, serviceLoginResponse, serviceLoginUrl, 16);
-    return await fetchCsrfSession(jar, serviceUrl, spaceUrl);
+    const serviceFinalResponse = await followRedirects(jar, serviceLoginResponse, serviceLoginUrl, 16);
+    const serviceCsrf = extractCsrf(serviceFinalResponse);
+    if (serviceCsrf.value && serviceFinalResponse.ok) {
+      return finalizeCasSession(jar, serviceUrl, spaceUrl, serviceFinalResponse);
+    }
+    return await fetchCsrfSession(jar, serviceUrl, spaceUrl, securityContext);
   } catch (error) {
     const msg = String(error?.message || '');
     if (!/CAS service authentication failed \(401\)|CAS CSRF token unavailable \(401\)|invalid_grant|authenticated session/i.test(msg)) {
@@ -500,7 +515,7 @@ async function casLoginWithPath({
     password
   });
   await followRedirects(freshJar, passportLoginResponse, passportLoginUrl, 16);
-  return await fetchCsrfSession(freshJar, serviceUrl, spaceUrl);
+  return await fetchCsrfSession(freshJar, serviceUrl, spaceUrl, securityContext);
 }
 
 export async function getCasCredentials(config, options = {}) {
