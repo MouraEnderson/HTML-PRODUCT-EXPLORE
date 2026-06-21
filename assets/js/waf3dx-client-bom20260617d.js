@@ -1457,25 +1457,105 @@
     });
   }
 
+  function ensureAdvancedVisible() {
+    try {
+      var advanced = uiRoot().querySelector && uiRoot().querySelector('.bom-topbar-more');
+      if (!advanced) return;
+      advanced.classList.remove('bom-hidden');
+      advanced.removeAttribute('hidden');
+      advanced.style.display = '';
+    } catch (e0) {}
+  }
+
+  function ensureTopbarDiagnosticTrigger() {
+    if (byId('btnWaf3dxDiagToggle')) return;
+    var actions = uiRoot().querySelector && uiRoot().querySelector('.bom-topbar-actions');
+    if (!actions) return;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'btnWaf3dxDiagToggle';
+    btn.className = 'bom-btn bom-btn-secondary bom-btn-compact bom-waf3dx-topbar-trigger';
+    btn.textContent = 'Diagnóstico';
+    btn.title = 'Abrir Diagnóstico 3DX (WAFData / dseng)';
+    var anchor = actions.querySelector('.bom-build-pill') || actions.querySelector('#btnThemeToggle');
+    if (anchor && anchor.parentNode === actions) {
+      actions.insertBefore(btn, anchor);
+    } else {
+      actions.appendChild(btn);
+    }
+    btn.addEventListener('click', function (ev) {
+      if (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+      var drawer = byId('waf3dxDiagnosticDrawer');
+      if (!drawer) {
+        installDiagnosticUi();
+        drawer = byId('waf3dxDiagnosticDrawer');
+      }
+      if (!drawer) return;
+      drawer.classList.toggle('bom-hidden');
+      btn.setAttribute('aria-expanded', drawer.classList.contains('bom-hidden') ? 'false' : 'true');
+    });
+  }
+
+  function ensureDiagnosticDrawer() {
+    if (byId('waf3dxDiagnosticDrawer')) return byId('waf3dxDiagnosticDrawer');
+    var topbar = uiRoot().querySelector && uiRoot().querySelector('.bom-topbar');
+    if (!topbar) return null;
+    var drawer = document.createElement('div');
+    drawer.id = 'waf3dxDiagnosticDrawer';
+    drawer.className = 'bom-waf3dx-drawer bom-hidden';
+    drawer.setAttribute('role', 'region');
+    drawer.setAttribute('aria-label', 'Diagnóstico 3DX');
+    topbar.appendChild(drawer);
+    return drawer;
+  }
+
+  function mountDiagnosticControls(container) {
+    if (!container || container.querySelector('#waf3dxDiagnosticPanel')) return false;
+    var wrap = document.createElement('div');
+    wrap.id = 'waf3dxDiagnosticWrap';
+    wrap.className = 'bom-waf3dx-diag-wrap';
+    wrap.innerHTML =
+      '<p style="margin:4px 0 6px;font-size:.68rem;font-weight:600">Diagnóstico 3DX</p>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">' +
+      '<button type="button" id="btnWaf3dxTestSession" class="bom-btn bom-btn-secondary" style="font-size:.65rem">Testar sessão 3DX</button>' +
+      '<button type="button" id="btnWaf3dxTestEbom" class="bom-btn bom-btn-secondary" style="font-size:.65rem">Testar E-BOM</button>' +
+      '<button type="button" id="btnWaf3dxTest3d" class="bom-btn bom-btn-secondary" style="font-size:.65rem">Testar 3DView</button>' +
+      '<button type="button" id="btnWaf3dxTestMaturity" class="bom-btn bom-btn-secondary" style="font-size:.65rem">Testar maturidade read-only</button>' +
+      '<button type="button" id="btnWaf3dxExportDiag" class="bom-btn bom-btn-secondary" style="font-size:.65rem">Exportar diagnóstico sanitizado</button>' +
+      '</div>' +
+      '<div id="waf3dxDiagnosticPanel"></div>';
+    container.appendChild(wrap);
+    return true;
+  }
+
   function installDiagnosticUi() {
     try {
+      if (byId('waf3dxDiagnosticUiReady')) {
+        ensureAdvancedVisible();
+        ensureTopbarDiagnosticTrigger();
+        return;
+      }
+      ensureAdvancedVisible();
+      ensureTopbarDiagnosticTrigger();
+      var drawer = ensureDiagnosticDrawer();
       var rules = byId('bomRulesPanel');
-      if (!rules || byId('waf3dxDiagnosticPanel')) return;
-
-      var wrap = document.createElement('div');
-      wrap.id = 'waf3dxDiagnosticWrap';
-      wrap.className = 'bom-waf3dx-diag-wrap';
-      wrap.innerHTML =
-        '<p style="margin:4px 0 6px;font-size:.68rem;font-weight:600">Diagnóstico 3DX</p>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">' +
-        '<button type="button" id="btnWaf3dxTestSession" class="bom-btn bom-btn-secondary" style="font-size:.65rem">Testar sessão 3DX</button>' +
-        '<button type="button" id="btnWaf3dxTestEbom" class="bom-btn bom-btn-secondary" style="font-size:.65rem">Testar E-BOM</button>' +
-        '<button type="button" id="btnWaf3dxTest3d" class="bom-btn bom-btn-secondary" style="font-size:.65rem">Testar 3DView</button>' +
-        '<button type="button" id="btnWaf3dxTestMaturity" class="bom-btn bom-btn-secondary" style="font-size:.65rem">Testar maturidade read-only</button>' +
-        '<button type="button" id="btnWaf3dxExportDiag" class="bom-btn bom-btn-secondary" style="font-size:.65rem">Exportar diagnóstico sanitizado</button>' +
-        '</div>' +
-        '<div id="waf3dxDiagnosticPanel"></div>';
-      rules.insertBefore(wrap, rules.firstChild);
+      var mounted = false;
+      if (drawer) mounted = mountDiagnosticControls(drawer) || mounted;
+      if (rules && !rules.querySelector('#waf3dxDiagnosticWrap')) {
+        var hint = document.createElement('p');
+        hint.className = 'bom-waf3dx-advanced-hint';
+        hint.style.cssText = 'margin:0 0 6px;font-size:.62rem;color:#5c6b7a';
+        hint.textContent = 'Diagnóstico 3DX: use o botão Diagnóstico no topo ou abra este painel.';
+        rules.insertBefore(hint, rules.firstChild);
+      }
+      if (!mounted && drawer) mountDiagnosticControls(drawer);
+      var ready = document.createElement('span');
+      ready.id = 'waf3dxDiagnosticUiReady';
+      ready.className = 'bom-hidden';
+      (drawer || rules || uiRoot()).appendChild(ready);
 
       bindDiagnosticButton('btnWaf3dxTestSession', function () {
         return runFullDiagnostic();
@@ -1601,6 +1681,7 @@
     renderDiagnosticPanel: renderDiagnosticPanel,
     exportSanitizedDiagnostic: exportSanitizedDiagnostic,
     installDiagnosticUi: installDiagnosticUi,
+    ensureAdvancedVisible: ensureAdvancedVisible,
     sanitizeReport: sanitizeReport,
     ensureSpaceUrl: ensureSpaceUrl,
     getSecurityContextValue: getSecurityContextValue,

@@ -10,9 +10,11 @@
 
 ## Como abrir o diagnóstico no widget
 
-1. Abrir widget oficial: `widget-v3-08i.html?v=bom20260617d` no 3DDashboard (Web Page Reader).
-2. Expandir **Avançado** no topo.
-3. Seção **Diagnóstico 3DX** (painel novo):
+1. Abrir widget: `widget-v3-08i.html?v=bom20260617d` no 3DDashboard (Web Page Reader).
+2. No topo do widget BOM Analytics:
+   - Botão **Diagnóstico** (sempre visível, ao lado do build pill) → abre painel flutuante **Diagnóstico 3DX**
+   - Ou clique **Avançado** (também visível no topo) → Root Physical ID, profundidade, Testar Root ID
+3. No painel **Diagnóstico 3DX**:
    - **Testar sessão 3DX** — matriz completa (WAF → CSRF → GET root → POST expand variants → 3D → maturidade)
    - **Testar E-BOM** — CSRF + GET root + POST expand
    - **Testar 3DView** — `find3DShapeOrRep` + `dsdo:DerivedOutputs/Locate`

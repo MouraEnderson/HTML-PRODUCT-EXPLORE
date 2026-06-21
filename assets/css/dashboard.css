@@ -2989,9 +2989,54 @@ body.ui-clean .main-clean {
   white-space: nowrap;
 }
 
-.bom-layout-page.bom-3dx-product-dashboard .bom-topbar-more,
 .bom-layout-page.bom-3dx-product-dashboard #btnLoadNextLevel,
 .bom-layout-page.bom-3dx-product-dashboard #btnToggleRightPanel {
+  display: none !important;
+}
+
+.bom-layout-page.bom-3dx-product-dashboard .bom-topbar-more {
+  display: block !important;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+
+.bom-layout-page.bom-3dx-product-dashboard .bom-topbar-more summary {
+  font-size: 0.68rem;
+  padding: 4px 8px;
+  white-space: nowrap;
+  list-style: none;
+}
+
+.bom-layout-page.bom-3dx-product-dashboard .bom-topbar-more[open] {
+  right: 4px;
+  top: calc(100% - 2px);
+  min-width: 280px;
+  max-width: min(92vw, 420px);
+  max-height: min(70vh, 520px);
+  overflow: auto;
+}
+
+.bom-waf3dx-topbar-trigger {
+  flex-shrink: 0;
+}
+
+.bom-waf3dx-drawer {
+  position: absolute;
+  right: 8px;
+  top: calc(100% - 2px);
+  z-index: 120;
+  min-width: 300px;
+  max-width: min(94vw, 440px);
+  max-height: min(72vh, 540px);
+  overflow: auto;
+  background: var(--bom-card, #fff);
+  border: 1px solid var(--bom-border, #d8e0ea);
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+}
+
+.bom-waf3dx-drawer.bom-hidden {
   display: none !important;
 }
 

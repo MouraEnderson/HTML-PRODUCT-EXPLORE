@@ -2932,9 +2932,12 @@
   function hideEndUserChrome() {
     var advanced = uiRoot().querySelector && uiRoot().querySelector('.bom-topbar-more');
     if (advanced) {
-      advanced.classList.add('bom-hidden');
-      advanced.setAttribute('hidden', 'hidden');
-      advanced.style.display = 'none';
+      advanced.classList.remove('bom-hidden');
+      advanced.removeAttribute('hidden');
+      advanced.style.display = '';
+    }
+    if (w.__waf3dxClient && w.__waf3dxClient.ensureAdvancedVisible) {
+      w.__waf3dxClient.ensureAdvancedVisible();
     }
     var nextBtn = byId('btnLoadNextLevel');
     if (nextBtn) {
@@ -3275,6 +3278,9 @@
     apply3dxProductDashboardLayout();
     bindTestRootButton();
     bindCopyContextDiagnosticsButton();
+    if (w.__waf3dxClient && w.__waf3dxClient.installDiagnosticUi) {
+      w.__waf3dxClient.installDiagnosticUi();
+    }
   }
 
   function bindSyncButtons() {
