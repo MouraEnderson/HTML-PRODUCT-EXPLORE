@@ -1596,7 +1596,30 @@
             'WAFData indisponível neste frame — abra o widget no 3DDashboard Web Page Reader com usuário logado.'
           );
         }
-        return client.getEngItem(opts.rootId).then(function (rootRes) {
+        return client
+          .resolveEngItemRootId({
+            physicalId: opts.rootId,
+            title: opts.title || lastSyncTitle,
+            name: opts.rootName || ''
+          })
+          .then(function (resolved) {
+            if (!resolved.ok) {
+              throw new Error(resolved.error || resolved.recommendation || 'ROOT_RESOLVE_FAILED');
+            }
+            opts.rootId = resolved.rootId;
+            if (resolved.title) opts.title = resolved.title;
+            if (resolved.source && resolved.source !== 'DIRECT_DSENG_ID') {
+              var resolveNote =
+                'Root resolvido: ' +
+                (resolved.physicalId || 'contexto') +
+                ' → ' +
+                resolved.rootId +
+                ' (' +
+                resolved.source +
+                ')';
+              opts.fallbackWarning = opts.fallbackWarning ? opts.fallbackWarning + ' · ' + resolveNote : resolveNote;
+            }
+            return client.getEngItem(opts.rootId).then(function (rootRes) {
           if (!rootRes.canReadRoot) {
             throw new Error('GET root falhou HTTP ' + rootRes.status + ': ' + (rootRes.error || ''));
           }
@@ -1646,6 +1669,7 @@
             });
             return applySkaPayloadToUI(payload);
           });
+            });
         });
       })
       .catch(function (err) {
@@ -2292,6 +2316,7 @@
     var manual = s(opts.manualRootId || (byId('explorerObjectId') && byId('explorerObjectId').value));
     var depth = opts.depth != null ? opts.depth : getDepthFromInput();
     var saved = loadLastGoodContext();
+    var title = s(ctx.title || ctx.name || ctx.productName || lastSyncTitle);
 
     if (manual && isValidDsengPhysicalId(manual)) {
       return {
@@ -2301,6 +2326,37 @@
         title: s(ctx.title) || lastSyncTitle || (saved && saved.rootTitle) || '',
         source: 'ADVANCED_MANUAL',
         useResolveSelection: false,
+        saved: saved
+      };
+    }
+
+    var prdHint = s(ctx.rootId || ctx.selectedId || ctx.physicalId);
+    if (prdHint && /^prd-/i.test(prdHint) && isWafSessionMode()) {
+      return {
+        ok: false,
+        needsWafUqlResolve: true,
+        physicalId: prdHint,
+        rootId: prdHint,
+        depth: depth,
+        title: title || s(ctx.title || ctx.name) || lastSyncTitle,
+        rootName: s(ctx.name || ctx.rootName),
+        source: 'PRODUCT_EXPLORER_PRD',
+        useResolveSelection: false,
+        saved: saved
+      };
+    }
+
+    if (isWafSessionMode() && title.indexOf(KNOWN_ROOT_TITLE_HINT) >= 0) {
+      return {
+        ok: true,
+        rootId: KNOWN_ROOT_ID,
+        depth: depth,
+        title: title || lastSyncTitle || KNOWN_ROOT_TITLE_HINT,
+        source: 'KNOWN_ROOT_FROM_EXPLORER_TITLE',
+        useResolveSelection: false,
+        knownRootFallback: true,
+        fallbackWarning:
+          'Product Explorer não forneceu rootId dseng — usando CJ MESA conhecido (' + KNOWN_ROOT_ID + ').',
         saved: saved
       };
     }
@@ -2497,6 +2553,45 @@
       return loadBomViaResolveSelection(opts).catch(function (err) {
         return tryLoadFromLastGoodContext(opts, err, 'resolve-selection falhou');
       });
+    }
+
+    if (resolved.needsWafUqlResolve && w.__waf3dxClient && w.__waf3dxClient.resolveEngItemRootId) {
+      if (!opts.silent) {
+        setStatus('Resolvendo prd-* → dseng:EngItem via UQL search (WAFData)…', 'info');
+      }
+      return w.__waf3dxClient
+        .resolveEngItemRootId({
+          physicalId: resolved.physicalId || resolved.rootId,
+          title: resolved.title,
+          name: resolved.rootName || ''
+        })
+        .then(function (uql) {
+          if (!uql.ok) {
+            return tryLoadFromLastGoodContext(opts, new Error(uql.error || 'UQL resolve failed'), 'UQL falhou');
+          }
+          var idEl = byId('explorerObjectId');
+          if (idEl) idEl.value = uql.rootId;
+          return loadBomViaStructureWithRoot({
+            rootId: uql.rootId,
+            depth: resolved.depth,
+            expandDepth: resolved.expandDepth || resolved.depth,
+            source: uql.source || resolved.source || 'WAF_UQL_RESOLVE',
+            title: uql.title || resolved.title,
+            rootName: uql.name || resolved.rootName || '',
+            silent: opts.silent,
+            fallbackWarning:
+              'prd ' +
+              (uql.physicalId || resolved.physicalId) +
+              ' → dseng ' +
+              uql.rootId +
+              ' (' +
+              (uql.source || 'UQL') +
+              ')'
+          });
+        })
+        .catch(function (err) {
+          return tryLoadFromLastGoodContext(opts, err, 'UQL resolve exception');
+        });
     }
 
     if (resolved.ok && resolved.rootId) {
@@ -2724,7 +2819,13 @@
   function loadBomViaResolveSelection(opts) {
     opts = opts || {};
     if (isWafSessionMode()) {
-      var resolved = resolveRootForBomLoad({ allowResolveSelection: false, ctx: opts.ctx });
+      var wafCtx =
+        opts.ctx ||
+        (w.ProductExplorerSyncProvider &&
+          w.ProductExplorerSyncProvider.getContext &&
+          w.ProductExplorerSyncProvider.getContext()) ||
+        {};
+      var resolved = resolveRootForBomLoad({ allowResolveSelection: false, ctx: wafCtx });
       if (resolved.ok && resolved.rootId) {
         return loadBomViaWafSession({
           rootId: resolved.rootId,
@@ -2734,12 +2835,24 @@
           title: resolved.title,
           rootName: resolved.rootName || '',
           silent: opts.silent,
-          fallbackWarning: resolved.fallbackWarning || ''
+          fallbackWarning: resolved.fallbackWarning || '',
+          knownRootFallback: !!resolved.knownRootFallback
+        });
+      }
+      if (resolved.needsWafUqlResolve) {
+        return loadBomViaWafSession({
+          rootId: resolved.physicalId || resolved.rootId,
+          depth: resolved.depth,
+          expandDepth: resolved.expandDepth || resolved.depth,
+          source: resolved.source || 'PRODUCT_EXPLORER_PRD',
+          title: resolved.title,
+          rootName: resolved.rootName || '',
+          silent: opts.silent
         });
       }
       var wafMsg =
-        'Modo wafdata-session: Product Explorer não forneceu rootId dseng. Root CJ MESA preenchido em Avançado — clique Testar Root ID.';
-      suggestKnownRootIfApplicable(selectionPayload.normalized || {});
+        'Modo wafdata-session: Product Explorer não forneceu rootId dseng. Root CJ MESA preenchido em Avançado — clique Sincronizar novamente.';
+      suggestKnownRootIfApplicable(wafCtx);
       renderEmptySkaState('SELECTION_NOT_RESOLVED', {
         contextMeta: lastContextMeta,
         statusMessage: wafMsg,

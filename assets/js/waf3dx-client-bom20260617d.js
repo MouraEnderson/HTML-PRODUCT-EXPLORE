@@ -526,6 +526,193 @@
     );
   }
 
+  function isDsengHexId(id) {
+    id = s(id);
+    if (!id || /^prd-/i.test(id)) return false;
+    return /^[0-9A-F]{24,32}$/i.test(id);
+  }
+
+  function quoteUql(value) {
+    return '"' + s(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+  }
+
+  function engItemSearchPath(uqlQuery, top) {
+    return (
+      '/resources/v1/modeler/dseng/dseng:EngItem/search?$searchStr=' +
+      encodeURIComponent(uqlQuery) +
+      '&$top=' +
+      (n(top) || 20)
+    );
+  }
+
+  function memberField(m, field) {
+    return s(m && m[field]);
+  }
+
+  function scoreEngItemCandidate(m, expected, hints) {
+    hints = hints || {};
+    expected = s(expected);
+    var score = 0;
+    if (memberField(m, 'id') === expected) score += 100;
+    if (memberField(m, 'name') === expected) score += 95;
+    if (memberField(m, 'title') === expected) score += 85;
+    if (hints.title && memberField(m, 'title') === hints.title) score += 80;
+    if (hints.prdId && memberField(m, 'name') === hints.prdId) score += 90;
+    return score;
+  }
+
+  function chooseExactEngItem(res, expected, hints) {
+    expected = s(expected);
+    hints = hints || {};
+    var members = extractMembers(res);
+    if (!members.length) return null;
+    var best = null;
+    var bestScore = -1;
+    var i;
+    for (i = 0; i < members.length; i++) {
+      var m = members[i];
+      if (
+        memberField(m, 'id') === expected ||
+        memberField(m, 'name') === expected ||
+        memberField(m, 'title') === expected
+      ) {
+        var score = scoreEngItemCandidate(m, expected, hints);
+        if (score > bestScore) {
+          best = m;
+          bestScore = score;
+        }
+      }
+    }
+    if (best && isDsengHexId(best.id)) return best;
+    if (members.length === 1 && isDsengHexId(members[0].id)) return members[0];
+    for (i = 0; i < members.length; i++) {
+      var cs = scoreEngItemCandidate(members[i], expected, hints);
+      if (cs > bestScore && isDsengHexId(members[i].id)) {
+        best = members[i];
+        bestScore = cs;
+      }
+    }
+    return bestScore > 0 ? best : null;
+  }
+
+  function searchEngItems(uqlQuery, options) {
+    options = options || {};
+    uqlQuery = s(uqlQuery);
+    if (!uqlQuery) {
+      return Promise.resolve({ ok: false, members: [], status: 0, error: 'empty UQL query' });
+    }
+    return withTimeout(
+      ensureSpaceUrl().then(function (spaceUrl) {
+        var url = cleanUrl(spaceUrl) + engItemSearchPath(uqlQuery, options.top);
+        var headers = { Accept: 'application/json', SecurityContext: getSecurityContextValue() };
+        return wafRequest(url, { method: 'GET', type: 'json', headers: headers }).then(function (res) {
+          var members = extractMembers(res.responseJson || res.data);
+          return {
+            ok: res.ok && members.length > 0,
+            status: res.status,
+            members: members,
+            uqlQuery: uqlQuery,
+            url: url,
+            error: res.ok ? (members.length ? '' : 'empty member list') : res.wafMessage || res.error
+          };
+        });
+      }),
+      REQUEST_TIMEOUT_MS,
+      'searchEngItems'
+    );
+  }
+
+  /**
+   * Resolve Explorer prd-* or title → dseng hex id (tenant-validated UQL paths).
+   */
+  function resolveEngItemRootId(options) {
+    options = options || {};
+    var physicalId = s(options.physicalId || options.rootId || options.id || options.name);
+    var title = s(options.title || options.label);
+    var attempts = [];
+    var hints = { title: title, prdId: physicalId };
+
+    if (isDsengHexId(physicalId)) {
+      return Promise.resolve({
+        ok: true,
+        rootId: physicalId,
+        source: 'DIRECT_DSENG_ID',
+        title: title,
+        physicalId: physicalId,
+        attempts: attempts
+      });
+    }
+
+    function tryQuery(label, uql, expected) {
+      expected = s(expected || physicalId || title);
+      return searchEngItems(uql, { top: 20 }).then(function (res) {
+        attempts.push({
+          label: label,
+          uql: uql,
+          status: res.status,
+          count: (res.members || []).length,
+          ok: res.ok
+        });
+        if (!res.ok) return null;
+        var hit = chooseExactEngItem({ member: res.members }, expected, hints);
+        if (!hit && title && expected !== title) {
+          hit = chooseExactEngItem({ member: res.members }, title, hints);
+        }
+        if (hit && isDsengHexId(hit.id)) {
+          return {
+            ok: true,
+            rootId: hit.id,
+            title: memberField(hit, 'title') || title,
+            name: memberField(hit, 'name'),
+            source: label,
+            physicalId: physicalId || memberField(hit, 'name'),
+            member: sanitizeReport(hit),
+            attempts: attempts
+          };
+        }
+        return null;
+      });
+    }
+
+    var chain = Promise.resolve(null);
+    if (physicalId && /^prd-/i.test(physicalId)) {
+      chain = chain
+        .then(function (r) {
+          return r || tryQuery('UQL_NAME_PRD', 'name:' + physicalId, physicalId);
+        })
+        .then(function (r) {
+          return r || tryQuery('SEARCHSTR_PRD', physicalId, physicalId);
+        });
+    } else if (physicalId) {
+      chain = chain.then(function (r) {
+        return r || tryQuery('SEARCHSTR', physicalId, physicalId);
+      });
+    }
+    if (title) {
+      chain = chain.then(function (r) {
+        return r || tryQuery('UQL_LABEL_TITLE', 'label:' + quoteUql(title), title);
+      });
+    }
+
+    return chain.then(function (resolved) {
+      if (resolved && resolved.ok) {
+        log('resolveEngItemRootId OK', resolved.source, resolved.physicalId, '→', resolved.rootId);
+        return resolved;
+      }
+      return {
+        ok: false,
+        rootId: '',
+        error: 'Não foi possível resolver prd/título para dseng:EngItem id',
+        physicalId: physicalId,
+        title: title,
+        attempts: attempts,
+        recommendation:
+          'GET dseng:EngItem/prd-* retorna 404 — resolver via UQL (name:prd ou label:título). Root CJ MESA: ' +
+          ROOT_ID
+      };
+    });
+  }
+
   function getEngItem(id, options) {
     options = options || {};
     id = s(id || options.id || ROOT_ID);
@@ -755,6 +942,8 @@
           ok: !!chosen,
           representationFound: !!chosen,
           referenceId: s(id),
+          representationType: chosen ? s(chosen.representationType || chosen.type) : '',
+          representationId: chosen ? s(chosen.id) : '',
           representation: chosen || null,
           shapes: repRes.shapes || [],
           repReferences: repRes.repReferences || [],
@@ -813,53 +1002,108 @@
     return files[0] || null;
   }
 
+  function locateDerivedOutputsOnce(repId, repType, referenceId) {
+    referenceId = s(referenceId);
+    repId = s(repId);
+    repType = s(repType || 'VPMReference');
+    return ensureSpaceUrl().then(function (spaceUrl) {
+      return getCsrf().then(function (csrf) {
+        var url = cleanUrl(spaceUrl) + '/resources/v1/modeler/dsdo/dsdo:DerivedOutputs/Locate';
+        var bodyObj = buildLocatePayload(repId, repType, spaceUrl);
+        var headers = {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          SecurityContext: getSecurityContextValue()
+        };
+        if (csrf.ok && cachedCsrf && cachedCsrf.value) headers[cachedCsrf.name] = cachedCsrf.value;
+        return wafRequest(url, {
+          method: 'POST',
+          type: 'json',
+          headers: headers,
+          data: JSON.stringify(bodyObj)
+        }).then(function (res) {
+          var files = extractDerivedFiles(res.responseJson || res.data);
+          var best = pickBestWebFile(files);
+          return {
+            ok: res.ok && files.length > 0,
+            derivedOutputFound: res.ok && files.length > 0,
+            status: res.status,
+            referenceId: referenceId,
+            representationId: repId,
+            representationType: repType,
+            fileCount: files.length,
+            files: sanitizeReport(files),
+            best: best ? sanitizeReport(best) : null,
+            derivedOutputAvailable: files.length > 0,
+            locateTarget: repType + ':' + repId,
+            blocker: files.length ? '' : 'No derived output available for this representation',
+            requiredAdminAction: files.length ? '' : 'Enable/generate derived output for web visualization',
+            error: res.ok ? (files.length ? '' : 'fileCount=0') : res.wafMessage || res.error,
+            url: url,
+            method: 'POST'
+          };
+        });
+      });
+    });
+  }
+
   function locateDerivedOutputs(target, options) {
     options = options || {};
     target = target || {};
     var referenceId = s(target.referenceId || target.id || TAMPO_ID);
-    var repType = s(target.representationType || target.type || 'VPMReference');
-    var repId = s(target.representation && target.representation.id ? target.representation.id : target.representationId || referenceId);
+    var candidates = [];
+    var seen = {};
+    function addCandidate(id, type, label) {
+      id = s(id);
+      type = s(type || 'VPMReference');
+      if (!id) return;
+      var key = type + '|' + id;
+      if (seen[key]) return;
+      seen[key] = true;
+      candidates.push({ id: id, type: type, label: label || type });
+    }
+    if (target.representation && target.representation.id) {
+      addCandidate(
+        target.representation.id,
+        target.representation.representationType || target.representationType || target.representation.type || '3DShape',
+        'representation'
+      );
+    }
+    if (target.shapes && target.shapes.length) {
+      target.shapes.forEach(function (sh, idx) {
+        addCandidate(sh.id, sh.type || '3DShape', 'shape-' + idx);
+      });
+    }
+    if (target.repReferences && target.repReferences.length) {
+      target.repReferences.forEach(function (rr, idx) {
+        addCandidate(rr.id, rr.type || 'VPMRepReference', 'repRef-' + idx);
+      });
+    }
+    addCandidate(referenceId, 'VPMReference', 'engItem');
+
     return withTimeout(
-      ensureSpaceUrl().then(function (spaceUrl) {
-        return getCsrf().then(function (csrf) {
-          var url = cleanUrl(spaceUrl) + '/resources/v1/modeler/dsdo/dsdo:DerivedOutputs/Locate';
-          var bodyObj = buildLocatePayload(repId, repType, spaceUrl);
-          var headers = {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-            SecurityContext: getSecurityContextValue()
-          };
-          if (csrf.ok && cachedCsrf && cachedCsrf.value) headers[cachedCsrf.name] = cachedCsrf.value;
-          return wafRequest(url, {
-            method: 'POST',
-            type: 'json',
-            headers: headers,
-            data: JSON.stringify(bodyObj)
-          }).then(function (res) {
-            var files = extractDerivedFiles(res.responseJson || res.data);
-            var best = pickBestWebFile(files);
-            return {
-              ok: res.ok && files.length > 0,
-              derivedOutputFound: res.ok && files.length > 0,
-              status: res.status,
-              referenceId: referenceId,
-              representationId: repId,
-              representationType: repType,
-              fileCount: files.length,
-              files: sanitizeReport(files),
-              best: best ? sanitizeReport(best) : null,
-              derivedOutputAvailable: files.length > 0,
-              blocker: files.length ? '' : 'No derived output available for this representation',
-              requiredAdminAction: files.length
-                ? ''
-                : 'Enable/generate derived output for web visualization',
-              error: res.ok ? (files.length ? '' : 'fileCount=0') : res.wafMessage || res.error,
-              url: url,
-              method: 'POST'
-            };
+      (function tryNext(i) {
+        if (i >= candidates.length) {
+          return Promise.resolve({
+            ok: false,
+            derivedOutputFound: false,
+            status: 200,
+            referenceId: referenceId,
+            fileCount: 0,
+            error: 'fileCount=0',
+            attempts: candidates.map(function (c) {
+              return c.label + ':' + c.type;
+            }),
+            requiredAdminAction: 'Enable/generate derived output for web visualization',
+            blocker: 'No derived output available for any representation candidate'
           });
+        }
+        var c = candidates[i];
+        return locateDerivedOutputsOnce(c.id, c.type, referenceId).then(function (res) {
+          if (res.derivedOutputFound) return res;
+          return tryNext(i + 1);
         });
-      }),
+      })(0),
       REQUEST_TIMEOUT_MS,
       'locateDerivedOutputs'
     );
@@ -1716,6 +1960,9 @@
     request: request,
     getCsrf: getCsrf,
     getEngItem: getEngItem,
+    searchEngItems: searchEngItems,
+    resolveEngItemRootId: resolveEngItemRootId,
+    isDsengHexId: isDsengHexId,
     expandEngItem: expandEngItem,
     getEngItemRepresentations: getEngItemRepresentations,
     find3DShapeOrRep: find3DShapeOrRep,

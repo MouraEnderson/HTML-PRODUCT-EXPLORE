@@ -100,13 +100,31 @@ O relatório `expandMatrix[]` indica **qual combinação passou ou falhou** (HTT
 
 ---
 
-## Evidência conhecida no tenant (2026-06)
+## Evidência conhecida no tenant (2026-06-11)
+
+| Etapa | Status | Notas |
+|-------|--------|-------|
+| WAFData no frame | ✅ | `authenticatedRequest`, CSRF 200, SecurityContext OK |
+| GET `dseng:EngItem/prd-*` | ❌ **404** | Explorer expõe `prd-R1132100929518-01103695` — **não usar como rootId** |
+| UQL `name:prd-R1132100929518-01103695` | ✅ 200 | → `63FC553465A62400699E0792000086AB` |
+| UQL `label:"CJ MESA 4BCS VP TOP 3DX"` | ✅ 200 | → mesmo dseng id |
+| GET root dseng | ✅ 200 | `63FC553465A62400699E0792000086AB` |
+| POST expand `official-dseng-v1+sc+csrf` | ✅ 200 | **13 rows** — variante vencedora |
+| POST expand em candidato errado (`8EA67E9…`) | ❌ 403 | expand só no root correto |
+| dsdo Locate | ⚠️ 200 fileCount=0 | admin: gerar Derived Output web |
+| GetNextStates invoke | ❌ 404 | read-only via GET state OK; write bloqueado no tenant |
+
+**Implementação:** `window.__waf3dxClient.resolveEngItemRootId({ physicalId, title })` resolve prd→dseng antes do expand. Sync Explorer dispara automaticamente.
+
+---
+
+## Evidência anterior (2026-06 — pré-UQL)
 
 | Etapa | Status observado | Notas |
 |-------|------------------|-------|
 | WAFData no frame | ✅ presente | `window.__bomWafProbe` / `WAFData.authenticatedRequest` |
 | GET root | _validar no 3DDashboard_ | esperado 200 se SecurityContext OK |
-| POST expand | ❌ **403** reportado | stack WAFData/Csrf.js — matriz deve identificar combinação vencedora ou confirmar bloqueio de role |
+| POST expand | ❌ **403** reportado (antes do fix CSRF/SC) | matriz identificou `official-dseng-v1+sc+csrf` |
 | Render CAS | ❌ não é caminho principal | `/authcheck` falha tenant CAS |
 
 **Bloqueio provável em 403 expand:** permissão PLM (role/collab space), SecurityContext incorreto para POST, ou política Web Page Reader. O diagnóstico deve apontar a variante exata — não esconder 403.
