@@ -5,7 +5,7 @@
   var GH = typeof w.__BOM_GH_BASE__ === 'string' ? w.__BOM_GH_BASE__ : 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
   var BOM_BUILD = w.__BOM_WIDGET_BUILD__ || 'bom20260617d';
   var BASE_BUILD = w.__BOM_BASE_BUILD__ || 'bom20260607a';
-  var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'waf3dx20260620c';
+  var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'waf3dx20260620e';
 
   w.__BOM_EXPECTED_BUILD__ = BOM_BUILD;
   w.__BOM_RUNTIME_BUILD__ = BOM_BUILD;
@@ -178,6 +178,9 @@
   }
 
   function wireDiagnosticToggle() {
+    if (w.__waf3dxClient && w.__waf3dxClient.installExecutorUi) {
+      w.__waf3dxClient.installExecutorUi();
+    }
     if (w.__waf3dxClient && w.__waf3dxClient.installDiagnosticUi) {
       w.__waf3dxClient.installDiagnosticUi();
     }
@@ -186,8 +189,7 @@
   function scheduleDiagnosticUiInstall() {
     wireDiagnosticToggle();
     function tryInstall(attempt) {
-      if (w.__waf3dxClient && w.__waf3dxClient.installDiagnosticUi) {
-        w.__waf3dxClient.installDiagnosticUi();
+      if (w.__waf3dxClient && (w.__waf3dxClient.installExecutorUi || w.__waf3dxClient.installDiagnosticUi)) {
         wireDiagnosticToggle();
         return;
       }

@@ -1178,13 +1178,21 @@
                 };
               }
               var format = s(file.format || guessFormatFromName(file.fileName));
+              var buf = toArrayBuffer(binRes.data);
+              var byteLength = contentByteLength(binRes.data);
               return {
                 ok: true,
                 status: 200,
                 format: format,
                 fileName: s(file.fileName),
                 content: binRes.data,
-                recommendation: 'Load content in Three.js viewer — blob URL must be created by caller',
+                arrayBuffer: buf,
+                byteLength: byteLength,
+                recommendation: isWebViewFormat(format)
+                  ? 'Load content in Three.js viewer via blob URL'
+                  : format === 'STEP'
+                    ? 'STEP downloaded — convertGeometryIfNeeded required'
+                    : 'Format may require conversion before Three.js',
                 viewerRenderedRealModel: false
               };
             });
@@ -1203,7 +1211,494 @@
     if (name.indexOf('.OBJ') >= 0) return 'OBJ';
     if (name.indexOf('.STL') >= 0) return 'STL';
     if (name.indexOf('.3DXML') >= 0) return '3DXML';
+    if (name.indexOf('.STEP') >= 0 || name.indexOf('.STP') >= 0) return 'STEP';
     return '';
+  }
+
+  var WEB_VIEW_FORMATS = ['GLB', 'GLTF', 'OBJ', 'STL'];
+
+  function isWebViewFormat(format) {
+    format = s(format).toUpperCase();
+    return WEB_VIEW_FORMATS.indexOf(format) >= 0;
+  }
+
+  function pickStepFile(files) {
+    files = files || [];
+    var i;
+    for (i = 0; i < files.length; i++) {
+      var f = files[i];
+      var fmt = s(f.format || guessFormatFromName(f.fileName)).toUpperCase();
+      if (fmt === 'STEP' || fmt === 'STP' || /\.step$|\.stp$/i.test(s(f.fileName))) return f;
+    }
+    return null;
+  }
+
+  function toArrayBuffer(content) {
+    if (!content) return null;
+    if (content instanceof ArrayBuffer) return content;
+    if (ArrayBuffer.isView(content)) return content.buffer;
+    if (typeof content === 'string') {
+      try {
+        var bin = atob(content);
+        var len = bin.length;
+        var bytes = new Uint8Array(len);
+        var i;
+        for (i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+        return bytes.buffer;
+      } catch (e0) {
+        var enc = new TextEncoder();
+        return enc.encode(content).buffer;
+      }
+    }
+    return null;
+  }
+
+  function contentByteLength(content) {
+    if (!content) return 0;
+    if (typeof content === 'string') return content.length;
+    if (content.byteLength != null) return content.byteLength;
+    if (content.length != null) return content.length;
+    return 0;
+  }
+
+  function downloadBinaryUrl(downloadUrl, options) {
+    options = options || {};
+    return wafRequest(downloadUrl, {
+      method: options.method || 'GET',
+      type: options.type || 'text',
+      headers: options.headers || {}
+    }).then(function (res) {
+      if (!res.ok) {
+        return {
+          ok: false,
+          status: res.status,
+          error: res.error || res.wafMessage || 'Binary download failed',
+          method: options.method || 'GET',
+          endpoint: '(FCS ticket URL omitida)'
+        };
+      }
+      var buf = toArrayBuffer(res.data);
+      return {
+        ok: true,
+        status: res.status || 200,
+        content: res.data,
+        arrayBuffer: buf,
+        byteLength: contentByteLength(res.data),
+        method: options.method || 'GET'
+      };
+    });
+  }
+
+  function getRepresentations(id, options) {
+    return getEngItemRepresentations(id, options);
+  }
+
+  function find3DGeometrySource(id, options) {
+    options = options || {};
+    id = s(id || options.id || TAMPO_ID);
+    var evidence = [];
+    return withTimeout(
+      find3DShapeOrRep(id, options)
+        .then(function (rep) {
+          evidence.push(
+            rep.representationFound
+              ? 'find3DShapeOrRep PASS ' + rep.representationType
+              : 'find3DShapeOrRep FAIL — ' + (rep.error || 'no representation')
+          );
+          if (!rep.representationFound) {
+            return {
+              ok: false,
+              lineClickReal: true,
+              representationFound: false,
+              derivedOutputFound: false,
+              geometrySourceFound: false,
+              referenceId: id,
+              evidence: evidence,
+              blocker: rep.error || 'No 3DShape/VPMRepReference found',
+              recommendation: rep.recommendation
+            };
+          }
+          return locateDerivedOutputs(rep).then(function (derived) {
+            evidence.push(
+              derived.derivedOutputFound
+                ? 'dsdo Locate fileCount=' + derived.fileCount + ' format=' + s((derived.best && derived.best.format) || '')
+                : 'dsdo Locate fileCount=0'
+            );
+            var stepFile = pickStepFile(derived.files || []);
+            var webFile = derived.best && isWebViewFormat(derived.best.format || guessFormatFromName(derived.best.fileName)) ? derived.best : null;
+            if (webFile) {
+              return {
+                ok: true,
+                lineClickReal: true,
+                representationFound: true,
+                derivedOutputFound: true,
+                geometrySourceFound: true,
+                format: s(webFile.format || guessFormatFromName(webFile.fileName)).toUpperCase(),
+                path: 'derived-web-direct',
+                referenceId: id,
+                representation: sanitizeReport(rep),
+                derivedOutput: sanitizeReport(derived),
+                file: sanitizeReport(webFile),
+                evidence: evidence,
+                recommendation: 'Download derived ' + webFile.format + ' and render in Three.js'
+              };
+            }
+            if (stepFile) {
+              return {
+                ok: true,
+                lineClickReal: true,
+                representationFound: true,
+                derivedOutputFound: true,
+                geometrySourceFound: true,
+                format: 'STEP',
+                path: 'derived-step-conversion',
+                referenceId: id,
+                representation: sanitizeReport(rep),
+                derivedOutput: sanitizeReport(derived),
+                file: sanitizeReport(stepFile),
+                stepAvailable: true,
+                evidence: evidence,
+                recommendation: 'STEP available — run convertGeometryIfNeeded after download'
+              };
+            }
+            return {
+              ok: false,
+              lineClickReal: true,
+              representationFound: true,
+              derivedOutputFound: false,
+              geometrySourceFound: false,
+              referenceId: id,
+              representation: sanitizeReport(rep),
+              derivedOutput: sanitizeReport(derived),
+              evidence: evidence,
+              blocker: derived.blocker || 'No downloadable or convertible geometry source found',
+              requiredAdminAction: derived.requiredAdminAction,
+              recommendation: derived.requiredAdminAction || 'Enable GLB/OBJ/STL or STEP derived format in Platform Manager'
+            };
+          });
+        }),
+      REQUEST_TIMEOUT_MS * 2,
+      'find3DGeometrySource'
+    );
+  }
+
+  function downloadGeometry(target, options) {
+    options = options || {};
+    target = target || {};
+    if (target.path === 'derived-step-conversion' || (target.file && pickStepFile([target.file]))) {
+      var merged = target.derivedOutput || target;
+      merged.best = target.file || merged.best;
+      return downloadDerivedOutput(merged, options).then(function (dl) {
+        dl.format = s(dl.format || 'STEP').toUpperCase();
+        dl.stepAvailable = dl.ok && dl.byteLength > 0;
+        dl.path = 'derived-step-conversion';
+        return dl;
+      });
+    }
+    if (target.derivedOutput && target.derivedOutput.best) {
+      return downloadDerivedOutput(target.derivedOutput, options);
+    }
+    if (target.best || target.file) {
+      return downloadDerivedOutput(target, options);
+    }
+    return find3DGeometrySource(target.referenceId || target.id || TAMPO_ID).then(function (src) {
+      if (!src.geometrySourceFound) {
+        return {
+          ok: false,
+          error: src.blocker || 'geometry source not found',
+          evidence: src.evidence || [],
+          recommendation: src.recommendation
+        };
+      }
+      return downloadGeometry(src, options);
+    });
+  }
+
+  function convertGeometryIfNeeded(file, options) {
+    options = options || {};
+    file = file || {};
+    var format = s(file.format || guessFormatFromName(file.fileName)).toUpperCase();
+    var byteLength = n(file.byteLength) || contentByteLength(file.content || file.arrayBuffer);
+    if (isWebViewFormat(format)) {
+      return Promise.resolve({
+        ok: true,
+        conversionOk: true,
+        conversionRequired: false,
+        format: format,
+        byteLength: byteLength,
+        blobUrl: file.blobUrl || '',
+        recommendation: 'Web-viewable format — render directly in Three.js'
+      });
+    }
+    if (format === 'STEP' || format === 'STP') {
+      if (!byteLength) {
+        return Promise.resolve({
+          ok: false,
+          stepAvailable: false,
+          conversionOk: false,
+          format: 'STEP',
+          blocker: 'STEP file empty or not downloaded',
+          evidence: ['STEP unavailable — byteLength=0'],
+          recommendation: 'Run downloadGeometry first'
+        });
+      }
+      var converterUrl = s((cfg().STEP_GEOMETRY_CONVERTER_URL || cfg().GEOMETRY_CONVERTER_URL || '').trim());
+      if (converterUrl) {
+        return withTimeout(
+          (function () {
+            try {
+              var buf = file.arrayBuffer || toArrayBuffer(file.content);
+              var blob = new Blob([buf], { type: 'application/step' });
+              var fd = new FormData();
+              fd.append('file', blob, s(file.fileName || 'model.step'));
+              fd.append('targetFormat', 'glb');
+              return fetch(converterUrl, { method: 'POST', body: fd })
+                .then(function (res) {
+                  return res.arrayBuffer().then(function (outBuf) {
+                    if (!res.ok) {
+                      return {
+                        ok: false,
+                        stepAvailable: true,
+                        conversionOk: false,
+                        status: res.status,
+                        format: 'STEP',
+                        blocker: 'Converter HTTP ' + res.status,
+                        evidence: ['STEP downloaded byteLength=' + byteLength, 'converter failed'],
+                        recommendation: 'Check STEP_GEOMETRY_CONVERTER_URL service'
+                      };
+                    }
+                    var outBlob = new Blob([outBuf], { type: 'model/gltf-binary' });
+                    return {
+                      ok: true,
+                      stepAvailable: true,
+                      conversionOk: true,
+                      format: 'GLB',
+                      byteLength: outBuf.byteLength,
+                      blobUrl: w.URL.createObjectURL(outBlob),
+                      recommendation: 'STEP converted to GLB via external converter (no session token sent)'
+                    };
+                  });
+                })
+                .catch(function (err) {
+                  return {
+                    ok: false,
+                    stepAvailable: true,
+                    conversionOk: false,
+                    format: 'STEP',
+                    error: sanitizeError(err),
+                    evidence: ['STEP downloaded byteLength=' + byteLength, 'converter exception'],
+                    recommendation: 'Fix STEP_GEOMETRY_CONVERTER_URL or deploy OCCT WASM converter'
+                  };
+                });
+            } catch (eConv) {
+              return Promise.resolve({
+                ok: false,
+                stepAvailable: true,
+                conversionOk: false,
+                format: 'STEP',
+                error: sanitizeError(eConv),
+                evidence: ['STEP downloaded byteLength=' + byteLength],
+                recommendation: 'Configure STEP_GEOMETRY_CONVERTER_URL for STEP→GLB'
+              });
+            }
+          })(),
+          REQUEST_TIMEOUT_MS,
+          'convertGeometryIfNeeded'
+        );
+      }
+      return Promise.resolve({
+        ok: false,
+        stepAvailable: true,
+        conversionOk: false,
+        format: 'STEP',
+        byteLength: byteLength,
+        blocker: 'STEP→mesh converter not configured in widget',
+        evidence: [
+          'STEP downloaded byteLength=' + byteLength,
+          'Tenant has STEP derived rules but no GLB/OBJ in dropdown',
+          'Configure APP_CONFIG.STEP_GEOMETRY_CONVERTER_URL for stateless STEP→GLB'
+        ],
+        recommendation: 'Deploy stateless converter endpoint (file-only upload, no CSRF/cookie) or add GLB derived format in Platform Manager'
+      });
+    }
+    return Promise.resolve({
+      ok: false,
+      conversionOk: false,
+      format: format || 'UNKNOWN',
+      blocker: 'Unsupported geometry format for Three.js viewer',
+      evidence: ['format=' + (format || 'unknown')],
+      recommendation: 'Need GLB/glTF/OBJ/STL derived output or STEP+converter'
+    });
+  }
+
+  function renderGeometryInThree(target, options) {
+    options = options || {};
+    target = target || {};
+    var viewer = w.Bom3DViewer;
+    if (!viewer) {
+      return Promise.resolve({
+        ok: false,
+        viewerRenderedRealModel: false,
+        error: 'Bom3DViewer not loaded',
+        recommendation: 'Ensure bom-3d-viewer.js is loaded in widget runtime'
+      });
+    }
+    var format = s(target.format || options.format).toLowerCase();
+    var blobUrl = s(target.blobUrl);
+    var title = s(options.title || target.title || '');
+    if (blobUrl) {
+      return Promise.resolve(viewer.show({ modelUrl: blobUrl, format: format, title: title })).then(function (rendered) {
+        return {
+          ok: !!rendered,
+          viewerRenderedRealModel: !!rendered,
+          format: format,
+          recommendation: rendered ? 'Real model rendered in Three.js panel' : 'Viewer failed to load blob URL'
+        };
+      });
+    }
+    return downloadGeometry(target, options)
+      .then(function (dl) {
+        if (!dl.ok) {
+          return {
+            ok: false,
+            viewerRenderedRealModel: false,
+            error: dl.error || 'download failed',
+            evidence: dl.evidence || [],
+            recommendation: dl.recommendation
+          };
+        }
+        var buf = dl.arrayBuffer || toArrayBuffer(dl.content);
+        var fmt = s(dl.format || format).toUpperCase();
+        var mime =
+          fmt === 'GLB'
+            ? 'model/gltf-binary'
+            : fmt === 'GLTF'
+              ? 'model/gltf+json'
+              : fmt === 'OBJ'
+                ? 'text/plain'
+                : fmt === 'STL'
+                  ? 'model/stl'
+                  : 'application/octet-stream';
+        var blob = new Blob([buf || dl.content || ''], { type: mime });
+        var url = w.URL.createObjectURL(blob);
+        return convertGeometryIfNeeded({
+          format: fmt,
+          fileName: dl.fileName,
+          content: dl.content,
+          arrayBuffer: buf,
+          byteLength: dl.byteLength,
+          blobUrl: isWebViewFormat(fmt) ? url : ''
+        }).then(function (conv) {
+          var finalUrl = conv.blobUrl || (conv.conversionOk === false && isWebViewFormat(fmt) ? url : conv.blobUrl);
+          if (!conv.conversionOk && !isWebViewFormat(fmt)) {
+            if (viewer.showMessage) {
+              viewer.showMessage(conv.blocker || conv.recommendation || 'Conversão STEP necessária', 'STEP_CONVERSION_REQUIRED');
+            }
+            return {
+              ok: false,
+              viewerRenderedRealModel: false,
+              stepAvailable: conv.stepAvailable,
+              conversionOk: false,
+              format: fmt,
+              evidence: conv.evidence || [],
+              blocker: conv.blocker,
+              recommendation: conv.recommendation
+            };
+          }
+          return Promise.resolve(
+            viewer.show({ modelUrl: finalUrl || url, format: s(conv.format || fmt).toLowerCase(), title: title })
+          ).then(function (rendered) {
+            return {
+              ok: !!rendered,
+              viewerRenderedRealModel: !!rendered,
+              format: conv.format || fmt,
+              conversionOk: conv.conversionOk !== false,
+              recommendation: rendered ? 'Real model rendered in Three.js panel' : 'Viewer load failed'
+            };
+          });
+        });
+      });
+  }
+
+  function testMaturityWriteCandidates(id, options) {
+    options = options || {};
+    id = s(id || options.id || TAMPO_ID);
+    var invokeCandidates = [
+      { name: 'dseng:GetNextStates', kind: 'read-transitions' },
+      { name: 'dseng:ChangeMaturity', kind: 'write' },
+      { name: 'dseng:Promote', kind: 'write' },
+      { name: 'dseng:SetState', kind: 'write' },
+      { name: 'dseng:ChangeState', kind: 'write' },
+      { name: 'dslic:ChangeState', kind: 'write' },
+      { name: 'invoke/dslc:promote', kind: 'write' }
+    ];
+    var testedEndpoints = [];
+    var stateBefore = '';
+
+    function probeInvoke(candidate) {
+      return ensureSpaceUrl().then(function (spaceUrl) {
+        return getCsrf().then(function (csrf) {
+          var invokeUrl = buildEngItemUrl(spaceUrl, id, '/invoke/' + candidate.name);
+          var headers = {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            SecurityContext: getSecurityContextValue()
+          };
+          if (csrf.ok && cachedCsrf && cachedCsrf.value) headers[cachedCsrf.name] = cachedCsrf.value;
+          return wafRequest(invokeUrl, {
+            method: 'POST',
+            type: 'json',
+            headers: headers,
+            data: JSON.stringify({ currentState: stateBefore, state: stateBefore })
+          }).then(function (res) {
+            testedEndpoints.push({
+              invoke: candidate.name,
+              kind: candidate.kind,
+              method: 'POST',
+              endpoint: '/invoke/' + candidate.name,
+              status: res.status,
+              pass: res.ok,
+              error: res.ok ? '' : res.wafMessage || res.error
+            });
+            return res;
+          });
+        });
+      });
+    }
+
+    return withTimeout(
+      getMaturity(id)
+        .then(function (before) {
+          stateBefore = before.current || '';
+          var chain = Promise.resolve();
+          invokeCandidates.forEach(function (c) {
+            chain = chain.then(function () {
+              return probeInvoke(c);
+            });
+          });
+          return chain.then(function () {
+            var readOk = testedEndpoints.some(function (t) {
+              return t.kind === 'read-transitions' && t.pass;
+            });
+            var writeAvailable = testedEndpoints.some(function (t) {
+              return t.kind === 'write' && t.status !== 404 && t.status !== 403;
+            });
+            return {
+              ok: before.maturityReadOk,
+              maturityReadOk: before.maturityReadOk,
+              transitionsLoaded: readOk,
+              stateBefore: stateBefore,
+              testedEndpoints: testedEndpoints,
+              writeEndpointAvailable: writeAvailable,
+              recommendation: readOk
+                ? 'Transitions endpoint responded — write may be possible'
+                : 'GetNextStates unavailable (404) — capture native UI invoke if write required'
+            };
+          });
+        }),
+      REQUEST_TIMEOUT_MS * 2,
+      'testMaturityWriteCandidates'
+    );
   }
 
   function getMaturity(id, options) {
@@ -1607,6 +2102,260 @@
     );
   }
 
+  function runFullValidation(options) {
+    options = options || {};
+    var rootId = s(options.rootId || ROOT_ID);
+    var referenceId = s(options.referenceId || TAMPO_ID);
+    var report = {
+      build: BUILD,
+      url: (w.location && w.location.href) || '',
+      startedAt: new Date().toISOString(),
+      wafAvailable: false,
+      csrfOk: false,
+      canReadRoot: false,
+      expandOk: false,
+      rowsDetected: 0,
+      ebomReady: false,
+      pass: false,
+      steps: [],
+      expandMatrix: [],
+      threeD: {},
+      maturity: {},
+      registry: {},
+      recommendation: '',
+      nextAction: ''
+    };
+
+    function pushStep(step) {
+      report.steps.push(sanitizeReport(step));
+    }
+
+    return withTimeout(
+      detectWafData()
+        .then(function (detect) {
+          report.wafAvailable = !!detect.wafAvailable;
+          pushStep({
+            step: 'WAFData detect',
+            pass: detect.wafAvailable,
+            status: detect.wafAvailable ? 200 : 0,
+            error: detect.error,
+            recommendation: detect.wafAvailable ? 'WAFData OK' : 'Abrir widget no 3DDashboard Web Page Reader'
+          });
+          if (!detect.wafAvailable) {
+            report.nextAction = 'Abrir widget logado no 3DDashboard';
+            report.recommendation = 'FAIL — WAFData indisponível fora do Web Page Reader';
+            report.finishedAt = new Date().toISOString();
+            lastDiagnostic = sanitizeReport(report);
+            w.__lastWaf3dxValidation = lastDiagnostic;
+            w.__lastWaf3dxDiagnostic = lastDiagnostic;
+            return lastDiagnostic;
+          }
+
+          if (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.resolveKnownExplorerRoot) {
+            report.registry = sanitizeReport(
+              w.ProductExplorerSyncProvider.resolveKnownExplorerRoot({
+                physicalId: 'prd-R1132100929518-01103695',
+                title: ROOT_TITLE
+              }) || {}
+            );
+            pushStep({
+              step: 'Explorer registry mapping',
+              pass: !!(report.registry && report.registry.rootId),
+              endpoint: 'EXPLORER_CONTEXT_REGISTRY_KNOWN_ROOT',
+              recommendation: report.registry.rootId
+                ? 'prd→dseng registry OK'
+                : 'Registry mapping missing — check product-explorer-sync-provider'
+            });
+          }
+
+          return runFullDiagnostic({ rootId: rootId, referenceId: referenceId }).then(function (diag) {
+            report.csrfOk = !!diag.csrfOk;
+            report.canReadRoot = !!diag.canReadRoot;
+            report.expandOk = !!diag.expandOk;
+            report.rowsDetected = n(diag.rowsDetected);
+            report.expandMatrix = diag.expandMatrix || [];
+            report.steps = (report.steps || []).concat(diag.steps || []);
+            report.ebomReady = report.wafAvailable && report.csrfOk && report.canReadRoot && report.expandOk && report.rowsDetected >= 5;
+
+            return find3DGeometrySource(referenceId).then(function (geo) {
+              report.threeD = sanitizeReport(geo);
+              pushStep({
+                step: '3D geometry source',
+                pass: !!geo.geometrySourceFound,
+                status: geo.derivedOutputFound ? 200 : 0,
+                error: geo.blocker || geo.error,
+                recommendation: geo.recommendation
+              });
+
+              var threeDPromise = geo.geometrySourceFound
+                ? downloadGeometry(geo)
+                    .then(function (dl) {
+                      report.threeD.download = sanitizeReport({
+                        ok: dl.ok,
+                        format: dl.format,
+                        byteLength: dl.byteLength,
+                        status: dl.status,
+                        error: dl.error
+                      });
+                      if (!dl.ok) return { viewerRenderedRealModel: false, downloadOk: false };
+                      return convertGeometryIfNeeded(dl).then(function (conv) {
+                        report.threeD.conversion = sanitizeReport(conv);
+                        if (conv.conversionOk || isWebViewFormat(dl.format)) {
+                          return renderGeometryInThree(
+                            { blobUrl: conv.blobUrl, format: conv.format || dl.format },
+                            { title: 'Validação ' + referenceId }
+                          );
+                        }
+                        return {
+                          viewerRenderedRealModel: false,
+                          conversionOk: false,
+                          stepAvailable: conv.stepAvailable,
+                          blocker: conv.blocker,
+                          evidence: conv.evidence
+                        };
+                      });
+                    })
+                : Promise.resolve({ viewerRenderedRealModel: false, geometrySourceFound: false });
+
+              return threeDPromise.then(function (renderRes) {
+                report.threeD.viewerRenderedRealModel = !!renderRes.viewerRenderedRealModel;
+                report.threeD.geometrySourceFound = !!geo.geometrySourceFound;
+                report.threeD.lineClickReal = true;
+                pushStep({
+                  step: '3D viewer render',
+                  pass: !!renderRes.viewerRenderedRealModel,
+                  error: renderRes.blocker || renderRes.error,
+                  recommendation: renderRes.recommendation || report.threeD.recommendation
+                });
+
+                return getAllowedMaturityTransitions(referenceId).then(function (mat) {
+                  report.maturity = sanitizeReport(mat);
+                  pushStep({
+                    step: 'Maturity read-only',
+                    pass: mat.maturityReadOk,
+                    transitionsLoaded: mat.transitionsLoaded,
+                    status: mat.status,
+                    error: mat.error,
+                    recommendation: mat.recommendation
+                  });
+
+                  return testMaturityWriteCandidates(referenceId).then(function (matProbe) {
+                    report.maturity.testedEndpoints = matProbe.testedEndpoints;
+                    report.maturity.writeEndpointAvailable = matProbe.writeEndpointAvailable;
+                    pushStep({
+                      step: 'Maturity invoke matrix',
+                      pass: matProbe.writeEndpointAvailable,
+                      error: matProbe.writeEndpointAvailable ? '' : 'All write invokes 403/404',
+                      recommendation: matProbe.recommendation
+                    });
+
+                    if (options.testMaturityWrite && mat.transitions && mat.transitions.length) {
+                      var target = mat.transitions[0];
+                      return changeMaturity(referenceId, { to: target }).then(function (chg) {
+                        report.maturity.changeExecuted = !!chg.changeExecuted;
+                        report.maturity.verifiedByReread = !!chg.verifiedByReread;
+                        report.maturity.stateBefore = chg.stateBefore;
+                        report.maturity.stateAfter = chg.stateAfter;
+                        report.maturity.success = !!chg.success;
+                        pushStep({
+                          step: 'Maturity write + reread',
+                          pass: !!chg.verifiedByReread,
+                          error: chg.error || chg.blocker,
+                          recommendation: chg.recommendation
+                        });
+                        return finalizeValidationReport(report);
+                      });
+                    }
+                    report.maturity.changeExecuted = false;
+                    report.maturity.verifiedByReread = false;
+                    report.maturity.success = mat.maturityReadOk && mat.transitionsLoaded;
+                    return finalizeValidationReport(report);
+                  });
+                });
+              });
+            });
+          });
+        })
+        .catch(function (err) {
+          report.error = sanitizeError(err);
+          report.recommendation = 'FAIL — ' + report.error;
+          report.nextAction = 'Exportar relatório sanitizado e revisar steps';
+          report.finishedAt = new Date().toISOString();
+          lastDiagnostic = sanitizeReport(report);
+          w.__lastWaf3dxValidation = lastDiagnostic;
+          w.__lastWaf3dxDiagnostic = lastDiagnostic;
+          return lastDiagnostic;
+        }),
+      REQUEST_TIMEOUT_MS * 8,
+      'runFullValidation'
+    );
+  }
+
+  function finalizeValidationReport(report) {
+    report.pass =
+      report.wafAvailable &&
+      report.csrfOk &&
+      report.canReadRoot &&
+      report.expandOk &&
+      report.rowsDetected >= 5 &&
+      !!report.threeD.viewerRenderedRealModel &&
+      !!report.maturity.maturityReadOk;
+    if (!report.ebomReady) {
+      report.nextAction = 'Resolver expand (CSRF+SecurityContext) — ver expandMatrix';
+    } else if (!report.threeD.viewerRenderedRealModel) {
+      report.nextAction =
+        report.threeD.stepAvailable
+          ? 'Configurar STEP_GEOMETRY_CONVERTER_URL ou habilitar GLB derived no Platform Manager'
+          : 'Habilitar/gerar derived output web (GLB/OBJ) ou STEP no tenant';
+    } else if (!report.maturity.transitionsLoaded) {
+      report.nextAction = 'Maturidade read OK; write bloqueado — invoke GetNextStates 404 no tenant';
+    } else if (!report.maturity.verifiedByReread) {
+      report.nextAction = 'Transições disponíveis — confirmar mudança real via modal maturidade';
+    } else {
+      report.nextAction = 'Validação completa PASS — E-BOM, 3D e maturidade operacionais';
+    }
+    report.recommendation = report.pass
+      ? 'PASS — validação completa via sessão WAFData'
+      : report.ebomReady
+        ? 'E-BOM OK — ver bloqueios 3D/maturidade nos steps'
+        : 'FAIL parcial — ver steps e expandMatrix';
+    report.finishedAt = new Date().toISOString();
+    lastDiagnostic = sanitizeReport(report);
+    w.__lastWaf3dxValidation = lastDiagnostic;
+    w.__lastWaf3dxDiagnostic = lastDiagnostic;
+    return lastDiagnostic;
+  }
+
+  function exportSanitizedReport() {
+    var report = sanitizeReport(lastDiagnostic || w.__lastWaf3dxValidation || w.__lastWaf3dxDiagnostic || {});
+    var summary = {
+      build: report.build || BUILD,
+      url: (w.location && w.location.href) || '',
+      finishedAt: report.finishedAt || new Date().toISOString(),
+      wafAvailable: report.wafAvailable,
+      csrfOk: report.csrfOk,
+      canReadRoot: report.canReadRoot,
+      expandOk: report.expandOk,
+      rowsDetected: report.rowsDetected,
+      ebomReady: report.ebomReady,
+      threeD: report.threeD || {},
+      maturity: report.maturity || {},
+      registry: report.registry || {},
+      steps: report.steps || [],
+      expandMatrix: (report.expandMatrix || []).slice(0, 20),
+      recommendation: report.recommendation,
+      nextAction: report.nextAction,
+      pass: report.pass
+    };
+    var text = JSON.stringify(summary, null, 2);
+    if (w.navigator && w.navigator.clipboard && w.navigator.clipboard.writeText) {
+      return w.navigator.clipboard.writeText(text).then(function () {
+        return { ok: true, exported: true, bytes: text.length, report: summary };
+      });
+    }
+    return Promise.resolve({ ok: true, exported: false, report: summary });
+  }
+
   function renderDiagnosticPanel(report) {
     report = report || lastDiagnostic || w.__lastWaf3dxDiagnostic;
     var panel = byId('waf3dxDiagnosticPanel');
@@ -1831,6 +2580,246 @@
     return true;
   }
 
+  function renderExecutorPanel(report) {
+    report = report || lastDiagnostic || w.__lastWaf3dxValidation || w.__lastWaf3dxDiagnostic;
+    renderDiagnosticPanel(report);
+    var summary = byId('waf3dxExecutorSummary');
+    if (!summary || !report) return;
+    var ebomPass = report.ebomReady || (report.expandOk && report.rowsDetected >= 5);
+    var threeDPass = report.threeD && report.threeD.viewerRenderedRealModel;
+    var matPass = report.maturity && report.maturity.maturityReadOk;
+    summary.innerHTML =
+      '<div class="bom-waf3dx-exec-summary">' +
+      '<p><strong>Executor 3DX</strong> ' +
+      (report.pass ? '<span class="bom-waf3dx-pass">PASS</span>' : '<span class="bom-waf3dx-fail">FAIL / parcial</span>') +
+      '</p>' +
+      '<ul class="bom-waf3dx-exec-list">' +
+      '<li>E-BOM: ' +
+      (ebomPass ? 'PASS' : 'FAIL') +
+      ' (rows=' +
+      esc(String(report.rowsDetected || 0)) +
+      ')</li>' +
+      '<li>3DView: ' +
+      (threeDPass ? 'PASS' : 'FAIL') +
+      (report.threeD && report.threeD.blocker ? ' — ' + esc(report.threeD.blocker) : '') +
+      '</li>' +
+      '<li>Maturidade read: ' +
+      (matPass ? 'PASS' : 'FAIL') +
+      '</li>' +
+      '<li>Maturidade write: ' +
+      (report.maturity && report.maturity.verifiedByReread ? 'PASS (releitura)' : 'FAIL / não testado') +
+      '</li>' +
+      '</ul>' +
+      '<p class="bom-waf3dx-next-action"><strong>Próxima ação:</strong> ' +
+      esc(report.nextAction || report.recommendation || '') +
+      '</p></div>';
+  }
+
+  function mountExecutorControls(container) {
+    if (!container || container.querySelector('#waf3dxExecutorPanel')) return false;
+    var wrap = document.createElement('div');
+    wrap.id = 'waf3dxExecutorWrap';
+    wrap.className = 'bom-waf3dx-exec-wrap';
+    wrap.innerHTML =
+      '<div id="waf3dxExecutorPanel" class="bom-waf3dx-exec-panel">' +
+      '<p class="bom-waf3dx-exec-title"><strong>Executor 3DX</strong> <span class="bom-waf3dx-exec-hint">validação automatizada via WAFData</span></p>' +
+      '<div class="bom-waf3dx-exec-actions">' +
+      '<button type="button" id="btnWaf3dxRunFullValidation" class="bom-btn bom-btn-primary bom-btn-compact">Executar validação completa</button>' +
+      '<button type="button" id="btnWaf3dxExecEbom" class="bom-btn bom-btn-secondary bom-btn-compact">Testar E-BOM</button>' +
+      '<button type="button" id="btnWaf3dxExec3d" class="bom-btn bom-btn-secondary bom-btn-compact">Testar 3DView</button>' +
+      '<button type="button" id="btnWaf3dxExecMaturity" class="bom-btn bom-btn-secondary bom-btn-compact">Testar maturidade</button>' +
+      '<button type="button" id="btnWaf3dxExportReport" class="bom-btn bom-btn-secondary bom-btn-compact">Exportar relatório sanitizado</button>' +
+      '</div>' +
+      '<div id="waf3dxExecutorSummary"></div>' +
+      '<div id="waf3dxDiagnosticPanel"></div>' +
+      '</div>';
+    container.insertBefore(wrap, container.firstChild);
+    return true;
+  }
+
+  function bindExecutorButton(id, handler, busyText) {
+    var btn = byId(id);
+    if (!btn || btn.__waf3dxExecBound) return;
+    btn.__waf3dxExecBound = true;
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      var prev = btn.textContent;
+      btn.textContent = busyText || 'Executando…';
+      Promise.resolve(handler())
+        .then(function (report) {
+          renderExecutorPanel(report);
+          openDiagnosticModal();
+          setDiagnosticStatus(
+            report.pass
+              ? 'Validação completa PASS'
+              : report.ebomReady
+                ? 'E-BOM OK — ver 3D/maturidade no Executor'
+                : report.recommendation || 'Validação concluída — ver painel',
+            report.pass ? 'ok' : 'error'
+          );
+        })
+        .finally(function () {
+          btn.disabled = false;
+          btn.textContent = prev;
+        });
+    });
+  }
+
+  function installExecutorUi() {
+    try {
+      installGlobalDiagnosticDelegation();
+      ensureAdvancedVisible();
+      ensureDiagnosticModal();
+      var rulesPanel = byId('bomRulesPanel');
+      if (rulesPanel) mountExecutorControls(rulesPanel);
+      var drawer = byId('waf3dxDiagnosticDrawer');
+      if (drawer && !drawer.querySelector('#waf3dxDiagnosticPanel') && !byId('waf3dxDiagnosticPanel')) {
+        mountDiagnosticControls(drawer);
+      }
+      if (byId('waf3dxExecutorUiReady')) return;
+
+      bindExecutorButton(
+        'btnWaf3dxRunFullValidation',
+        function () {
+          return runFullValidation();
+        },
+        'Validando…'
+      );
+
+      bindExecutorButton(
+        'btnWaf3dxExecEbom',
+        function () {
+          return detectWafData().then(function (d) {
+            if (!d.wafAvailable) return { steps: [{ step: 'WAFData', pass: false }], pass: false };
+            return getCsrf().then(function (csrf) {
+              return getEngItem(ROOT_ID).then(function (root) {
+                return expandEngItem(ROOT_ID, { expandDepth: 1 }).then(function (exp) {
+                  var rep = {
+                    wafAvailable: true,
+                    csrfOk: csrf.ok,
+                    canReadRoot: root.canReadRoot,
+                    expandOk: exp.expandOk,
+                    rowsDetected: exp.rowsDetected,
+                    ebomReady: root.canReadRoot && exp.expandOk && exp.rowsDetected >= 5,
+                    pass: root.canReadRoot && exp.expandOk && exp.rowsDetected >= 5,
+                    steps: [
+                      { step: 'CSRF', pass: csrf.ok, status: csrf.status, method: 'GET' },
+                      { step: 'GET root', pass: root.canReadRoot, status: root.status, method: 'GET' },
+                      { step: 'POST expand', pass: exp.expandOk, status: exp.status, method: 'POST', rowsDetected: exp.rowsDetected }
+                    ],
+                    nextAction: exp.expandOk ? 'E-BOM pronto — sincronizar estrutura' : 'Ver expandMatrix no relatório',
+                    recommendation: exp.expandOk ? 'E-BOM OK' : 'Expand blocked'
+                  };
+                  lastDiagnostic = sanitizeReport(rep);
+                  w.__lastWaf3dxValidation = lastDiagnostic;
+                  return lastDiagnostic;
+                });
+              });
+            });
+          });
+        },
+        'Testando E-BOM…'
+      );
+
+      bindExecutorButton(
+        'btnWaf3dxExec3d',
+        function () {
+          return find3DGeometrySource(TAMPO_ID).then(function (geo) {
+            return downloadGeometry(geo).then(function (dl) {
+              return convertGeometryIfNeeded(dl).then(function (conv) {
+                var renderPromise =
+                  conv.conversionOk || isWebViewFormat(dl.format)
+                    ? renderGeometryInThree({ blobUrl: conv.blobUrl, format: conv.format || dl.format }, { title: 'Tampo teste' })
+                    : Promise.resolve({
+                        viewerRenderedRealModel: false,
+                        stepAvailable: conv.stepAvailable,
+                        blocker: conv.blocker,
+                        evidence: conv.evidence
+                      });
+                return renderPromise.then(function (renderRes) {
+                  var out = {
+                    pass: !!renderRes.viewerRenderedRealModel,
+                    threeD: sanitizeReport(
+                      Object.assign({}, geo, {
+                        downloadOk: dl.ok,
+                        conversion: conv,
+                        viewerRenderedRealModel: renderRes.viewerRenderedRealModel
+                      })
+                    ),
+                    steps: [
+                      { step: 'geometry source', pass: geo.geometrySourceFound, error: geo.blocker },
+                      { step: 'download', pass: dl.ok, status: dl.status },
+                      { step: 'conversion', pass: conv.conversionOk, error: conv.blocker },
+                      { step: 'viewer', pass: renderRes.viewerRenderedRealModel, error: renderRes.blocker }
+                    ],
+                    nextAction: renderRes.viewerRenderedRealModel
+                      ? '3DView OK — clique linha E-BOM'
+                      : conv.recommendation || geo.recommendation
+                  };
+                  lastDiagnostic = sanitizeReport(out);
+                  w.__lastWaf3dxValidation = lastDiagnostic;
+                  return lastDiagnostic;
+                });
+              });
+            });
+          });
+        },
+        'Testando 3DView…'
+      );
+
+      bindExecutorButton(
+        'btnWaf3dxExecMaturity',
+        function () {
+          return getAllowedMaturityTransitions(TAMPO_ID).then(function (mat) {
+            return testMaturityWriteCandidates(TAMPO_ID).then(function (probe) {
+              var out = {
+                pass: mat.maturityReadOk,
+                maturity: sanitizeReport(Object.assign({}, mat, probe)),
+                steps: [
+                  { step: 'read state', pass: mat.maturityReadOk, status: mat.status, method: 'GET' },
+                  { step: 'transitions', pass: mat.transitionsLoaded, method: 'POST' },
+                  { step: 'write matrix', pass: probe.writeEndpointAvailable, error: probe.recommendation }
+                ],
+                nextAction: mat.transitionsLoaded
+                  ? 'Use modal Alterar maturidade para write com releitura'
+                  : 'GetNextStates 404 — write bloqueado no tenant'
+              };
+              lastDiagnostic = sanitizeReport(out);
+              w.__lastWaf3dxValidation = lastDiagnostic;
+              return lastDiagnostic;
+            });
+          });
+        },
+        'Testando maturidade…'
+      );
+
+      bindExecutorButton(
+        'btnWaf3dxExportReport',
+        function () {
+          return exportSanitizedReport().then(function (res) {
+            var bar = byId('statusBar');
+            if (bar) {
+              bar.textContent = res.exported
+                ? 'Relatório sanitizado copiado para clipboard'
+                : 'Relatório em __lastWaf3dxValidation';
+              bar.className = 'bom-st bom-st-ok';
+            }
+            return lastDiagnostic || w.__lastWaf3dxValidation;
+          });
+        },
+        'Exportando…'
+      );
+
+      var ready = document.createElement('span');
+      ready.id = 'waf3dxExecutorUiReady';
+      ready.className = 'bom-hidden';
+      var host = byId('waf3dxExecutorPanel') || document.body;
+      host.appendChild(ready);
+    } catch (e) {
+      log('installExecutorUi error', e && e.message);
+    }
+  }
+
   function installDiagnosticUi() {
     try {
       installGlobalDiagnosticDelegation();
@@ -1965,16 +2954,26 @@
     isDsengHexId: isDsengHexId,
     expandEngItem: expandEngItem,
     getEngItemRepresentations: getEngItemRepresentations,
+    getRepresentations: getRepresentations,
     find3DShapeOrRep: find3DShapeOrRep,
+    find3DGeometrySource: find3DGeometrySource,
     locateDerivedOutputs: locateDerivedOutputs,
     downloadDerivedOutput: downloadDerivedOutput,
+    downloadGeometry: downloadGeometry,
+    convertGeometryIfNeeded: convertGeometryIfNeeded,
+    renderGeometryInThree: renderGeometryInThree,
     getMaturity: getMaturity,
     getAllowedMaturityTransitions: getAllowedMaturityTransitions,
     changeMaturity: changeMaturity,
+    testMaturityWriteCandidates: testMaturityWriteCandidates,
     runFullDiagnostic: runFullDiagnostic,
+    runFullValidation: runFullValidation,
     renderDiagnosticPanel: renderDiagnosticPanel,
+    renderExecutorPanel: renderExecutorPanel,
     exportSanitizedDiagnostic: exportSanitizedDiagnostic,
+    exportSanitizedReport: exportSanitizedReport,
     installDiagnosticUi: installDiagnosticUi,
+    installExecutorUi: installExecutorUi,
     openDiagnosticModal: openDiagnosticModal,
     closeDiagnosticModal: closeDiagnosticModal,
     toggleDiagnosticModal: toggleDiagnosticModal,
@@ -1983,7 +2982,7 @@
     ensureSpaceUrl: ensureSpaceUrl,
     getSecurityContextValue: getSecurityContextValue,
     getLastDiagnostic: function () {
-      return lastDiagnostic || w.__lastWaf3dxDiagnostic || null;
+      return lastDiagnostic || w.__lastWaf3dxValidation || w.__lastWaf3dxDiagnostic || null;
     },
     constants: {
       SPACE_URL: SPACE_URL,
@@ -2000,6 +2999,7 @@
   if (typeof w.__bomWaf3dxClientInstall === 'function') {
     w.__bomWaf3dxClientInstall();
   } else {
+    installExecutorUi();
     installDiagnosticUi();
   }
 })(typeof window !== 'undefined' ? window : this);

@@ -674,58 +674,54 @@
       w.Bom3DViewer.showLoading(active.activeTitle);
     }
     w.__waf3dxClient
-      .find3DShapeOrRep(active.activeReferenceId)
-      .then(function (rep) {
+      .find3DGeometrySource(active.activeReferenceId)
+      .then(function (geo) {
         if (reqId !== activeVisualizationRequestId) return;
-        if (!rep.representationFound) {
+        if (!geo.geometrySourceFound) {
           if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
-            w.Bom3DViewer.showMessage(rep.error || 'Representação 3D não encontrada via dseng expand.', 'NO_REPRESENTATION');
+            w.Bom3DViewer.showMessage(
+              geo.blocker || geo.requiredAdminAction || 'Geometria real não encontrada via WAFData.',
+              geo.derivedOutputFound === false ? 'NO_DERIVED_OUTPUT' : 'NO_REPRESENTATION'
+            );
           }
           return null;
         }
-        return w.__waf3dxClient.locateDerivedOutputs(rep);
+        return w.__waf3dxClient.downloadGeometry(geo);
       })
-      .then(function (derived) {
-        if (reqId !== activeVisualizationRequestId || !derived) return;
-        if (!derived.derivedOutputFound) {
+      .then(function (dl) {
+        if (reqId !== activeVisualizationRequestId || !dl) return;
+        if (!dl.ok) {
           if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
-            w.Bom3DViewer.showMessage(
-              derived.requiredAdminAction || derived.blocker || 'Derived output não disponível (fileCount=0).',
-              'NO_DERIVED_OUTPUT'
-            );
+            w.Bom3DViewer.showMessage(dl.error || 'Download geometria falhou via WAFData.', 'DOWNLOAD_FAILED');
           }
           return;
         }
-        return w.__waf3dxClient.downloadDerivedOutput(derived).then(function (dl) {
+        return w.__waf3dxClient.convertGeometryIfNeeded(dl).then(function (conv) {
           if (reqId !== activeVisualizationRequestId) return;
-          if (!dl.ok) {
-            if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
-              w.Bom3DViewer.showMessage(dl.error || 'DownloadTicket/FCS falhou via WAFData.', 'DOWNLOAD_FAILED');
+          if (conv.conversionOk || /^GLB|GLTF|OBJ|STL$/i.test(s(dl.format))) {
+            var blobUrl = conv.blobUrl;
+            if (!blobUrl && dl.arrayBuffer) {
+              try {
+                var mime = /GLB/i.test(dl.format) ? 'model/gltf-binary' : 'application/octet-stream';
+                blobUrl = w.URL.createObjectURL(new Blob([dl.arrayBuffer], { type: mime }));
+              } catch (eBlob) {}
             }
-            return;
-          }
-          var format = s(dl.format || 'OBJ').toUpperCase();
-          if (format === 'GLB' || format === 'GLTF') {
-            if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
-              w.Bom3DViewer.showMessage(
-                'Arquivo ' +
-                  format +
-                  ' obtido via sessão, mas blob binário requer ajuste de transporte WAFData — veja diagnóstico 3DView.',
-                'BINARY_TRANSPORT_PENDING'
+            if (w.__waf3dxClient.renderGeometryInThree) {
+              return w.__waf3dxClient.renderGeometryInThree(
+                { blobUrl: blobUrl, format: conv.format || dl.format },
+                { title: active.activeTitle }
               );
             }
+            if (w.Bom3DViewer && w.Bom3DViewer.show && blobUrl) {
+              w.Bom3DViewer.show({ modelUrl: blobUrl, format: s(conv.format || dl.format).toLowerCase(), title: active.activeTitle });
+            }
             return;
           }
-          try {
-            var blob = new Blob([dl.content || ''], { type: 'text/plain' });
-            var blobUrl = w.URL.createObjectURL(blob);
-            if (w.Bom3DViewer && w.Bom3DViewer.show) {
-              w.Bom3DViewer.show({ modelUrl: blobUrl, format: format, title: active.activeTitle });
-            }
-          } catch (eBlob) {
-            if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
-              w.Bom3DViewer.showMessage('Falha ao montar blob para viewer: ' + (eBlob.message || eBlob), 'VIEWER_BLOB_FAILED');
-            }
+          if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
+            w.Bom3DViewer.showMessage(
+              conv.blocker || conv.recommendation || 'STEP disponível mas conversão não configurada.',
+              'STEP_CONVERSION_REQUIRED'
+            );
           }
         });
       })
@@ -3410,6 +3406,9 @@
     apply3dxProductDashboardLayout();
     bindTestRootButton();
     bindCopyContextDiagnosticsButton();
+    if (w.__waf3dxClient && w.__waf3dxClient.installExecutorUi) {
+      w.__waf3dxClient.installExecutorUi();
+    }
     if (w.__waf3dxClient && w.__waf3dxClient.installDiagnosticUi) {
       w.__waf3dxClient.installDiagnosticUi();
     }

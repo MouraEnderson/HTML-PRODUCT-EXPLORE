@@ -10,23 +10,27 @@
 
 ## Como abrir o diagnóstico no widget
 
-1. Abrir widget: `widget-v3-08i.html?v=bom20260617d` no 3DDashboard (Web Page Reader).
-2. No topo do widget BOM Analytics:
-   - Botão **Diagnóstico** (sempre visível, ao lado do build pill) → abre painel flutuante **Diagnóstico 3DX**
-   - Ou clique **Avançado** (também visível no topo) → Root Physical ID, profundidade, Testar Root ID
-3. No painel **Diagnóstico 3DX**:
-   - **Testar sessão 3DX** — matriz completa (WAF → CSRF → GET root → POST expand variants → 3D → maturidade)
-   - **Testar E-BOM** — CSRF + GET root + POST expand
-   - **Testar 3DView** — `find3DShapeOrRep` + `dsdo:DerivedOutputs/Locate`
-   - **Testar maturidade read-only** — GET state + `invoke/dseng:GetNextStates`
-   - **Exportar diagnóstico sanitizado** — JSON sem token/CSRF/cookie
+1. Abrir widget: `widget-v3-08i.html?v=bom20260617d&c=waf3dx20260620e` no 3DDashboard (Web Page Reader).
+2. No topo: **Avançado** → painel **Executor 3DX** (validação automatizada).
+3. Botão principal: **Executar validação completa** — E-BOM + 3D + maturidade + registry em uma execução.
+4. Botão **Diagnóstico** (topo) → modal flutuante com testes individuais legados.
+
+### Executor 3DX (Avançado)
+
+| Botão | Função |
+|-------|--------|
+| Executar validação completa | `runFullValidation()` |
+| Testar E-BOM | CSRF + GET root + POST expand |
+| Testar 3DView | `find3DGeometrySource` → download → conversão → Three.js |
+| Testar maturidade | read + matriz invoke write |
+| Exportar relatório sanitizado | `exportSanitizedReport()` |
 
 Console (frame do widget):
 
 ```js
-window.__waf3dxClient.runFullDiagnostic()
+window.__waf3dxClient.runFullValidation()
+window.__waf3dxClient.exportSanitizedReport()
 window.__waf3dxClient.getLastDiagnostic()
-window.__waf3dxClient.exportSanitizedDiagnostic()
 ```
 
 ---
