@@ -7,7 +7,7 @@
 import { chromium } from 'playwright';
 
 const DEFAULT_URL =
-  'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260617d&c=waf3dx20260620e';
+  'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3-08i.html?v=bom20260617d&c=waf3dx20260620g';
 const WIDGET_URL = process.env.WIDGET_URL || DEFAULT_URL;
 
 async function main() {

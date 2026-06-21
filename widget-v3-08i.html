@@ -27,7 +27,7 @@
 
     var BOM_BUILD = 'bom20260617d';
     var BASE_BUILD = 'bom20260607a';
-    var RELEASE_COMMIT = 'waf3dx20260620f';
+    var RELEASE_COMMIT = 'waf3dx20260620g';
 
     window.__BOM_GH_BASE__ = GH;
     window.__BOM_WIDGET_BUILD__ = BOM_BUILD;
@@ -36,6 +36,9 @@
     window.__BOM_EXPECTED_BUILD__ = BOM_BUILD;
     window.__BOM_RUNTIME_BUILD__ = BOM_BUILD;
     window.__BOM_BUILD_ID__ = BOM_BUILD;
+    window.__BOM_DATA_SOURCE__ = 'wafdata-session';
+    window.__BOM_LOADER_MODE__ = 'wafdata-session';
+    window.__BOM_HOTFIX_MODE__ = 'wafdata-session';
 
     (function loadWidgetRuntime() {
       var q = '?v=' + encodeURIComponent(BOM_BUILD) + '&c=' + encodeURIComponent(RELEASE_COMMIT);
@@ -44,13 +47,6 @@
       s.type = 'text/javascript';
       s.charset = 'UTF-8';
       s.src = src;
-      s.onload = function () {
-        var stability = document.createElement('script');
-        stability.type = 'text/javascript';
-        stability.charset = 'UTF-8';
-        stability.src = GH + 'assets/js/bom-root-stability-bom20260617d.js' + q;
-        document.getElementsByTagName('head')[0].appendChild(stability);
-      };
       document.getElementsByTagName('head')[0].appendChild(s);
     })();
   //]]>

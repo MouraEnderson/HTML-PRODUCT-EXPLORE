@@ -13,6 +13,7 @@
   var LEGACY_SKA_SOURCE = 'ska-bom-service';
   var DEFAULT_SPACE_URL = 'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia';
   var WAF_EXPAND_VARIANT = 'official-dseng-v1+sc+csrf';
+  var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'waf3dx20260620g';
   var DEFAULT_DEPTH = 1;
   var SESSION_KEY = '3dx_bom_snapshot_v1';
   var LAST_GOOD_CONTEXT_KEY = 'bomAnalytics:lastGoodContext:bom20260617d';
@@ -1655,6 +1656,7 @@
 
   function loadBomViaWafSession(opts) {
     opts = opts || {};
+    recordWafRuntimeProof('loadBomViaWafSession-start', opts.rootId || '');
     var client = w.__waf3dxClient;
     var syncBtn = byId('btnSyncExplorer');
     var refreshBtn = byId('btnRefreshBom');
@@ -1761,7 +1763,22 @@
               depth: depth,
               expandDepth: depth
             });
-            return applySkaPayloadToUI(payload);
+            return applySkaPayloadToUI(payload).then(function (applied) {
+              var rowCount = getSkaExpectedTotal(payload);
+              recordWafRuntimeProof('loadBomViaWafSession-ok', {
+                rows: rowCount,
+                expandVariant: WAF_EXPAND_VARIANT,
+                rootId: opts.rootId
+              });
+              w.__BOM_WAF_EBOM_RUNTIME__ = w.__BOM_WAF_EBOM_RUNTIME__ || {};
+              w.__BOM_WAF_EBOM_RUNTIME__.rows = rowCount;
+              w.__BOM_WAF_EBOM_RUNTIME__.expandVariant = WAF_EXPAND_VARIANT;
+              w.__BOM_WAF_EBOM_RUNTIME__.lastLoader = 'loadBomViaWafSession';
+              try {
+                console.info('[BOM Analytics] wafdata-session rows=' + rowCount);
+              } catch (eRows) {}
+              return applied;
+            });
           });
             });
         });
@@ -3621,10 +3638,19 @@
   }
 
   function bindSyncButtons() {
-    var syncBtn = byId('btnSyncExplorer');
-    if (syncBtn && !syncBtn.__BOM_SKA_SYNC_BOUND__) {
-      syncBtn.__BOM_SKA_SYNC_BOUND__ = true;
-      syncBtn.addEventListener(
+    reassertWafSessionOwnership();
+    bindSyncButtonsForce();
+  }
+
+  function bindSyncButtonsForce() {
+    function wireButton(id, handler) {
+      var old = byId(id);
+      if (!old || !old.parentNode) return;
+      if (old.__BOM_WAF_SYNC_WIRED__ === RELEASE_COMMIT) return;
+      var clone = old.cloneNode(true);
+      clone.__BOM_WAF_SYNC_WIRED__ = RELEASE_COMMIT;
+      old.parentNode.replaceChild(clone, old);
+      clone.addEventListener(
         'click',
         function (ev) {
           if (ev) {
@@ -3632,26 +3658,85 @@
             ev.stopPropagation();
             if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
           }
-          syncWithProductExplorer().catch(function () {});
+          handler();
         },
         true
       );
     }
-    var refreshBtn = byId('btnRefreshBom');
-    if (refreshBtn && !refreshBtn.__BOM_SKA_REFRESH_BOUND__) {
-      refreshBtn.__BOM_SKA_REFRESH_BOUND__ = true;
-      refreshBtn.addEventListener(
-        'click',
-        function (ev) {
-          if (ev) {
-            ev.preventDefault();
-            ev.stopPropagation();
-            if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
-          }
-          refreshBom().catch(function () {});
-        },
-        true
-      );
+    wireButton('btnSyncExplorer', function () {
+      recordWafRuntimeProof('sync-button', 'syncWithProductExplorer');
+      syncWithProductExplorer().catch(function (err) {
+        recordWafRuntimeProof('sync-error', err && err.message);
+      });
+    });
+    wireButton('btnRefreshBom', function () {
+      recordWafRuntimeProof('refresh-button', 'refreshBom');
+      refreshBom().catch(function (err) {
+        recordWafRuntimeProof('refresh-error', err && err.message);
+      });
+    });
+  }
+
+  function recordWafRuntimeProof(stage, detail) {
+    var proof = w.__BOM_WAF_EBOM_RUNTIME__ || {};
+    proof.build = BUILD;
+    proof.releaseCommit = RELEASE_COMMIT;
+    proof.dataSource = DATA_SOURCE;
+    proof.stage = stage;
+    proof.detail = detail;
+    proof.at = new Date().toISOString();
+    proof.loadViaExplorerSync = w.loadViaExplorerSync === syncWithProductExplorer ? 'syncWithProductExplorer' : String(w.loadViaExplorerSync);
+    proof.refreshBomFromSka = w.refreshBomFromSka === refreshBom ? 'refreshBom' : String(w.refreshBomFromSka);
+    w.__BOM_WAF_EBOM_RUNTIME__ = proof;
+    renderWafRuntimeProof(proof);
+    try {
+      console.info('[BOM Analytics] waf-ebom-runtime', stage, detail || '');
+    } catch (eLog) {}
+  }
+
+  function renderWafRuntimeProof(proof) {
+    proof = proof || w.__BOM_WAF_EBOM_RUNTIME__ || {};
+    var el = byId('wafEbomRuntimeProof');
+    if (!el) return;
+    el.textContent =
+      'cache=' +
+      (proof.releaseCommit || RELEASE_COMMIT) +
+      ' | source=' +
+      (proof.dataSource || DATA_SOURCE) +
+      ' | loader=' +
+      (proof.lastLoader || proof.stage || 'boot') +
+      (proof.rows != null ? ' | rows=' + proof.rows : '') +
+      (proof.expandVariant ? ' | expand=' + proof.expandVariant : '');
+  }
+
+  function mountWafRuntimeProofPanel() {
+    var host = byId('bomRulesPanel');
+    if (!host || host.querySelector('#wafEbomRuntimeProof')) return;
+    var box = document.createElement('div');
+    box.id = 'wafEbomRuntimeProofWrap';
+    box.className = 'bom-waf-ebom-proof-wrap';
+    box.innerHTML =
+      '<p class="bom-waf-ebom-proof-title"><strong>Runtime E-BOM</strong></p>' +
+      '<p id="wafEbomRuntimeProof" class="bom-waf-ebom-proof-line">cache=' +
+      RELEASE_COMMIT +
+      ' | source=wafdata-session | loader=boot</p>';
+    host.insertBefore(box, host.firstChild);
+    recordWafRuntimeProof('boot', 'hotfix-installed');
+  }
+
+  function reassertWafSessionOwnership() {
+    if (!isWafSessionMode()) return;
+    w.__BOM_DATA_SOURCE__ = DATA_SOURCE;
+    w.__BOM_LOADER_MODE__ = DATA_SOURCE;
+    w.__BOM_HOTFIX_MODE__ = DATA_SOURCE;
+    w.loadViaExplorerSync = syncWithProductExplorer;
+    w.refreshBomFromSka = refreshBom;
+    w.loadViaSkaService = syncWithProductExplorer;
+    if (typeof w.__bomRootStabilityLoad === 'function') {
+      w.__bomRootStabilityLoad = function () {
+        recordWafRuntimeProof('blocked-root-stability', 'delegated-to-waf');
+        return syncWithProductExplorer();
+      };
     }
   }
 
@@ -3794,6 +3879,7 @@
         try {
           patchUiLabels();
           bindSyncButtons();
+          reassertWafSessionOwnership();
           var legacy = byId('btnImportPaste');
           if (legacy && legacy.textContent.indexOf('Atualizar estrutura') >= 0) {
             legacy.classList.add('bom-hidden');
@@ -3851,8 +3937,9 @@
     installLabelGuard();
     setTimeout(bindSyncButtons, 400);
     setTimeout(function () {
-      syncBuild();
+      reassertWafSessionOwnership();
       bindSyncButtons();
+      syncBuild();
       patchUiLabels();
       patchPartPreviewForSka();
       if (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.refresh) {
@@ -3870,8 +3957,23 @@
     applyTopbarCompactLabels();
     bindTestRootButton();
     bindCopyContextDiagnosticsButton();
-    setStatus('Build ' + BUILD + ' | SKA BOM Service + resolve-selection', 'ok');
+    mountWafRuntimeProofPanel();
+    reassertWafSessionOwnership();
+    setStatus('Build ' + BUILD + ' | cache ' + RELEASE_COMMIT + ' | wafdata-session', 'ok');
   }
+
+  w.__BOM_ASSERT_WAF_EBOM__ = function () {
+    return {
+      ok: isWafSessionMode(),
+      build: BUILD,
+      releaseCommit: RELEASE_COMMIT,
+      dataSource: w.__BOM_DATA_SOURCE__,
+      loadViaExplorerSync: w.loadViaExplorerSync === syncWithProductExplorer,
+      refreshBomFromSka: w.refreshBomFromSka === refreshBom,
+      runtime: w.__BOM_WAF_EBOM_RUNTIME__ || null,
+      defaultSpaceUrlDefined: typeof DEFAULT_SPACE_URL === 'string' && DEFAULT_SPACE_URL.length > 0
+    };
+  };
 
   w.__bomSkaServiceInstall = install;
   w.fetchBomStructureFromSkaService = fetchBomStructureFromSkaService;

@@ -3165,6 +3165,24 @@ body.ui-clean .main-clean {
   overflow: auto;
 }
 
+.bom-waf-ebom-proof-wrap {
+  margin: 0 0 6px;
+  padding: 4px 0;
+  border-bottom: 1px dashed #d8e0ea;
+}
+
+.bom-waf-ebom-proof-title {
+  margin: 0 0 2px;
+  font-size: 0.62rem;
+}
+
+.bom-waf-ebom-proof-line {
+  margin: 0;
+  font-size: 0.58rem;
+  color: #374151;
+  word-break: break-word;
+}
+
 .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-2 #statusBar {
   margin: 0;
   padding: 2px 6px;

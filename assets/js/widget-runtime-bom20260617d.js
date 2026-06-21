@@ -5,7 +5,10 @@
   var GH = typeof w.__BOM_GH_BASE__ === 'string' ? w.__BOM_GH_BASE__ : 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
   var BOM_BUILD = w.__BOM_WIDGET_BUILD__ || 'bom20260617d';
   var BASE_BUILD = w.__BOM_BASE_BUILD__ || 'bom20260607a';
-  var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'waf3dx20260620f';
+  var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'waf3dx20260620g';
+
+  w.__BOM_DATA_SOURCE__ = w.__BOM_DATA_SOURCE__ || 'wafdata-session';
+  w.__BOM_LOADER_MODE__ = w.__BOM_LOADER_MODE__ || 'wafdata-session';
 
   w.__BOM_EXPECTED_BUILD__ = BOM_BUILD;
   w.__BOM_RUNTIME_BUILD__ = BOM_BUILD;
@@ -58,7 +61,13 @@
 
   function buildPillTitle() {
     var mf = w.__BOM_RELEASE_MANIFEST__;
-    return 'Build ' + BOM_BUILD + '\nCommit ' + (mf && mf.commit ? mf.commit : RELEASE_COMMIT) + '\nHotfix bom-ska-service-hotfix-20260617d.js';
+    return (
+      'Build ' +
+      BOM_BUILD +
+      '\nCache ' +
+      (mf && mf.commit ? mf.commit : RELEASE_COMMIT) +
+      '\nDataSource wafdata-session\nHotfix bom-ska-service-hotfix-20260617d.js'
+    );
   }
 
   function updateBuildLabel() {
