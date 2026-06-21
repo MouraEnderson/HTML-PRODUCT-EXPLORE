@@ -2879,12 +2879,14 @@ body.ui-clean .main-clean {
   grid-row: 1;
   grid-column: 1 / -1;
   min-height: 38px;
-  max-height: 64px;
+  max-height: none;
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 2px 6px !important;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+  z-index: 300;
 }
 
 .bom-layout-page.bom-3dx-product-dashboard > .bom-zone-2 {
@@ -3014,6 +3016,12 @@ body.ui-clean .main-clean {
   max-width: min(92vw, 420px);
   max-height: min(70vh, 520px);
   overflow: auto;
+  z-index: 999998;
+}
+
+.bom-waf3dx-topbar-trigger[aria-expanded='true'] {
+  background: #e8eef5;
+  border-color: #9db4cc;
 }
 
 .bom-waf3dx-topbar-trigger {
@@ -3021,10 +3029,8 @@ body.ui-clean .main-clean {
 }
 
 .bom-waf3dx-drawer {
-  position: absolute;
-  right: 8px;
-  top: calc(100% - 2px);
-  z-index: 120;
+  position: fixed;
+  z-index: 999999;
   min-width: 300px;
   max-width: min(94vw, 440px);
   max-height: min(72vh, 540px);
@@ -3033,7 +3039,7 @@ body.ui-clean .main-clean {
   border: 1px solid var(--bom-border, #d8e0ea);
   border-radius: 10px;
   padding: 10px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
 }
 
 .bom-waf3dx-drawer.bom-hidden {

@@ -1431,6 +1431,19 @@
     return Promise.resolve({ ok: true, exported: false, json: report });
   }
 
+  function positionDiagnosticDrawer(btn, drawer) {
+    if (!btn || !drawer) return;
+    try {
+      var rect = btn.getBoundingClientRect();
+      drawer.style.position = 'fixed';
+      drawer.style.top = Math.round(rect.bottom + 6) + 'px';
+      drawer.style.right = Math.max(8, Math.round(w.innerWidth - rect.right)) + 'px';
+      drawer.style.left = 'auto';
+      drawer.style.bottom = 'auto';
+      drawer.style.maxHeight = Math.max(180, w.innerHeight - rect.bottom - 12) + 'px';
+    } catch (e0) {}
+  }
+
   function bindDiagnosticButton(id, handler, busyText) {
     var btn = byId(id);
     if (!btn || btn.__waf3dxBound) return;
@@ -1442,6 +1455,13 @@
       Promise.resolve(handler())
         .then(function (report) {
           renderDiagnosticPanel(report);
+          var drawer = byId('waf3dxDiagnosticDrawer');
+          var toggle = byId('btnWaf3dxDiagToggle');
+          if (drawer) {
+            drawer.classList.remove('bom-hidden');
+            positionDiagnosticDrawer(toggle, drawer);
+            if (toggle) toggle.setAttribute('aria-expanded', 'true');
+          }
           var bar = byId('statusBar');
           if (bar && report) {
             bar.textContent = report.pass

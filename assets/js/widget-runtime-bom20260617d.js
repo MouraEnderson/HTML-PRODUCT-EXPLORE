@@ -5,7 +5,7 @@
   var GH = typeof w.__BOM_GH_BASE__ === 'string' ? w.__BOM_GH_BASE__ : 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
   var BOM_BUILD = w.__BOM_WIDGET_BUILD__ || 'bom20260617d';
   var BASE_BUILD = w.__BOM_BASE_BUILD__ || 'bom20260607a';
-  var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'waf3dx20260620a';
+  var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'waf3dx20260620b';
 
   w.__BOM_EXPECTED_BUILD__ = BOM_BUILD;
   w.__BOM_RUNTIME_BUILD__ = BOM_BUILD;
@@ -177,6 +177,19 @@
     step(0);
   }
 
+  function positionDiagnosticDrawer(btn, drawer) {
+    if (!btn || !drawer) return;
+    try {
+      var rect = btn.getBoundingClientRect();
+      drawer.style.position = 'fixed';
+      drawer.style.top = Math.round(rect.bottom + 6) + 'px';
+      drawer.style.right = Math.max(8, Math.round(w.innerWidth - rect.right)) + 'px';
+      drawer.style.left = 'auto';
+      drawer.style.bottom = 'auto';
+      drawer.style.maxHeight = Math.max(180, w.innerHeight - rect.bottom - 12) + 'px';
+    } catch (e0) {}
+  }
+
   function wireDiagnosticToggle() {
     var btn = uiRoot().querySelector ? uiRoot().querySelector('#btnWaf3dxDiagToggle') : null;
     var drawer = uiRoot().querySelector ? uiRoot().querySelector('#waf3dxDiagnosticDrawer') : null;
@@ -191,14 +204,23 @@
         w.__waf3dxClient.installDiagnosticUi();
       }
       if (!drawer) drawer = uiRoot().querySelector('#waf3dxDiagnosticDrawer');
-      if (!drawer) return;
-      drawer.classList.toggle('bom-hidden');
-      btn.setAttribute('aria-expanded', drawer.classList.contains('bom-hidden') ? 'false' : 'true');
-      if (!drawer.classList.contains('bom-hidden') && !w.__waf3dxClient) {
-        drawer.innerHTML =
-          '<p style="margin:0;font-size:.72rem;color:#b42318">Cliente WAF3DX ainda não carregou. Aguarde ou recarregue o widget (build ' +
-          BOM_BUILD +
-          ').</p>';
+      if (!drawer) {
+        setBar('Painel Diagnóstico 3DX não encontrado no DOM.', 'error');
+        return;
+      }
+      var willOpen = drawer.classList.contains('bom-hidden');
+      if (willOpen) {
+        drawer.classList.remove('bom-hidden');
+        positionDiagnosticDrawer(btn, drawer);
+        btn.setAttribute('aria-expanded', 'true');
+        if (!drawer.querySelector('#waf3dxDiagnosticPanel') && !w.__waf3dxClient) {
+          drawer.innerHTML =
+            '<p style="margin:0;font-size:.72rem;color:#b42318">Cliente WAF3DX ainda não carregou. Aguarde 2s e clique de novo.</p>';
+        }
+        setBar('Diagnóstico 3DX aberto — escolha um teste abaixo.', 'info');
+      } else {
+        drawer.classList.add('bom-hidden');
+        btn.setAttribute('aria-expanded', 'false');
       }
     });
   }

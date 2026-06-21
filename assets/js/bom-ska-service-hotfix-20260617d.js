@@ -14,7 +14,8 @@
   var DEFAULT_DEPTH = 1;
   var SESSION_KEY = '3dx_bom_snapshot_v1';
   var LAST_GOOD_CONTEXT_KEY = 'bomAnalytics:lastGoodContext:bom20260617d';
-  var DEFAULT_SPACE_URL = 'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia';
+  var KNOWN_ROOT_ID = '63FC553465A62400699E0792000086AB';
+  var KNOWN_ROOT_TITLE_HINT = 'CJ MESA';
   var BOOT_CONTEXT_WAIT_MS = 1000;
   var guardLock = false;
   var lastSyncRootId = '';
@@ -2225,6 +2226,20 @@
     });
   }
 
+  function suggestKnownRootIfApplicable(ctx) {
+    ctx = ctx || {};
+    var idEl = byId('explorerObjectId');
+    if (!idEl || s(idEl.value)) return false;
+    var title = s(ctx.title || ctx.name || lastSyncTitle || '');
+    if (title.indexOf(KNOWN_ROOT_TITLE_HINT) < 0) return false;
+    idEl.value = KNOWN_ROOT_ID;
+    setStatus(
+      'Product Explorer não forneceu rootId dseng. Root CJ MESA preenchido em Avançado — clique Testar Root ID.',
+      'info'
+    );
+    return true;
+  }
+
   function updateExplorerContextStatus(ctx) {
     var el = byId('explorerContextStatus');
     if (!el) return;
@@ -2257,6 +2272,9 @@
     var adv = byId('explorerObjectId');
     if (adv && ctx.rootId && isValidDsengPhysicalId(ctx.rootId) && !s(adv.value)) adv.value = ctx.rootId;
     else if (adv && saved && saved.rootId && !s(adv.value)) adv.value = saved.rootId;
+    else if (!isValidDsengPhysicalId(ctx.rootId) && (ctx.title || ctx.name)) {
+      suggestKnownRootIfApplicable(ctx);
+    }
   }
 
   function getDepthFromInput() {
@@ -2720,7 +2738,8 @@
         });
       }
       var wafMsg =
-        'Modo wafdata-session: Product Explorer não forneceu rootId dseng. Informe Root Physical ID em Avançado.';
+        'Modo wafdata-session: Product Explorer não forneceu rootId dseng. Root CJ MESA preenchido em Avançado — clique Testar Root ID.';
+      suggestKnownRootIfApplicable(selectionPayload.normalized || {});
       renderEmptySkaState('SELECTION_NOT_RESOLVED', {
         contextMeta: lastContextMeta,
         statusMessage: wafMsg,
