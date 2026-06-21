@@ -558,8 +558,18 @@
     replaceButton('btnRefreshBom', function () { loadWithResolution({ reason: 'manual-refresh', preferSaved: true, preferKnown: true }); });
     replaceButton('btnTestRootId', function () { loadWithResolution({ reason: 'advanced-root', forceManual: true, preferKnown: true }); });
   }
+  function isWafSessionMode() {
+    return w.__BOM_DATA_SOURCE__ === 'wafdata-session' || w.__BOM_LOADER_MODE__ === 'wafdata-session';
+  }
+
   function install() {
     if (installed) return;
+    if (isWafSessionMode()) {
+      installed = true;
+      w.__BOM_ROOT_STABILITY_REV__ = REV + '-waf-delegated';
+      w.__BOM_ROOT_STABILITY_MODE__ = 'wafdata-session-delegated';
+      return;
+    }
     if (!byId('bomTable') || !w.BomSnapshot || !w.BomSnapshot.applyPayload) return;
     installed = true;
     w.__BOM_ROOT_STABILITY_BUILD__ = BUILD;

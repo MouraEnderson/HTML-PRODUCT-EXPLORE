@@ -11,6 +11,8 @@
   var LIFECYCLE_CHANGE_URL = 'https://bom-resolver.onrender.com/api/3dx/lifecycle/change-maturity';
   var DATA_SOURCE = 'wafdata-session';
   var LEGACY_SKA_SOURCE = 'ska-bom-service';
+  var DEFAULT_SPACE_URL = 'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia';
+  var WAF_EXPAND_VARIANT = 'official-dseng-v1+sc+csrf';
   var DEFAULT_DEPTH = 1;
   var SESSION_KEY = '3dx_bom_snapshot_v1';
   var LAST_GOOD_CONTEXT_KEY = 'bomAnalytics:lastGoodContext:bom20260617d';
@@ -201,12 +203,49 @@
     return false;
   }
 
+  function resolveKnownExplorerRoot(ctx) {
+    ctx = ctx || {};
+    if (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.resolveKnownExplorerRoot) {
+      return w.ProductExplorerSyncProvider.resolveKnownExplorerRoot(ctx);
+    }
+    if (isValidDsengPhysicalId(ctx.rootId)) return null;
+    var title = s(ctx.title || ctx.name || ctx.productName);
+    if (title.indexOf(KNOWN_ROOT_TITLE_HINT) >= 0) {
+      return {
+        rootId: KNOWN_ROOT_ID,
+        selectedId: KNOWN_ROOT_ID,
+        physicalId: s(ctx.physicalId),
+        title: title || KNOWN_ROOT_TITLE_HINT,
+        source: 'EXPLORER_CONTEXT_REGISTRY_KNOWN_ROOT',
+        selectionMode: 'known-root-registry',
+        expansionAvailable: true
+      };
+    }
+    return null;
+  }
+
   function normalizeCandidateRootId(ctx, manualRootId) {
     ctx = ctx || {};
     var candidate = s(manualRootId);
     var source = 'MISSING';
     var title = s(ctx.title || ctx.productName || ctx.rootName);
-    if (!candidate) candidate = s(ctx.rootId || ctx.selectedId);
+    if (!candidate && isValidDsengPhysicalId(ctx.rootId)) candidate = s(ctx.rootId);
+    if (!candidate) {
+      var known = resolveKnownExplorerRoot(ctx);
+      if (known && isValidDsengPhysicalId(known.rootId)) {
+        return {
+          ok: true,
+          rootId: known.rootId,
+          reason: 'VALID',
+          source: known.source || 'EXPLORER_CONTEXT_REGISTRY_KNOWN_ROOT',
+          validationStatus: 'VALID',
+          title: known.title || title,
+          candidateRootId: known.physicalId || known.rootId,
+          rawType: 'known-root-registry'
+        };
+      }
+    }
+    if (!candidate) candidate = s(ctx.selectedId);
     if (candidate && !manualRootId) {
       if (ctx.source === 'PRODUCT_EXPLORER_CONTEXT' || ctx.path === 'B') source = 'PlatformAPI';
       else if (ctx.source === 'EXPLORER_CONTEXT') source = 'ExplorerContext';
@@ -278,11 +317,15 @@
     });
   }
 
-  function renderEmptyTableMessage(msg) {
+  function renderEmptyTableMessage(msg, options) {
+    options = options || {};
+    var displayMsg = options.showTechnicalError
+      ? msg || 'Sem dados sincronizados.'
+      : 'Sem dados sincronizados. Use Sincronizar com Product Explorer ou Avançado.';
     var tbody = byId('bomTable') && byId('bomTable').querySelector('tbody');
     if (tbody) {
       tbody.innerHTML =
-        '<tr class="bom-empty-row"><td colspan="12">' + escapeHtml(msg || 'Sem dados sincronizados.') + '</td></tr>';
+        '<tr class="bom-empty-row"><td colspan="12">' + escapeHtml(displayMsg) + '</td></tr>';
     }
     updateTablePager(0);
     var tableLbl = byId('tableProductLabel');
@@ -434,14 +477,20 @@
     renderEmptyKpiPlaceholders();
     renderEmptyTableMessage(
       details.tableMessage ||
-        'Selecione uma estrutura no Product Explorer e clique Sincronizar.'
+        'Selecione uma estrutura no Product Explorer e clique Sincronizar.',
+      { showTechnicalError: false }
     );
     var lbl = byId('selectionLabel');
     if (lbl && details.title) lbl.textContent = details.title;
     var banner = byId('syncBanner');
     if (banner) {
       banner.classList.remove('bom-hidden');
-      banner.innerHTML = escapeHtml(details.bannerMessage || 'Sem dados sincronizados via SKA BOM Service.');
+      banner.innerHTML = escapeHtml(
+        details.bannerMessage ||
+          (details.statusMessage
+            ? details.statusMessage
+            : 'Sem dados sincronizados via wafdata-session.')
+      );
     }
     renderContextDiagnostics(details.contextMeta || lastContextMeta, reason);
     if (details.errorCode === 'ROOT_NOT_FOUND') {
@@ -1518,11 +1567,49 @@
   }
 
   function isWafSessionMode() {
-    return w.__BOM_DATA_SOURCE__ === 'wafdata-session' || DATA_SOURCE === 'wafdata-session';
+    return (
+      w.__BOM_DATA_SOURCE__ === 'wafdata-session' ||
+      w.__BOM_LOADER_MODE__ === 'wafdata-session' ||
+      DATA_SOURCE === 'wafdata-session'
+    );
   }
 
   function isLegacySkaMode() {
     return w.__BOM_DATA_SOURCE__ === LEGACY_SKA_SOURCE;
+  }
+
+  function normalizeWafExpandPayload(payload, rootId) {
+    if (typeof w.normalizeExpandItemPayload === 'function') {
+      var normalized = w.normalizeExpandItemPayload(payload);
+      if (normalized && normalized.rows && normalized.rows.length) return normalized;
+    }
+    payload = payload || {};
+    var members = payload.member || payload.data || (payload.data && payload.data.member) || [];
+    if (!Array.isArray(members)) members = [];
+    var rows = [];
+    var seen = {};
+    members.forEach(function (m, idx) {
+      if (!m) return;
+      var refId = s(m.id || m.physicalid || m.physicalId);
+      if (!refId || seen[refId]) return;
+      seen[refId] = true;
+      rows.push({
+        rowKey: refId,
+        level: refId === s(rootId) ? 0 : 1,
+        parentReferenceId: refId === s(rootId) ? '' : s(rootId),
+        referenceId: refId,
+        physicalId: s(m.name || m.physicalid || refId),
+        title: s(m.title || m.name || refId),
+        name: s(m.name || m.title || refId),
+        revision: s(m.revision),
+        owner: s(m.owner),
+        maturity: s(m.state || m.maturity),
+        state: s(m.state || m.maturity),
+        type: s(m.type || 'VPMReference'),
+        source: 'wafdata-expand'
+      });
+    });
+    return { rows: rows, visualRowsCount: rows.length, includesRoot: true, fallback: true };
   }
 
   function buildWafPayloadFromExpand(opts, rootRes, expRes, normalized) {
@@ -1545,9 +1632,16 @@
       expandDepth: depth,
       diagnostics: {
         status: rows.length ? 'OK' : 'EMPTY',
+        expandVariant: WAF_EXPAND_VARIANT,
+        rawRows: expRes.rowsDetected || rows.length,
         endpointsUsed: [
           { method: 'GET', endpoint: '/dseng:EngItem/' + opts.rootId, status: rootRes.status },
-          { method: 'POST', endpoint: '/dseng:EngItem/' + opts.rootId + '/expand', status: expRes.status }
+          {
+            method: 'POST',
+            endpoint: '/dseng:EngItem/' + opts.rootId + '/expand',
+            status: expRes.status,
+            variant: WAF_EXPAND_VARIANT
+          }
         ],
         durationMs: 0,
         warnings:
@@ -1619,14 +1713,14 @@
           if (!rootRes.canReadRoot) {
             throw new Error('GET root falhou HTTP ' + rootRes.status + ': ' + (rootRes.error || ''));
           }
-          return client.expandEngItem(opts.rootId, { expandDepth: depth }).then(function (expRes) {
+          return client.expandEngItem(opts.rootId, {
+            expandDepth: depth,
+            variantLabel: WAF_EXPAND_VARIANT
+          }).then(function (expRes) {
             if (!expRes.expandOk) {
               throw new Error('POST expand falhou HTTP ' + expRes.status + ': ' + (expRes.error || ''));
             }
-            var normalized =
-              typeof w.normalizeExpandItemPayload === 'function'
-                ? w.normalizeExpandItemPayload(expRes.data)
-                : { rows: [], visualRowsCount: expRes.rowsDetected };
+            var normalized = normalizeWafExpandPayload(expRes.data, opts.rootId);
             if (!normalized.rows || !normalized.rows.length) {
               throw new Error(
                 'Expand retornou 0 linhas normalizadas (raw members: ' + (expRes.rowsDetected || 0) + ').'
@@ -1638,9 +1732,13 @@
             lastSyncTitle = payload.root.title || opts.title || '';
             payload.__skaSyncMeta = {
               source: opts.source || 'WAF_SESSION',
+              dataSource: DATA_SOURCE,
+              expandVariant: WAF_EXPAND_VARIANT,
               eventType: 'wafdata-expand',
               rootId: opts.rootId,
               depth: depth,
+              rawRows: expRes.rowsDetected || normalized.rows.length,
+              displayRows: normalized.rows.length,
               lastSyncAt: new Date().toISOString(),
               validationStatus: 'VALID',
               fallbackWarning: opts.fallbackWarning || '',
@@ -1678,7 +1776,7 @@
           errorCode: normalized.code || 'WAF_SESSION_FAILED',
           statusMessage: err.message || normalized.message,
           statusKind: 'error',
-          tableMessage: err.message || normalized.message,
+          bannerMessage: err.message || normalized.message,
           preserveGoodState: true
         });
         return Promise.reject(err);
@@ -2107,6 +2205,11 @@
     var syncMeta = payload.__skaSyncMeta || {};
     var dyn = payload.__skaDynamicState || {};
     var resolution = payload.resolution || {};
+    var isWafPayload =
+      payload.source === DATA_SOURCE ||
+      syncMeta.dataSource === DATA_SOURCE ||
+      syncMeta.eventType === 'wafdata-expand' ||
+      isWafSessionMode();
     var candidates = syncMeta.selectedCandidates || [];
     var selectedCandidatesText = candidates
       .slice(0, 6)
@@ -2138,21 +2241,34 @@
     } else if (payloadMode === 'global') {
       selectionNote = ' · expansao global de todos os ramos carregados';
     }
-    var summary =
-      'Fonte: dseng · modo: ' +
-      payloadMode +
-      ' · source: ' +
-      sourceLabel +
-      ' · item: ' +
-      itemLabel +
-      ' · strategy: ' +
-      strategy +
-      ' · linhas: ' +
-      expected +
-      ' · ' +
-      (dyn.partial === false ? 'recorte completo' : 'estrutura parcial') +
-      selectionNote;
+    var summary;
+    if (isWafPayload) {
+      var rawRows = syncMeta.rawRows || (diag.rawRows != null ? diag.rawRows : expected);
+      summary =
+        'Fonte: wafdata-session · expand: ' +
+        (syncMeta.expandVariant || diag.expandVariant || WAF_EXPAND_VARIANT) +
+        ' · linhas: ' +
+        expected +
+        (rawRows !== expected ? ' · rawRows=' + rawRows : '') +
+        ' · VALID';
+    } else {
+      summary =
+        'Fonte: dseng · modo: ' +
+        payloadMode +
+        ' · source: ' +
+        sourceLabel +
+        ' · item: ' +
+        itemLabel +
+        ' · strategy: ' +
+        strategy +
+        ' · linhas: ' +
+        expected +
+        ' · ' +
+        (dyn.partial === false ? 'recorte completo' : 'estrutura parcial') +
+        selectionNote;
+    }
     var detail =
+      (isWafPayload ? 'dataSource=' + DATA_SOURCE + ' | ' : '') +
       'payloadEndpoint=' +
       (syncMeta.payloadEndpoint || '') +
       ' | payloadMode=' +
@@ -2198,14 +2314,30 @@
     syncBuild();
     patchUiLabels();
     if (!assertSkaCountIntegrity(payload)) return false;
-    persistLastGoodContext(payload, {
-      rootId: (payload.root && payload.root.id) || lastSyncRootId,
-      rootTitle: (payload.root && payload.root.title) || lastSyncTitle,
-      depth: lastSyncDepth,
-      expandDepth: lastSyncDepth
-    });
+    try {
+      persistLastGoodContext(payload, {
+        rootId: (payload.root && payload.root.id) || lastSyncRootId,
+        rootTitle: (payload.root && payload.root.title) || lastSyncTitle,
+        depth: lastSyncDepth,
+        expandDepth: lastSyncDepth
+      });
+    } catch (persistErr) {
+      logWaf('persistLastGoodContext skipped: ' + (persistErr && persistErr.message));
+    }
     scheduleSkaUiReapply(payload);
+    if (payload.source === DATA_SOURCE || (payload.__skaSyncMeta && payload.__skaSyncMeta.dataSource === DATA_SOURCE)) {
+      try {
+        console.info('[BOM Analytics] wafdata-session rows=' + expected);
+      } catch (logErr) {}
+      setStatus('E-BOM carregada via wafdata-session — ' + expected + ' linhas.', 'ok');
+    }
     return true;
+  }
+
+  function logWaf(msg) {
+    try {
+      console.log('[BOM wafdata-session]', msg);
+    } catch (e) {}
   }
 
   function applySkaPayloadToUI(payload) {
@@ -2326,7 +2458,33 @@
       };
     }
 
-    var prdHint = s(ctx.rootId || ctx.selectedId || ctx.physicalId);
+    if (isValidDsengPhysicalId(ctx.rootId)) {
+      return {
+        ok: true,
+        rootId: s(ctx.rootId),
+        depth: depth,
+        title: title || lastSyncTitle,
+        source: ctx.source || 'PRODUCT_EXPLORER_CONTEXT',
+        useResolveSelection: false,
+        saved: saved
+      };
+    }
+
+    var knownRegistry = resolveKnownExplorerRoot(ctx);
+    if (knownRegistry && isValidDsengPhysicalId(knownRegistry.rootId)) {
+      return {
+        ok: true,
+        rootId: knownRegistry.rootId,
+        depth: depth,
+        title: knownRegistry.title || title || lastSyncTitle,
+        source: knownRegistry.source || 'EXPLORER_CONTEXT_REGISTRY_KNOWN_ROOT',
+        useResolveSelection: false,
+        expansionAvailable: true,
+        saved: saved
+      };
+    }
+
+    var prdHint = s(ctx.physicalId || ( /^prd-/i.test(s(ctx.rootId)) ? ctx.rootId : ''));
     if (prdHint && /^prd-/i.test(prdHint) && isWafSessionMode()) {
       return {
         ok: false,
@@ -2490,7 +2648,7 @@
             errorCode: normalized.code,
             statusMessage: normalized.message,
             statusKind: 'error',
-            tableMessage: normalized.message,
+            bannerMessage: normalized.message,
             preserveGoodState: true
           });
           return Promise.reject(err);
@@ -2613,7 +2771,7 @@
         title: resolved.title,
         statusMessage: msg,
         statusKind: 'error',
-        tableMessage: msg
+        bannerMessage: msg
       });
       return Promise.reject(new Error('ROOT_UNRESOLVED'));
     });
@@ -2789,6 +2947,28 @@
 
   function loadBomViaSkaStructure(opts) {
     opts = opts || {};
+    if (isWafSessionMode()) {
+      var params = resolveSyncParams({ forceManual: !!opts.forceManual, advancedOnly: !!opts.advancedOnly });
+      if (!params.rootId || !params.validation || !params.validation.ok) {
+        var invMsg = 'Informe um Root Physical ID dseng válido em Avançado.';
+        renderEmptySkaState('CONTEXT_INVALID', {
+          contextMeta: lastContextMeta,
+          title: params.title,
+          statusMessage: invMsg,
+          statusKind: 'error',
+          bannerMessage: invMsg,
+          preserveGoodState: true
+        });
+        return Promise.reject(new Error('CONTEXT_INVALID'));
+      }
+      return loadBomViaWafSession({
+        rootId: params.rootId,
+        depth: params.depth,
+        source: params.source || 'ADVANCED_MANUAL',
+        title: params.title,
+        silent: opts.silent
+      });
+    }
     var params = resolveSyncParams({ forceManual: true, advancedOnly: true });
     if (!params.rootId || !params.validation || !params.validation.ok) {
       var invMsg = 'Informe um Root Physical ID dseng válido em Avançado.';
@@ -2797,7 +2977,7 @@
         title: params.title,
         statusMessage: invMsg,
         statusKind: 'error',
-        tableMessage: invMsg,
+        bannerMessage: invMsg,
         preserveGoodState: true
       });
       return Promise.reject(new Error('CONTEXT_INVALID'));
@@ -2853,7 +3033,7 @@
         contextMeta: lastContextMeta,
         statusMessage: wafMsg,
         statusKind: 'error',
-        tableMessage: wafMsg,
+        bannerMessage: wafMsg,
         preserveGoodState: true
       });
       return Promise.reject(new Error('SELECTION_NOT_RESOLVED'));
@@ -2956,7 +3136,7 @@
             errorCode: code,
             statusMessage: normalized.message,
             statusKind: 'error',
-            tableMessage: normalized.message,
+            bannerMessage: normalized.message,
             preserveGoodState: true
           });
           if (code === 'SELECTION_NOT_RESOLVED') {
@@ -2997,15 +3177,41 @@
       lastContextMeta = {
         source: ctx.source || 'PRODUCT_EXPLORER_CONTEXT',
         title: ctx.title,
-        candidateRootId: ctx.selectedId || ctx.rootId,
-        rootIdUsed: '',
-        validationStatus: 'RESOLVE_PENDING'
+        candidateRootId: ctx.selectedId || ctx.physicalId || ctx.rootId,
+        rootIdUsed: isValidDsengPhysicalId(ctx.rootId) ? ctx.rootId : '',
+        validationStatus: isValidDsengPhysicalId(ctx.rootId) ? 'VALID' : 'RESOLVE_PENDING'
       };
       return loadBomWithRootResolution({ ctx: ctx, silent: opts.silent });
     });
   }
 
   function refreshBom() {
+    if (isWafSessionMode()) {
+      var manual = s(byId('explorerObjectId') && byId('explorerObjectId').value);
+      if (manual && isValidDsengPhysicalId(manual)) {
+        return loadBomViaWafSession({
+          rootId: manual,
+          depth: getDepthFromInput(),
+          source: 'ADVANCED_MANUAL',
+          title: lastSyncTitle
+        });
+      }
+      if (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.refresh) {
+        return w.ProductExplorerSyncProvider.refresh('manual-refresh').then(function (ctx) {
+          updateExplorerContextStatus(ctx);
+          return loadBomWithRootResolution({ ctx: ctx });
+        });
+      }
+      if (lastSyncRootId && isValidDsengPhysicalId(lastSyncRootId)) {
+        return loadBomViaWafSession({
+          rootId: lastSyncRootId,
+          depth: lastSyncDepth || getDepthFromInput(),
+          source: 'LAST_SYNC',
+          title: lastSyncTitle
+        });
+      }
+      return loadBomWithRootResolution({});
+    }
     var manual = s(byId('explorerObjectId') && byId('explorerObjectId').value);
     if (manual && isValidDsengPhysicalId(manual)) {
       return loadBomViaSkaStructure({ forceManual: true, advancedOnly: true });
