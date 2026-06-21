@@ -1455,19 +1455,20 @@
       Promise.resolve(handler())
         .then(function (report) {
           renderDiagnosticPanel(report);
-          var drawer = byId('waf3dxDiagnosticDrawer');
-          var toggle = byId('btnWaf3dxDiagToggle');
-          if (drawer) {
-            drawer.classList.remove('bom-hidden');
-            positionDiagnosticDrawer(toggle, drawer);
-            if (toggle) toggle.setAttribute('aria-expanded', 'true');
-          }
+          openDiagnosticModal();
+          setDiagnosticStatus(
+            report.pass
+              ? 'Diagnóstico 3DX PASS — expand ' + (report.rowsDetected || 0) + ' linhas'
+              : 'Diagnóstico 3DX: ' + (report.recommendation || 'ver painel'),
+            report.pass ? 'ok' : 'error'
+          );
           var bar = byId('statusBar');
-          if (bar && report) {
-            bar.textContent = report.pass
-              ? 'Diagnóstico 3DX PASS — expand ' + report.rowsDetected + ' linhas'
-              : 'Diagnóstico 3DX: ' + (report.recommendation || 'ver painel');
-            bar.className = 'bom-st ' + (report.pass ? 'bom-st-ok' : 'bom-st-err');
+          if (bar && report && !report.pass) {
+            bar.textContent = report.recommendation || bar.textContent;
+          }
+          if (bar && report && report.pass) {
+            bar.textContent = 'Diagnóstico 3DX PASS — expand ' + report.rowsDetected + ' linhas';
+            bar.className = 'bom-st bom-st-ok';
           }
         })
         .finally(function () {
@@ -1475,6 +1476,15 @@
           btn.textContent = prev;
         });
     });
+  }
+
+  function setDiagnosticStatus(msg, kind) {
+    var bar = byId('statusBar');
+    if (!bar) return;
+    bar.textContent = msg || '';
+    bar.className = 'bom-st';
+    if (kind === 'ok') bar.className += ' bom-st-ok';
+    if (kind === 'error') bar.className += ' bom-st-err';
   }
 
   function ensureAdvancedVisible() {
@@ -1487,50 +1497,76 @@
     } catch (e0) {}
   }
 
-  function ensureTopbarDiagnosticTrigger() {
-    if (byId('btnWaf3dxDiagToggle') && byId('btnWaf3dxDiagToggle').__BOM_DIAG_TOGGLE__) return;
-    if (byId('btnWaf3dxDiagToggle')) return;
-    var actions = uiRoot().querySelector && uiRoot().querySelector('.bom-topbar-actions');
-    if (!actions) return;
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.id = 'btnWaf3dxDiagToggle';
-    btn.className = 'bom-btn bom-btn-secondary bom-btn-compact bom-waf3dx-topbar-trigger';
-    btn.textContent = 'Diagnóstico';
-    btn.title = 'Abrir Diagnóstico 3DX (WAFData / dseng)';
-    var anchor = actions.querySelector('.bom-build-pill') || actions.querySelector('#btnThemeToggle');
-    if (anchor && anchor.parentNode === actions) {
-      actions.insertBefore(btn, anchor);
-    } else {
-      actions.appendChild(btn);
-    }
-    btn.addEventListener('click', function (ev) {
-      if (ev) {
-        ev.preventDefault();
-        ev.stopPropagation();
-      }
-      var drawer = byId('waf3dxDiagnosticDrawer');
-      if (!drawer) {
-        installDiagnosticUi();
-        drawer = byId('waf3dxDiagnosticDrawer');
-      }
-      if (!drawer) return;
-      drawer.classList.toggle('bom-hidden');
-      btn.setAttribute('aria-expanded', drawer.classList.contains('bom-hidden') ? 'false' : 'true');
-    });
+  function ensureDiagnosticModal() {
+    var modal = byId('waf3dxDiagnosticModal');
+    if (modal) return modal;
+    var host = document.body || uiRoot();
+    modal = document.createElement('div');
+    modal.id = 'waf3dxDiagnosticModal';
+    modal.className = 'bom-waf3dx-modal bom-hidden';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Diagnóstico 3DX');
+    modal.innerHTML =
+      '<div class="bom-waf3dx-modal-backdrop" data-waf3dx-close="1"></div>' +
+      '<div class="bom-waf3dx-modal-card">' +
+      '<div class="bom-waf3dx-modal-head">' +
+      '<strong>Diagnóstico 3DX</strong>' +
+      '<button type="button" class="bom-waf3dx-modal-close" id="btnWaf3dxModalClose" title="Fechar">×</button>' +
+      '</div>' +
+      '<div id="waf3dxDiagnosticDrawer" class="bom-waf3dx-drawer"></div>' +
+      '</div>';
+    host.appendChild(modal);
+    return modal;
   }
 
-  function ensureDiagnosticDrawer() {
-    if (byId('waf3dxDiagnosticDrawer')) return byId('waf3dxDiagnosticDrawer');
-    var topbar = uiRoot().querySelector && uiRoot().querySelector('.bom-topbar');
-    if (!topbar) return null;
-    var drawer = document.createElement('div');
-    drawer.id = 'waf3dxDiagnosticDrawer';
-    drawer.className = 'bom-waf3dx-drawer bom-hidden';
-    drawer.setAttribute('role', 'region');
-    drawer.setAttribute('aria-label', 'Diagnóstico 3DX');
-    topbar.appendChild(drawer);
-    return drawer;
+  function openDiagnosticModal() {
+    installDiagnosticUi();
+    var modal = ensureDiagnosticModal();
+    modal.classList.remove('bom-hidden');
+    var btn = byId('btnWaf3dxDiagToggle');
+    if (btn) btn.setAttribute('aria-expanded', 'true');
+    setDiagnosticStatus('Diagnóstico 3DX aberto — escolha um teste.', 'info');
+    return modal;
+  }
+
+  function closeDiagnosticModal() {
+    var modal = byId('waf3dxDiagnosticModal');
+    if (modal) modal.classList.add('bom-hidden');
+    var btn = byId('btnWaf3dxDiagToggle');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
+
+  function toggleDiagnosticModal(forceOpen) {
+    var modal = byId('waf3dxDiagnosticModal');
+    var isOpen = modal && !modal.classList.contains('bom-hidden');
+    if (forceOpen === true || (!isOpen && forceOpen !== false)) return openDiagnosticModal();
+    if (forceOpen === false || isOpen) return closeDiagnosticModal();
+    return isOpen ? closeDiagnosticModal() : openDiagnosticModal();
+  }
+
+  function installGlobalDiagnosticDelegation() {
+    if (w.__BOM_WAF3DX_DELEGATION__) return;
+    w.__BOM_WAF3DX_DELEGATION__ = true;
+    document.addEventListener(
+      'click',
+      function (ev) {
+        var target = ev.target;
+        if (!target || !target.closest) return;
+        if (target.closest('#btnWaf3dxDiagToggle')) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          toggleDiagnosticModal(true);
+          return;
+        }
+        if (target.closest('#btnWaf3dxModalClose') || target.closest('[data-waf3dx-close="1"]')) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          closeDiagnosticModal();
+        }
+      },
+      true
+    );
   }
 
   function mountDiagnosticControls(container) {
@@ -1539,7 +1575,6 @@
     wrap.id = 'waf3dxDiagnosticWrap';
     wrap.className = 'bom-waf3dx-diag-wrap';
     wrap.innerHTML =
-      '<p style="margin:4px 0 6px;font-size:.68rem;font-weight:600">Diagnóstico 3DX</p>' +
       '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">' +
       '<button type="button" id="btnWaf3dxTestSession" class="bom-btn bom-btn-secondary" style="font-size:.65rem">Testar sessão 3DX</button>' +
       '<button type="button" id="btnWaf3dxTestEbom" class="bom-btn bom-btn-secondary" style="font-size:.65rem">Testar E-BOM</button>' +
@@ -1554,29 +1589,14 @@
 
   function installDiagnosticUi() {
     try {
-      if (byId('waf3dxDiagnosticUiReady')) {
-        ensureAdvancedVisible();
-        ensureTopbarDiagnosticTrigger();
-        return;
-      }
+      installGlobalDiagnosticDelegation();
       ensureAdvancedVisible();
-      ensureTopbarDiagnosticTrigger();
-      var drawer = ensureDiagnosticDrawer();
-      var rules = byId('bomRulesPanel');
-      var mounted = false;
-      if (drawer) mounted = mountDiagnosticControls(drawer) || mounted;
-      if (rules && !rules.querySelector('#waf3dxDiagnosticWrap')) {
-        var hint = document.createElement('p');
-        hint.className = 'bom-waf3dx-advanced-hint';
-        hint.style.cssText = 'margin:0 0 6px;font-size:.62rem;color:#5c6b7a';
-        hint.textContent = 'Diagnóstico 3DX: use o botão Diagnóstico no topo ou abra este painel.';
-        rules.insertBefore(hint, rules.firstChild);
+      ensureDiagnosticModal();
+      var drawer = byId('waf3dxDiagnosticDrawer');
+      if (drawer && !drawer.querySelector('#waf3dxDiagnosticPanel')) {
+        mountDiagnosticControls(drawer);
       }
-      if (!mounted && drawer) mountDiagnosticControls(drawer);
-      var ready = document.createElement('span');
-      ready.id = 'waf3dxDiagnosticUiReady';
-      ready.className = 'bom-hidden';
-      (drawer || rules || uiRoot()).appendChild(ready);
+      if (byId('waf3dxDiagnosticUiReady')) return;
 
       bindDiagnosticButton('btnWaf3dxTestSession', function () {
         return runFullDiagnostic();
@@ -1679,6 +1699,12 @@
           return lastDiagnostic || w.__lastWaf3dxDiagnostic;
         });
       }, 'Exportando…');
+
+      var ready = document.createElement('span');
+      ready.id = 'waf3dxDiagnosticUiReady';
+      ready.className = 'bom-hidden';
+      var host = byId('waf3dxDiagnosticDrawer') || document.body;
+      host.appendChild(ready);
     } catch (e) {
       log('installDiagnosticUi error', e && e.message);
     }
@@ -1702,6 +1728,9 @@
     renderDiagnosticPanel: renderDiagnosticPanel,
     exportSanitizedDiagnostic: exportSanitizedDiagnostic,
     installDiagnosticUi: installDiagnosticUi,
+    openDiagnosticModal: openDiagnosticModal,
+    closeDiagnosticModal: closeDiagnosticModal,
+    toggleDiagnosticModal: toggleDiagnosticModal,
     ensureAdvancedVisible: ensureAdvancedVisible,
     sanitizeReport: sanitizeReport,
     ensureSpaceUrl: ensureSpaceUrl,
@@ -1718,7 +1747,8 @@
     }
   };
 
-  w.__lastWaf3dxDiagnostic = null;
+  w.__bomOpen3dxDiagnostic = openDiagnosticModal;
+  w.__bomClose3dxDiagnostic = closeDiagnosticModal;
 
   if (typeof w.__bomWaf3dxClientInstall === 'function') {
     w.__bomWaf3dxClientInstall();
