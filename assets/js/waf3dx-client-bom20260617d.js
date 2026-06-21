@@ -1468,6 +1468,7 @@
   }
 
   function ensureTopbarDiagnosticTrigger() {
+    if (byId('btnWaf3dxDiagToggle') && byId('btnWaf3dxDiagToggle').__BOM_DIAG_TOGGLE__) return;
     if (byId('btnWaf3dxDiagToggle')) return;
     var actions = uiRoot().querySelector && uiRoot().querySelector('.bom-topbar-actions');
     if (!actions) return;
