@@ -27,7 +27,7 @@
 
     var BOM_BUILD = 'bom20260617d';
     var BASE_BUILD = 'bom20260607a';
-    var RELEASE_COMMIT = 'wafrec20260621a';
+    var RELEASE_COMMIT = 'wafrec20260621b';
 
     window.__BOM_GH_BASE__ = GH;
     window.__BOM_WIDGET_BUILD__ = BOM_BUILD;
@@ -42,12 +42,20 @@
 
     (function loadWidgetRuntime() {
       var q = '?v=' + encodeURIComponent(BOM_BUILD) + '&c=' + encodeURIComponent(RELEASE_COMMIT);
-      var src = GH + 'assets/js/widget-runtime-bom20260617d.js' + q;
-      var s = document.createElement('script');
-      s.type = 'text/javascript';
-      s.charset = 'UTF-8';
-      s.src = src;
-      document.getElementsByTagName('head')[0].appendChild(s);
+      var runtime = document.createElement('script');
+      runtime.type = 'text/javascript';
+      runtime.charset = 'UTF-8';
+      runtime.async = false;
+      runtime.src = GH + 'assets/js/widget-runtime-bom20260617d.js' + q;
+      runtime.onload = function () {
+        var finalizer = document.createElement('script');
+        finalizer.type = 'text/javascript';
+        finalizer.charset = 'UTF-8';
+        finalizer.async = false;
+        finalizer.src = GH + 'assets/js/bom-waf-recursive-ebom-bom20260621a.js' + q;
+        document.getElementsByTagName('head')[0].appendChild(finalizer);
+      };
+      document.getElementsByTagName('head')[0].appendChild(runtime);
     })();
   //]]>
   </script>
