@@ -94,21 +94,37 @@
   function wafRequest(waf, url, opts) {
     opts = opts || {};
     return new Promise(function (resolve) {
+      var settled = false;
+      function finish(res) {
+        if (settled) return;
+        settled = true;
+        resolve(res);
+      }
       var reqOpts = {
         method: opts.method || 'GET',
         headers: opts.headers || {},
-        onComplete: function (backendresponse, response_hdrs, err, msg) {
+        onComplete: function (data, responseHeaders) {
+          finish({
+            ok: true,
+            status: 200,
+            data: parseJsonMaybe(data),
+            responseText: typeof data === 'string' ? data : JSON.stringify(data),
+            responseJson: parseJsonMaybe(data),
+            error: '',
+            wafMessage: ''
+          });
+        },
+        onFailure: function (err, backendresponse, response_hdrs) {
+          var msg = (err && (err.message || err.error || err.statusText)) || 'WAF request failed';
           var status = parseWafStatus(err, msg);
           var responseText = extractResponseText(err, msg, backendresponse);
-          var responseJson = parseJsonMaybe(backendresponse) || parseJsonMaybe(responseText);
-          var ok = !err && status >= 200 && status < 300;
-          resolve({
-            ok: ok,
+          finish({
+            ok: false,
             status: status,
-            data: responseJson,
+            data: parseJsonMaybe(backendresponse),
             responseText: responseText,
-            responseJson: responseJson,
-            error: ok ? '' : s(msg || (err && err.message) || err),
+            responseJson: parseJsonMaybe(backendresponse),
+            error: s(msg),
             wafMessage: s(msg)
           });
         }
@@ -656,6 +672,7 @@
 
   function installUi() {
     try {
+      if (w.__waf3dxClient && w.__waf3dxClient.installDiagnosticUi) return;
       var root = w.__3DX_UI_ROOT__ || (w.widget && w.widget.body) || document;
       if (!root || !root.querySelector) return;
       var panel = root.querySelector('#bomRulesPanel');

@@ -9,7 +9,8 @@
   var VIZ_URL = 'https://bom-resolver.onrender.com/api/3dx/visualization/resolve';
   var LIFECYCLE_TRANSITIONS_URL = 'https://bom-resolver.onrender.com/api/3dx/lifecycle/transitions';
   var LIFECYCLE_CHANGE_URL = 'https://bom-resolver.onrender.com/api/3dx/lifecycle/change-maturity';
-  var DATA_SOURCE = 'ska-bom-service';
+  var DATA_SOURCE = 'wafdata-session';
+  var LEGACY_SKA_SOURCE = 'ska-bom-service';
   var DEFAULT_DEPTH = 1;
   var SESSION_KEY = '3dx_bom_snapshot_v1';
   var LAST_GOOD_CONTEXT_KEY = 'bomAnalytics:lastGoodContext:bom20260617d';
@@ -665,7 +666,80 @@
       : 'Alterar maturidade no 3DEXPERIENCE';
   }
 
+  function loadVisualizationForRowWaf(active) {
+    if (!active || !active.activeReferenceId || !w.__waf3dxClient) return;
+    var reqId = ++activeVisualizationRequestId;
+    if (w.Bom3DViewer && w.Bom3DViewer.showLoading) {
+      w.Bom3DViewer.showLoading(active.activeTitle);
+    }
+    w.__waf3dxClient
+      .find3DShapeOrRep(active.activeReferenceId)
+      .then(function (rep) {
+        if (reqId !== activeVisualizationRequestId) return;
+        if (!rep.representationFound) {
+          if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
+            w.Bom3DViewer.showMessage(rep.error || 'Representação 3D não encontrada via dseng expand.', 'NO_REPRESENTATION');
+          }
+          return null;
+        }
+        return w.__waf3dxClient.locateDerivedOutputs(rep);
+      })
+      .then(function (derived) {
+        if (reqId !== activeVisualizationRequestId || !derived) return;
+        if (!derived.derivedOutputFound) {
+          if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
+            w.Bom3DViewer.showMessage(
+              derived.requiredAdminAction || derived.blocker || 'Derived output não disponível (fileCount=0).',
+              'NO_DERIVED_OUTPUT'
+            );
+          }
+          return;
+        }
+        return w.__waf3dxClient.downloadDerivedOutput(derived).then(function (dl) {
+          if (reqId !== activeVisualizationRequestId) return;
+          if (!dl.ok) {
+            if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
+              w.Bom3DViewer.showMessage(dl.error || 'DownloadTicket/FCS falhou via WAFData.', 'DOWNLOAD_FAILED');
+            }
+            return;
+          }
+          var format = s(dl.format || 'OBJ').toUpperCase();
+          if (format === 'GLB' || format === 'GLTF') {
+            if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
+              w.Bom3DViewer.showMessage(
+                'Arquivo ' +
+                  format +
+                  ' obtido via sessão, mas blob binário requer ajuste de transporte WAFData — veja diagnóstico 3DView.',
+                'BINARY_TRANSPORT_PENDING'
+              );
+            }
+            return;
+          }
+          try {
+            var blob = new Blob([dl.content || ''], { type: 'text/plain' });
+            var blobUrl = w.URL.createObjectURL(blob);
+            if (w.Bom3DViewer && w.Bom3DViewer.show) {
+              w.Bom3DViewer.show({ modelUrl: blobUrl, format: format, title: active.activeTitle });
+            }
+          } catch (eBlob) {
+            if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
+              w.Bom3DViewer.showMessage('Falha ao montar blob para viewer: ' + (eBlob.message || eBlob), 'VIEWER_BLOB_FAILED');
+            }
+          }
+        });
+      })
+      .catch(function () {
+        if (reqId !== activeVisualizationRequestId) return;
+        if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
+          w.Bom3DViewer.showMessage('Falha na cadeia 3DView via WAFData session.', 'WAF_3DVIEW_FAILED');
+        }
+      });
+  }
+
   function loadVisualizationForRow(active) {
+    if (isWafSessionMode()) {
+      return loadVisualizationForRowWaf(active);
+    }
     if (!active || !active.activeReferenceId) return;
     var reqId = ++activeVisualizationRequestId;
     if (w.Bom3DViewer && w.Bom3DViewer.showLoading) {
@@ -720,7 +794,40 @@
     if (kind === 'ok') hint.classList.add('bom-maturity-hint-ok');
   }
 
+  function loadLifecycleForRowWaf(active) {
+    if (!active || !active.activeReferenceId || !w.__waf3dxClient) return;
+    var reqId = ++activeLifecycleRequestId;
+    updateMaturityHint('Consultando maturidade via sessão WAFData…', 'ok');
+    w.__waf3dxClient
+      .getAllowedMaturityTransitions(active.activeReferenceId)
+      .then(function (data) {
+        if (reqId !== activeLifecycleRequestId) return;
+        w.__bomActiveLifecycleData = {
+          ok: data.transitionsLoaded,
+          transitions: (data.transitions || []).map(function (state, idx) {
+            return { id: 't' + idx, label: state, to: state, action: 'promote' };
+          }),
+          item: { currentState: data.current || active.activeMaturity }
+        };
+        if (!data.transitionsLoaded) {
+          updateMaturityHint(data.recommendation || formatMaturityBlockHint({ code: 'LIFECYCLE_TRANSITIONS_UNAVAILABLE' }, active), 'warn');
+          setMaturityButtonBlocked(true);
+          return;
+        }
+        setMaturityButtonBlocked(false);
+        updateMaturityHint(data.transitions.length + ' transição(ões) via sessão WAFData.', 'ok');
+      })
+      .catch(function () {
+        if (reqId !== activeLifecycleRequestId) return;
+        updateMaturityHint('Falha ao consultar maturidade via WAFData.', 'err');
+        setMaturityButtonBlocked(true);
+      });
+  }
+
   function loadLifecycleForRow(active) {
+    if (isWafSessionMode()) {
+      return loadLifecycleForRowWaf(active);
+    }
     if (!active || !active.activeReferenceId) return;
     var reqId = ++activeLifecycleRequestId;
     updateMaturityHint('Consultando transições permitidas…', 'ok');
@@ -862,7 +969,30 @@
           if (statusEl) statusEl.textContent = 'Selecione uma transição ou informe o estado destino.';
           return;
         }
-        if (statusEl) statusEl.textContent = 'Executando mudança via backend…';
+        if (statusEl) statusEl.textContent = isWafSessionMode() ? 'Executando mudança via WAFData…' : 'Executando mudança via backend…';
+        if (isWafSessionMode() && w.__waf3dxClient) {
+          w.__waf3dxClient
+            .changeMaturity(active.activeReferenceId, { to: target, action: action, transition: transition })
+            .then(function (data) {
+              if (statusEl) {
+                statusEl.textContent = data.success
+                  ? 'Maturidade alterada e verificada: ' + data.stateBefore + ' → ' + data.stateAfter
+                  : data.error || data.blocker || 'Mudança não verificada por releitura.';
+              }
+              if (data.success) {
+                if (activeEbomRow) {
+                  activeEbomRow.activeMaturity = data.stateAfter || target;
+                  activeEbomRow.activeState = data.stateAfter || target;
+                }
+                closeMaturityModal();
+                loadLifecycleForRow(active);
+              }
+            })
+            .catch(function (err) {
+              if (statusEl) statusEl.textContent = 'Falha WAFData: ' + (err.message || err);
+            });
+          return;
+        }
         postJson(LIFECYCLE_CHANGE_URL, {
           referenceId: active.activeReferenceId,
           physicalId: active.activePhysicalId,
@@ -1388,6 +1518,162 @@
       throw err;
     }
     return payload;
+  }
+
+  function isWafSessionMode() {
+    return w.__BOM_DATA_SOURCE__ === 'wafdata-session' || DATA_SOURCE === 'wafdata-session';
+  }
+
+  function isLegacySkaMode() {
+    return w.__BOM_DATA_SOURCE__ === LEGACY_SKA_SOURCE;
+  }
+
+  function buildWafPayloadFromExpand(opts, rootRes, expRes, normalized) {
+    opts = opts || {};
+    rootRes = rootRes || {};
+    expRes = expRes || {};
+    normalized = normalized || { rows: [] };
+    var rows = normalized.rows || [];
+    var depth = opts.depth == null ? DEFAULT_DEPTH : opts.depth;
+    var counts = rebuildDynamicCounts(rows, normalized.includesRoot !== false, depth);
+    return {
+      ok: true,
+      source: DATA_SOURCE,
+      mode: 'dseng-official',
+      strategy: 'expand-item',
+      root: { id: opts.rootId, title: rootRes.title || opts.title || '' },
+      rows: rows,
+      counts: counts,
+      scope: { mode: 'root', expandDepth: depth, isPartial: depth <= 1 },
+      expandDepth: depth,
+      diagnostics: {
+        status: rows.length ? 'OK' : 'EMPTY',
+        endpointsUsed: [
+          { method: 'GET', endpoint: '/dseng:EngItem/' + opts.rootId, status: rootRes.status },
+          { method: 'POST', endpoint: '/dseng:EngItem/' + opts.rootId + '/expand', status: expRes.status }
+        ],
+        durationMs: 0,
+        warnings:
+          opts.source === 'KNOWN_ROOT_FALLBACK' || opts.knownRootFallback
+            ? ['KNOWN_ROOT fallback CJ MESA — dev/regression only, not silent production default']
+            : [],
+        errors: rows.length ? [] : ['Expand returned 0 normalized rows']
+      }
+    };
+  }
+
+  function loadBomViaWafSession(opts) {
+    opts = opts || {};
+    var client = w.__waf3dxClient;
+    var syncBtn = byId('btnSyncExplorer');
+    var refreshBtn = byId('btnRefreshBom');
+    if (syncBtn) syncBtn.disabled = true;
+    if (refreshBtn) refreshBtn.disabled = true;
+
+    if (!opts.rootId || !isValidDsengPhysicalId(opts.rootId)) {
+      if (syncBtn) syncBtn.disabled = false;
+      if (refreshBtn) refreshBtn.disabled = false;
+      return Promise.reject(new Error('ROOT_ID_REQUIRED'));
+    }
+    if (!client) {
+      if (syncBtn) syncBtn.disabled = false;
+      if (refreshBtn) refreshBtn.disabled = false;
+      return Promise.reject(new Error('WAF3DX client not loaded'));
+    }
+
+    clearStateBeforeSkaApply();
+    w.__BOM_SKA_EMPTY_STATE__ = false;
+    if (!opts.silent) setStatus('Carregando E-BOM via sessão WAFData (dseng expand)…', 'info');
+
+    var depth = opts.depth == null ? DEFAULT_DEPTH : opts.depth;
+
+    return client
+      .detectWafData()
+      .then(function (detect) {
+        if (!detect.wafAvailable) {
+          throw new Error(
+            'WAFData indisponível neste frame — abra o widget no 3DDashboard Web Page Reader com usuário logado.'
+          );
+        }
+        return client.getEngItem(opts.rootId).then(function (rootRes) {
+          if (!rootRes.canReadRoot) {
+            throw new Error('GET root falhou HTTP ' + rootRes.status + ': ' + (rootRes.error || ''));
+          }
+          return client.expandEngItem(opts.rootId, { expandDepth: depth }).then(function (expRes) {
+            if (!expRes.expandOk) {
+              throw new Error('POST expand falhou HTTP ' + expRes.status + ': ' + (expRes.error || ''));
+            }
+            var normalized =
+              typeof w.normalizeExpandItemPayload === 'function'
+                ? w.normalizeExpandItemPayload(expRes.data)
+                : { rows: [], visualRowsCount: expRes.rowsDetected };
+            if (!normalized.rows || !normalized.rows.length) {
+              throw new Error(
+                'Expand retornou 0 linhas normalizadas (raw members: ' + (expRes.rowsDetected || 0) + ').'
+              );
+            }
+            var payload = buildWafPayloadFromExpand(opts, rootRes, expRes, normalized);
+            lastSyncRootId = opts.rootId;
+            lastSyncDepth = depth;
+            lastSyncTitle = payload.root.title || opts.title || '';
+            payload.__skaSyncMeta = {
+              source: opts.source || 'WAF_SESSION',
+              eventType: 'wafdata-expand',
+              rootId: opts.rootId,
+              depth: depth,
+              lastSyncAt: new Date().toISOString(),
+              validationStatus: 'VALID',
+              fallbackWarning: opts.fallbackWarning || '',
+              knownRootFallback: !!opts.knownRootFallback
+            };
+            lastContextMeta = {
+              source: opts.source || 'WAF_SESSION',
+              title: lastSyncTitle,
+              candidateRootId: opts.rootName || opts.title || opts.rootId,
+              rootIdUsed: opts.rootId,
+              validationStatus: 'VALID',
+              fallbackWarning: opts.fallbackWarning || ''
+            };
+            if (opts.fallbackWarning) showFallbackBanner(opts.fallbackWarning);
+            resetDynamicState(payload, depth > 1 ? 'depth-' + depth : 'initial', { manualRootId: opts.rootId });
+            persistLastGoodContext(payload, {
+              rootId: opts.rootId,
+              rootTitle: lastSyncTitle,
+              rootName: opts.rootName || '',
+              depth: depth,
+              expandDepth: depth
+            });
+            return applySkaPayloadToUI(payload);
+          });
+        });
+      })
+      .catch(function (err) {
+        if (opts.source === 'LAST_GOOD_CONTEXT') {
+          return Promise.reject(err);
+        }
+        var normalized = normalizeSkaError(err);
+        renderEmptySkaState(normalized.code === 'ROOT_NOT_FOUND' ? 'ROOT_NOT_FOUND' : 'ERROR', {
+          contextMeta: lastContextMeta,
+          errorCode: normalized.code || 'WAF_SESSION_FAILED',
+          statusMessage: err.message || normalized.message,
+          statusKind: 'error',
+          tableMessage: err.message || normalized.message,
+          preserveGoodState: true
+        });
+        return Promise.reject(err);
+      })
+      .then(
+        function (result) {
+          if (syncBtn) syncBtn.disabled = false;
+          if (refreshBtn) refreshBtn.disabled = false;
+          return result;
+        },
+        function (err) {
+          if (syncBtn) syncBtn.disabled = false;
+          if (refreshBtn) refreshBtn.disabled = false;
+          throw err;
+        }
+      );
   }
 
   function fetchBomStructureFromSkaService(opts) {
@@ -2064,6 +2350,9 @@
 
   function loadBomViaStructureWithRoot(opts) {
     opts = opts || {};
+    if (isWafSessionMode()) {
+      return loadBomViaWafSession(opts);
+    }
     var syncBtn = byId('btnSyncExplorer');
     var refreshBtn = byId('btnRefreshBom');
     if (syncBtn) syncBtn.disabled = true;
@@ -2415,6 +2704,32 @@
   }
 
   function loadBomViaResolveSelection(opts) {
+    opts = opts || {};
+    if (isWafSessionMode()) {
+      var resolved = resolveRootForBomLoad({ allowResolveSelection: false, ctx: opts.ctx });
+      if (resolved.ok && resolved.rootId) {
+        return loadBomViaWafSession({
+          rootId: resolved.rootId,
+          depth: resolved.depth,
+          expandDepth: resolved.expandDepth || resolved.depth,
+          source: resolved.source || 'PRODUCT_EXPLORER_CONTEXT',
+          title: resolved.title,
+          rootName: resolved.rootName || '',
+          silent: opts.silent,
+          fallbackWarning: resolved.fallbackWarning || ''
+        });
+      }
+      var wafMsg =
+        'Modo wafdata-session: Product Explorer não forneceu rootId dseng. Informe Root Physical ID em Avançado.';
+      renderEmptySkaState('SELECTION_NOT_RESOLVED', {
+        contextMeta: lastContextMeta,
+        statusMessage: wafMsg,
+        statusKind: 'error',
+        tableMessage: wafMsg,
+        preserveGoodState: true
+      });
+      return Promise.reject(new Error('SELECTION_NOT_RESOLVED'));
+    }
     opts = opts || {};
     var syncBtn = byId('btnSyncExplorer');
     var refreshBtn = byId('btnRefreshBom');
@@ -2931,7 +3246,7 @@
     var refreshBtn = byId('btnRefreshBom');
     if (refreshBtn) refreshBtn.textContent = 'Atualizar BOM';
     var badge = byId('explorerSourceBadge');
-    if (badge) badge.textContent = 'Fonte: SKA BOM Service / dseng';
+    if (badge) badge.textContent = isWafSessionMode() ? 'Fonte: WAFData session / dseng' : 'Fonte: SKA BOM Service / dseng';
     var idEl = byId('explorerObjectId');
     if (idEl) {
       idEl.placeholder = 'Root Physical ID (Avançado)';

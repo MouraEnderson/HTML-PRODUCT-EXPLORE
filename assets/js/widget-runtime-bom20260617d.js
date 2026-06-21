@@ -22,8 +22,9 @@
     bundle: 'bom-bundle-' + BASE_BUILD + '.js',
     provider: 'product-explorer-sync-provider.js',
     hotfix: 'bom-ska-service-hotfix-20260617d.js',
+    wafClient: 'waf3dx-client-bom20260617d.js',
     wafProbe: 'wafdata-probe-bom20260617d.js',
-    dataSource: 'ska-bom-service'
+    dataSource: 'wafdata-session'
   };
   w.__BOM_RELEASE_PROBE__ = function () {
     return w.__BOM_RELEASE_MANIFEST__;
@@ -179,13 +180,19 @@
     try {
       updateBuildLabel();
       if (typeof w.__bomSkaServiceInstall === 'function') w.__bomSkaServiceInstall();
+      if (typeof w.__waf3dxClient !== 'undefined' && w.__waf3dxClient.installDiagnosticUi) {
+        w.__waf3dxClient.installDiagnosticUi();
+      }
       if (typeof w.App !== 'undefined' && w.App.run) {
         w.App.run();
         if (typeof w.__bomSkaServiceInstall === 'function') w.__bomSkaServiceInstall();
+        if (typeof w.__waf3dxClient !== 'undefined' && w.__waf3dxClient.installDiagnosticUi) {
+          w.__waf3dxClient.installDiagnosticUi();
+        }
         if (w.App.rebindScanButton) w.App.rebindScanButton();
         if (w.App.rebindImportButton) w.App.rebindImportButton();
         updateBuildLabel();
-        setBar('Build ' + (w.__BOM_BUILD_ID__ || BOM_BUILD) + ' | SKA BOM Service', 'ok');
+        setBar('Build ' + (w.__BOM_BUILD_ID__ || BOM_BUILD) + ' | WAFData session / dseng', 'ok');
         w.__BOM_WIDGET_BOOT_STATE__.completed = true;
       } else {
         setBar('App nao iniciou.', 'error');
@@ -226,13 +233,21 @@
                       setBar('Erro ao carregar Product Explorer sync provider.', 'error');
                       return;
                     }
-                    loadScript(GH + 'assets/js/bom-ska-service-hotfix-20260617d.js' + q, false, function (err3) {
-                      if (err3) {
-                        setBar('Erro ao carregar SKA BOM Service hotfix.', 'error');
-                        return;
-                      }
-                      loadScript(GH + 'assets/js/wafdata-probe-bom20260617d.js' + q, true, function () {
-                        loadDebugLegacyScripts(finishBoot);
+                    loadScript(GH + 'assets/js/integration/expand-item-provider.js' + q, true, function () {
+                      loadScript(GH + 'assets/js/bom-ska-service-hotfix-20260617d.js' + q, false, function (err3) {
+                        if (err3) {
+                          setBar('Erro ao carregar BOM hotfix.', 'error');
+                          return;
+                        }
+                        loadScript(GH + 'assets/js/waf3dx-client-bom20260617d.js' + q, false, function (errWaf) {
+                          if (errWaf) {
+                            setBar('Erro ao carregar WAF3DX client.', 'error');
+                            return;
+                          }
+                          loadScript(GH + 'assets/js/wafdata-probe-bom20260617d.js' + q, true, function () {
+                            loadDebugLegacyScripts(finishBoot);
+                          });
+                        });
                       });
                     });
                   });
@@ -274,7 +289,7 @@
     st.started = true;
     st.build = BOM_BUILD;
     paint();
-    setBar('Carregando ' + BOM_BUILD + ' (SKA BOM Service)...', 'info');
+    setBar('Carregando ' + BOM_BUILD + ' (WAFData session)...', 'info');
     if (st.completed) {
       updateBuildLabel();
       if (typeof w.__bomSkaServiceInstall === 'function') w.__bomSkaServiceInstall();
