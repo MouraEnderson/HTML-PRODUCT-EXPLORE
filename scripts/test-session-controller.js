@@ -82,6 +82,8 @@ assert.strictEqual(counts.uniqueReferenceCount, 2, 'Root plus one repeated refer
 
 const diagnostic = JSON.parse(api.exportDiagnostics());
 assert.ok(!JSON.stringify(diagnostic).match(/token|cookie|authorization/i), 'Diagnostics must be sanitized');
+assert.ok(Array.isArray(diagnostic.autoContextProbeResults), 'Diagnostics must expose auto-context probe results');
+assert.strictEqual(typeof diagnostic.resolverStrategy, 'string', 'Diagnostics must expose resolver strategy');
 const initialState = api.getState();
 assert.strictEqual(initialState.controller, 'bom-waf-session-controller-bom20260621e');
 assert.strictEqual(initialState.activeEntrypoint, 'widget-v3.html');
@@ -91,9 +93,17 @@ assert.doesNotThrow(() => api.boot(), 'Controller boot must not fail before a us
 
 const widget = fs.readFileSync('widget-v3.html', 'utf8');
 assert.ok(widget.includes('__bomWafSessionController.boot'), 'Widget must boot the official controller');
+assert.ok(widget.includes('__bomAutoExpandOrchestrator.boot'), 'Widget must boot the auto-context orchestrator');
 assert.ok(!widget.includes('App.run();'), 'Widget must not start legacy App.run');
 assert.ok(widget.includes("bom-bundle-' + CANON_BUILD"), 'Canonical build must choose the bundle file');
 assert.ok(!widget.includes('BOM_BUILD = fromQuery'), 'Query string must not select a bundle build');
+assert.ok(widget.includes('id="autoContextBadge"'), 'Widget must expose the auto-context badge');
+assert.ok(widget.includes('id="autoContextLabel"'), 'Widget must expose the auto-context label');
+assert.ok(widget.includes('id="btnRetryAutoContext"'), 'Widget must expose the retry auto-context button');
+assert.ok(widget.includes('id="skaDepthInput"'), 'Widget must expose the depth input');
+assert.ok(widget.includes('bom-auto-context-detector-bom20260622b.js'), 'Widget must load the smart context detector');
+assert.ok(widget.includes('bom-expandable-object-resolver-bom20260622b.js'), 'Widget must load the expandable object resolver');
+assert.ok(widget.includes('bom-auto-expand-orchestrator-bom20260622b.js'), 'Widget must load the auto-expand orchestrator');
 
 const bundle = fs.readFileSync('assets/js/bom-bundle.js', 'utf8');
 assert.ok(!bundle.includes('product-explorer-bridge.js'), 'Official bundle must not include DOM bridge');

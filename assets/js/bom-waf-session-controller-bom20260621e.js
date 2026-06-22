@@ -737,11 +737,25 @@
     };
   }
 
+  function autoContextDiagnostics() {
+    if (!global.__bomAutoExpandOrchestrator || !global.__bomAutoExpandOrchestrator.getDiagnostics) {
+      return {};
+    }
+    return sanitize(global.__bomAutoExpandOrchestrator.getDiagnostics() || {});
+  }
+
   function exportDiagnostics() {
+    var autoContext = autoContextDiagnostics();
     return JSON.stringify({
       controller: 'bom-waf-session-controller-bom20260621e',
       state: getState(),
-      diagnostics: state.diagnostics.map(sanitize)
+      diagnostics: state.diagnostics.map(sanitize),
+      autoContextProbeResults: autoContext.autoContextProbeResults || [],
+      detectedObject: autoContext.detectedObject || null,
+      resolverStrategy: autoContext.resolverStrategy || '',
+      expectedChildCount: autoContext.expectedChildCount || 0,
+      estimatedDepth: autoContext.estimatedDepth || 0,
+      autoContextTimings: autoContext.autoContextTimings || {}
     }, null, 2);
   }
 
@@ -756,6 +770,7 @@
     probeContextSources: probeContextSources,
     selectRow: selectRow,
     getState: getState,
+    setStatusMessage: setStatus,
     exportDiagnostics: exportDiagnostics,
     __test: {
       isCjContext: isCjContext,
