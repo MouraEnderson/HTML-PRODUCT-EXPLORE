@@ -11,6 +11,7 @@
     BUILD: 'bom20260621e',
     /** One operational path: bom-waf-session-controller-bom20260621e.js. */
     SESSION_CONTROLLER_ONLY: true,
+    ACTIVE_ENTRYPOINT: 'widget-v3.html',
     /** DEC-016: explorer-mirror (principal) | expand-item (diagnóstico) | full-bom-api (alternativo) */
     DATA_SOURCE: 'wafdata-dseng-session-controller',
     EXPAND_ITEM_LEVELS: 2,

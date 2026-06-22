@@ -159,7 +159,7 @@
         source: text(context.selectionSource || context.source),
         raw: sanitize(context)
       };
-      if (!out.selectedId && !out.title) throw new Error('Nao foi possivel identificar a montagem atual no Product Explorer.');
+      if (!out.selectedId && !out.title) throw new Error('Nenhuma montagem ativa detectada. Abra uma estrutura no Product Explorer e clique Sincronizar.');
       state.context = out;
       diagnostic('info', 'official-context', { source: out.source, selectedId: out.selectedId, title: out.title });
       return out;
@@ -414,8 +414,11 @@
         '<dt>Revisao</dt><dd>' + escapeHtml(row.revision || '-') + '</dd>' +
         '<dt>Proprietario</dt><dd>' + escapeHtml(row.owner || '-') + '</dd>' +
         '<dt>Maturidade</dt><dd>' + escapeHtml(row.maturity || row.state || '-') + '</dd>' +
+        '<dt>Nivel</dt><dd>' + escapeHtml(row.level) + '</dd>' +
+        '<dt>Path</dt><dd>' + escapeHtml(row.path || '-') + '</dd>' +
         '<dt>3DView</dt><dd>Aguardando geometry resolver.</dd>' +
         '<dt>Maturidade write</dt><dd>Leitura somente; write nao habilitado.</dd>' +
+        '<dd><button type="button" disabled="disabled">Ver 3D real</button> <button type="button" disabled="disabled">Alterar maturidade</button></dd>' +
         '</dl>';
     }
   }
@@ -527,6 +530,11 @@
 
   function getState() {
     return {
+      controller: 'bom-waf-session-controller-bom20260621e',
+      activeEntrypoint: (global.APP_CONFIG && global.APP_CONFIG.ACTIVE_ENTRYPOINT) || 'widget-v3.html',
+      activeBuild: global.__BOM_BUILD_ID__ || (global.APP_CONFIG && global.APP_CONFIG.BUILD) || '',
+      bundleLoaded: global.__BOM_BUNDLE_LOADED__ === true,
+      legacyOperationalHandlers: 0,
       booted: state.booted,
       loading: state.loading,
       root: sanitize(state.root),

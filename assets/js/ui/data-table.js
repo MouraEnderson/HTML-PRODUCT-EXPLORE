@@ -210,6 +210,10 @@ var DataTable = (function () {
       }
       return escapeHtml(o || '');
     }
+    if (col.key === 'name' || col.key === 'title') {
+      var indent = Math.max(0, Number(n.level) || 0) * 16;
+      return '<span class="bom-tree-label" style="padding-left:' + indent + 'px">' + escapeHtml(v == null ? '' : v) + '</span>';
+    }
     if (col.key === 'type') return escapeHtml(shortType(v));
     if (col.format === 'status' || col.key === 'state' || col.key === 'maturity') {
       var raw = maturityLabel(n);

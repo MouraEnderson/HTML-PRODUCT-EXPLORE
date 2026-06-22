@@ -42,9 +42,20 @@ assert.strictEqual(counts.uniqueReferenceCount, 2, 'Root plus one repeated refer
 
 const diagnostic = JSON.parse(api.exportDiagnostics());
 assert.ok(!JSON.stringify(diagnostic).match(/token|cookie|authorization/i), 'Diagnostics must be sanitized');
+const initialState = api.getState();
+assert.strictEqual(initialState.controller, 'bom-waf-session-controller-bom20260621e');
+assert.strictEqual(initialState.activeEntrypoint, 'widget-v3.html');
+assert.strictEqual(initialState.legacyOperationalHandlers, 0);
 
 const widget = fs.readFileSync('widget-v3.html', 'utf8');
 assert.ok(widget.includes('__bomWafSessionController.boot'), 'Widget must boot the official controller');
 assert.ok(!widget.includes('App.run();'), 'Widget must not start legacy App.run');
+assert.ok(widget.includes("bom-bundle-' + CANON_BUILD"), 'Canonical build must choose the bundle file');
+assert.ok(!widget.includes('BOM_BUILD = fromQuery'), 'Query string must not select a bundle build');
+
+const bundle = fs.readFileSync('assets/js/bom-bundle.js', 'utf8');
+assert.ok(!bundle.includes('product-explorer-bridge.js'), 'Official bundle must not include DOM bridge');
+assert.ok(!bundle.includes('tsv-bom-loader.js'), 'Official bundle must not include TSV loader');
+assert.ok(!bundle.includes('paste-bom-loader.js'), 'Official bundle must not include clipboard loader');
 
 console.log('PASS session controller contract tests');

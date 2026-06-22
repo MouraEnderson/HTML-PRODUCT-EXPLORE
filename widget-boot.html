@@ -16,13 +16,9 @@
   //<![CDATA[
     (function () {
       var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-      var FALLBACK = 'bom20260607a';
-      var target = GH + 'widget-v3.html?v=' + encodeURIComponent(FALLBACK) + '&boot=' + Date.now();
+      var target = GH + 'widget-v3.html?cacheBust=' + Date.now();
 
-      function go(build) {
-        if (build && /^bom20/.test(String(build))) {
-          target = GH + 'widget-v3.html?v=' + encodeURIComponent(build) + '&boot=' + Date.now();
-        }
+      function go() {
         if (window.top && window.top !== window) {
           window.location.replace(target);
         } else {
@@ -34,15 +30,15 @@
       s.charset = 'UTF-8';
       s.src = GH + 'assets/js/build-id.js?_=' + Date.now();
       s.onload = function () {
-        go(window.__BOM_BUILD_ID__ || FALLBACK);
+        go();
       };
       s.onerror = function () {
-        go(FALLBACK);
+        go();
       };
       document.getElementsByTagName('head')[0].appendChild(s);
 
       window.setTimeout(function () {
-        go(window.__BOM_BUILD_ID__ || FALLBACK);
+        go();
       }, 2500);
     })();
   //]]>
@@ -51,6 +47,6 @@
 <body>
   <p>Carregando BOM Analytics (build atual)…</p>
   <p class="ok">Se ficar preso, use no Additional App:<br />
-  <code>https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-boot.html</code></p>
+  <code>https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/widget-v3.html</code></p>
 </body>
 </html>

@@ -120,6 +120,7 @@
         ? String(window.__BOM_BUILD_ID__)
         : 'bom20260607a';
     var BOM_BUILD = CANON_BUILD;
+    var CACHE_BUST = CANON_BUILD;
     var BUNDLE;
 
     (function parseEmbedEarly() {
@@ -147,16 +148,10 @@
       window.__3DX_EMBED_QUERY__ = eq;
     })();
 
-    (function applyBuildFromQuery() {
+    (function applyCacheBustFromQuery() {
       var eq = window.__3DX_EMBED_QUERY__ || {};
-      function pickBuild(raw) {
-        if (!raw || !/^bom20/.test(String(raw))) return null;
-        if (raw < CANON_BUILD) return CANON_BUILD;
-        return raw;
-      }
-      var fromQuery = pickBuild(eq.v) || pickBuild(eq.build);
-      if (fromQuery) BOM_BUILD = fromQuery;
-      BUNDLE = GH + 'assets/js/bom-bundle-' + BOM_BUILD + '.js?v=' + encodeURIComponent(BOM_BUILD);
+      CACHE_BUST = String(eq.v || eq.cacheBust || CANON_BUILD);
+      BUNDLE = GH + 'assets/js/bom-bundle-' + CANON_BUILD + '.js?v=' + encodeURIComponent(CACHE_BUST);
     })();
 
     var UI_HTML =
@@ -317,6 +312,7 @@
             return;
           }
           try {
+            window.__BOM_BUNDLE_LOADED__ = true;
             if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
             if (window.__bomWafSessionController && window.__bomWafSessionController.boot) {
               window.__bomWafSessionController.boot();

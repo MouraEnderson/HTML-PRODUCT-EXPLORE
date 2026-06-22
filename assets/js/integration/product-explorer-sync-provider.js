@@ -201,6 +201,9 @@
   }
 
   function readExplorerContextOfficialRaw() {
+    if (w.APP_CONFIG && w.APP_CONFIG.SESSION_CONTROLLER_ONLY === true) {
+      return { normalized: null, raw: null };
+    }
     if (typeof w.ExplorerContext === 'undefined' || !w.ExplorerContext.refresh) {
       return { normalized: null, raw: null };
     }
