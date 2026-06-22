@@ -171,7 +171,7 @@
       '<summary>Avan\u00e7ado</summary>' +
       '<div id="bomRulesPanel"></div>' +
       '<input type="text" id="explorerObjectId" class="bom-input" placeholder="ID f\u00edsico" />' +
-      '<button type="button" id="btnLoadPhysicalId" class="bom-btn bom-btn-secondary">Varrer por ID</button>' +
+      '<button type="button" id="btnLoadPhysicalId" class="bom-btn bom-btn-secondary">Carregar por ID</button>' +
       '<button type="button" id="btnApiDiagnostic" class="bom-btn bom-btn-secondary">Diagnosticar API</button>' +
       '<textarea id="apiDiagReport" class="bom-input bom-hidden" rows="6" readonly="readonly" placeholder="Relat\u00f3rio API\u2026"></textarea>' +
       '<textarea id="pasteArea" class="bom-paste bom-hidden" placeholder="Contingencia manual desativada"></textarea>' +
@@ -306,22 +306,24 @@
 
     function startBundle() {
       loadScript(GH + 'assets/vendor/chart.umd.min.js?v=' + BOM_BUILD, true, function () {
-        loadScript(BUNDLE, false, function (err) {
-          if (err) {
-            setBar('Erro ao carregar bundle.', 'error');
-            return;
-          }
-          try {
-            window.__BOM_BUNDLE_LOADED__ = true;
-            if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
-            if (window.__bomWafSessionController && window.__bomWafSessionController.boot) {
-              window.__bomWafSessionController.boot();
-            } else {
-              setBar('Controller oficial nao iniciou.', 'error');
+        loadScript(GH + 'assets/js/bom-context-diagnostic-bom20260622a.js?v=' + BOM_BUILD, true, function () {
+          loadScript(BUNDLE, false, function (err) {
+            if (err) {
+              setBar('Erro ao carregar bundle.', 'error');
+              return;
             }
-          } catch (ex) {
-            setBar('Erro: ' + (ex.message || ex), 'error');
-          }
+            try {
+              window.__BOM_BUNDLE_LOADED__ = true;
+              if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
+              if (window.__bomWafSessionController && window.__bomWafSessionController.boot) {
+                window.__bomWafSessionController.boot();
+              } else {
+                setBar('Controller oficial nao iniciou.', 'error');
+              }
+            } catch (ex) {
+              setBar('Erro: ' + (ex.message || ex), 'error');
+            }
+          });
         });
       });
     }
