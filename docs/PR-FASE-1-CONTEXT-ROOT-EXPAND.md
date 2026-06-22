@@ -75,6 +75,42 @@ Cobertura adicionada:
 - o botao manual pertence ao controller;
 - o controller nao contem `expandDepth: -1`.
 
+## Resultado do teste real em 2026-06-22
+
+Ambiente: Additional App no 3DDashboard autenticado, com a estrutura
+`01_SKA_Drone Assembly_130520206` visivel no Product Structure Explorer.
+
+### Rota manual `prd-R...`
+
+Entrada usada: `prd-R1132100929518-01172440`.
+
+Resultado observado no console do widget:
+
+1. `manual-root-resolved` foi emitido;
+2. `expand-request` foi emitido para `dseng:EngItem/expand`;
+3. a chamada falhou com `Rede bloqueou *-space. Use build bom20260621e no
+   Additional App.`
+
+Conclusao: a resolucao `prd-R... -> raiz dseng` e o acionamento do contrato de
+expansao funcionaram. O bloqueio atual ocorre depois disso, na comunicacao WAF
+com o host `*-space`; nao e falha de botao, clipboard, identificacao de raiz ou
+`expandDepth` negativo.
+
+### Rota oficial pelo botao principal
+
+Ao clicar `Atualizar estrutura`, foram emitidos `context-probe` e
+`root-resolution-failed`. A raiz oficial permaneceu vazia no frame, sem usar
+o registro CJ. O diagnostico detalhado fica em
+`window.__bomWafSessionController.exportDiagnostics()` e remove campos de
+sessao por projeto.
+
+### Decisao de fase
+
+**BLOQUEADA, nao aprovada.** Nao iniciar Fase 2, parser especifico, E-BOM
+recursiva ou 3DView ate que uma chamada autenticada para a expansao retorne
+payload real ou se prove formalmente a restricao de host/tenant e se escolha
+o canal oficial alternativo.
+
 ## Validacao real obrigatoria
 
 No Additional App autenticado:
