@@ -69,6 +69,10 @@ const normalized = test.normalizeExpansion(
 );
 const instanceRows = normalized.rows.filter((row) => row.instanceId);
 assert.strictEqual(instanceRows.length, 2, 'Two instances of one reference must remain two rows');
+const contractInspection = test.inspectExpansionPayload(expansion);
+assert.strictEqual(contractInspection.objectsDetected, 3, 'Contract inspection sees every candidate object');
+assert.strictEqual(contractInspection.byType.VPMInstance, 2, 'Contract inspection separates instance candidates from references');
+assert.strictEqual(contractInspection.byType.VPMReference, 1, 'Contract inspection separates reference candidates from instances');
 const counts = test.computeCounts(normalized.rows, normalized.rawRows, []);
 assert.strictEqual(counts.occurrenceCount, normalized.rows.length - 1, 'Occurrences exclude only root row');
 assert.strictEqual(counts.uniqueReferenceCount, 2, 'Root plus one repeated reference are unique references');

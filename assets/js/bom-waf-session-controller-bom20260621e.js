@@ -493,6 +493,23 @@
     return { type: 'object', keys: Object.keys(payload).slice(0, 40), arrayLengths: lengths };
   }
 
+  function inspectExpansionPayload(payload) {
+    var objects = collectObjects(payload);
+    var byType = {};
+    var samples = {};
+    objects.forEach(function (item) {
+      var type = nestedValue(item, ['type', 'displayType', 'objectType']) || 'unknown';
+      byType[type] = (byType[type] || 0) + 1;
+      if (samples[type]) return;
+      samples[type] = {
+        keys: Object.keys(item).slice(0, 30),
+        referenceKeys: item.reference && typeof item.reference === 'object' ? Object.keys(item.reference).slice(0, 30) : [],
+        referredObjectKeys: item.referredObject && typeof item.referredObject === 'object' ? Object.keys(item.referredObject).slice(0, 30) : []
+      };
+    });
+    return { objectsDetected: objects.length, byType: byType, samples: samples };
+  }
+
   function expandRootWithValidatedContract(root) {
     var depth = requestedExpandDepth();
     var request = {
@@ -504,11 +521,16 @@
     diagnostic('info', 'expand-request', request);
     return EnoviaApi.expandEngItem(root.internalId, { expandDepth: depth })
       .then(function (payload) {
-        diagnostic('info', 'expand-response', {
+        var detail = {
           status: 'completed',
           request: request,
-          shape: describeExpansionPayload(payload)
-        });
+          shape: describeExpansionPayload(payload),
+          contract: inspectExpansionPayload(payload)
+        };
+        diagnostic('info', 'expand-response', detail);
+        if (global.console && console.info) {
+          console.info('[BOM contract]', JSON.stringify(sanitize(detail)));
+        }
         return payload;
       });
   }
@@ -727,7 +749,8 @@
       isEngItemId: isEngItemId,
       isPrdId: isPrdId,
       requestedExpandDepth: requestedExpandDepth,
-      describeExpansionPayload: describeExpansionPayload
+      describeExpansionPayload: describeExpansionPayload,
+      inspectExpansionPayload: inspectExpansionPayload
     }
   };
 })(window);
