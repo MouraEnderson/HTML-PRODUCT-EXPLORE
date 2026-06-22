@@ -42,6 +42,15 @@ const test = api.__test;
 assert.strictEqual(test.isCjContext({ title: 'SKA_ENDERSW-BES-00009887' }), false, 'SKA must not be CJ');
 assert.strictEqual(test.isCjContext({ title: 'CJ MESA 4BCS VP TOP 3DX' }), true, 'CJ title enables CJ registry');
 assert.strictEqual(test.isCjContext({ physicalId: 'prd-R1132100929518-01103695' }), true, 'CJ physical ID enables CJ registry');
+assert.strictEqual(test.isEngItemId('63FC553465A62400699E0792000086AB'), true, 'Internal dseng IDs are accepted manually');
+assert.strictEqual(test.isPrdId('prd-R1132100929518-00662677'), true, 'Cloud prd IDs are accepted manually');
+assert.strictEqual(test.isEngItemId('prd-R1132100929518-00662677'), false, 'prd IDs must not be mistaken for dseng IDs');
+assert.strictEqual(test.requestedExpandDepth(), 1, 'Expand contract defaults to an explicit positive depth');
+assert.strictEqual(
+  JSON.stringify(test.describeExpansionPayload({ member: [{ id: 'A' }], meta: { ignored: true } })),
+  JSON.stringify({ type: 'object', keys: ['member', 'meta'], arrayLengths: { member: 1 } }),
+  'Expansion diagnostics report shape without exposing member content'
+);
 
 const expansion = {
   member: [
@@ -80,5 +89,10 @@ const bundle = fs.readFileSync('assets/js/bom-bundle.js', 'utf8');
 assert.ok(!bundle.includes('product-explorer-bridge.js'), 'Official bundle must not include DOM bridge');
 assert.ok(!bundle.includes('tsv-bom-loader.js'), 'Official bundle must not include TSV loader');
 assert.ok(!bundle.includes('paste-bom-loader.js'), 'Official bundle must not include clipboard loader');
+
+assert.ok(source.includes("bindControllerButton('btnLoadPhysicalId', loadManualInput)"), 'Advanced manual root button must be owned by the controller');
+assert.ok(source.includes('function probeContextSources()'), 'Controller must expose a safe context source probe');
+assert.ok(source.includes('function expandRootWithValidatedContract(root)'), 'Controller must use a named expand contract helper');
+assert.ok(!source.includes('expandEngItem(root.internalId, { expandDepth: -1 })'), 'Controller must not request unbounded expandDepth -1');
 
 console.log('PASS session controller contract tests');

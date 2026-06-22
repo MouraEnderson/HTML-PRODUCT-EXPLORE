@@ -4145,7 +4145,8 @@ var DataTable = (function () {
     if (typeof ProductExplorerSyncProvider === 'undefined' || !ProductExplorerSyncProvider.refresh) {
       return Promise.reject(new Error('Provider oficial de selecao indisponivel.'));
     }
-    return ProductExplorerSyncProvider.refresh('manual-controller').then(function (context) {
+    return probeContextSources().then(function (probe) {
+      var context = probe.result || {};
       context = context || {};
       /* Never trust a provider rootId from a registry/config as the active selection. */
       var selectedId = text(context.physicalId || context.selectedId);
@@ -4164,6 +4165,48 @@ var DataTable = (function () {
       diagnostic('info', 'official-context', { source: out.source, selectedId: out.selectedId, title: out.title });
       return out;
     });
+  }
+
+  /*
+   * This probe intentionally observes only documented/runtime integration points.
+   * It must not inspect the Product Explorer DOM, cookies, or authentication data.
+   */
+  function probeContextSources() {
+    var probe = {
+      provider: {
+        available: typeof ProductExplorerSyncProvider !== 'undefined',
+        refresh: false,
+        rawContext: false
+      },
+      runtime: {
+        require: typeof global.require === 'function' || !!(global.widget && global.widget.requirejs),
+        wafData: !!(global.WAFData && global.WAFData.authenticatedRequest),
+        explorerContext: !!(global.ExplorerContext && global.ExplorerContext.refresh),
+        embedded: !!global.frameElement
+      },
+      manualInput: text(byId('explorerObjectId') && byId('explorerObjectId').value),
+      result: null
+    };
+
+    if (!probe.provider.available || !ProductExplorerSyncProvider.refresh) {
+      return Promise.resolve(probe);
+    }
+    probe.provider.refresh = true;
+    return ProductExplorerSyncProvider.refresh('controller-context-probe')
+      .then(function (context) {
+        probe.result = sanitize(context || {});
+        if (ProductExplorerSyncProvider.getRawSelectionContext) {
+          probe.provider.rawContext = true;
+          probe.raw = sanitize(ProductExplorerSyncProvider.getRawSelectionContext());
+        }
+        diagnostic('info', 'context-probe', probe);
+        return probe;
+      })
+      .catch(function (error) {
+        probe.error = text(error && error.message);
+        diagnostic('error', 'context-probe-failed', probe);
+        return probe;
+      });
   }
 
   function membersOf(response) {
@@ -4234,6 +4277,49 @@ var DataTable = (function () {
       state.root = null;
       diagnostic('error', 'root-resolution-failed', { message: error.message });
       throw error;
+    });
+  }
+
+  function memberId(member) {
+    return text(member && (member.id || member.physicalid || member.physicalId));
+  }
+
+  function resolveManualRoot(value) {
+    var candidate = text(value);
+    if (!candidate) return Promise.reject(new Error('Informe um ID dseng, physical id prd-R... ou titulo exato no campo avancado.'));
+
+    return initRuntime().then(function () {
+      if (isEngItemId(candidate)) {
+        return EnoviaApi.getEngItem(candidate).then(function () {
+          return { internalId: candidate, source: 'ManualInput dseng:EngItem', title: candidate, physicalId: '' };
+        });
+      }
+      if (isPrdId(candidate)) {
+        return EnoviaApi.resolveEngItemMember(candidate, '').then(function (member) {
+          var id = memberId(member);
+          if (!isEngItemId(id)) {
+            throw new Error('Physical id informado nao retornou um id interno dseng valido.');
+          }
+          return EnoviaApi.getEngItem(id).then(function () {
+            return { internalId: id, source: 'ManualInput prd-R -> dseng', title: candidate, physicalId: candidate };
+          });
+        });
+      }
+      return exactSearch(candidate).then(function (id) {
+        return EnoviaApi.getEngItem(id).then(function () {
+          return { internalId: id, source: 'ManualInput titulo exato', title: candidate, physicalId: '' };
+        });
+      });
+    }).then(function (root) {
+      state.root = root;
+      state.context = {
+        selectedId: root.internalId,
+        physicalId: root.physicalId,
+        title: root.title,
+        source: root.source
+      };
+      diagnostic('info', 'manual-root-resolved', root);
+      return root;
     });
   }
 
@@ -4389,6 +4475,44 @@ var DataTable = (function () {
     };
   }
 
+  function requestedExpandDepth() {
+    var input = byId('skaDepthInput');
+    var value = parseInt(text(input && input.value), 10);
+    if (isNaN(value) || value < 1) value = 1;
+    return Math.min(value, 20);
+  }
+
+  function describeExpansionPayload(payload) {
+    if (payload == null) return { type: String(payload), keys: [], arrayLengths: {} };
+    if (Array.isArray(payload)) return { type: 'array', keys: [], arrayLengths: { root: payload.length } };
+    if (typeof payload !== 'object') return { type: typeof payload, keys: [], arrayLengths: {} };
+    var lengths = {};
+    Object.keys(payload).slice(0, 40).forEach(function (key) {
+      if (Array.isArray(payload[key])) lengths[key] = payload[key].length;
+    });
+    return { type: 'object', keys: Object.keys(payload).slice(0, 40), arrayLengths: lengths };
+  }
+
+  function expandRootWithValidatedContract(root) {
+    var depth = requestedExpandDepth();
+    var request = {
+      rootId: root.internalId,
+      expandDepth: depth,
+      endpoint: 'dseng:EngItem/expand',
+      auth: 'WAFData + SecurityContext + CSRF'
+    };
+    diagnostic('info', 'expand-request', request);
+    return EnoviaApi.expandEngItem(root.internalId, { expandDepth: depth })
+      .then(function (payload) {
+        diagnostic('info', 'expand-response', {
+          status: 'completed',
+          request: request,
+          shape: describeExpansionPayload(payload)
+        });
+        return payload;
+      });
+  }
+
   function renderCounters() {
     var c = state.counts;
     var meta = c.displayRows + ' linhas exibidas · ' + c.occurrenceCount + ' ocorrencias · ' +
@@ -4457,7 +4581,7 @@ var DataTable = (function () {
     var requestGeneration = state.generation;
     return EnoviaApi.getEngItem(root.internalId)
       .then(function (rootResponse) {
-        return EnoviaApi.expandEngItem(root.internalId, { expandDepth: -1 }).then(function (expansion) {
+        return expandRootWithValidatedContract(root).then(function (expansion) {
           return { rootResponse: rootResponse, expansion: expansion };
         });
       })
@@ -4503,6 +4627,30 @@ var DataTable = (function () {
     return sync();
   }
 
+  function loadManualInput() {
+    if (state.loading) return Promise.resolve(state.rows);
+    state.generation += 1;
+    state.rows = [];
+    state.counts = emptyCounts();
+    state.failures = [];
+    setLoading(true);
+    setStatus('Resolvendo raiz informada manualmente...', 'info');
+    return resolveManualRoot(text(byId('explorerObjectId') && byId('explorerObjectId').value))
+      .then(function (root) { return loadStructure(root); })
+      .catch(function (error) {
+        state.rows = [];
+        state.counts = emptyCounts();
+        state.failures = [text(error.message || error)];
+        state.counts.failures = 1;
+        state.counts.partial = true;
+        render();
+        setStatus(text(error.message || 'Nao foi possivel carregar a raiz informada.'), 'error');
+        diagnostic('error', 'manual-root-failed', { message: text(error.message || error) });
+        throw error;
+      })
+      .finally(function () { setLoading(false); });
+  }
+
   function bindControllerButton(id, handler) {
     var current = byId(id);
     if (!current || !current.parentNode) return;
@@ -4523,6 +4671,7 @@ var DataTable = (function () {
     bindControllerButton('btnSyncExplorer', sync);
     bindControllerButton('btnRefreshBom', refresh);
     bindControllerButton('btnRefresh', refresh);
+    bindControllerButton('btnLoadPhysicalId', loadManualInput);
     setStatus('Pronto. Abra ou selecione uma montagem no Product Explorer e clique Atualizar estrutura.', 'info');
     diagnostic('info', 'controller-booted', { version: 'bom20260621e' });
     return Promise.resolve(state);
@@ -4562,8 +4711,11 @@ var DataTable = (function () {
     boot: boot,
     sync: sync,
     refresh: refresh,
+    loadManualInput: loadManualInput,
     resolveCurrentRoot: resolveCurrentRoot,
+    resolveManualRoot: resolveManualRoot,
     loadStructure: loadStructure,
+    probeContextSources: probeContextSources,
     selectRow: selectRow,
     getState: getState,
     exportDiagnostics: exportDiagnostics,
@@ -4571,7 +4723,11 @@ var DataTable = (function () {
       isCjContext: isCjContext,
       normalizeExpansion: normalizeExpansion,
       computeCounts: computeCounts,
-      sanitize: sanitize
+      sanitize: sanitize,
+      isEngItemId: isEngItemId,
+      isPrdId: isPrdId,
+      requestedExpandDepth: requestedExpandDepth,
+      describeExpansionPayload: describeExpansionPayload
     }
   };
 })(window);
