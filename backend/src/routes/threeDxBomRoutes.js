@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   getSkaHealth,
+  getSkaAuthHealth,
   resolveStructure,
   resolveSelection,
   resolveDiagnostic,
@@ -8,6 +9,7 @@ import {
 } from '../services/threeDxBomService.js';
 import { buildInternalErrorResponse } from '../services/threeDxBomNormalizer.js';
 import { getThreeDxConfig } from '../services/threeDxConfig.js';
+import { runUpstreamMatrix } from '../services/threeDxUpstreamMatrix.js';
 
 const router = Router();
 
@@ -19,6 +21,15 @@ function sendInternalError(res) {
 router.get('/health', (_req, res) => {
   try {
     res.json(getSkaHealth());
+  } catch (_err) {
+    sendInternalError(res);
+  }
+});
+
+router.get('/health/authcheck', async (_req, res) => {
+  try {
+    const result = await getSkaAuthHealth();
+    res.status(result.ok ? 200 : 503).json(result);
   } catch (_err) {
     sendInternalError(res);
   }
@@ -61,6 +72,15 @@ router.post('/diagnostic', async (req, res) => {
       return;
     }
     res.json(result.data);
+  } catch (_err) {
+    sendInternalError(res);
+  }
+});
+
+router.post('/upstream-matrix', async (req, res) => {
+  try {
+    const data = await runUpstreamMatrix(req.body || {});
+    res.json(data);
   } catch (_err) {
     sendInternalError(res);
   }

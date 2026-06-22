@@ -10,40 +10,41 @@ alwaysApply: true
 - Pasta: `C:\Users\Enderson\Projects\3dx-product-explorer-bom-dashboard`
 - GitHub: `https://github.com/MouraEnderson/HTML-PRODUCT-EXPLORE`
 - Pages: `https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/`
-- Widget 3DDashboard: `widget-v3-08i.html?v=bom20260614n` (**Additional App** trusted, GitHub Pages)
+- Widget 3DDashboard: `widget-v3-08i.html?v=bom20260617d&t=3dx&probe=f5df3e3`
 - Tenant piloto: `R1132100929518`
 - Dashboard piloto: `#dashboard:e9bdf50c-6377-4956-b931-b5566a8e9e97/tabId:AMzDJUOA09wQHOdVtHHY`
 
 ## Build atual (atualizar após cada deploy)
 
-- **BUILD:** `bom20260614n`
-- **Release DEC-015:** Expand Item validado tenant (classificação **A**, PR #11 merged)
-- Widget: `widget-v3-08i.html` + hotfix + `expand-item-provider.js` + `expand-item-validator.js`
-- Fonte principal: **Expand Item** (`DATA_SOURCE=expand-item`); Full BOM API = alternativo
-- **Deploy one-click:** `powershell -ExecutionPolicy Bypass -File deploy.ps1`
+- **BUILD:** `bom20260617d`
+- **Visual 3DX:** ✅ aprovado 2026-06-17 — ver `docs/3DX-DASHBOARD-VISUAL-APPROVED-20260617.md`
+- **Commit layout final:** `abf29bc`
+- Widget carrega **`bom-ska-service-hotfix-20260617d.js`** + `widget-runtime-bom20260617d.js`
+- Fonte operacional: **SKA BOM Service / dseng** (`bom-resolver.onrender.com`)
+- **Deploy:** push `main` → GitHub Actions `Deploy GitHub Pages`
 - Rebuild só bundle: `powershell -ExecutionPolicy Bypass -File scripts/build-bundle.ps1`
 
 ## Sprint 2 — status
 
 | Item | Status |
 |------|--------|
-| 2.1 Owner parser | ✅ no bundle `03b` |
-| 2.2 Em Espera + KPI risco | ✅ no bundle `03b` |
-| 2.3 Sync banner + import report | ✅ no bundle `03b` |
-| 2.4 Contagem Explorer = Dashboard (79=79) | ✅ `03t` infer colunas + root/merge |
-| 2.5 Deploy build no ar | ✅ `deploy.ps1` + `bom20260603s` |
-| DEC-015 Expand Item | ✅ tenant A — `bom20260614g` / release `14h` |
+| 2.1 Owner parser | ✅ no bundle |
+| 2.2 Em Espera + KPI risco | ✅ no bundle |
+| 2.3 Sync banner + import report | ✅ |
+| 2.4 Contagem Explorer = Dashboard | ⚠️ escopo funcional — depth/root vs árvore expandida PSE |
+| 2.5 Deploy build no ar | ✅ `main` + Pages |
+| UX 3DX quadrantes | ✅ aprovado visual — PR #36 + commits `57271c4`/`abf29bc` |
+| ExpandItem backend | ✅ PR #33 |
+| Selection resolver | ✅ PR #23/#24 |
 
-## Arquivos-chave
+## Arquivos-chave (cadeia real widget 08i)
 
-- Expand Item: `assets/js/integration/expand-item-provider.js` (DEC-015)
-- Validação: `assets/js/integration/expand-item-validator.js`
-- Hotfix loader: `assets/js/bom-api-id-hotfix-20260608a.js`
-- Import/paste: `assets/js/services/file-import-service.js`
-- Sync Explorer vs Dashboard: `assets/js/ui/sync-banner.js`
-- Maturidade/KPI: `attribute-service.js`, `metrics-engine.js`, `kpi-cards.js`, `config.js`
-- Layout iframe: `assets/js/ui/layout-fit.js`, `assets/css/dashboard.css`
-- Bundle: `scripts/build-bundle.ps1`
+- Runtime: `assets/js/widget-runtime-bom20260617d.js`
+- Hotfix SKA: `assets/js/bom-ska-service-hotfix-20260617d.js`
+- Provider seleção: `assets/js/integration/product-explorer-sync-provider.js`
+- Bundle: `assets/js/bom-bundle-bom20260607a.js`
+- Layout CSS: `assets/css/dashboard.css`
+- Backend: `backend/` → Render `bom-resolver.onrender.com`
 
 ## Git no Windows (sem git config global)
 
@@ -51,4 +52,4 @@ Antes de commit: `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, `G
 
 ## Fluxo de dados no widget
 
-**Atualizar estrutura** (validação automática embutida) → Expand Item POST único → normalização Path → tabela/KPIs = `rows.length`. Diagnóstico técnico opcional em Avançado. Clipboard/TSV/DOM mirror reprovados.
+Product Explorer → API oficial (PlatformAPI / DS Selection / ExplorerContext) → backend dseng → dashboard. Sem DOM scraping, clipboard, TSV ou Mirror operacional. KPI row e Avançado ocultos na UX final; diagnóstico compacto + footer SKA.

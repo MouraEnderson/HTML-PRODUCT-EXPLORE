@@ -71,8 +71,21 @@ Este repositório tem `render.yaml` na raiz. No Render:
 4. Build command: `npm install`.
 5. Start command: `npm start`.
 6. Configure variáveis sensíveis:
-   - `ENOVIA_BEARER_TOKEN` ou
-   - `ENO_CSRF_TOKEN` + `ENOVIA_COOKIE`.
+   - **Recomendado (produção):** `THREEDX_USERNAME`, `THREEDX_PASSWORD`, `THREEDX_AUTH_MODE=cas`
+   - `THREEDX_PASSPORT_URL` (ex.: `https://r1132100929518-eu1.iam.3dexperience.3ds.com`)
+   - `AUTO_CSRF=true`
+   - Alternativa legada (expira em ~2h): `ENO_CSRF_TOKEN` + `ENOVIA_COOKIE`
+   - Ou `ENOVIA_BEARER_TOKEN` quando disponível
+
+### Verificar autenticação real
+
+```bash
+curl -s https://bom-resolver.onrender.com/api/3dx/bom/health/authcheck
+```
+
+Esperado quando OK: `"canReadKnownRoot": true` para o root CJ MESA.
+
+`ENOVIA_COOKIE` expirado retorna `sessionExpired: true` — renovar via CAS (`THREEDX_USERNAME`/`THREEDX_PASSWORD`).
 
 ## Variáveis
 

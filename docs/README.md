@@ -4,7 +4,8 @@ Esta pasta concentra o direcionamento tecnico atual do projeto.
 
 ## Leitura recomendada
 
-1. [Plano tecnico - Fase 0](PLANO-TECNICO-FASE-0.md)
+1. [**3DX Dashboard — Visual aprovado (2026-06-17)**](3DX-DASHBOARD-VISUAL-APPROVED-20260617.md)
+2. [Plano tecnico - Fase 0](PLANO-TECNICO-FASE-0.md)
 2. [Decisoes tecnicas](DECISOES-TECNICAS.md)
 3. [Plano de sprints priorizado](PLANO-SPRINTS-PRIORIZADO.md)
 4. [Organizacao do repositorio](ORGANIZACAO-REPOSITORIO.md)

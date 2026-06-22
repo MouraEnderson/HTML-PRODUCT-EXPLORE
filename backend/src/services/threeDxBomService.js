@@ -1,7 +1,9 @@
 import { getThreeDxConfig, getPublicEnvironmentFlags } from './threeDxConfig.js';
 import { ThreeDxDsengClient, assertDsengConfigured } from './threeDxDsengClient.js';
+import { getCasCredentials, probeCasAuth } from './threeDxCasAuth.js';
 import { resolveSelectionToEngItem } from './selectionResolver.js';
 import { normalizeExpandItemPayload } from './threeDxExpandItemNormalizer.js';
+import { attachScopeToPayload } from './scopeContract.js';
 import {
   SOURCE,
   CJ_MESA_ROOT_ID,
@@ -48,7 +50,125 @@ export function getSkaHealth() {
     source: SOURCE,
     version: 'v1',
     mode,
-    upstream: config.upstream
+    upstream: config.upstream,
+    auth: {
+      configured: config.authConfigured,
+      mode: config.authMode,
+      casFallback: Boolean(config.casFallback),
+      cookieConfigured: Boolean(config.cookie),
+      usernameConfigured: Boolean(config.usernameConfigured),
+      passwordConfigured: Boolean(config.passwordConfigured),
+      passportUrlConfigured: Boolean(config.passportUrl),
+      passportUrlIgnored: Boolean(config.passportUrlIgnored),
+      spaceUrlHost: config.spaceUrlHost || '',
+      spaceUrlDerivedFromIfwe: Boolean(config.spaceUrlDerivedFromIfwe),
+      spaceUrlInvalid: Boolean(config.spaceUrlInvalid),
+      securityContextValid: Boolean(config.securityContextValid),
+      securityContextHadNewline: Boolean(config.securityContextHadNewline)
+    },
+    deploy: {
+      commit: String(process.env.RENDER_GIT_COMMIT || process.env.GITHUB_SHA || '').slice(0, 12),
+      service: String(process.env.RENDER_SERVICE_NAME || '')
+    }
+  };
+}
+
+export async function getSkaAuthHealth() {
+  const base = getSkaHealth();
+  const config = getThreeDxConfig();
+  const auth = {
+    configured: config.authConfigured,
+    mode: config.authMode,
+    casFallback: Boolean(config.casFallback),
+    usernameConfigured: Boolean(config.usernameConfigured),
+    passwordConfigured: Boolean(config.passwordConfigured),
+    dsengReachable: false,
+    canReadKnownRoot: false,
+    knownRootId: CJ_MESA_ROOT_ID,
+    sessionExpired: false,
+    error: null
+  };
+
+  const configuredCheck = assertDsengConfigured(config);
+  if (!configuredCheck.ok) {
+    auth.error = configuredCheck.message;
+    return { ...base, ok: false, auth };
+  }
+
+  if (config.authMode === 'cas') {
+    auth.casProbe = await probeCasAuth(config);
+    if (config.passportUrlIgnored) {
+      auth.passportUrlIgnored = true;
+      auth.hint =
+        'THREEDX_PASSPORT_URL on Render is invalid (dashboard/ifwe URL). Remove it or set https://r<TENANT>-eu1.iam.3dexperience.3ds.com';
+    }
+    if (config.spaceUrlDerivedFromIfwe) {
+      auth.spaceUrlDerivedFromIfwe = true;
+      auth.hint =
+        'THREEDX_SPACE_URL was dashboard/ifwe URL — auto-derived to *-space*. Save explicit space URL on Render.';
+    }
+    if (config.spaceUrlInvalid) {
+      auth.spaceUrlInvalid = true;
+      auth.hint =
+        'THREEDX_SPACE_URL invalid. Set https://r1132100929518-us1-space.3dexperience.3ds.com/enovia (never ifwe/dashboard).';
+    }
+    if (config.securityContextHadNewline) {
+      auth.securityContextHadNewline = true;
+      auth.hint =
+        'SECURITY_CONTEXT had line break in Render. Use single line: ctx::VPLMProjectLeader.Company Name.CS_IMPLANTACAO';
+    }
+    try {
+      const creds = await getCasCredentials(config, { forceRefresh: true });
+      auth.casLoginOk = true;
+      auth.casHasCsrf = Boolean(creds.csrfToken);
+      auth.casHasCookie = Boolean(creds.cookie);
+    } catch (error) {
+      auth.casLoginOk = false;
+      auth.casLoginError = String(error?.message || error).slice(0, 300);
+      auth.error = auth.casLoginError;
+      auth.sessionExpired = /CAS login rejected|invalid_grant|authenticated session/i.test(auth.casLoginError);
+      if (/CAS login rejected/i.test(auth.casLoginError)) {
+        auth.hint =
+          'CAS rejected THREEDX_USERNAME/THREEDX_PASSWORD on Render. Update credentials (no dashboard URLs, no quotes).';
+      } else if (/tenant .* does not exist/i.test(auth.casLoginError)) {
+        auth.hint =
+          'THREEDX_SPACE_URL must be *-space* (not ifwe/dashboard). Use https://r1132100929518-us1-space.3dexperience.3ds.com/enovia';
+      } else if (/CAS service authentication failed \(401\)/i.test(auth.casLoginError)) {
+        auth.hint =
+          '3DPassport OK, 3DSpace CSRF returned 401. Verify THREEDX_SECURITY_CONTEXT and user access to CS_IMPLANTACAO.';
+      }
+      if (!config.securityContextValid) {
+        auth.securityContextInvalid = true;
+        auth.hint =
+          'THREEDX_SECURITY_CONTEXT must start with ctx:: (example: ctx::VPLMProjectLeader.Company Name.CS_IMPLANTACAO).';
+      }
+      return { ...base, ok: false, auth };
+    }
+  }
+
+  const client = new ThreeDxDsengClient(config);
+  try {
+    const result = await client.getEngItem(CJ_MESA_ROOT_ID);
+    auth.dsengReachable = true;
+    auth.canReadKnownRoot = Boolean(result?.ok);
+    if (!auth.canReadKnownRoot) {
+      auth.error = 'Known root EngItem was not readable';
+    }
+  } catch (error) {
+    const mapped = client.mapUpstreamError(error);
+    auth.error = mapped.message;
+    auth.sessionExpired = mapped.code === 'UPSTREAM_AUTH_FAILED';
+    auth.upstreamDetail = String(error?.message || '').slice(0, 240);
+    if (auth.sessionExpired && config.authMode === 'cas') {
+      auth.hint =
+        'Verify THREEDX_USERNAME/THREEDX_PASSWORD on Render and ensure 3DPassport allows server-side CAS login.';
+    }
+  }
+
+  return {
+    ...base,
+    ok: auth.canReadKnownRoot,
+    auth
   };
 }
 
@@ -97,8 +217,28 @@ function parseStructureInput(body, defaultDepth = 1, mode = 'dseng-official') {
     expandDepth: Number(body.expandDepth ?? depthResult.depth),
     includeRoot: body.includeRoot !== false,
     mode: body.mode || mode,
-    expandStrategy: body.expandStrategy || ''
+    expandStrategy: body.expandStrategy || '',
+    scopeMode: body.scopeMode || body.payloadMode || '',
+    selectionSource: body.selectionSource || ''
   };
+}
+
+function scopeOptionsFromParsed(parsed, data, overrides = {}) {
+  const root = data?.root || {};
+  return {
+    mode: overrides.mode || parsed.scopeMode || 'root',
+    source: overrides.source || 'dseng',
+    item: overrides.item || root.title || root.id || parsed.rootId || '',
+    rootId: overrides.rootId || parsed.rootId || root.id || '',
+    expandStrategy: parsed.expandStrategy === 'expand-item' ? 'expand-item' : 'eng-instances',
+    expandDepth: parsed.expandDepth || parsed.depth || 1,
+    isPartial: overrides.isPartial !== false,
+    selectionSource: parsed.selectionSource || overrides.selectionSource || ''
+  };
+}
+
+function withStructureScope(data, parsed, overrides = {}) {
+  return attachScopeToPayload(data, scopeOptionsFromParsed(parsed, data, overrides));
 }
 
 function buildRootMeta(rootId) {
@@ -166,21 +306,25 @@ export function resolveMockStructure(body) {
 
   return {
     ok: true,
-    data: buildStructureSuccess({
-      mode: 'mock',
-      root: rootMeta,
-      rows,
-      depth: parsed.depth,
-      includeRoot: parsed.includeRoot,
-      diagnostics: buildDiagnostics({
+    data: withStructureScope(
+      buildStructureSuccess({
         mode: 'mock',
-        endpointsUsed: [],
-        durationMs: 0,
-        warnings: ['Mock response only. No 3DEXPERIENCE call was executed in PR 2.'],
-        errors: [],
-        levelCounts: counts.levelCounts
-      })
-    })
+        root: rootMeta,
+        rows,
+        depth: parsed.depth,
+        includeRoot: parsed.includeRoot,
+        diagnostics: buildDiagnostics({
+          mode: 'mock',
+          endpointsUsed: [],
+          durationMs: 0,
+          warnings: ['Mock response only. No 3DEXPERIENCE call was executed in PR 2.'],
+          errors: [],
+          levelCounts: counts.levelCounts
+        })
+      }),
+      parsed,
+      { mode: parsed.scopeMode || 'root', isPartial: parsed.depth > 0 }
+    )
   };
 }
 
@@ -316,25 +460,28 @@ async function resolveDsengStructure(parsed, config) {
 
   return {
     ok: true,
-    data: buildStructureSuccess({
-      mode: 'dseng-official',
-      root,
-      rows,
-      depth: parsed.depth,
-      includeRoot: parsed.includeRoot,
-      diagnostics: buildDiagnostics({
+    data: withStructureScope(
+      buildStructureSuccess({
         mode: 'dseng-official',
-        endpointsUsed: client.getEndpointsUsed(),
-        durationMs: Date.now() - started,
-        warnings,
-        errors,
-        levelCounts: counts.levelCounts,
-        missingChildReferenceIdsCount,
-        skippedInstancesCount,
-        missingChildReferenceSampleKeys,
-        truncatedInstancesCount
-      })
-    })
+        root,
+        rows,
+        depth: parsed.depth,
+        includeRoot: parsed.includeRoot,
+        diagnostics: buildDiagnostics({
+          mode: 'dseng-official',
+          endpointsUsed: client.getEndpointsUsed(),
+          durationMs: Date.now() - started,
+          warnings,
+          errors,
+          levelCounts: counts.levelCounts,
+          missingChildReferenceIdsCount,
+          skippedInstancesCount,
+          missingChildReferenceSampleKeys,
+          truncatedInstancesCount
+        })
+      }),
+      parsed
+    )
   };
 }
 
@@ -387,19 +534,25 @@ async function resolveDsengExpandItem(parsed, config) {
       endpointsUsed: client.getEndpointsUsed(),
       durationMs: Date.now() - started
     });
-    return { ok: true, data };
+    return { ok: true, data: withStructureScope(data, parsed) };
   } catch (error) {
     return failureFromUpstream(error, client, parsed.mode || 'dseng-official');
   }
 }
 
-export async function buildExpandItemFromRoot({ rootId, expandDepth = 1, includeRoot, mode = 'dseng-official' }, config) {
+export async function buildExpandItemFromRoot(
+  { rootId, expandDepth = 1, includeRoot, mode = 'dseng-official', scopeMode = '', selectionSource = '' },
+  config
+) {
   const parsed = {
     rootId: normalizeRootId(rootId),
     expandDepth,
     depth: expandDepth,
     includeRoot: includeRoot !== false,
-    mode
+    mode,
+    expandStrategy: 'expand-item',
+    scopeMode,
+    selectionSource
   };
   if (!parsed.rootId) {
     return {
@@ -474,7 +627,17 @@ function parseResolveSelectionInput(body, defaultDepth = 1, mode = 'dseng-offici
   if (!depthResult.ok) {
     return depthResult;
   }
-  const selection = body.selection || {};
+  let selection = body.selection || {};
+  if ((!selection.normalized && !selection.raw) && (body.title || body.name)) {
+    selection = {
+      normalized: {
+        title: String(body.title || '').trim(),
+        name: String(body.name || '').trim(),
+        source: body.selectionSource || 'API_FLAT'
+      },
+      source: body.selectionSource || 'API_FLAT'
+    };
+  }
   return {
     ok: true,
     selection,
@@ -483,7 +646,9 @@ function parseResolveSelectionInput(body, defaultDepth = 1, mode = 'dseng-offici
     includeRoot: body.includeRoot !== false,
     mode: body.mode || mode,
     expandStrategy: body.expandStrategy || '',
-    manualRootId: normalizeRootId(body.manualRootId || selection.manualRootId || selection.normalized?.manualRootId)
+    manualRootId: normalizeRootId(body.manualRootId || selection.manualRootId || selection.normalized?.manualRootId),
+    scopeMode: body.scopeMode || body.payloadMode || 'selected-branch',
+    selectionSource: body.selectionSource || selection.source || ''
   };
 }
 
@@ -580,7 +745,9 @@ export async function resolveSelection(body) {
           rootId: resolution.rootId,
           expandDepth: parsed.expandDepth || parsed.depth || 1,
           includeRoot: parsed.includeRoot,
-          mode: parsed.mode
+          mode: parsed.mode,
+          scopeMode: parsed.scopeMode || 'selected-branch',
+          selectionSource: parsed.selectionSource
         },
         config
       )

@@ -1,5 +1,6 @@
 import { EnoviaClient, extractMembers } from './enoviaClient.js';
 import { getThreeDxConfig } from './threeDxConfig.js';
+import { getCasCredentials, invalidateCasSession } from './threeDxCasAuth.js';
 
 const ENG_ITEM_ENDPOINT = '/dseng:EngItem/{ID}';
 const ENG_ITEM_SEARCH_ENDPOINT = '/dseng:EngItem/search';
@@ -10,6 +11,8 @@ export class ThreeDxDsengClient {
   constructor(config = getThreeDxConfig()) {
     this.config = config;
     this.endpointsUsed = [];
+    this._authReady = false;
+    this._authModeInUse = config.authMode;
     const selectedAuth = {
       bearerToken: config.authMode === 'bearer' ? config.bearerToken : '',
       cookie: config.authMode === 'cookie' ? config.cookie : '',
@@ -20,9 +23,60 @@ export class ThreeDxDsengClient {
       spaceUrl: config.spaceUrl,
       securityContext: config.securityContext,
       csrfToken: config.csrfToken,
-      authMode: config.authMode,
+      authMode: config.authMode === 'basic' ? 'basic' : '',
       ...selectedAuth
     });
+  }
+
+  async ensureAuthenticated({ forceRefresh = false } = {}) {
+    if (this._authReady && !forceRefresh) return;
+
+    if (this.config.authMode === 'cas' || this._authModeInUse === 'cas') {
+      const creds = await getCasCredentials(this.config, { forceRefresh });
+      this.client.cookie = creds.cookie;
+      this.client.csrfToken = creds.csrfToken || this.client.csrfToken || '';
+      this.client.csrfHeaderName = creds.csrfHeaderName || this.client.csrfHeaderName;
+      this._authModeInUse = 'cas';
+      this._authReady = true;
+      return;
+    }
+
+    if (this.config.authMode === 'cookie') {
+      this.client.cookie = this.config.cookie;
+      this._authModeInUse = 'cookie';
+      this._authReady = true;
+      return;
+    }
+
+    this._authReady = true;
+  }
+
+  async switchToCasAuth({ forceRefresh = true } = {}) {
+    if (!this.config.username || !this.config.password) {
+      throw new Error('CAS fallback requires THREEDX_USERNAME and THREEDX_PASSWORD');
+    }
+    invalidateCasSession(this.config);
+    this._authReady = false;
+    this._authModeInUse = 'cas';
+    await this.ensureAuthenticated({ forceRefresh });
+  }
+
+  isAuthFailure(error) {
+    return this.mapUpstreamError(error).code === 'UPSTREAM_AUTH_FAILED';
+  }
+
+  async withAuthRetry(operation) {
+    await this.ensureAuthenticated();
+    try {
+      return await operation();
+    } catch (error) {
+      const canRetryWithCas = this.config.casFallback || this.config.authMode === 'cas';
+      if (!canRetryWithCas || !this.isAuthFailure(error)) {
+        throw error;
+      }
+      await this.switchToCasAuth({ forceRefresh: true });
+      return operation();
+    }
   }
 
   recordEndpoint(method, endpoint, status) {
@@ -30,6 +84,7 @@ export class ThreeDxDsengClient {
   }
 
   async ensureCsrf() {
+    await this.ensureAuthenticated();
     if (this.client.csrfToken || process.env.AUTO_CSRF !== 'true') {
       return;
     }
@@ -42,6 +97,9 @@ export class ThreeDxDsengClient {
     const status = Number(error?.status || 0);
     const upstreamDetail = `${error?.bodySummary || ''} ${error?.message || ''}`;
     if (/invalid_grant|authenticated session|service ticket/i.test(upstreamDetail)) {
+      return { code: 'UPSTREAM_AUTH_FAILED', message: 'Failed to authenticate with 3DEXPERIENCE' };
+    }
+    if (/CAS fetch failed|CAS login rejected|CAS service authentication failed|CAS CSRF token unavailable|CAS_PASSPORT_BLOCKED|login ticket unavailable/i.test(upstreamDetail)) {
       return { code: 'UPSTREAM_AUTH_FAILED', message: 'Failed to authenticate with 3DEXPERIENCE' };
     }
     if (status === 401 || status === 403) {
@@ -58,53 +116,59 @@ export class ThreeDxDsengClient {
 
   async getEngItem(id) {
     const endpoint = ENG_ITEM_ENDPOINT;
-    try {
-      const data = await this.client.getEngItem(id);
-      this.recordEndpoint('GET', endpoint, 200);
-      return { ok: true, data };
-    } catch (error) {
-      this.recordEndpoint('GET', endpoint, Number(error?.status || 502));
-      throw error;
-    }
+    return this.withAuthRetry(async () => {
+      try {
+        const data = await this.client.getEngItem(id);
+        this.recordEndpoint('GET', endpoint, 200);
+        return { ok: true, data };
+      } catch (error) {
+        this.recordEndpoint('GET', endpoint, Number(error?.status || 502));
+        throw error;
+      }
+    });
   }
 
   async searchEngItems(searchStr, top = 20) {
     const endpoint = ENG_ITEM_SEARCH_ENDPOINT;
-    try {
-      const data = await this.client.searchEngItems(searchStr, top);
-      this.recordEndpoint('GET', endpoint, 200);
-      return { ok: true, data };
-    } catch (error) {
-      this.recordEndpoint('GET', endpoint, Number(error?.status || 502));
-      throw error;
-    }
+    return this.withAuthRetry(async () => {
+      try {
+        const data = await this.client.searchEngItems(searchStr, top);
+        this.recordEndpoint('GET', endpoint, 200);
+        return { ok: true, data };
+      } catch (error) {
+        this.recordEndpoint('GET', endpoint, Number(error?.status || 502));
+        throw error;
+      }
+    });
   }
 
   async getEngInstances(parentId) {
     const endpoint = ENG_INSTANCE_ENDPOINT;
-    try {
-      const maxPages = Number(process.env.DSENG_MAX_INSTANCE_PAGES || 20);
-      const data = await this.client.getAllEngInstances(parentId, {
-        pageSize: 100,
-        maxPages
-      });
-      const members = extractMembers(data);
-      const totalItems = Number(data?.totalItems ?? members.length);
-      const truncatedInstancesCount = totalItems > members.length
-        ? totalItems - members.length
-        : 0;
-      this.recordEndpoint('GET', endpoint, 200);
-      return {
-        ok: true,
-        data,
-        members,
-        totalItems,
-        truncatedInstancesCount
-      };
-    } catch (error) {
-      this.recordEndpoint('GET', endpoint, Number(error?.status || 502));
-      throw error;
-    }
+    return this.withAuthRetry(async () => {
+      try {
+        const maxPages = Number(process.env.DSENG_MAX_INSTANCE_PAGES || 20);
+        const data = await this.client.getAllEngInstances(parentId, {
+          pageSize: 100,
+          maxPages
+        });
+        const members = extractMembers(data);
+        const totalItems = Number(data?.totalItems ?? members.length);
+        const truncatedInstancesCount = totalItems > members.length
+          ? totalItems - members.length
+          : 0;
+        this.recordEndpoint('GET', endpoint, 200);
+        return {
+          ok: true,
+          data,
+          members,
+          totalItems,
+          truncatedInstancesCount
+        };
+      } catch (error) {
+        this.recordEndpoint('GET', endpoint, Number(error?.status || 502));
+        throw error;
+      }
+    });
   }
 
   async expandEngItem(parentId, { expandDepth = 1 } = {}) {
@@ -115,15 +179,17 @@ export class ThreeDxDsengClient {
       type_filter_bo: ['VPMReference', 'VPMRepReference'],
       type_filter_rel: ['VPMInstance', 'VPMRepInstance']
     };
-    try {
-      await this.ensureCsrf();
-      const data = await this.client.expandEngItem(parentId, body);
-      this.recordEndpoint('POST', endpoint, 200);
-      return { ok: true, data };
-    } catch (error) {
-      this.recordEndpoint('POST', endpoint, Number(error?.status || 502));
-      throw error;
-    }
+    return this.withAuthRetry(async () => {
+      try {
+        await this.ensureCsrf();
+        const data = await this.client.expandEngItem(parentId, body);
+        this.recordEndpoint('POST', endpoint, 200);
+        return { ok: true, data };
+      } catch (error) {
+        this.recordEndpoint('POST', endpoint, Number(error?.status || 502));
+        throw error;
+      }
+    });
   }
 
   getEndpointsUsed() {

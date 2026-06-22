@@ -8,6 +8,14 @@
   var DEBOUNCE_MS = 500;
   var POLL_MS = 3000;
   var ALLOWED_EXPLORER_CONTEXT_SOURCES = ['query-id', 'query-name', 'config-id', 'registry'];
+  /** Regression registry — item real conhecido no tenant piloto (não é mock). */
+  var KNOWN_EXPLORER_ROOT_REGISTRY = [
+    {
+      physicalId: 'prd-R1132100929518-01103695',
+      title: 'CJ MESA 4BCS VP TOP 3DX',
+      rootId: '63FC553465A62400699E0792000086AB'
+    }
+  ];
   var listeners = [];
   var lastContext = null;
   var lastRawPlatformItem = null;
@@ -29,6 +37,48 @@
       return w.ThreeDXContentParser.isValidPhysicalId(id);
     }
     return /^[0-9A-F]{24,32}$/i.test(id);
+  }
+
+  function normalizeTitleKey(title) {
+    return s(title).toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  function resolveKnownExplorerRoot(ctx) {
+    ctx = ctx || {};
+    var physicalId = s(ctx.physicalId || ctx.id || ctx.selectedId);
+    var title = s(ctx.productName || ctx.rootName || ctx.displayName || ctx.title || ctx.name);
+    var titleKey = normalizeTitleKey(title);
+    var i;
+    for (i = 0; i < KNOWN_EXPLORER_ROOT_REGISTRY.length; i++) {
+      var entry = KNOWN_EXPLORER_ROOT_REGISTRY[i];
+      if (physicalId && s(entry.physicalId).toLowerCase() === physicalId.toLowerCase()) {
+        return {
+          rootId: entry.rootId,
+          selectedId: entry.rootId,
+          physicalId: entry.physicalId,
+          title: title || entry.title,
+          source: 'EXPLORER_CONTEXT_REGISTRY_KNOWN_ROOT',
+          selectionMode: 'known-root-registry',
+          expansionAvailable: true,
+          autoSyncAvailable: true,
+          message: 'Contexto Product Explorer mapeado para root dseng conhecido (registry regressão)'
+        };
+      }
+      if (titleKey && normalizeTitleKey(entry.title) === titleKey) {
+        return {
+          rootId: entry.rootId,
+          selectedId: entry.rootId,
+          physicalId: entry.physicalId,
+          title: title || entry.title,
+          source: 'EXPLORER_CONTEXT_REGISTRY_KNOWN_ROOT',
+          selectionMode: 'known-root-registry',
+          expansionAvailable: true,
+          autoSyncAvailable: true,
+          message: 'Contexto Product Explorer mapeado por título para root dseng conhecido (registry regressão)'
+        };
+      }
+    }
+    return null;
   }
 
   function isSensitiveKey(key) {
@@ -210,27 +260,45 @@
     w.ExplorerContext.refresh(false);
     var ctx = w.ExplorerContext.get();
     lastRawExplorerContext = ctx || null;
-    if (!ctx || !ctx.hasValidPhysicalId) return { normalized: null, raw: ctx || null };
+    if (!ctx) return { normalized: null, raw: null };
+    var title = s(ctx.productName || ctx.rootName || ctx.displayName);
+    var name = s(ctx.name || ctx.objectName || '');
+    var physicalId = s(ctx.physicalId);
     var src = s(ctx.source);
-    if (ALLOWED_EXPLORER_CONTEXT_SOURCES.indexOf(src) < 0) {
-      return { normalized: null, raw: ctx || null };
+    var known = resolveKnownExplorerRoot({ physicalId: physicalId, title: title, name: name, selectedId: ctx.selectedId });
+    if (known) {
+      known.name = name;
+      known.eventType = 'context';
+      known.path = 'B';
+      known.lastSyncAt = null;
+      known.bridgeDiagnostic = getBridgeDiagnosticStatus();
+      return { normalized: known, raw: ctx };
     }
-    return {
-      normalized: {
-        rootId: s(ctx.physicalId),
-        selectedId: s(ctx.physicalId),
-        title: s(ctx.productName || ctx.rootName || ctx.displayName),
-        source: 'EXPLORER_CONTEXT',
-        eventType: 'context',
-        path: 'B',
-        expansionAvailable: false,
-        autoSyncAvailable: true,
-        message: 'Contexto Product Explorer detectado',
-        lastSyncAt: null,
-        bridgeDiagnostic: getBridgeDiagnosticStatus()
-      },
-      raw: ctx
+    var base = {
+      rootId: isValidPhysicalId(physicalId) ? physicalId : '',
+      selectedId: isValidPhysicalId(physicalId) ? physicalId : s(ctx.selectedId || name || title),
+      physicalId: isValidPhysicalId(physicalId) ? physicalId : s(physicalId),
+      name: name,
+      title: title,
+      source: 'EXPLORER_CONTEXT',
+      eventType: 'context',
+      path: 'B',
+      expansionAvailable: false,
+      autoSyncAvailable: true,
+      message: ctx.hasValidPhysicalId
+        ? 'Contexto Product Explorer detectado'
+        : 'Contexto Product Explorer parcial (titulo sem rootId dseng)',
+      lastSyncAt: null,
+      bridgeDiagnostic: getBridgeDiagnosticStatus()
     };
+    if (ctx.hasValidPhysicalId && ALLOWED_EXPLORER_CONTEXT_SOURCES.indexOf(src) >= 0) {
+      return { normalized: base, raw: ctx };
+    }
+    if (title || name) {
+      base.selectionMode = 'fallback';
+      return { normalized: base, raw: ctx };
+    }
+    return { normalized: null, raw: ctx };
   }
 
   function readExplorerContextOfficial() {
@@ -306,14 +374,50 @@
       };
     }
     if (ctxOfficial && ctxOfficial.rootId) {
-      ctxOfficial.selectionMode = 'root';
+      ctxOfficial.selectionMode = ctxOfficial.selectionMode || 'root';
+      ctxOfficial.expansionAvailable = ctxOfficial.expansionAvailable !== false;
       ctxOfficial.selectedCandidates = selectedCandidates.filter(Boolean);
       return ctxOfficial;
     }
-    if (ctxOfficial && ctxOfficial.title) {
-      ctxOfficial.selectionMode = 'fallback';
+    if (ctxOfficial && (ctxOfficial.title || ctxOfficial.name)) {
+      var knownMerge = resolveKnownExplorerRoot(ctxOfficial);
+      if (knownMerge) {
+        knownMerge.name = ctxOfficial.name || knownMerge.name;
+        knownMerge.label = ctxOfficial.label || ctxOfficial.title;
+        knownMerge.eventType = ctxOfficial.eventType || 'context';
+        knownMerge.path = 'B';
+        knownMerge.selectedCandidates = selectedCandidates.filter(Boolean);
+        knownMerge.lastSyncAt = null;
+        knownMerge.bridgeDiagnostic = getBridgeDiagnosticStatus();
+        return knownMerge;
+      }
+      ctxOfficial.selectionMode = ctxOfficial.selectionMode || 'fallback';
       ctxOfficial.selectedCandidates = selectedCandidates.filter(Boolean);
+      if (!ctxOfficial.source) ctxOfficial.source = 'EXPLORER_CONTEXT';
       return ctxOfficial;
+    }
+    if (selectedCandidates.length) {
+      var hint = selectedCandidates[0] || {};
+      return {
+        rootId: '',
+        selectedId: s(hint.id || hint.physicalId || hint.name || hint.title),
+        physicalId: s(hint.physicalId),
+        name: s(hint.name),
+        title: s(hint.title || hint.label || hint.name),
+        label: s(hint.label || hint.title),
+        type: s(hint.type),
+        source: 'PRODUCT_EXPLORER_CONTEXT',
+        selectionSource: s(hint.source),
+        eventType: 'partial-context',
+        selectionMode: 'fallback',
+        selectedCandidates: selectedCandidates.filter(Boolean),
+        path: 'B',
+        expansionAvailable: false,
+        autoSyncAvailable: true,
+        message: 'Contexto parcial do Product Explorer (sem rootId dseng)',
+        lastSyncAt: null,
+        bridgeDiagnostic: getBridgeDiagnosticStatus()
+      };
     }
     return emptyContext();
   }
@@ -436,6 +540,8 @@
     getRawSelectionContext: getRawSelectionContext,
     getBridgeDiagnosticStatus: getBridgeDiagnosticStatus,
     isValidPhysicalId: isValidPhysicalId,
+    resolveKnownExplorerRoot: resolveKnownExplorerRoot,
+    KNOWN_EXPLORER_ROOT_REGISTRY: KNOWN_EXPLORER_ROOT_REGISTRY,
     DEBOUNCE_MS: DEBOUNCE_MS
   };
 })(window);

@@ -13,16 +13,30 @@ services:
         value: https://mouraenderson.github.io,https://r1132100929518-us1-ifwe.3dexperience.3ds.com
       - key: SPACE_URL
         value: https://r1132100929518-us1-space.3dexperience.3ds.com/enovia
+      - key: THREEDX_SPACE_URL
+        value: https://r1132100929518-us1-space.3dexperience.3ds.com/enovia
+      - key: THREEDX_PASSPORT_URL
+        value: https://r1132100929518-eu1.iam.3dexperience.3ds.com
       - key: SECURITY_CONTEXT
         value: ctx::VPLMProjectLeader.Company Name.CS_IMPLANTACAO
+      - key: THREEDX_SECURITY_CONTEXT
+        value: ctx::VPLMProjectLeader.Company Name.CS_IMPLANTACAO
+      - key: BOM_SERVICE_MODE
+        value: dseng
+      - key: THREEDX_AUTH_MODE
+        value: cas
+      - key: AUTO_CSRF
+        value: true
       - key: BOM_MAX_ITEMS
         value: 20000
       - key: BOM_PAGE_SIZE
         value: 100
       - key: BOM_MAX_DEPTH
         value: 40
-      - key: AUTO_CSRF
-        value: false
+      - key: THREEDX_USERNAME
+        sync: false
+      - key: THREEDX_PASSWORD
+        sync: false
       - key: ENOVIA_BEARER_TOKEN
         sync: false
       - key: ENO_CSRF_TOKEN

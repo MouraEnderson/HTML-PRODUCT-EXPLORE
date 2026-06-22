@@ -6,9 +6,20 @@
   var BUILD = 'bom20260617d';
   var SKA_URL = 'https://bom-resolver.onrender.com/api/3dx/bom/structure';
   var RESOLVE_URL = 'https://bom-resolver.onrender.com/api/3dx/bom/resolve-selection';
-  var DATA_SOURCE = 'ska-bom-service';
+  var VIZ_URL = 'https://bom-resolver.onrender.com/api/3dx/visualization/resolve';
+  var LIFECYCLE_TRANSITIONS_URL = 'https://bom-resolver.onrender.com/api/3dx/lifecycle/transitions';
+  var LIFECYCLE_CHANGE_URL = 'https://bom-resolver.onrender.com/api/3dx/lifecycle/change-maturity';
+  var DATA_SOURCE = 'wafdata-session';
+  var LEGACY_SKA_SOURCE = 'ska-bom-service';
+  var DEFAULT_SPACE_URL = 'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia';
+  var WAF_EXPAND_VARIANT = 'official-dseng-v1+sc+csrf';
+  var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'waf3dx20260620g';
   var DEFAULT_DEPTH = 1;
   var SESSION_KEY = '3dx_bom_snapshot_v1';
+  var LAST_GOOD_CONTEXT_KEY = 'bomAnalytics:lastGoodContext:bom20260617d';
+  var KNOWN_ROOT_ID = '63FC553465A62400699E0792000086AB';
+  var KNOWN_ROOT_TITLE_HINT = 'CJ MESA';
+  var BOOT_CONTEXT_WAIT_MS = 1000;
   var guardLock = false;
   var lastSyncRootId = '';
   var lastSyncDepth = DEFAULT_DEPTH;
@@ -31,6 +42,9 @@
   };
   var RIGHT_PANEL_KEY = 'bomAnalyticsRightPanel';
   var rightPanelPreference = null;
+  var activeEbomRow = null;
+  var activeLifecycleRequestId = 0;
+  var activeVisualizationRequestId = 0;
 
   w.__BOM_EXPECTED_BUILD__ = BUILD;
   w.__BOM_RUNTIME_BUILD__ = BUILD;
@@ -56,6 +70,107 @@
     try {
       if (w.localStorage) w.localStorage.setItem(key, value);
     } catch (e) {}
+  }
+
+  function getTenantSlug() {
+    var m = String(DEFAULT_SPACE_URL).match(/\/\/(r\d+-[a-z0-9]+)-space\./i);
+    return m ? m[1].toLowerCase() : 'r1132100929518-us1';
+  }
+
+  function parseLastGoodContext(raw) {
+    if (!raw) return null;
+    try {
+      var ctx = JSON.parse(raw);
+      if (!ctx || typeof ctx !== 'object') return null;
+      if (ctx.build && ctx.build !== BUILD) return null;
+      if (ctx.tenant && ctx.tenant !== getTenantSlug()) return null;
+      if (!isValidDsengPhysicalId(ctx.rootId)) return null;
+      return ctx;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function loadLastGoodContext() {
+    return parseLastGoodContext(safeStorageGet(LAST_GOOD_CONTEXT_KEY));
+  }
+
+  function buildLastGoodContextRecord(payload, resolved) {
+    payload = payload || {};
+    resolved = resolved || {};
+    var root = payload.root || {};
+    return {
+      build: BUILD,
+      tenant: getTenantSlug(),
+      spaceUrl: DEFAULT_SPACE_URL,
+      rootId: s(resolved.rootId || root.id),
+      rootTitle: s(resolved.rootTitle || root.title || lastSyncTitle),
+      rootName: s(resolved.rootName || ''),
+      mode: 'dseng-official',
+      expandStrategy: 'expand-item',
+      depth: Number(resolved.depth != null ? resolved.depth : lastSyncDepth || DEFAULT_DEPTH),
+      expandDepth: Number(
+        resolved.expandDepth != null
+          ? resolved.expandDepth
+          : resolved.depth != null
+          ? resolved.depth
+          : lastSyncDepth || DEFAULT_DEPTH
+      ),
+      includeRoot: resolved.includeRoot !== false,
+      lastSuccessAt: new Date().toISOString()
+    };
+  }
+
+  function shouldPersistLastGoodContext(payload) {
+    if (!payload || payload.ok === false) return false;
+    var total = getSkaExpectedTotal(payload);
+    var rows = payload.rows || [];
+    var rootId = s((payload.root && payload.root.id) || lastSyncRootId);
+    if (!isValidDsengPhysicalId(rootId)) return false;
+    if (!rows.length || total <= 0) return false;
+    return true;
+  }
+
+  function persistLastGoodContext(payload, resolved) {
+    if (!shouldPersistLastGoodContext(payload)) return;
+    safeStorageSet(LAST_GOOD_CONTEXT_KEY, JSON.stringify(buildLastGoodContextRecord(payload, resolved)));
+  }
+
+  function applyLastGoodContextToUi(saved, warning) {
+    if (!saved) return false;
+    var adv = byId('explorerObjectId');
+    if (adv) adv.value = saved.rootId;
+    var depthEl = byId('skaDepthInput');
+    if (depthEl && saved.depth) depthEl.value = String(saved.depth);
+    lastSyncRootId = saved.rootId;
+    lastSyncDepth = saved.depth || DEFAULT_DEPTH;
+    lastSyncTitle = saved.rootTitle || '';
+    lastContextMeta = {
+      source: 'LAST_GOOD_CONTEXT',
+      title: saved.rootTitle,
+      candidateRootId: saved.rootName || saved.rootTitle,
+      rootIdUsed: saved.rootId,
+      validationStatus: 'VALID',
+      fallbackWarning: warning || ''
+    };
+    updateExplorerContextStatus({
+      rootId: saved.rootId,
+      title: saved.rootTitle,
+      source: 'LAST_GOOD_CONTEXT'
+    });
+    if (warning) showFallbackBanner(warning);
+    return true;
+  }
+
+  function showFallbackBanner(message) {
+    var banner = byId('syncBanner');
+    if (!banner || !message) return;
+    banner.classList.remove('bom-hidden');
+    banner.innerHTML = escapeHtml(message);
+  }
+
+  function hasRenderableSkaPayload() {
+    return !!(w.__bomSkaLastPayload && getSkaExpectedTotal(w.__bomSkaLastPayload) > 0);
   }
 
   function normalizeLoadMode(mode) {
@@ -89,12 +204,49 @@
     return false;
   }
 
+  function resolveKnownExplorerRoot(ctx) {
+    ctx = ctx || {};
+    if (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.resolveKnownExplorerRoot) {
+      return w.ProductExplorerSyncProvider.resolveKnownExplorerRoot(ctx);
+    }
+    if (isValidDsengPhysicalId(ctx.rootId)) return null;
+    var title = s(ctx.title || ctx.name || ctx.productName);
+    if (title.indexOf(KNOWN_ROOT_TITLE_HINT) >= 0) {
+      return {
+        rootId: KNOWN_ROOT_ID,
+        selectedId: KNOWN_ROOT_ID,
+        physicalId: s(ctx.physicalId),
+        title: title || KNOWN_ROOT_TITLE_HINT,
+        source: 'EXPLORER_CONTEXT_REGISTRY_KNOWN_ROOT',
+        selectionMode: 'known-root-registry',
+        expansionAvailable: true
+      };
+    }
+    return null;
+  }
+
   function normalizeCandidateRootId(ctx, manualRootId) {
     ctx = ctx || {};
     var candidate = s(manualRootId);
     var source = 'MISSING';
     var title = s(ctx.title || ctx.productName || ctx.rootName);
-    if (!candidate) candidate = s(ctx.rootId || ctx.selectedId);
+    if (!candidate && isValidDsengPhysicalId(ctx.rootId)) candidate = s(ctx.rootId);
+    if (!candidate) {
+      var known = resolveKnownExplorerRoot(ctx);
+      if (known && isValidDsengPhysicalId(known.rootId)) {
+        return {
+          ok: true,
+          rootId: known.rootId,
+          reason: 'VALID',
+          source: known.source || 'EXPLORER_CONTEXT_REGISTRY_KNOWN_ROOT',
+          validationStatus: 'VALID',
+          title: known.title || title,
+          candidateRootId: known.physicalId || known.rootId,
+          rawType: 'known-root-registry'
+        };
+      }
+    }
+    if (!candidate) candidate = s(ctx.selectedId);
     if (candidate && !manualRootId) {
       if (ctx.source === 'PRODUCT_EXPLORER_CONTEXT' || ctx.path === 'B') source = 'PlatformAPI';
       else if (ctx.source === 'EXPLORER_CONTEXT') source = 'ExplorerContext';
@@ -143,25 +295,8 @@
   function renderEmptyKpiPlaceholders() {
     var grid = byId('kpiGrid');
     if (!grid) return;
-    var markers = [
-      { tone: 'green', label: 'Total linhas', value: '0' },
-      { tone: 'blue', label: 'Maturidade', value: '—' },
-      { tone: 'purple', label: 'Proprietários', value: '—' },
-      { tone: 'blue', label: 'Fonte', value: 'SKA' }
-    ];
-    grid.innerHTML = markers
-      .map(function (m) {
-        return (
-          '<div class="stat-marker stat-marker-' +
-          m.tone +
-          '"><span class="stat-marker-label">' +
-          escapeHtml(String(m.label)) +
-          '</span><span class="stat-marker-value">' +
-          escapeHtml(String(m.value)) +
-          '</span></div>'
-        );
-      })
-      .join('');
+    grid.innerHTML = '';
+    grid.style.display = 'none';
   }
 
   function renderEmptyChartsState() {
@@ -183,11 +318,15 @@
     });
   }
 
-  function renderEmptyTableMessage(msg) {
+  function renderEmptyTableMessage(msg, options) {
+    options = options || {};
+    var displayMsg = options.showTechnicalError
+      ? msg || 'Sem dados sincronizados.'
+      : 'Sem dados sincronizados. Use Sincronizar com Product Explorer ou Avançado.';
     var tbody = byId('bomTable') && byId('bomTable').querySelector('tbody');
     if (tbody) {
       tbody.innerHTML =
-        '<tr class="bom-empty-row"><td colspan="12">' + escapeHtml(msg || 'Sem dados sincronizados.') + '</td></tr>';
+        '<tr class="bom-empty-row"><td colspan="12">' + escapeHtml(displayMsg) + '</td></tr>';
     }
     updateTablePager(0);
     var tableLbl = byId('tableProductLabel');
@@ -310,6 +449,25 @@
 
   function renderEmptySkaState(reason, details) {
     details = details || {};
+    if (details.preserveGoodState !== false && hasRenderableSkaPayload()) {
+      renderContextDiagnostics(details.contextMeta || lastContextMeta, reason);
+      if (details.bannerMessage) showFallbackBanner(details.bannerMessage);
+      setStatus(
+        details.statusMessage || 'Estrutura anterior mantida — contexto do Product Explorer incompleto.',
+        details.statusKind || 'info'
+      );
+      return;
+    }
+    if (details.preserveGoodState !== false) {
+      var savedCtx = loadLastGoodContext();
+      if (savedCtx && !details.skipLastGoodRetry) {
+        details.skipLastGoodRetry = true;
+        tryLoadFromLastGoodContext({ silent: true }, null, 'contexto parcial do Product Explorer').catch(function () {
+          renderEmptySkaState(reason, { preserveGoodState: false, skipLastGoodRetry: true });
+        });
+        return;
+      }
+    }
     w.__bomSkaLastPayload = null;
     w.__BOM_SKA_EMPTY_STATE__ = true;
     try {
@@ -320,14 +478,20 @@
     renderEmptyKpiPlaceholders();
     renderEmptyTableMessage(
       details.tableMessage ||
-        'Selecione uma estrutura no Product Explorer e clique Sincronizar, ou use Avançado.'
+        'Selecione uma estrutura no Product Explorer e clique Sincronizar.',
+      { showTechnicalError: false }
     );
     var lbl = byId('selectionLabel');
     if (lbl && details.title) lbl.textContent = details.title;
     var banner = byId('syncBanner');
     if (banner) {
       banner.classList.remove('bom-hidden');
-      banner.innerHTML = escapeHtml(details.bannerMessage || 'Sem dados sincronizados via SKA BOM Service.');
+      banner.innerHTML = escapeHtml(
+        details.bannerMessage ||
+          (details.statusMessage
+            ? details.statusMessage
+            : 'Sem dados sincronizados via wafdata-session.')
+      );
     }
     renderContextDiagnostics(details.contextMeta || lastContextMeta, reason);
     if (details.errorCode === 'ROOT_NOT_FOUND') {
@@ -382,6 +546,597 @@
       .replace(/>/g, '&gt;');
   }
 
+  function findSkaRowForNode(node) {
+    if (!node || !w.__bomSkaLastPayload || !w.__bomSkaLastPayload.rows) return null;
+    var rows = w.__bomSkaLastPayload.rows;
+    var ref = s(node.referenceId || node.referencePhysicalId || node.sourcePhysicalId || node.physicalid);
+    var rowKey = s(node.rowKey);
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      if (rowKey && s(row.rowKey) === rowKey) return row;
+      if (ref && (s(row.referenceId) === ref || s(row.physicalId) === ref)) return row;
+    }
+    return null;
+  }
+
+  function buildActiveEbomRow(node, skaRow) {
+    node = node || {};
+    skaRow = skaRow || {};
+    var referenceId = s(skaRow.referenceId || skaRow.physicalId || node.referenceId || node.sourcePhysicalId || node.physicalid);
+    return {
+      activeEbomRow: node,
+      activeRowKey: s(skaRow.rowKey || node.rowKey),
+      activeReferenceId: referenceId,
+      activePhysicalId: s(skaRow.physicalId || node.sourcePhysicalId || node.physicalid || referenceId),
+      activeInstanceId: s(skaRow.instanceId || node.instanceId),
+      activePath: Array.isArray(skaRow.path) ? skaRow.path.slice() : [],
+      activeTitle: s(node.title || skaRow.title || node.name),
+      activeName: s(node.name || skaRow.name || node.title),
+      activeRevision: s(node.revision || skaRow.revision),
+      activeMaturity: s(node.maturity || node.state || skaRow.maturity || skaRow.state),
+      activeOwner: s(node.owner || skaRow.owner),
+      activeType: s(node.type || node.displayType || skaRow.type),
+      activeDescription: s(node.description || skaRow.description),
+      activeState: s(node.state || node.maturity || skaRow.state || skaRow.maturity),
+      activeRepReferenceId: s(skaRow.repReferenceId || '')
+    };
+  }
+
+  function getScopeModeFromPayload(payload) {
+    payload = payload || w.__bomSkaLastPayload || {};
+    var scope = payload.scope || {};
+    if (scope.mode) return scope.mode;
+    var syncMeta = payload.__skaSyncMeta || {};
+    var dyn = payload.__skaDynamicState || {};
+    return normalizeLoadMode(syncMeta.payloadMode || dyn.loadMode || dynamicState.loadMode || 'root');
+  }
+
+  function formatDsengCountLine(payload, total) {
+    payload = payload || w.__bomSkaLastPayload || {};
+    var counts = payload.counts || {};
+    var scope = payload.scope || {};
+    var loaded = counts.loadedRows != null ? counts.loadedRows : total != null ? total : counts.totalRows || 0;
+    var parts = [loaded + ' linhas dseng'];
+    if (counts.occurrenceCount != null) parts.push(counts.occurrenceCount + ' ocorrencias');
+    if (counts.uniqueReferenceCount != null) {
+      parts.push(counts.uniqueReferenceCount + ' refs unicas');
+    } else if (counts.referenceCount != null) {
+      parts.push(counts.referenceCount + ' refs');
+    }
+    parts.push(getScopeModeFromPayload(payload));
+    var depth = scope.expandDepth != null ? scope.expandDepth : payload.expandDepth;
+    if (depth == null && dynamicState.lastDepth != null) depth = dynamicState.lastDepth;
+    if (depth != null && depth !== '') parts.push('expandDepth ' + depth);
+    parts.push(scope.isPartial === false ? 'completo' : 'parcial');
+    return parts.join(' · ');
+  }
+
+  function ownerLabel(node) {
+    if (typeof w.MetricsEngine !== 'undefined' && w.MetricsEngine.ownerLabel) {
+      return w.MetricsEngine.ownerLabel(node.owner);
+    }
+    return s(node.owner || '—') || '—';
+  }
+
+  function renderEbomSidePanel(node, active, refs) {
+    if (!refs || !refs.metaEl) return;
+    active = active || buildActiveEbomRow(node, findSkaRowForNode(node));
+    refs.metaEl.innerHTML =
+      '<dl class="bom-preview-dl">' +
+      '<dt>Título</dt><dd>' +
+      escapeHtml(active.activeTitle || '—') +
+      '</dd>' +
+      '<dt>Descrição</dt><dd>' +
+      escapeHtml(active.activeDescription || '—') +
+      '</dd>' +
+      '<dt>Revisão</dt><dd>' +
+      escapeHtml(active.activeRevision || '—') +
+      '</dd>' +
+      '<dt>Proprietário</dt><dd>' +
+      escapeHtml(ownerLabel(node)) +
+      '</dd>' +
+      '<dt>Maturidade</dt><dd>' +
+      escapeHtml(active.activeMaturity || '—') +
+      '</dd>' +
+      '<dt>Estado</dt><dd>' +
+      escapeHtml(active.activeState || '—') +
+      '</dd>' +
+      '<dt>Reference ID</dt><dd class="bom-preview-id">' +
+      escapeHtml(active.activeReferenceId || '—') +
+      '</dd>' +
+      '<dt>Instance ID</dt><dd class="bom-preview-id">' +
+      escapeHtml(active.activeInstanceId || '—') +
+      '</dd>' +
+      '<dt>Path</dt><dd class="bom-preview-id">' +
+      escapeHtml((active.activePath || []).join(' > ') || '—') +
+      '</dd>' +
+      '</dl>' +
+      '<div class="bom-maturity-actions" id="bomMaturityActions">' +
+      '<button type="button" class="bom-btn bom-btn-secondary bom-btn-compact" id="btnChangeMaturity">Alterar maturidade</button>' +
+      '<p class="bom-maturity-hint" id="bomMaturityHint"></p>' +
+      '</div>';
+    bindMaturityAction(active);
+  }
+
+  function postJson(url, body) {
+    return fetch(url, {
+      method: 'POST',
+      credentials: 'omit',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {})
+    }).then(function (response) {
+      return response.text().then(function (text) {
+        var data = null;
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch (e) {
+          data = { ok: false, message: text || 'Resposta inválida' };
+        }
+        return { response: response, data: data };
+      });
+    });
+  }
+
+  function formatVisualizationBlockMessage(data, code) {
+    var attempts = (data.diagnostics && data.diagnostics.attempts) || [];
+    var hasShapes = attempts.some(function (a) {
+      return (a.shapeCount && a.shapeCount > 0) || String(a.step || '').indexOf('3DShape') >= 0;
+    });
+    if (code === 'NO_WEB_VIEWABLE_FORMAT' || (hasShapes && code === 'OFFICIAL_3D_REPRESENTATION_API_REQUIRED')) {
+      return (
+        'Representação 3D web não disponível neste tenant. ' +
+        'Foram encontrados objetos 3DShape, mas nenhum Derived Output GLB/glTF/OBJ/STL foi retornado.'
+      );
+    }
+    if (code === 'OFFICIAL_3D_REPRESENTATION_API_REQUIRED') {
+      return (
+        'Representação 3D web não disponível neste tenant. ' +
+        'O backend tentou dseng/dsdo/ds3sh/dsxcad sem obter arquivo renderizável.'
+      );
+    }
+    return data.message || 'Representação 3D web não disponível para este item.';
+  }
+
+  function formatMaturityBlockHint(data, active) {
+    var state = (data.item && data.item.currentState) || active.activeMaturity || '—';
+    if (data.code === 'LIFECYCLE_TRANSITIONS_UNAVAILABLE' || data.code === 'OFFICIAL_LIFECYCLE_API_REQUIRED') {
+      return (
+        'Maturidade indisponível: o tenant/API não retornou transições oficiais para este item. Estado atual: ' +
+        state
+      );
+    }
+    return data.message || 'Nenhuma transição retornada.';
+  }
+
+  function setMaturityButtonBlocked(blocked) {
+    var btn = byId('btnChangeMaturity');
+    if (!btn) return;
+    btn.disabled = !!blocked;
+    btn.title = blocked
+      ? 'Maturidade indisponível neste tenant — API não retornou transições oficiais.'
+      : 'Alterar maturidade no 3DEXPERIENCE';
+  }
+
+  function loadVisualizationForRowWaf(active) {
+    if (!active || !active.activeReferenceId || !w.__waf3dxClient) return;
+    var reqId = ++activeVisualizationRequestId;
+    if (w.Bom3DViewer && w.Bom3DViewer.showLoading) {
+      w.Bom3DViewer.showLoading(active.activeTitle);
+    }
+    w.__waf3dxClient
+      .find3DGeometrySource(active.activeReferenceId)
+      .then(function (geo) {
+        if (reqId !== activeVisualizationRequestId) return;
+        if (!geo.geometrySourceFound) {
+          if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
+            w.Bom3DViewer.showMessage(
+              geo.blocker || geo.requiredAdminAction || 'Geometria real não encontrada via WAFData.',
+              geo.derivedOutputFound === false ? 'NO_DERIVED_OUTPUT' : 'NO_REPRESENTATION'
+            );
+          }
+          return null;
+        }
+        return w.__waf3dxClient.downloadGeometry(geo);
+      })
+      .then(function (dl) {
+        if (reqId !== activeVisualizationRequestId || !dl) return;
+        if (!dl.ok) {
+          if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
+            w.Bom3DViewer.showMessage(dl.error || 'Download geometria falhou via WAFData.', 'DOWNLOAD_FAILED');
+          }
+          return;
+        }
+        return w.__waf3dxClient.convertGeometryIfNeeded(dl).then(function (conv) {
+          if (reqId !== activeVisualizationRequestId) return;
+          if (conv.conversionOk || /^GLB|GLTF|OBJ|STL$/i.test(s(dl.format))) {
+            var blobUrl = conv.blobUrl;
+            if (!blobUrl && dl.arrayBuffer) {
+              try {
+                var mime = /GLB/i.test(dl.format) ? 'model/gltf-binary' : 'application/octet-stream';
+                blobUrl = w.URL.createObjectURL(new Blob([dl.arrayBuffer], { type: mime }));
+              } catch (eBlob) {}
+            }
+            if (w.__waf3dxClient.renderGeometryInThree) {
+              return w.__waf3dxClient.renderGeometryInThree(
+                { blobUrl: blobUrl, format: conv.format || dl.format },
+                { title: active.activeTitle }
+              );
+            }
+            if (w.Bom3DViewer && w.Bom3DViewer.show && blobUrl) {
+              w.Bom3DViewer.show({ modelUrl: blobUrl, format: s(conv.format || dl.format).toLowerCase(), title: active.activeTitle });
+            }
+            return;
+          }
+          if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
+            w.Bom3DViewer.showMessage(
+              conv.blocker || conv.recommendation || 'STEP disponível mas conversão não configurada.',
+              'STEP_CONVERSION_REQUIRED'
+            );
+          }
+        });
+      })
+      .catch(function () {
+        if (reqId !== activeVisualizationRequestId) return;
+        if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
+          w.Bom3DViewer.showMessage('Falha na cadeia 3DView via WAFData session.', 'WAF_3DVIEW_FAILED');
+        }
+      });
+  }
+
+  function loadVisualizationForRow(active) {
+    if (isWafSessionMode()) {
+      return loadVisualizationForRowWaf(active);
+    }
+    if (!active || !active.activeReferenceId) return;
+    var reqId = ++activeVisualizationRequestId;
+    if (w.Bom3DViewer && w.Bom3DViewer.showLoading) {
+      w.Bom3DViewer.showLoading(active.activeTitle);
+    }
+    postJson(VIZ_URL, {
+      referenceId: active.activeReferenceId,
+      physicalId: active.activePhysicalId,
+      instanceId: active.activeInstanceId,
+      title: active.activeTitle,
+      name: active.activeName,
+      type: active.activeType,
+      path: active.activePath,
+      mode: 'dseng-official'
+    })
+      .then(function (result) {
+        if (reqId !== activeVisualizationRequestId) return;
+        var data = result.data || {};
+        if (data.ok && data.modelUrl) {
+          if (w.Bom3DViewer && w.Bom3DViewer.show) {
+            w.Bom3DViewer.show({
+              modelUrl: data.modelUrl,
+              format: data.format,
+              title: active.activeTitle
+            });
+          }
+          return;
+        }
+        var code = data.code || (data.error && data.error.code) || 'OFFICIAL_3D_REPRESENTATION_API_REQUIRED';
+        var msg = formatVisualizationBlockMessage(data, code);
+        if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
+          w.Bom3DViewer.showMessage(msg, code);
+        }
+      })
+      .catch(function () {
+        if (reqId !== activeVisualizationRequestId) return;
+        if (w.Bom3DViewer && w.Bom3DViewer.showMessage) {
+          w.Bom3DViewer.showMessage(
+            'Representação 3D web não disponível neste tenant. Falha na chamada ao backend.',
+            'VISUALIZATION_REQUEST_FAILED'
+          );
+        }
+      });
+  }
+
+  function updateMaturityHint(text, kind) {
+    var hint = byId('bomMaturityHint');
+    if (!hint) return;
+    hint.textContent = text || '';
+    hint.className = 'bom-maturity-hint';
+    if (kind === 'err') hint.classList.add('bom-maturity-hint-err');
+    if (kind === 'ok') hint.classList.add('bom-maturity-hint-ok');
+  }
+
+  function loadLifecycleForRowWaf(active) {
+    if (!active || !active.activeReferenceId || !w.__waf3dxClient) return;
+    var reqId = ++activeLifecycleRequestId;
+    updateMaturityHint('Consultando maturidade via sessão WAFData…', 'ok');
+    w.__waf3dxClient
+      .getAllowedMaturityTransitions(active.activeReferenceId)
+      .then(function (data) {
+        if (reqId !== activeLifecycleRequestId) return;
+        w.__bomActiveLifecycleData = {
+          ok: data.transitionsLoaded,
+          transitions: (data.transitions || []).map(function (state, idx) {
+            return { id: 't' + idx, label: state, to: state, action: 'promote' };
+          }),
+          item: { currentState: data.current || active.activeMaturity }
+        };
+        if (!data.transitionsLoaded) {
+          updateMaturityHint(data.recommendation || formatMaturityBlockHint({ code: 'LIFECYCLE_TRANSITIONS_UNAVAILABLE' }, active), 'warn');
+          setMaturityButtonBlocked(true);
+          return;
+        }
+        setMaturityButtonBlocked(false);
+        updateMaturityHint(data.transitions.length + ' transição(ões) via sessão WAFData.', 'ok');
+      })
+      .catch(function () {
+        if (reqId !== activeLifecycleRequestId) return;
+        updateMaturityHint('Falha ao consultar maturidade via WAFData.', 'err');
+        setMaturityButtonBlocked(true);
+      });
+  }
+
+  function loadLifecycleForRow(active) {
+    if (isWafSessionMode()) {
+      return loadLifecycleForRowWaf(active);
+    }
+    if (!active || !active.activeReferenceId) return;
+    var reqId = ++activeLifecycleRequestId;
+    updateMaturityHint('Consultando transições permitidas…', 'ok');
+    postJson(LIFECYCLE_TRANSITIONS_URL, {
+      referenceId: active.activeReferenceId,
+      physicalId: active.activePhysicalId,
+      currentState: active.activeMaturity || active.activeState,
+      type: active.activeType,
+      mode: 'dseng-official'
+    })
+      .then(function (result) {
+        if (reqId !== activeLifecycleRequestId) return;
+        var data = result.data || {};
+        if (data.code === 'OFFICIAL_LIFECYCLE_API_REQUIRED' || data.code === 'LIFECYCLE_TRANSITIONS_UNAVAILABLE') {
+          updateMaturityHint(formatMaturityBlockHint(data, active), 'warn');
+          setMaturityButtonBlocked(true);
+          return;
+        }
+        setMaturityButtonBlocked(false);
+        if (data.ok && data.transitions && data.transitions.length) {
+          updateMaturityHint(data.transitions.length + ' transição(ões) disponível(is).', 'ok');
+          setMaturityButtonBlocked(false);
+          return;
+        }
+        if (data.ok) {
+          updateMaturityHint('Transições consultadas.', 'ok');
+          return;
+        }
+        updateMaturityHint(data.message || 'Nenhuma transição retornada.', 'warn');
+      })
+      .catch(function () {
+        if (reqId !== activeLifecycleRequestId) return;
+        updateMaturityHint('Falha ao consultar transições de maturidade.', 'err');
+      });
+  }
+
+  function closeMaturityModal() {
+    var modal = byId('bomMaturityModal');
+    if (modal) modal.remove();
+  }
+
+  function openMaturityModal(active, lifecycleData) {
+    closeMaturityModal();
+    lifecycleData = lifecycleData || {};
+    var current =
+      (lifecycleData.item && lifecycleData.item.currentState) ||
+      active.activeMaturity ||
+      active.activeState ||
+      '—';
+    var transitions = Array.isArray(lifecycleData.transitions)
+      ? lifecycleData.transitions.filter(function (t) {
+          return !t.inferred;
+        })
+      : [];
+    if (!transitions.length && lifecycleData.code) {
+      var status = byId('bomMaturityModalStatus');
+      if (status) {
+        status.textContent =
+          lifecycleData.message ||
+          'Maturidade indisponível: o tenant/API não retornou transições oficiais para este item.';
+      }
+    }
+    var modal = document.createElement('div');
+    modal.id = 'bomMaturityModal';
+    modal.className = 'bom-maturity-modal';
+    var transitionsHtml = '';
+    if (transitions.length) {
+      transitionsHtml =
+        '<label class="bom-filter-item"><span>Transição permitida</span>' +
+        '<select id="bomMaturityTransition" class="bom-input">' +
+        transitions
+          .map(function (t, idx) {
+            return (
+              '<option value="' +
+              idx +
+              '">' +
+              escapeHtml(t.label || t.to || t.action) +
+              (t.inferred ? ' (validar)' : '') +
+              '</option>'
+            );
+          })
+          .join('') +
+        '</select></label>';
+    } else {
+      transitionsHtml =
+        '<p class="bom-maturity-warning">Maturidade indisponível: o tenant/API não retornou transições oficiais para este item. Operação bloqueada.</p>';
+    }
+    modal.innerHTML =
+      '<div class="bom-maturity-modal-card" role="dialog" aria-modal="true">' +
+      '<h3>Alterar maturidade (PLM)</h3>' +
+      '<p><strong>Item:</strong> ' +
+      escapeHtml(active.activeTitle) +
+      '</p>' +
+      '<p><strong>Revisão:</strong> ' +
+      escapeHtml(active.activeRevision || '—') +
+      '</p>' +
+      '<p><strong>Estado atual:</strong> ' +
+      escapeHtml(current) +
+      '</p>' +
+      transitionsHtml +
+      '<p class="bom-maturity-warning">Operação oficial no 3DEXPERIENCE. Requer confirmação e permissão PLM.</p>' +
+      '<div class="bom-maturity-modal-actions">' +
+      '<button type="button" class="bom-btn bom-btn-secondary" id="bomMaturityCancel">Cancelar</button>' +
+      '<button type="button" class="bom-btn bom-btn-primary" id="bomMaturityConfirm">Confirmar mudança</button>' +
+      '</div>' +
+      '<p class="bom-maturity-modal-status" id="bomMaturityModalStatus"></p>' +
+      '</div>';
+    uiRoot().appendChild(modal);
+    var cancelBtn = byId('bomMaturityCancel');
+    var confirmBtn = byId('bomMaturityConfirm');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', function () {
+        closeMaturityModal();
+      });
+    }
+    if (confirmBtn) {
+      if (!transitions.length) {
+        confirmBtn.disabled = true;
+      }
+      confirmBtn.addEventListener('click', function () {
+        var target = '';
+        var transition = '';
+        var action = '';
+        var selectEl = byId('bomMaturityTransition');
+        if (selectEl && transitions.length) {
+          var picked = transitions[Number(selectEl.value)] || transitions[0];
+          target = s(picked.to || picked.targetState);
+          transition = s(picked.id || picked.label);
+          action = s(picked.action || 'promote');
+        } else {
+          target = s(byId('bomMaturityTargetState') && byId('bomMaturityTargetState').value);
+        }
+        var statusEl = byId('bomMaturityModalStatus');
+        if (!transitions.length) {
+          if (statusEl) statusEl.textContent = 'Nenhuma transição oficial disponível.';
+          return;
+        }
+        if (!target && !transition) {
+          if (statusEl) statusEl.textContent = 'Selecione uma transição ou informe o estado destino.';
+          return;
+        }
+        if (statusEl) statusEl.textContent = isWafSessionMode() ? 'Executando mudança via WAFData…' : 'Executando mudança via backend…';
+        if (isWafSessionMode() && w.__waf3dxClient) {
+          w.__waf3dxClient
+            .changeMaturity(active.activeReferenceId, { to: target, action: action, transition: transition })
+            .then(function (data) {
+              if (statusEl) {
+                statusEl.textContent = data.success
+                  ? 'Maturidade alterada e verificada: ' + data.stateBefore + ' → ' + data.stateAfter
+                  : data.error || data.blocker || 'Mudança não verificada por releitura.';
+              }
+              if (data.success) {
+                if (activeEbomRow) {
+                  activeEbomRow.activeMaturity = data.stateAfter || target;
+                  activeEbomRow.activeState = data.stateAfter || target;
+                }
+                closeMaturityModal();
+                loadLifecycleForRow(active);
+              }
+            })
+            .catch(function (err) {
+              if (statusEl) statusEl.textContent = 'Falha WAFData: ' + (err.message || err);
+            });
+          return;
+        }
+        postJson(LIFECYCLE_CHANGE_URL, {
+          referenceId: active.activeReferenceId,
+          physicalId: active.activePhysicalId,
+          currentState: current,
+          targetState: target,
+          transition: transition,
+          action: action,
+          confirm: true,
+          mode: 'dseng-official'
+        })
+          .then(function (result) {
+            var data = result.data || {};
+            if (data.ok) {
+              if (statusEl) statusEl.textContent = 'Maturidade atualizada. Recarregando dashboard…';
+              closeMaturityModal();
+              if (activeEbomRow) {
+                activeEbomRow.activeMaturity = data.newState || target;
+                activeEbomRow.activeState = data.newState || target;
+              }
+              refreshBom().catch(function () {});
+              return;
+            }
+            var code = data.code || (data.error && data.error.code) || 'LIFECYCLE_ERROR';
+            var msg = data.message || 'Transição não permitida ou API oficial indisponível.';
+            if (statusEl) statusEl.textContent = code + ': ' + msg;
+            updateMaturityHint(code + ': ' + msg, 'err');
+          })
+          .catch(function () {
+            if (statusEl) statusEl.textContent = 'Falha na chamada de lifecycle.';
+          });
+      });
+    }
+  }
+
+  function bindMaturityAction(active) {
+    var btn = byId('btnChangeMaturity');
+    if (!btn || btn.__BOM_MATURITY_BOUND__) return;
+    btn.__BOM_MATURITY_BOUND__ = true;
+    btn.addEventListener('click', function () {
+      postJson(LIFECYCLE_TRANSITIONS_URL, {
+        referenceId: active.activeReferenceId,
+        physicalId: active.activePhysicalId,
+        currentState: active.activeMaturity || active.activeState,
+        type: active.activeType,
+        mode: 'dseng-official'
+      })
+        .then(function (result) {
+          openMaturityModal(active, result.data || {});
+        })
+        .catch(function () {
+          openMaturityModal(active, {
+            code: 'LIFECYCLE_REQUEST_FAILED',
+            item: { currentState: active.activeMaturity || active.activeState }
+          });
+        });
+    });
+  }
+
+  function handleEbomRowSelect(node) {
+    if (!node) return;
+    var skaRow = findSkaRowForNode(node);
+    activeEbomRow = buildActiveEbomRow(node, skaRow);
+    w.__bomActiveEbomRow = activeEbomRow;
+
+    var refs = w.PartPreview && w.PartPreview.ensureRefs && w.PartPreview.ensureRefs();
+    if (!refs || !refs.panel) return;
+
+    if (refs.hintEl) refs.hintEl.style.display = 'none';
+    if (refs.titleEl) refs.titleEl.textContent = activeEbomRow.activeTitle || activeEbomRow.activeName || 'Peça';
+    renderEbomSidePanel(node, activeEbomRow, refs);
+    refs.panel.classList.add('bom-preview-active');
+    loadVisualizationForRow(activeEbomRow);
+    loadLifecycleForRow(activeEbomRow);
+  }
+
+  function patchPartPreviewForSka() {
+    if (!w.PartPreview || w.PartPreview.__SKA_EBOM_PATCHED__) return;
+    var origShow = w.PartPreview.show;
+    var origClear = w.PartPreview.clear;
+    w.PartPreview.show = function (node) {
+      if (w.__BOM_DATA_SOURCE__ !== DATA_SOURCE) {
+        return origShow.apply(this, arguments);
+      }
+      handleEbomRowSelect(node);
+    };
+    w.PartPreview.clear = function () {
+      activeEbomRow = null;
+      w.__bomActiveEbomRow = null;
+      if (w.Bom3DViewer && w.Bom3DViewer.clear) w.Bom3DViewer.clear();
+      return origClear.apply(this, arguments);
+    };
+    w.PartPreview.__SKA_EBOM_PATCHED__ = true;
+    if (w.Bom3DViewer && w.Bom3DViewer.init) {
+      w.Bom3DViewer.init('#partPreviewImage');
+    }
+  }
+
   function formatBuildPillLabel(b) {
     var m = String(b || '').match(/^bom(\d{8})([a-z])$/i);
     return m ? m[1].slice(-2) + m[2] : String(b || '');
@@ -419,8 +1174,13 @@
         return;
       }
       if (/Atualizar estrutura|clique Atualizar estrutura/i.test(String(msg || ''))) {
-        msg = 'Build ' + BUILD + ' | SKA BOM Service — use Sincronizar com Product Explorer ou Avançado.';
+        msg = 'Build ' + BUILD + ' | SKA BOM Service — use Sincronizar com Product Explorer.';
         kind = kind === 'error' ? 'error' : 'ok';
+      }
+      if (w.__bomSkaLastPayload && w.__BOM_DATA_SOURCE__ === DATA_SOURCE) {
+        if (/^Snapshot:/i.test(String(msg || '')) || /^Estrutura:/i.test(String(msg || ''))) {
+          return;
+        }
       }
     }
     if (w.App && w.App.setStatus) w.App.setStatus(msg, kind);
@@ -463,12 +1223,28 @@
 
   function rebuildDynamicCounts(rows, includeRoot, depth) {
     var levelCounts = {};
+    var refs = {};
+    var instanceCount = 0;
+    var pathCount = 0;
     (rows || []).forEach(function (row) {
       var level = Number(row.level || 0);
       levelCounts[level] = (levelCounts[level] || 0) + 1;
+      var ref = s(row.referenceId || row.physicalId);
+      if (ref) refs[ref] = true;
+      if (row.instanceId) instanceCount += 1;
+      if (row.path && row.path.length) pathCount += 1;
     });
+    var occurrenceCount = (rows || []).filter(function (row) {
+      return Number(row.level || 0) > 0;
+    }).length;
     return {
       totalRows: (rows || []).length,
+      loadedRows: (rows || []).length,
+      occurrenceCount: occurrenceCount,
+      referenceCount: Object.keys(refs).length,
+      uniqueReferenceCount: Object.keys(refs).length,
+      instanceCount: instanceCount,
+      pathCount: pathCount,
       rootIncluded: includeRoot !== false,
       depth: depth,
       levelCounts: levelCounts,
@@ -503,6 +1279,16 @@
     rows = decorateDynamicRows(rows || []);
     payload.rows = rows;
     payload.counts = rebuildDynamicCounts(rows, true, maxLoadedLevel(rows));
+    payload.scope = {
+      mode: mode === 'incremental' || mode === 'dashboard-row' ? 'dashboard-row' : mode || 'root',
+      source: 'dseng',
+      item: (payload.root && (payload.root.title || payload.root.id)) || '',
+      rootId: (payload.root && payload.root.id) || dynamicState.lastResolvedRootId || '',
+      expandStrategy: 'expand-item',
+      expandDepth: payload.counts.depth || dynamicState.lastDepth || DEFAULT_DEPTH,
+      isPartial: true
+    };
+    payload.partial = true;
     payload.__skaDynamicState = {
       loadMode: mode || dynamicState.loadMode || 'incremental',
       partial: true,
@@ -781,6 +1567,251 @@
     return payload;
   }
 
+  function isWafSessionMode() {
+    return (
+      w.__BOM_DATA_SOURCE__ === 'wafdata-session' ||
+      w.__BOM_LOADER_MODE__ === 'wafdata-session' ||
+      DATA_SOURCE === 'wafdata-session'
+    );
+  }
+
+  function isLegacySkaMode() {
+    return w.__BOM_DATA_SOURCE__ === LEGACY_SKA_SOURCE;
+  }
+
+  function normalizeWafExpandPayload(payload, rootId) {
+    if (typeof w.normalizeExpandItemPayload === 'function') {
+      var normalized = w.normalizeExpandItemPayload(payload);
+      if (normalized && normalized.rows && normalized.rows.length) return normalized;
+    }
+    payload = payload || {};
+    var members = payload.member || payload.data || (payload.data && payload.data.member) || [];
+    if (!Array.isArray(members)) members = [];
+    var rows = [];
+    var seen = {};
+    members.forEach(function (m, idx) {
+      if (!m) return;
+      var refId = s(m.id || m.physicalid || m.physicalId);
+      if (!refId || seen[refId]) return;
+      seen[refId] = true;
+      rows.push({
+        rowKey: refId,
+        level: refId === s(rootId) ? 0 : 1,
+        parentReferenceId: refId === s(rootId) ? '' : s(rootId),
+        referenceId: refId,
+        physicalId: s(m.name || m.physicalid || refId),
+        title: s(m.title || m.name || refId),
+        name: s(m.name || m.title || refId),
+        revision: s(m.revision),
+        owner: s(m.owner),
+        maturity: s(m.state || m.maturity),
+        state: s(m.state || m.maturity),
+        type: s(m.type || 'VPMReference'),
+        source: 'wafdata-expand'
+      });
+    });
+    return { rows: rows, visualRowsCount: rows.length, includesRoot: true, fallback: true };
+  }
+
+  function buildWafPayloadFromExpand(opts, rootRes, expRes, normalized) {
+    opts = opts || {};
+    rootRes = rootRes || {};
+    expRes = expRes || {};
+    normalized = normalized || { rows: [] };
+    var rows = normalized.rows || [];
+    var depth = opts.depth == null ? DEFAULT_DEPTH : opts.depth;
+    var counts = rebuildDynamicCounts(rows, normalized.includesRoot !== false, depth);
+    return {
+      ok: true,
+      source: DATA_SOURCE,
+      mode: 'dseng-official',
+      strategy: 'expand-item',
+      root: { id: opts.rootId, title: rootRes.title || opts.title || '' },
+      rows: rows,
+      counts: counts,
+      scope: { mode: 'root', expandDepth: depth, isPartial: depth <= 1 },
+      expandDepth: depth,
+      diagnostics: {
+        status: rows.length ? 'OK' : 'EMPTY',
+        expandVariant: WAF_EXPAND_VARIANT,
+        rawRows: expRes.rowsDetected || rows.length,
+        endpointsUsed: [
+          { method: 'GET', endpoint: '/dseng:EngItem/' + opts.rootId, status: rootRes.status },
+          {
+            method: 'POST',
+            endpoint: '/dseng:EngItem/' + opts.rootId + '/expand',
+            status: expRes.status,
+            variant: WAF_EXPAND_VARIANT
+          }
+        ],
+        durationMs: 0,
+        warnings:
+          opts.source === 'KNOWN_ROOT_FALLBACK' || opts.knownRootFallback
+            ? ['KNOWN_ROOT fallback CJ MESA — dev/regression only, not silent production default']
+            : [],
+        errors: rows.length ? [] : ['Expand returned 0 normalized rows']
+      }
+    };
+  }
+
+  function loadBomViaWafSession(opts) {
+    opts = opts || {};
+    recordWafRuntimeProof('loadBomViaWafSession-start', opts.rootId || '');
+    var client = w.__waf3dxClient;
+    var syncBtn = byId('btnSyncExplorer');
+    var refreshBtn = byId('btnRefreshBom');
+    if (syncBtn) syncBtn.disabled = true;
+    if (refreshBtn) refreshBtn.disabled = true;
+
+    if (!opts.rootId || !isValidDsengPhysicalId(opts.rootId)) {
+      if (syncBtn) syncBtn.disabled = false;
+      if (refreshBtn) refreshBtn.disabled = false;
+      return Promise.reject(new Error('ROOT_ID_REQUIRED'));
+    }
+    if (!client) {
+      if (syncBtn) syncBtn.disabled = false;
+      if (refreshBtn) refreshBtn.disabled = false;
+      return Promise.reject(new Error('WAF3DX client not loaded'));
+    }
+
+    clearStateBeforeSkaApply();
+    w.__BOM_SKA_EMPTY_STATE__ = false;
+    if (!opts.silent) setStatus('Carregando E-BOM via sessão WAFData (dseng expand)…', 'info');
+
+    var depth = opts.depth == null ? DEFAULT_DEPTH : opts.depth;
+
+    return client
+      .detectWafData()
+      .then(function (detect) {
+        if (!detect.wafAvailable) {
+          throw new Error(
+            'WAFData indisponível neste frame — abra o widget no 3DDashboard Web Page Reader com usuário logado.'
+          );
+        }
+        return client
+          .resolveEngItemRootId({
+            physicalId: opts.rootId,
+            title: opts.title || lastSyncTitle,
+            name: opts.rootName || ''
+          })
+          .then(function (resolved) {
+            if (!resolved.ok) {
+              throw new Error(resolved.error || resolved.recommendation || 'ROOT_RESOLVE_FAILED');
+            }
+            opts.rootId = resolved.rootId;
+            if (resolved.title) opts.title = resolved.title;
+            if (resolved.source && resolved.source !== 'DIRECT_DSENG_ID') {
+              var resolveNote =
+                'Root resolvido: ' +
+                (resolved.physicalId || 'contexto') +
+                ' → ' +
+                resolved.rootId +
+                ' (' +
+                resolved.source +
+                ')';
+              opts.fallbackWarning = opts.fallbackWarning ? opts.fallbackWarning + ' · ' + resolveNote : resolveNote;
+            }
+            return client.getEngItem(opts.rootId).then(function (rootRes) {
+          if (!rootRes.canReadRoot) {
+            throw new Error('GET root falhou HTTP ' + rootRes.status + ': ' + (rootRes.error || ''));
+          }
+          return client.expandEngItem(opts.rootId, {
+            expandDepth: depth,
+            variantLabel: WAF_EXPAND_VARIANT
+          }).then(function (expRes) {
+            if (!expRes.expandOk) {
+              throw new Error('POST expand falhou HTTP ' + expRes.status + ': ' + (expRes.error || ''));
+            }
+            var normalized = normalizeWafExpandPayload(expRes.data, opts.rootId);
+            if (!normalized.rows || !normalized.rows.length) {
+              throw new Error(
+                'Expand retornou 0 linhas normalizadas (raw members: ' + (expRes.rowsDetected || 0) + ').'
+              );
+            }
+            var payload = buildWafPayloadFromExpand(opts, rootRes, expRes, normalized);
+            lastSyncRootId = opts.rootId;
+            lastSyncDepth = depth;
+            lastSyncTitle = payload.root.title || opts.title || '';
+            payload.__skaSyncMeta = {
+              source: opts.source || 'WAF_SESSION',
+              dataSource: DATA_SOURCE,
+              expandVariant: WAF_EXPAND_VARIANT,
+              eventType: 'wafdata-expand',
+              rootId: opts.rootId,
+              depth: depth,
+              rawRows: expRes.rowsDetected || normalized.rows.length,
+              displayRows: normalized.rows.length,
+              lastSyncAt: new Date().toISOString(),
+              validationStatus: 'VALID',
+              fallbackWarning: opts.fallbackWarning || '',
+              knownRootFallback: !!opts.knownRootFallback
+            };
+            lastContextMeta = {
+              source: opts.source || 'WAF_SESSION',
+              title: lastSyncTitle,
+              candidateRootId: opts.rootName || opts.title || opts.rootId,
+              rootIdUsed: opts.rootId,
+              validationStatus: 'VALID',
+              fallbackWarning: opts.fallbackWarning || ''
+            };
+            if (opts.fallbackWarning) showFallbackBanner(opts.fallbackWarning);
+            resetDynamicState(payload, depth > 1 ? 'depth-' + depth : 'initial', { manualRootId: opts.rootId });
+            persistLastGoodContext(payload, {
+              rootId: opts.rootId,
+              rootTitle: lastSyncTitle,
+              rootName: opts.rootName || '',
+              depth: depth,
+              expandDepth: depth
+            });
+            return applySkaPayloadToUI(payload).then(function (applied) {
+              var rowCount = getSkaExpectedTotal(payload);
+              recordWafRuntimeProof('loadBomViaWafSession-ok', {
+                rows: rowCount,
+                expandVariant: WAF_EXPAND_VARIANT,
+                rootId: opts.rootId
+              });
+              w.__BOM_WAF_EBOM_RUNTIME__ = w.__BOM_WAF_EBOM_RUNTIME__ || {};
+              w.__BOM_WAF_EBOM_RUNTIME__.rows = rowCount;
+              w.__BOM_WAF_EBOM_RUNTIME__.expandVariant = WAF_EXPAND_VARIANT;
+              w.__BOM_WAF_EBOM_RUNTIME__.lastLoader = 'loadBomViaWafSession';
+              try {
+                console.info('[BOM Analytics] wafdata-session rows=' + rowCount);
+              } catch (eRows) {}
+              return applied;
+            });
+          });
+            });
+        });
+      })
+      .catch(function (err) {
+        if (opts.source === 'LAST_GOOD_CONTEXT') {
+          return Promise.reject(err);
+        }
+        var normalized = normalizeSkaError(err);
+        renderEmptySkaState(normalized.code === 'ROOT_NOT_FOUND' ? 'ROOT_NOT_FOUND' : 'ERROR', {
+          contextMeta: lastContextMeta,
+          errorCode: normalized.code || 'WAF_SESSION_FAILED',
+          statusMessage: err.message || normalized.message,
+          statusKind: 'error',
+          bannerMessage: err.message || normalized.message,
+          preserveGoodState: true
+        });
+        return Promise.reject(err);
+      })
+      .then(
+        function (result) {
+          if (syncBtn) syncBtn.disabled = false;
+          if (refreshBtn) refreshBtn.disabled = false;
+          return result;
+        },
+        function (err) {
+          if (syncBtn) syncBtn.disabled = false;
+          if (refreshBtn) refreshBtn.disabled = false;
+          throw err;
+        }
+      );
+  }
+
   function fetchBomStructureFromSkaService(opts) {
     opts = opts || {};
     return fetch(SKA_URL, {
@@ -898,14 +1929,6 @@
     updateTablePager(0);
   }
 
-  function updateTablePager(total) {
-    var pager = byId('tablePager');
-    if (pager) {
-      var suffix = w.__bomSkaLastPayload ? ' carregadas · estrutura parcial · modo ' + (dynamicState.loadMode || 'initial') : '';
-      pager.textContent = total + ' peças' + suffix;
-    }
-  }
-
   function sumChartLegendValues(legendId) {
     var el = byId(legendId);
     if (!el) return null;
@@ -931,11 +1954,6 @@
     if (w.BomService && w.BomService.getNodeCount) {
       var nodes = w.BomService.getNodeCount();
       if (nodes !== expected) issues.push('BomService=' + nodes + ' esperado=' + expected);
-    }
-
-    var kpiText = byId('kpiGrid') ? byId('kpiGrid').textContent || '' : '';
-    if (kpiText.indexOf('Total linhas') >= 0 && kpiText.indexOf(String(expected)) < 0) {
-      issues.push('KPI Total linhas != ' + expected);
     }
 
     var matSum = sumChartLegendValues('maturityLegendScroll');
@@ -1130,31 +2148,9 @@
 
   function renderSkaKpiSummary(payload) {
     var grid = byId('kpiGrid');
-    if (!grid || !payload) return;
-    var counts = payload.counts || {};
-    var expected = getSkaExpectedTotal(payload);
-    var level1 = (counts.levelCounts && counts.levelCounts['1']) || 0;
-    var markers = [
-      { tone: 'blue', label: 'Root', value: (payload.root && payload.root.title) || (payload.root && payload.root.id) || '-' },
-      { tone: 'green', label: 'Linhas carregadas', value: expected },
-      { tone: 'purple', label: 'Nível carregado', value: counts.depth != null ? counts.depth : DEFAULT_DEPTH },
-      { tone: 'red', label: 'Nível 1', value: level1 },
-      { tone: 'blue', label: 'Status', value: (payload.diagnostics && payload.diagnostics.status) || 'OK' },
-      { tone: 'green', label: 'Modo', value: (payload.__skaDynamicState && payload.__skaDynamicState.loadMode) || 'inicial' }
-    ];
-    grid.innerHTML = markers
-      .map(function (m) {
-        return (
-          '<div class="stat-marker stat-marker-' +
-          m.tone +
-          '"><span class="stat-marker-label">' +
-          escapeHtml(String(m.label)) +
-          '</span><span class="stat-marker-value">' +
-          escapeHtml(String(m.value)) +
-          '</span></div>'
-        );
-      })
-      .join('');
+    if (!grid) return;
+    grid.innerHTML = '';
+    grid.style.display = 'none';
   }
 
   function updateSyncBanner(payload) {
@@ -1170,50 +2166,39 @@
       '</strong> · estrutura parcial/incremental.';
   }
 
+  function tablePagerModePhrase(mode) {
+    mode = normalizeLoadMode(mode || 'root');
+    if (mode === 'selected-branch') return 'ramo selecionado';
+    if (mode === 'dashboard-row') return 'expansao por linha';
+    if (mode === 'global') return 'expansao global';
+    return 'modo root';
+  }
+
   function updateTablePager(total) {
     var pager = byId('tablePager');
-    if (pager) {
-      var modeLabel = normalizeLoadMode(dynamicState.loadMode || 'root');
-      var suffix = w.__bomSkaLastPayload ? ' carregadas · modo ' + modeLabel + ' · estrutura parcial' : '';
-      pager.textContent = total + ' pecas' + suffix;
+    if (!pager) return;
+    if (!w.__bomSkaLastPayload) {
+      pager.textContent = total + ' pecas';
+      return;
     }
+    var line = formatDsengCountLine(w.__bomSkaLastPayload, total);
+    var syncMeta = w.__bomSkaLastPayload.__skaSyncMeta || {};
+    var mode = getScopeModeFromPayload(w.__bomSkaLastPayload);
+    var extra =
+      mode === 'root' &&
+      syncMeta.selectionSource !== 'DS/Selection/Selection.getSelection' &&
+      syncMeta.selectionSource !== 'PlatformAPI.getSelection' &&
+      syncMeta.source !== 'ADVANCED_MANUAL'
+        ? ' · Explorer visual pode diferir do recorte dseng'
+        : '';
+    pager.textContent = line + extra;
   }
 
   function renderSkaKpiSummary(payload) {
     var grid = byId('kpiGrid');
-    if (!grid || !payload) return;
-    var counts = payload.counts || {};
-    var expected = getSkaExpectedTotal(payload);
-    var level1 = (counts.levelCounts && counts.levelCounts['1']) || 0;
-    var markers = [
-      { tone: 'green', label: 'Total linhas', value: expected },
-      { tone: 'blue', label: 'Referencias', value: counts.referenceCount != null ? counts.referenceCount : '-' },
-      { tone: 'purple', label: 'Nivel carregado', value: counts.depth != null ? counts.depth : DEFAULT_DEPTH },
-      { tone: 'red', label: 'Nivel 1', value: level1 },
-      { tone: 'blue', label: 'Status', value: (payload.diagnostics && payload.diagnostics.status) || 'OK' },
-      {
-        tone: 'green',
-        label: 'Modo',
-        value: normalizeLoadMode(
-          (payload.__skaSyncMeta && payload.__skaSyncMeta.payloadMode) ||
-            (payload.__skaDynamicState && payload.__skaDynamicState.loadMode) ||
-            'root'
-        )
-      }
-    ];
-    grid.innerHTML = markers
-      .map(function (m) {
-        return (
-          '<div class="stat-marker stat-marker-' +
-          m.tone +
-          '"><span class="stat-marker-label">' +
-          escapeHtml(String(m.label)) +
-          '</span><span class="stat-marker-value">' +
-          escapeHtml(String(m.value)) +
-          '</span></div>'
-        );
-      })
-      .join('');
+    if (!grid) return;
+    grid.innerHTML = '';
+    grid.style.display = 'none';
   }
 
   function updateSyncBanner(payload) {
@@ -1237,6 +2222,11 @@
     var syncMeta = payload.__skaSyncMeta || {};
     var dyn = payload.__skaDynamicState || {};
     var resolution = payload.resolution || {};
+    var isWafPayload =
+      payload.source === DATA_SOURCE ||
+      syncMeta.dataSource === DATA_SOURCE ||
+      syncMeta.eventType === 'wafdata-expand' ||
+      isWafSessionMode();
     var candidates = syncMeta.selectedCandidates || [];
     var selectedCandidatesText = candidates
       .slice(0, 6)
@@ -1255,25 +2245,47 @@
     var payloadMode = normalizeLoadMode(syncMeta.payloadMode || dyn.loadMode || dynamicState.loadMode || 'root');
     var sourceLabel = shortSelectionSource(syncMeta.selectionSource || syncMeta.source || '');
     var strategy = payload.strategy || dyn.strategy || 'expand-item';
-    var selectionNote =
-      payloadMode === 'root' && sourceLabel !== 'DS/Selection' && sourceLabel !== 'PlatformAPI' && sourceLabel !== 'Avancado'
-        ? ' · selecao PSE nao disponivel por API oficial; usando root atual'
-        : '';
-    var summary =
-      'Fonte: dseng · modo: ' +
-      payloadMode +
-      ' · source: ' +
-      sourceLabel +
-      ' · item: ' +
-      itemLabel +
-      ' · strategy: ' +
-      strategy +
-      ' · linhas: ' +
-      expected +
-      ' · ' +
-      (dyn.partial === false ? 'recorte completo' : 'parcial') +
-      selectionNote;
+    var selectionNote = '';
+    if (payloadMode === 'root' && sourceLabel !== 'DS/Selection' && sourceLabel !== 'PlatformAPI' && sourceLabel !== 'Avancado') {
+      selectionNote =
+        ' · selecao PSE nao disponivel por API oficial; usando root atual · Product Explorer expandido pode listar mais objetos do que o depth carregado';
+    } else if (payloadMode === 'root') {
+      selectionNote = ' · root depth parcial · Explorer expandido pode listar mais objetos';
+    } else if (payloadMode === 'selected-branch') {
+      selectionNote = ' · ramo selecionado via API oficial';
+    } else if (payloadMode === 'dashboard-row') {
+      selectionNote = ' · expansao incremental por linha na dashboard';
+    } else if (payloadMode === 'global') {
+      selectionNote = ' · expansao global de todos os ramos carregados';
+    }
+    var summary;
+    if (isWafPayload) {
+      var rawRows = syncMeta.rawRows || (diag.rawRows != null ? diag.rawRows : expected);
+      summary =
+        'Fonte: wafdata-session · expand: ' +
+        (syncMeta.expandVariant || diag.expandVariant || WAF_EXPAND_VARIANT) +
+        ' · linhas: ' +
+        expected +
+        (rawRows !== expected ? ' · rawRows=' + rawRows : '') +
+        ' · VALID';
+    } else {
+      summary =
+        'Fonte: dseng · modo: ' +
+        payloadMode +
+        ' · source: ' +
+        sourceLabel +
+        ' · item: ' +
+        itemLabel +
+        ' · strategy: ' +
+        strategy +
+        ' · linhas: ' +
+        expected +
+        ' · ' +
+        (dyn.partial === false ? 'recorte completo' : 'estrutura parcial') +
+        selectionNote;
+    }
     var detail =
+      (isWafPayload ? 'dataSource=' + DATA_SOURCE + ' | ' : '') +
       'payloadEndpoint=' +
       (syncMeta.payloadEndpoint || '') +
       ' | payloadMode=' +
@@ -1319,15 +2331,30 @@
     syncBuild();
     patchUiLabels();
     if (!assertSkaCountIntegrity(payload)) return false;
-    var syncNote =
-      payload.__skaSyncMeta && payload.__skaSyncMeta.source === 'PRODUCT_EXPLORER_CONTEXT'
-        ? 'Sincronizado com Product Explorer'
-        : 'SKA BOM Service validado';
-    setStatus(
-      syncNote + ': ' + expected + ' linhas · ' + rootName + ' · diagnostics OK',
-      'ok'
-    );
+    try {
+      persistLastGoodContext(payload, {
+        rootId: (payload.root && payload.root.id) || lastSyncRootId,
+        rootTitle: (payload.root && payload.root.title) || lastSyncTitle,
+        depth: lastSyncDepth,
+        expandDepth: lastSyncDepth
+      });
+    } catch (persistErr) {
+      logWaf('persistLastGoodContext skipped: ' + (persistErr && persistErr.message));
+    }
+    scheduleSkaUiReapply(payload);
+    if (payload.source === DATA_SOURCE || (payload.__skaSyncMeta && payload.__skaSyncMeta.dataSource === DATA_SOURCE)) {
+      try {
+        console.info('[BOM Analytics] wafdata-session rows=' + expected);
+      } catch (logErr) {}
+      setStatus('E-BOM carregada via wafdata-session — ' + expected + ' linhas.', 'ok');
+    }
     return true;
+  }
+
+  function logWaf(msg) {
+    try {
+      console.log('[BOM wafdata-session]', msg);
+    } catch (e) {}
   }
 
   function applySkaPayloadToUI(payload) {
@@ -1368,17 +2395,40 @@
     });
   }
 
+  function suggestKnownRootIfApplicable(ctx) {
+    ctx = ctx || {};
+    var idEl = byId('explorerObjectId');
+    if (!idEl || s(idEl.value)) return false;
+    var title = s(ctx.title || ctx.name || lastSyncTitle || '');
+    if (title.indexOf(KNOWN_ROOT_TITLE_HINT) < 0) return false;
+    idEl.value = KNOWN_ROOT_ID;
+    setStatus(
+      'Product Explorer não forneceu rootId dseng. Root CJ MESA preenchido em Avançado — clique Testar Root ID.',
+      'info'
+    );
+    return true;
+  }
+
   function updateExplorerContextStatus(ctx) {
     var el = byId('explorerContextStatus');
     if (!el) return;
     ctx = ctx || (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.getContext()) || {};
+    var saved = loadLastGoodContext();
     if (ctx.rootId && ctx.title && isValidDsengPhysicalId(ctx.rootId)) {
       el.textContent = 'Contexto detectado';
       el.title = ctx.title;
       el.className = 'bom-explorer-context-status bom-explorer-context-ok';
+    } else if (saved && saved.rootTitle && (ctx.title || ctx.rootId)) {
+      el.textContent = 'Contexto parcial — root salvo disponível';
+      el.title = (ctx.title || ctx.rootId || '') + ' · último root: ' + saved.rootTitle;
+      el.className = 'bom-explorer-context-status bom-explorer-context-warn';
     } else if (ctx.rootId || ctx.title) {
       el.textContent = 'Contexto sem rootId dseng válido';
       el.title = ctx.title || ctx.rootId || '';
+      el.className = 'bom-explorer-context-status bom-explorer-context-warn';
+    } else if (saved && saved.rootTitle) {
+      el.textContent = 'Usando último root salvo';
+      el.title = saved.rootTitle + ' (' + saved.rootId + ')';
       el.className = 'bom-explorer-context-status bom-explorer-context-warn';
     } else if (ctx.path === 'C') {
       el.textContent = 'Contexto indisponível';
@@ -1389,13 +2439,370 @@
       el.className = 'bom-explorer-context-status';
     }
     var adv = byId('explorerObjectId');
-    if (adv && ctx.rootId && !s(adv.value)) adv.value = ctx.rootId;
+    if (adv && ctx.rootId && isValidDsengPhysicalId(ctx.rootId) && !s(adv.value)) adv.value = ctx.rootId;
+    else if (adv && saved && saved.rootId && !s(adv.value)) adv.value = saved.rootId;
+    else if (!isValidDsengPhysicalId(ctx.rootId) && (ctx.title || ctx.name)) {
+      suggestKnownRootIfApplicable(ctx);
+    }
   }
 
   function getDepthFromInput() {
     var el = byId('skaDepthInput');
     var d = el ? Number(el.value) : DEFAULT_DEPTH;
     return isFinite(d) && d > 0 ? d : DEFAULT_DEPTH;
+  }
+
+  function resolveRootForBomLoad(opts) {
+    opts = opts || {};
+    var ctx =
+      opts.ctx ||
+      (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.getContext && w.ProductExplorerSyncProvider.getContext()) ||
+      {};
+    var manual = s(opts.manualRootId || (byId('explorerObjectId') && byId('explorerObjectId').value));
+    var depth = opts.depth != null ? opts.depth : getDepthFromInput();
+    var saved = loadLastGoodContext();
+    var title = s(ctx.title || ctx.name || ctx.productName || lastSyncTitle);
+
+    if (manual && isValidDsengPhysicalId(manual)) {
+      return {
+        ok: true,
+        rootId: manual,
+        depth: depth,
+        title: s(ctx.title) || lastSyncTitle || (saved && saved.rootTitle) || '',
+        source: 'ADVANCED_MANUAL',
+        useResolveSelection: false,
+        saved: saved
+      };
+    }
+
+    if (isValidDsengPhysicalId(ctx.rootId)) {
+      return {
+        ok: true,
+        rootId: s(ctx.rootId),
+        depth: depth,
+        title: title || lastSyncTitle,
+        source: ctx.source || 'PRODUCT_EXPLORER_CONTEXT',
+        useResolveSelection: false,
+        saved: saved
+      };
+    }
+
+    var knownRegistry = resolveKnownExplorerRoot(ctx);
+    if (knownRegistry && isValidDsengPhysicalId(knownRegistry.rootId)) {
+      return {
+        ok: true,
+        rootId: knownRegistry.rootId,
+        depth: depth,
+        title: knownRegistry.title || title || lastSyncTitle,
+        source: knownRegistry.source || 'EXPLORER_CONTEXT_REGISTRY_KNOWN_ROOT',
+        useResolveSelection: false,
+        expansionAvailable: true,
+        saved: saved
+      };
+    }
+
+    var prdHint = s(ctx.physicalId || ( /^prd-/i.test(s(ctx.rootId)) ? ctx.rootId : ''));
+    if (prdHint && /^prd-/i.test(prdHint) && isWafSessionMode()) {
+      return {
+        ok: false,
+        needsWafUqlResolve: true,
+        physicalId: prdHint,
+        rootId: prdHint,
+        depth: depth,
+        title: title || s(ctx.title || ctx.name) || lastSyncTitle,
+        rootName: s(ctx.name || ctx.rootName),
+        source: 'PRODUCT_EXPLORER_PRD',
+        useResolveSelection: false,
+        saved: saved
+      };
+    }
+
+    if (isWafSessionMode() && title.indexOf(KNOWN_ROOT_TITLE_HINT) >= 0) {
+      return {
+        ok: true,
+        rootId: KNOWN_ROOT_ID,
+        depth: depth,
+        title: title || lastSyncTitle || KNOWN_ROOT_TITLE_HINT,
+        source: 'KNOWN_ROOT_FROM_EXPLORER_TITLE',
+        useResolveSelection: false,
+        knownRootFallback: true,
+        fallbackWarning:
+          'Product Explorer não forneceu rootId dseng — usando CJ MESA conhecido (' + KNOWN_ROOT_ID + ').',
+        saved: saved
+      };
+    }
+
+    var pseNorm = normalizeCandidateRootId(ctx, '');
+    if (pseNorm.ok) {
+      return {
+        ok: true,
+        rootId: pseNorm.rootId,
+        depth: depth,
+        title: pseNorm.title || lastSyncTitle,
+        source: pseNorm.source || 'PRODUCT_EXPLORER_CONTEXT',
+        useResolveSelection: false,
+        saved: saved
+      };
+    }
+
+    var hasPseHints =
+      !!s(ctx.title) ||
+      !!s(ctx.name) ||
+      !!s(ctx.selectedId) ||
+      (ctx.selectedCandidates && ctx.selectedCandidates.length);
+    if (hasPseHints && opts.allowResolveSelection !== false && !opts.preferSaved) {
+      return {
+        ok: false,
+        rootId: '',
+        depth: depth,
+        title: s(ctx.title) || s(ctx.name) || lastSyncTitle,
+        source: 'RESOLVE_SELECTION',
+        useResolveSelection: true,
+        saved: saved,
+        pseNorm: pseNorm
+      };
+    }
+
+    if (saved && isValidDsengPhysicalId(saved.rootId)) {
+      return {
+        ok: true,
+        rootId: saved.rootId,
+        depth: saved.depth || depth,
+        expandDepth: saved.expandDepth || saved.depth || depth,
+        title: saved.rootTitle || lastSyncTitle,
+        rootName: saved.rootName || '',
+        source: 'LAST_GOOD_CONTEXT',
+        useResolveSelection: false,
+        saved: saved,
+        fallbackWarning:
+          'Product Explorer não forneceu rootId dseng oficial. Usando último root válido salvo: ' +
+          (saved.rootTitle || saved.rootId) +
+          '.'
+      };
+    }
+
+    return {
+      ok: false,
+      rootId: '',
+      depth: depth,
+      title: pseNorm.title || lastSyncTitle,
+      source: 'NONE',
+      useResolveSelection: false,
+      saved: saved,
+      pseNorm: pseNorm
+    };
+  }
+
+  function loadBomViaStructureWithRoot(opts) {
+    opts = opts || {};
+    if (isWafSessionMode()) {
+      return loadBomViaWafSession(opts);
+    }
+    var syncBtn = byId('btnSyncExplorer');
+    var refreshBtn = byId('btnRefreshBom');
+    if (syncBtn) syncBtn.disabled = true;
+    if (refreshBtn) refreshBtn.disabled = true;
+
+    if (!opts.rootId || !isValidDsengPhysicalId(opts.rootId)) {
+      if (syncBtn) syncBtn.disabled = false;
+      if (refreshBtn) refreshBtn.disabled = false;
+      return Promise.reject(new Error('ROOT_ID_REQUIRED'));
+    }
+
+    clearStateBeforeSkaApply();
+    w.__BOM_SKA_EMPTY_STATE__ = false;
+    if (!opts.silent) setStatus('Carregando via SKA BOM Service (/structure)…', 'info');
+
+    return fetchBomStructureFromSkaService({
+      rootId: opts.rootId,
+      depth: opts.depth == null ? DEFAULT_DEPTH : opts.depth,
+      expandDepth: opts.expandDepth == null ? opts.depth : opts.expandDepth,
+      includeRoot: opts.includeRoot !== false
+    })
+      .then(function (payload) {
+        lastSyncRootId = opts.rootId;
+        lastSyncDepth = opts.depth == null ? DEFAULT_DEPTH : opts.depth;
+        lastSyncTitle = (payload.root && payload.root.title) || opts.title || '';
+        payload.__skaSyncMeta = {
+          source: opts.source || 'STRUCTURE',
+          eventType: opts.source === 'LAST_GOOD_CONTEXT' ? 'last-good-context' : 'structure',
+          rootId: opts.rootId,
+          depth: opts.depth,
+          lastSyncAt: new Date().toISOString(),
+          validationStatus: 'VALID',
+          fallbackWarning: opts.fallbackWarning || ''
+        };
+        lastContextMeta = {
+          source: opts.source || 'STRUCTURE',
+          title: lastSyncTitle,
+          candidateRootId: opts.rootName || opts.title || opts.rootId,
+          rootIdUsed: opts.rootId,
+          validationStatus: 'VALID',
+          fallbackWarning: opts.fallbackWarning || ''
+        };
+        if (opts.fallbackWarning) showFallbackBanner(opts.fallbackWarning);
+        resetDynamicState(payload, opts.depth > 1 ? 'depth-' + opts.depth : 'initial', {
+          manualRootId: opts.rootId
+        });
+        persistLastGoodContext(payload, {
+          rootId: opts.rootId,
+          rootTitle: lastSyncTitle,
+          rootName: opts.rootName || '',
+          depth: opts.depth,
+          expandDepth: opts.expandDepth
+        });
+        return applySkaPayloadToUI(payload);
+      })
+      .catch(function (err) {
+        if (opts.source === 'LAST_GOOD_CONTEXT') {
+          return Promise.reject(err);
+        }
+        return tryLoadFromLastGoodContext({ silent: opts.silent }, err, 'structure falhou').then(function (loaded) {
+          if (loaded) return loaded;
+          var normalized = normalizeSkaError(err);
+          renderEmptySkaState(normalized.code === 'ROOT_NOT_FOUND' ? 'ROOT_NOT_FOUND' : 'ERROR', {
+            contextMeta: lastContextMeta,
+            errorCode: normalized.code,
+            statusMessage: normalized.message,
+            statusKind: 'error',
+            bannerMessage: normalized.message,
+            preserveGoodState: true
+          });
+          return Promise.reject(err);
+        });
+      })
+      .then(
+        function (result) {
+          if (syncBtn) syncBtn.disabled = false;
+          if (refreshBtn) refreshBtn.disabled = false;
+          return result;
+        },
+        function (err) {
+          if (syncBtn) syncBtn.disabled = false;
+          if (refreshBtn) refreshBtn.disabled = false;
+          throw err;
+        }
+      );
+  }
+
+  function tryLoadFromLastGoodContext(opts, priorErr, reason) {
+    opts = opts || {};
+    var saved = loadLastGoodContext();
+    if (!saved || !isValidDsengPhysicalId(saved.rootId)) {
+      if (priorErr) return Promise.reject(priorErr);
+      return Promise.resolve(null);
+    }
+    if (hasRenderableSkaPayload() && lastSyncRootId === saved.rootId) {
+      return Promise.resolve(w.__bomSkaLastPayload);
+    }
+    var warning =
+      'Product Explorer não forneceu rootId dseng oficial. Usando último root válido salvo: ' +
+      (saved.rootTitle || saved.rootId) +
+      (reason ? ' (' + reason + ').' : '.');
+    applyLastGoodContextToUi(saved, warning);
+    if (!opts.silent) setStatus(warning, 'info');
+    return loadBomViaStructureWithRoot({
+      rootId: saved.rootId,
+      depth: saved.depth || getDepthFromInput(),
+      expandDepth: saved.expandDepth || saved.depth || getDepthFromInput(),
+      source: 'LAST_GOOD_CONTEXT',
+      title: saved.rootTitle,
+      rootName: saved.rootName || '',
+      silent: opts.silent,
+      fallbackWarning: warning
+    }).catch(function (err) {
+      if (priorErr) return Promise.reject(priorErr);
+      return Promise.reject(err);
+    });
+  }
+
+  function loadBomWithRootResolution(opts) {
+    opts = opts || {};
+    var resolved = resolveRootForBomLoad(opts);
+
+    if (resolved.useResolveSelection) {
+      return loadBomViaResolveSelection(opts).catch(function (err) {
+        return tryLoadFromLastGoodContext(opts, err, 'resolve-selection falhou');
+      });
+    }
+
+    if (resolved.needsWafUqlResolve && w.__waf3dxClient && w.__waf3dxClient.resolveEngItemRootId) {
+      if (!opts.silent) {
+        setStatus('Resolvendo prd-* → dseng:EngItem via UQL search (WAFData)…', 'info');
+      }
+      return w.__waf3dxClient
+        .resolveEngItemRootId({
+          physicalId: resolved.physicalId || resolved.rootId,
+          title: resolved.title,
+          name: resolved.rootName || ''
+        })
+        .then(function (uql) {
+          if (!uql.ok) {
+            return tryLoadFromLastGoodContext(opts, new Error(uql.error || 'UQL resolve failed'), 'UQL falhou');
+          }
+          var idEl = byId('explorerObjectId');
+          if (idEl) idEl.value = uql.rootId;
+          return loadBomViaStructureWithRoot({
+            rootId: uql.rootId,
+            depth: resolved.depth,
+            expandDepth: resolved.expandDepth || resolved.depth,
+            source: uql.source || resolved.source || 'WAF_UQL_RESOLVE',
+            title: uql.title || resolved.title,
+            rootName: uql.name || resolved.rootName || '',
+            silent: opts.silent,
+            fallbackWarning:
+              'prd ' +
+              (uql.physicalId || resolved.physicalId) +
+              ' → dseng ' +
+              uql.rootId +
+              ' (' +
+              (uql.source || 'UQL') +
+              ')'
+          });
+        })
+        .catch(function (err) {
+          return tryLoadFromLastGoodContext(opts, err, 'UQL resolve exception');
+        });
+    }
+
+    if (resolved.ok && resolved.rootId) {
+      return loadBomViaStructureWithRoot({
+        rootId: resolved.rootId,
+        depth: resolved.depth,
+        expandDepth: resolved.expandDepth || resolved.depth,
+        source: resolved.source,
+        title: resolved.title,
+        rootName: resolved.rootName || '',
+        silent: opts.silent,
+        fallbackWarning: resolved.fallbackWarning || ''
+      });
+    }
+
+    return tryLoadFromLastGoodContext(opts, null, 'contexto sem rootId').then(function (loaded) {
+      if (loaded) return loaded;
+      var msg =
+        'Contexto sem rootId dseng válido. Informe Root Physical ID em Avançado ou sincronize com estrutura válida no Product Explorer.';
+      renderEmptySkaState('CONTEXT_INVALID', {
+        contextMeta: lastContextMeta || resolved.pseNorm || {},
+        preserveGoodState: true,
+        title: resolved.title,
+        statusMessage: msg,
+        statusKind: 'error',
+        bannerMessage: msg
+      });
+      return Promise.reject(new Error('ROOT_UNRESOLVED'));
+    });
+  }
+
+  function bootLoadFromContextOrPersisted() {
+    if (hasRenderableSkaPayload()) return;
+    var saved = loadLastGoodContext();
+    if (saved) {
+      applyLastGoodContextToUi(saved);
+    }
+    loadBomWithRootResolution({ silent: true, preferSaved: !!saved }).catch(function () {
+      if (!saved) renderInitialEmptyState();
+    });
   }
 
   function resolveSyncParams(opts) {
@@ -1406,9 +2813,15 @@
     var manual = opts.forceManual ? s(byId('explorerObjectId') && byId('explorerObjectId').value) : '';
     if (!manual && opts.advancedOnly) manual = s(byId('explorerObjectId') && byId('explorerObjectId').value);
     var norm = normalizeCandidateRootId(ctx, manual);
-    if (!norm.ok && !manual && lastSyncRootId && isValidDsengPhysicalId(lastSyncRootId)) {
-      norm = normalizeCandidateRootId({}, lastSyncRootId);
-      norm.source = 'LAST_SYNC';
+    if (!norm.ok && !manual) {
+      var saved = loadLastGoodContext();
+      if (saved && isValidDsengPhysicalId(saved.rootId)) {
+        norm = normalizeCandidateRootId({ title: saved.rootTitle }, saved.rootId);
+        norm.source = 'LAST_GOOD_CONTEXT';
+      } else if (lastSyncRootId && isValidDsengPhysicalId(lastSyncRootId)) {
+        norm = normalizeCandidateRootId({}, lastSyncRootId);
+        norm.source = 'LAST_SYNC';
+      }
     }
     lastContextMeta = {
       source: norm.source,
@@ -1551,12 +2964,29 @@
 
   function loadBomViaSkaStructure(opts) {
     opts = opts || {};
+    if (isWafSessionMode()) {
+      var params = resolveSyncParams({ forceManual: !!opts.forceManual, advancedOnly: !!opts.advancedOnly });
+      if (!params.rootId || !params.validation || !params.validation.ok) {
+        var invMsg = 'Informe um Root Physical ID dseng válido em Avançado.';
+        renderEmptySkaState('CONTEXT_INVALID', {
+          contextMeta: lastContextMeta,
+          title: params.title,
+          statusMessage: invMsg,
+          statusKind: 'error',
+          bannerMessage: invMsg,
+          preserveGoodState: true
+        });
+        return Promise.reject(new Error('CONTEXT_INVALID'));
+      }
+      return loadBomViaWafSession({
+        rootId: params.rootId,
+        depth: params.depth,
+        source: params.source || 'ADVANCED_MANUAL',
+        title: params.title,
+        silent: opts.silent
+      });
+    }
     var params = resolveSyncParams({ forceManual: true, advancedOnly: true });
-    var syncBtn = byId('btnSyncExplorer');
-    var refreshBtn = byId('btnRefreshBom');
-    if (syncBtn) syncBtn.disabled = true;
-    if (refreshBtn) refreshBtn.disabled = true;
-
     if (!params.rootId || !params.validation || !params.validation.ok) {
       var invMsg = 'Informe um Root Physical ID dseng válido em Avançado.';
       renderEmptySkaState('CONTEXT_INVALID', {
@@ -1564,73 +2994,67 @@
         title: params.title,
         statusMessage: invMsg,
         statusKind: 'error',
-        tableMessage: invMsg
+        bannerMessage: invMsg,
+        preserveGoodState: true
       });
-      if (syncBtn) syncBtn.disabled = false;
-      if (refreshBtn) refreshBtn.disabled = false;
       return Promise.reject(new Error('CONTEXT_INVALID'));
     }
-
-    clearStateBeforeSkaApply();
-    w.__BOM_SKA_EMPTY_STATE__ = false;
-    if (!opts.silent) setStatus('Carregando via SKA BOM Service (/structure)…', 'info');
-
-    return fetchBomStructureFromSkaService({
+    return loadBomViaStructureWithRoot({
       rootId: params.rootId,
       depth: params.depth,
-      includeRoot: true
-    })
-      .then(function (payload) {
-        lastSyncRootId = params.rootId;
-        lastSyncDepth = params.depth;
-        lastSyncTitle = (payload.root && payload.root.title) || params.title || '';
-        payload.__skaSyncMeta = {
-          source: 'ADVANCED_MANUAL',
-          eventType: 'advanced-structure',
-          rootId: params.rootId,
-          depth: params.depth,
-          lastSyncAt: new Date().toISOString(),
-          validationStatus: 'VALID'
-        };
-        lastContextMeta = {
-          source: 'ADVANCED_MANUAL',
-          title: lastSyncTitle,
-          candidateRootId: params.rootId,
-          rootIdUsed: params.rootId,
-          validationStatus: 'VALID'
-        };
-        resetDynamicState(payload, params.depth > 1 ? 'depth-' + params.depth : 'initial', {
-          manualRootId: params.rootId
-        });
-        return applySkaPayloadToUI(payload);
-      })
-      .catch(function (err) {
-        var normalized = normalizeSkaError(err);
-        var code = normalized.code || '';
-        renderEmptySkaState(code === 'ROOT_NOT_FOUND' ? 'ROOT_NOT_FOUND' : 'ERROR', {
-          contextMeta: lastContextMeta,
-          errorCode: code,
-          statusMessage: normalized.message,
-          statusKind: 'error',
-          tableMessage: normalized.message
-        });
-        return Promise.reject(err);
-      })
-      .then(
-        function (result) {
-          if (syncBtn) syncBtn.disabled = false;
-          if (refreshBtn) refreshBtn.disabled = false;
-          return result;
-        },
-        function (err) {
-          if (syncBtn) syncBtn.disabled = false;
-          if (refreshBtn) refreshBtn.disabled = false;
-          throw err;
-        }
-      );
+      expandDepth: params.depth,
+      source: params.source || 'ADVANCED_MANUAL',
+      title: params.title,
+      silent: opts.silent
+    });
   }
 
   function loadBomViaResolveSelection(opts) {
+    opts = opts || {};
+    if (isWafSessionMode()) {
+      var wafCtx =
+        opts.ctx ||
+        (w.ProductExplorerSyncProvider &&
+          w.ProductExplorerSyncProvider.getContext &&
+          w.ProductExplorerSyncProvider.getContext()) ||
+        {};
+      var resolved = resolveRootForBomLoad({ allowResolveSelection: false, ctx: wafCtx });
+      if (resolved.ok && resolved.rootId) {
+        return loadBomViaWafSession({
+          rootId: resolved.rootId,
+          depth: resolved.depth,
+          expandDepth: resolved.expandDepth || resolved.depth,
+          source: resolved.source || 'PRODUCT_EXPLORER_CONTEXT',
+          title: resolved.title,
+          rootName: resolved.rootName || '',
+          silent: opts.silent,
+          fallbackWarning: resolved.fallbackWarning || '',
+          knownRootFallback: !!resolved.knownRootFallback
+        });
+      }
+      if (resolved.needsWafUqlResolve) {
+        return loadBomViaWafSession({
+          rootId: resolved.physicalId || resolved.rootId,
+          depth: resolved.depth,
+          expandDepth: resolved.expandDepth || resolved.depth,
+          source: resolved.source || 'PRODUCT_EXPLORER_PRD',
+          title: resolved.title,
+          rootName: resolved.rootName || '',
+          silent: opts.silent
+        });
+      }
+      var wafMsg =
+        'Modo wafdata-session: Product Explorer não forneceu rootId dseng. Root CJ MESA preenchido em Avançado — clique Sincronizar novamente.';
+      suggestKnownRootIfApplicable(wafCtx);
+      renderEmptySkaState('SELECTION_NOT_RESOLVED', {
+        contextMeta: lastContextMeta,
+        statusMessage: wafMsg,
+        statusKind: 'error',
+        bannerMessage: wafMsg,
+        preserveGoodState: true
+      });
+      return Promise.reject(new Error('SELECTION_NOT_RESOLVED'));
+    }
     opts = opts || {};
     var syncBtn = byId('btnSyncExplorer');
     var refreshBtn = byId('btnRefreshBom');
@@ -1709,23 +3133,34 @@
           validationStatus: 'RESOLVED',
           resolutionStrategy: payload.resolution && payload.resolution.strategy
         };
+        persistLastGoodContext(payload, {
+          rootId: resolvedRoot,
+          rootTitle: lastSyncTitle,
+          rootName: selectionPayload.normalized.name || '',
+          depth: depth,
+          expandDepth: depth
+        });
         return applySkaPayloadToUI(payload);
       })
       .catch(function (err) {
-        var normalized = normalizeSkaError(err);
-        var code = normalized.code || '';
-        var errPayload = err && err.payload ? err.payload : null;
-        renderEmptySkaState(code === 'SELECTION_NOT_RESOLVED' ? 'SELECTION_NOT_RESOLVED' : 'ERROR', {
-          contextMeta: lastContextMeta,
-          errorCode: code,
-          statusMessage: normalized.message,
-          statusKind: 'error',
-          tableMessage: normalized.message
+        return tryLoadFromLastGoodContext(opts, err, 'resolve-selection falhou').then(function (loaded) {
+          if (loaded) return loaded;
+          var normalized = normalizeSkaError(err);
+          var code = normalized.code || '';
+          var errPayload = err && err.payload ? err.payload : null;
+          renderEmptySkaState(code === 'SELECTION_NOT_RESOLVED' ? 'SELECTION_NOT_RESOLVED' : 'ERROR', {
+            contextMeta: lastContextMeta,
+            errorCode: code,
+            statusMessage: normalized.message,
+            statusKind: 'error',
+            bannerMessage: normalized.message,
+            preserveGoodState: true
+          });
+          if (code === 'SELECTION_NOT_RESOLVED') {
+            renderSelectionNotResolved(errPayload, lastContextMeta);
+          }
+          return Promise.reject(err);
         });
-        if (code === 'SELECTION_NOT_RESOLVED') {
-          renderSelectionNotResolved(errPayload, lastContextMeta);
-        }
-        return Promise.reject(err);
       })
       .then(
         function (result) {
@@ -1746,28 +3181,54 @@
     if (opts.forceManual || opts.advancedOnly) {
       return loadBomViaSkaStructure(opts);
     }
-    return loadBomViaResolveSelection(opts);
+    return loadBomWithRootResolution(opts);
   }
 
   function syncWithProductExplorer(opts) {
     opts = opts || {};
     if (!w.ProductExplorerSyncProvider || !w.ProductExplorerSyncProvider.refresh) {
-      return loadBomViaResolveSelection(opts);
+      return loadBomWithRootResolution(opts);
     }
     return w.ProductExplorerSyncProvider.refresh('manual-sync').then(function (ctx) {
       updateExplorerContextStatus(ctx);
       lastContextMeta = {
         source: ctx.source || 'PRODUCT_EXPLORER_CONTEXT',
         title: ctx.title,
-        candidateRootId: ctx.selectedId || ctx.rootId,
-        rootIdUsed: '',
-        validationStatus: 'RESOLVE_PENDING'
+        candidateRootId: ctx.selectedId || ctx.physicalId || ctx.rootId,
+        rootIdUsed: isValidDsengPhysicalId(ctx.rootId) ? ctx.rootId : '',
+        validationStatus: isValidDsengPhysicalId(ctx.rootId) ? 'VALID' : 'RESOLVE_PENDING'
       };
-      return loadBomViaResolveSelection(opts);
+      return loadBomWithRootResolution({ ctx: ctx, silent: opts.silent });
     });
   }
 
   function refreshBom() {
+    if (isWafSessionMode()) {
+      var manual = s(byId('explorerObjectId') && byId('explorerObjectId').value);
+      if (manual && isValidDsengPhysicalId(manual)) {
+        return loadBomViaWafSession({
+          rootId: manual,
+          depth: getDepthFromInput(),
+          source: 'ADVANCED_MANUAL',
+          title: lastSyncTitle
+        });
+      }
+      if (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.refresh) {
+        return w.ProductExplorerSyncProvider.refresh('manual-refresh').then(function (ctx) {
+          updateExplorerContextStatus(ctx);
+          return loadBomWithRootResolution({ ctx: ctx });
+        });
+      }
+      if (lastSyncRootId && isValidDsengPhysicalId(lastSyncRootId)) {
+        return loadBomViaWafSession({
+          rootId: lastSyncRootId,
+          depth: lastSyncDepth || getDepthFromInput(),
+          source: 'LAST_SYNC',
+          title: lastSyncTitle
+        });
+      }
+      return loadBomWithRootResolution({});
+    }
     var manual = s(byId('explorerObjectId') && byId('explorerObjectId').value);
     if (manual && isValidDsengPhysicalId(manual)) {
       return loadBomViaSkaStructure({ forceManual: true, advancedOnly: true });
@@ -1776,88 +3237,231 @@
       return w.ProductExplorerSyncProvider.refresh('manual-refresh').then(function (ctx) {
         updateExplorerContextStatus(ctx);
         if (ctx && ctx.selectionMode === 'selected-branch') {
-          return loadBomViaResolveSelection({ payloadMode: 'selected-branch' });
+          return loadBomViaResolveSelection({ payloadMode: 'selected-branch' }).catch(function (err) {
+            return tryLoadFromLastGoodContext({}, err, 'refresh selected-branch falhou');
+          });
         }
-        if (lastSyncRootId && isValidDsengPhysicalId(lastSyncRootId)) {
-          var adv = byId('explorerObjectId');
-          if (adv && !s(adv.value)) adv.value = lastSyncRootId;
-          var depthEl = byId('skaDepthInput');
-          var desiredDepth = Math.max(Number(lastSyncDepth || DEFAULT_DEPTH), Number(dynamicState.maxLoadedLevel || 0), DEFAULT_DEPTH);
-          if (depthEl && desiredDepth > Number(depthEl.value || 0)) depthEl.value = String(Math.min(desiredDepth, 3));
-          setStatus('Nenhuma seleção oficial resolvível detectada; atualizando root atual.', 'info');
-          return loadBomViaSkaStructure({ forceManual: true, advancedOnly: true });
-        }
-        return loadBomViaResolveSelection({ payloadMode: ctx && ctx.selectionMode ? ctx.selectionMode : 'fallback' });
+        return loadBomWithRootResolution({ ctx: ctx });
       });
     }
-    if (lastSyncRootId && isValidDsengPhysicalId(lastSyncRootId)) {
-      var advFallback = byId('explorerObjectId');
-      if (advFallback && !s(advFallback.value)) advFallback.value = lastSyncRootId;
-      return loadBomViaSkaStructure({ forceManual: true, advancedOnly: true });
-    }
-    return syncWithProductExplorer();
+    return loadBomWithRootResolution({});
   }
 
   w.loadViaExplorerSync = syncWithProductExplorer;
   w.refreshBomFromSka = refreshBom;
   w.loadViaSkaService = syncWithProductExplorer;
 
-  function shouldAutoCollapseRightPanel(root) {
-    var width = root && root.clientWidth ? root.clientWidth : (w.innerWidth || 0);
-    return width > 0 && width < 1050;
+  function shouldAutoCollapseRightPanel() {
+    return false;
   }
 
-  function isRightPanelCollapsed(root) {
-    if (rightPanelPreference == null) rightPanelPreference = safeStorageGet(RIGHT_PANEL_KEY);
-    if (rightPanelPreference === 'collapsed') return true;
-    if (rightPanelPreference === 'open') return false;
-    return shouldAutoCollapseRightPanel(root);
+  function isRightPanelCollapsed() {
+    return false;
   }
 
   function applyRightPanelState() {
     var root = uiRoot();
-    if (!root) return;
-    var collapsed = isRightPanelCollapsed(root);
-    root.classList.toggle('bom-side-collapsed', collapsed);
-    if (document && document.body) document.body.classList.toggle('bom-side-collapsed', collapsed);
-    var btn = byId('btnToggleRightPanel');
-    if (btn) {
-      btn.textContent = collapsed ? 'Painel +' : 'Painel';
-      btn.title = collapsed ? 'Mostrar graficos e preview' : 'Recolher graficos e preview para ampliar a tabela';
-      btn.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
-    }
+    if (root) root.classList.remove('bom-side-collapsed');
+    if (document && document.body) document.body.classList.remove('bom-side-collapsed');
+    try {
+      if (w.localStorage) w.localStorage.removeItem(RIGHT_PANEL_KEY);
+    } catch (e) {}
     if (w.LayoutFit && w.LayoutFit.apply) {
       try {
         w.LayoutFit.apply();
-      } catch (e) {}
+      } catch (e2) {}
     }
+    apply3dxProductDashboardLayout();
   }
 
   function ensureRightPanelToggle() {
     var btn = byId('btnToggleRightPanel');
-    if (!btn) {
-      var actions = uiRoot().querySelector && uiRoot().querySelector('.bom-topbar-actions');
-      var advanced = uiRoot().querySelector && uiRoot().querySelector('.bom-topbar-more');
-      if (!actions) return null;
-      btn = document.createElement('button');
-      btn.type = 'button';
-      btn.id = 'btnToggleRightPanel';
-      btn.className = 'bom-btn bom-btn-secondary bom-btn-compact';
-      btn.setAttribute('aria-label', 'Recolher ou expandir painel direito');
-      if (advanced && advanced.parentNode === actions) actions.insertBefore(btn, advanced);
-      else actions.appendChild(btn);
-    }
-    if (!btn.__BOM_SIDE_TOGGLE_BOUND__) {
-      btn.__BOM_SIDE_TOGGLE_BOUND__ = true;
-      btn.addEventListener('click', function (ev) {
-        if (ev) ev.preventDefault();
-        rightPanelPreference = isRightPanelCollapsed(uiRoot()) ? 'open' : 'collapsed';
-        safeStorageSet(RIGHT_PANEL_KEY, rightPanelPreference);
-        applyRightPanelState();
-      });
-    }
+    if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
     applyRightPanelState();
-    return btn;
+  }
+
+  function hideEndUserChrome() {
+    var advanced = uiRoot().querySelector && uiRoot().querySelector('.bom-topbar-more');
+    if (advanced) {
+      advanced.classList.remove('bom-hidden');
+      advanced.removeAttribute('hidden');
+      advanced.style.display = '';
+    }
+    if (w.__waf3dxClient && w.__waf3dxClient.ensureAdvancedVisible) {
+      w.__waf3dxClient.ensureAdvancedVisible();
+    }
+    var nextBtn = byId('btnLoadNextLevel');
+    if (nextBtn) {
+      nextBtn.classList.add('bom-hidden');
+      nextBtn.style.display = 'none';
+    }
+  }
+
+  function reapplySkaUiChrome(payload) {
+    payload = payload || w.__bomSkaLastPayload;
+    if (!payload || w.__BOM_DATA_SOURCE__ !== DATA_SOURCE) return;
+    hideEndUserChrome();
+    applyRightPanelState();
+    renderSkaKpiSummary(payload);
+    renderSkaDiagnostics(payload);
+    updateTablePager(getSkaExpectedTotal(payload));
+    apply3dxProductDashboardLayout();
+    var expected = getSkaExpectedTotal(payload);
+    var statusEl = byId('statusBar');
+    if (statusEl) {
+      statusEl.textContent = formatDsengCountLine(payload, expected) + ' · Explorer visual pode diferir do recorte dseng';
+      statusEl.className = 'bom-st bom-st-ok';
+    }
+  }
+
+  function scheduleSkaUiReapply(payload) {
+    reapplySkaUiChrome(payload);
+    [120, 400, 900].forEach(function (ms) {
+      setTimeout(function () {
+        reapplySkaUiChrome(payload);
+      }, ms);
+    });
+  }
+
+  function neutralizeLayoutFitFor3dx() {
+    if (!w.LayoutFit || w.LayoutFit.__BOM_3DX_LAYOUT_PATCHED__) return;
+    var origApply = w.LayoutFit.apply;
+    w.LayoutFit.apply = function () {
+      var page = uiRoot().querySelector && uiRoot().querySelector('.bom-layout-page.bom-3dx-product-dashboard');
+      if (page) {
+        apply3dxProductDashboardLayout();
+        if (w.ChartsManager && w.ChartsManager.scheduleResize) {
+          try {
+            w.ChartsManager.scheduleResize();
+          } catch (e) {}
+        }
+        return;
+      }
+      return origApply.apply(this, arguments);
+    };
+    w.LayoutFit.__BOM_3DX_LAYOUT_PATCHED__ = true;
+  }
+
+  function apply3dxProductDashboardLayout() {
+    var page = uiRoot().querySelector && uiRoot().querySelector('.bom-layout-page.bom-3dx-product-dashboard');
+    if (!page) return;
+    var host = uiRoot();
+    var hostH = host && host.clientHeight ? host.clientHeight : window.innerHeight || 640;
+    page.style.gridTemplateAreas = '';
+    page.style.gridTemplateRows = 'auto minmax(0, 1fr)';
+    page.style.gridTemplateColumns = 'minmax(0, 1fr) minmax(280px, 38%)';
+    page.style.height = hostH + 'px';
+    page.style.maxHeight = hostH + 'px';
+    page.style.gap = '4px';
+
+    var zone1 = page.querySelector('.bom-zone-1');
+    var zone2 = page.querySelector('.bom-zone-2');
+    var zone3 = page.querySelector('.bom-zone-3');
+    var zone4 = page.querySelector('.bom-zone-4');
+    var zone5 = page.querySelector('.bom-zone-5');
+
+    function placeZone(el, row, col, extra) {
+      if (!el) return;
+      el.style.gridRow = String(row);
+      el.style.gridColumn = String(col);
+      if (extra) {
+        Object.keys(extra).forEach(function (key) {
+          el.style[key] = extra[key];
+        });
+      }
+    }
+
+    placeZone(zone1, '1', '1 / -1', { zIndex: '3' });
+    placeZone(zone2, '2', '1', { alignSelf: 'start', zIndex: '4', width: '100%', maxWidth: '100%' });
+    placeZone(zone3, '2', '2', { alignSelf: 'start', zIndex: '4', width: '100%', maxWidth: '100%' });
+    placeZone(zone4, '2', '1', {
+      alignSelf: 'stretch',
+      zIndex: '1',
+      minHeight: '0',
+      height: '100%',
+      maxHeight: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      boxSizing: 'border-box'
+    });
+    placeZone(zone5, '2', '2', {
+      alignSelf: 'stretch',
+      zIndex: '1',
+      minHeight: '0',
+      height: '100%',
+      maxHeight: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      boxSizing: 'border-box'
+    });
+
+    if (zone2) {
+      zone2.style.height = 'auto';
+      zone2.style.maxHeight = 'none';
+    }
+
+    var toolsH = zone2 ? zone2.offsetHeight : 64;
+    page.style.setProperty('--bom-tools-offset', toolsH + 'px');
+    if (zone4) zone4.style.paddingTop = toolsH + 'px';
+
+    if (zone3) {
+      zone3.style.height = 'auto';
+      zone3.style.maxHeight = 'none';
+      zone3.style.overflow = 'visible';
+    }
+    var chartsH = zone3 ? zone3.offsetHeight : 168;
+    chartsH = Math.max(148, Math.min(chartsH, Math.floor(hostH * 0.34)));
+    page.style.setProperty('--bom-charts-offset', chartsH + 'px');
+    if (zone5) zone5.style.paddingTop = chartsH + 'px';
+
+    var bodyH = Math.max(200, hostH - (zone1 ? zone1.offsetHeight : 40) - 8);
+    if (zone4) {
+      zone4.style.minHeight = bodyH + 'px';
+      zone4.style.height = bodyH + 'px';
+    }
+    if (zone5) {
+      zone5.style.minHeight = bodyH + 'px';
+      zone5.style.height = bodyH + 'px';
+    }
+
+    var list = zone4 && zone4.querySelector('.bom-ebom-list');
+    var tableWrap = zone4 && zone4.querySelector('.bom-table-wrap');
+    if (list && tableWrap && zone4) {
+      var head = zone4.querySelector('.bom-ebom-head');
+      var pager = zone4.querySelector('.bom-table-pager');
+      var headH = head ? head.offsetHeight : 0;
+      var pagerH = pager ? pager.offsetHeight : 22;
+      var listH = Math.max(160, bodyH - toolsH - headH - 6);
+      list.style.height = listH + 'px';
+      list.style.maxHeight = listH + 'px';
+      tableWrap.style.height = Math.max(120, listH - pagerH) + 'px';
+      tableWrap.style.maxHeight = tableWrap.style.height;
+    }
+
+    var previewBody = zone5 && zone5.querySelector('.bom-preview-body');
+    var previewImage = zone5 && zone5.querySelector('#partPreviewImage');
+    if (previewBody && zone5) {
+      var meta = zone5.querySelector('.bom-preview-meta');
+      var metaH = meta ? meta.offsetHeight : 72;
+      var previewBodyH = Math.max(140, bodyH - chartsH - 8);
+      previewBody.style.height = previewBodyH + 'px';
+      previewBody.style.maxHeight = previewBodyH + 'px';
+      previewBody.style.display = 'flex';
+      previewBody.style.flexDirection = 'column';
+      previewBody.style.minHeight = '0';
+      if (previewImage) {
+        previewImage.style.flex = '1 1 auto';
+        previewImage.style.minHeight = Math.max(100, previewBodyH - metaH - 16) + 'px';
+        previewImage.style.maxHeight = 'none';
+        previewImage.style.height = 'auto';
+      }
+    }
+
+    if (w.ChartsManager && w.ChartsManager.scheduleResize) {
+      try {
+        w.ChartsManager.scheduleResize();
+      } catch (e) {}
+    }
   }
 
   function applyTopbarCompactLabels() {
@@ -1884,6 +3488,7 @@
       badge.textContent = compact ? 'SKA/dseng' : 'Fonte: SKA BOM Service / dseng';
     }
     applyRightPanelState();
+    apply3dxProductDashboardLayout();
   }
 
   function bindTestRootButton() {
@@ -1912,7 +3517,7 @@
         area.classList.remove('bom-hidden');
         area.value = text;
       }
-      setStatus('Diagnóstico de contexto exibido em Avançado.', 'ok');
+      setStatus('Diagnóstico de contexto copiado para área técnica oculta.', 'ok');
     });
   }
 
@@ -1986,6 +3591,7 @@
     ensureSyncExplorerButton();
     ensureDynamicControls();
     ensureRightPanelToggle();
+    hideEndUserChrome();
     bindDynamicTableExpansion();
     var syncBtn = byId('btnSyncExplorer');
     if (syncBtn && syncBtn.textContent.indexOf('Sincronizar') < 0) {
@@ -1994,7 +3600,7 @@
     var refreshBtn = byId('btnRefreshBom');
     if (refreshBtn) refreshBtn.textContent = 'Atualizar BOM';
     var badge = byId('explorerSourceBadge');
-    if (badge) badge.textContent = 'Fonte: SKA BOM Service / dseng';
+    if (badge) badge.textContent = isWafSessionMode() ? 'Fonte: WAFData session / dseng' : 'Fonte: SKA BOM Service / dseng';
     var idEl = byId('explorerObjectId');
     if (idEl) {
       idEl.placeholder = 'Root Physical ID (Avançado)';
@@ -2020,15 +3626,31 @@
       w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.getContext && w.ProductExplorerSyncProvider.getContext()
     );
     applyTopbarCompactLabels();
+    apply3dxProductDashboardLayout();
     bindTestRootButton();
     bindCopyContextDiagnosticsButton();
+    if (w.__waf3dxClient && w.__waf3dxClient.installExecutorUi) {
+      w.__waf3dxClient.installExecutorUi();
+    }
+    if (w.__waf3dxClient && w.__waf3dxClient.installDiagnosticUi) {
+      w.__waf3dxClient.installDiagnosticUi();
+    }
   }
 
   function bindSyncButtons() {
-    var syncBtn = byId('btnSyncExplorer');
-    if (syncBtn && !syncBtn.__BOM_SKA_SYNC_BOUND__) {
-      syncBtn.__BOM_SKA_SYNC_BOUND__ = true;
-      syncBtn.addEventListener(
+    reassertWafSessionOwnership();
+    bindSyncButtonsForce();
+  }
+
+  function bindSyncButtonsForce() {
+    function wireButton(id, handler) {
+      var old = byId(id);
+      if (!old || !old.parentNode) return;
+      if (old.__BOM_WAF_SYNC_WIRED__ === RELEASE_COMMIT) return;
+      var clone = old.cloneNode(true);
+      clone.__BOM_WAF_SYNC_WIRED__ = RELEASE_COMMIT;
+      old.parentNode.replaceChild(clone, old);
+      clone.addEventListener(
         'click',
         function (ev) {
           if (ev) {
@@ -2036,26 +3658,85 @@
             ev.stopPropagation();
             if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
           }
-          syncWithProductExplorer().catch(function () {});
+          handler();
         },
         true
       );
     }
-    var refreshBtn = byId('btnRefreshBom');
-    if (refreshBtn && !refreshBtn.__BOM_SKA_REFRESH_BOUND__) {
-      refreshBtn.__BOM_SKA_REFRESH_BOUND__ = true;
-      refreshBtn.addEventListener(
-        'click',
-        function (ev) {
-          if (ev) {
-            ev.preventDefault();
-            ev.stopPropagation();
-            if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
-          }
-          refreshBom().catch(function () {});
-        },
-        true
-      );
+    wireButton('btnSyncExplorer', function () {
+      recordWafRuntimeProof('sync-button', 'syncWithProductExplorer');
+      syncWithProductExplorer().catch(function (err) {
+        recordWafRuntimeProof('sync-error', err && err.message);
+      });
+    });
+    wireButton('btnRefreshBom', function () {
+      recordWafRuntimeProof('refresh-button', 'refreshBom');
+      refreshBom().catch(function (err) {
+        recordWafRuntimeProof('refresh-error', err && err.message);
+      });
+    });
+  }
+
+  function recordWafRuntimeProof(stage, detail) {
+    var proof = w.__BOM_WAF_EBOM_RUNTIME__ || {};
+    proof.build = BUILD;
+    proof.releaseCommit = RELEASE_COMMIT;
+    proof.dataSource = DATA_SOURCE;
+    proof.stage = stage;
+    proof.detail = detail;
+    proof.at = new Date().toISOString();
+    proof.loadViaExplorerSync = w.loadViaExplorerSync === syncWithProductExplorer ? 'syncWithProductExplorer' : String(w.loadViaExplorerSync);
+    proof.refreshBomFromSka = w.refreshBomFromSka === refreshBom ? 'refreshBom' : String(w.refreshBomFromSka);
+    w.__BOM_WAF_EBOM_RUNTIME__ = proof;
+    renderWafRuntimeProof(proof);
+    try {
+      console.info('[BOM Analytics] waf-ebom-runtime', stage, detail || '');
+    } catch (eLog) {}
+  }
+
+  function renderWafRuntimeProof(proof) {
+    proof = proof || w.__BOM_WAF_EBOM_RUNTIME__ || {};
+    var el = byId('wafEbomRuntimeProof');
+    if (!el) return;
+    el.textContent =
+      'cache=' +
+      (proof.releaseCommit || RELEASE_COMMIT) +
+      ' | source=' +
+      (proof.dataSource || DATA_SOURCE) +
+      ' | loader=' +
+      (proof.lastLoader || proof.stage || 'boot') +
+      (proof.rows != null ? ' | rows=' + proof.rows : '') +
+      (proof.expandVariant ? ' | expand=' + proof.expandVariant : '');
+  }
+
+  function mountWafRuntimeProofPanel() {
+    var host = byId('bomRulesPanel');
+    if (!host || host.querySelector('#wafEbomRuntimeProof')) return;
+    var box = document.createElement('div');
+    box.id = 'wafEbomRuntimeProofWrap';
+    box.className = 'bom-waf-ebom-proof-wrap';
+    box.innerHTML =
+      '<p class="bom-waf-ebom-proof-title"><strong>Runtime E-BOM</strong></p>' +
+      '<p id="wafEbomRuntimeProof" class="bom-waf-ebom-proof-line">cache=' +
+      RELEASE_COMMIT +
+      ' | source=wafdata-session | loader=boot</p>';
+    host.insertBefore(box, host.firstChild);
+    recordWafRuntimeProof('boot', 'hotfix-installed');
+  }
+
+  function reassertWafSessionOwnership() {
+    if (!isWafSessionMode()) return;
+    w.__BOM_DATA_SOURCE__ = DATA_SOURCE;
+    w.__BOM_LOADER_MODE__ = DATA_SOURCE;
+    w.__BOM_HOTFIX_MODE__ = DATA_SOURCE;
+    w.loadViaExplorerSync = syncWithProductExplorer;
+    w.refreshBomFromSka = refreshBom;
+    w.loadViaSkaService = syncWithProductExplorer;
+    if (typeof w.__bomRootStabilityLoad === 'function') {
+      w.__bomRootStabilityLoad = function () {
+        recordWafRuntimeProof('blocked-root-stability', 'delegated-to-waf');
+        return syncWithProductExplorer();
+      };
     }
   }
 
@@ -2081,8 +3762,13 @@
           return;
         }
         if (!w.__BOM_DEBUG__ && /Atualizar estrutura|clique Atualizar estrutura/i.test(String(msg || ''))) {
-          msg = 'Build ' + BUILD + ' | SKA BOM Service — use Sincronizar com Product Explorer ou Avançado.';
+          msg = 'Build ' + BUILD + ' | SKA BOM Service — use Sincronizar com Product Explorer.';
           kind = kind === 'error' ? 'error' : 'ok';
+        }
+        if (w.__bomSkaLastPayload && w.__BOM_DATA_SOURCE__ === DATA_SOURCE) {
+          if (/^Snapshot:/i.test(String(msg || '')) || /^Estrutura:/i.test(String(msg || ''))) {
+            return;
+          }
         }
         return origStatus.call(this, msg, kind);
       };
@@ -2104,6 +3790,7 @@
             patchUiLabels();
           } else if (w.__bomSkaLastPayload && w.__BOM_DATA_SOURCE__ === DATA_SOURCE) {
             finalizeSkaUi(w.__bomSkaLastPayload);
+            scheduleSkaUiReapply(w.__bomSkaLastPayload);
           } else {
             syncBuild();
             patchUiLabels();
@@ -2192,6 +3879,7 @@
         try {
           patchUiLabels();
           bindSyncButtons();
+          reassertWafSessionOwnership();
           var legacy = byId('btnImportPaste');
           if (legacy && legacy.textContent.indexOf('Atualizar estrutura') >= 0) {
             legacy.classList.add('bom-hidden');
@@ -2219,6 +3907,7 @@
       root.classList.toggle('bom-ultra-compact', rect.width < 900);
       root.classList.toggle('bom-short', rect.height < 650);
       applyTopbarCompactLabels();
+      apply3dxProductDashboardLayout();
     });
     ro.observe(root);
     root.__BOM_SKA_RO__ = ro;
@@ -2236,7 +3925,9 @@
   function install() {
     syncBuild();
     disableLegacyOperationalBlockers();
+    neutralizeLayoutFitFor3dx();
     patchAppHooks();
+    patchPartPreviewForSka();
     installExplorerSync();
     patchUiLabels();
     bindSyncButtons();
@@ -2246,19 +3937,43 @@
     installLabelGuard();
     setTimeout(bindSyncButtons, 400);
     setTimeout(function () {
-      syncBuild();
+      reassertWafSessionOwnership();
       bindSyncButtons();
+      syncBuild();
       patchUiLabels();
+      patchPartPreviewForSka();
       if (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.refresh) {
         w.ProductExplorerSyncProvider.refresh('post-boot');
       }
+      setTimeout(bootLoadFromContextOrPersisted, BOOT_CONTEXT_WAIT_MS);
     }, 1500);
-    renderInitialEmptyState();
+    var savedBoot = loadLastGoodContext();
+    if (savedBoot) {
+      applyLastGoodContextToUi(savedBoot);
+      setStatus('Recuperando último root válido salvo…', 'info');
+    } else {
+      renderInitialEmptyState();
+    }
     applyTopbarCompactLabels();
     bindTestRootButton();
     bindCopyContextDiagnosticsButton();
-    setStatus('Build ' + BUILD + ' | SKA BOM Service + resolve-selection', 'ok');
+    mountWafRuntimeProofPanel();
+    reassertWafSessionOwnership();
+    setStatus('Build ' + BUILD + ' | cache ' + RELEASE_COMMIT + ' | wafdata-session', 'ok');
   }
+
+  w.__BOM_ASSERT_WAF_EBOM__ = function () {
+    return {
+      ok: isWafSessionMode(),
+      build: BUILD,
+      releaseCommit: RELEASE_COMMIT,
+      dataSource: w.__BOM_DATA_SOURCE__,
+      loadViaExplorerSync: w.loadViaExplorerSync === syncWithProductExplorer,
+      refreshBomFromSka: w.refreshBomFromSka === refreshBom,
+      runtime: w.__BOM_WAF_EBOM_RUNTIME__ || null,
+      defaultSpaceUrlDefined: typeof DEFAULT_SPACE_URL === 'string' && DEFAULT_SPACE_URL.length > 0
+    };
+  };
 
   w.__bomSkaServiceInstall = install;
   w.fetchBomStructureFromSkaService = fetchBomStructureFromSkaService;
@@ -2271,6 +3986,8 @@
   w.refreshBomFromSka = refreshBom;
   w.assertSkaCountIntegrity = assertSkaCountIntegrity;
   w.normalizeCandidateRootId = normalizeCandidateRootId;
+  w.resolveRootForBomLoad = resolveRootForBomLoad;
+  w.loadLastGoodContext = loadLastGoodContext;
   w.renderEmptySkaState = renderEmptySkaState;
   w.loadNextBomLevelFromSka = loadNextDynamicLevel;
   w.loadBomChildrenFromSka = loadChildrenForDynamicNode;
@@ -2286,6 +4003,9 @@
       partial: dynamicState.partial,
       lastError: dynamicState.lastError
     };
+  };
+  w.getActiveEbomRow = function () {
+    return activeEbomRow;
   };
 
   /* install deferred — runtime calls __bomSkaServiceInstall */
