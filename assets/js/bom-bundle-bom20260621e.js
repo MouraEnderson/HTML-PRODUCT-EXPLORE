@@ -1214,6 +1214,7 @@ var CompassServices = (function () {
     isDashboardOnIfwe: isDashboardOnIfwe,
     getVerifiedSpaceUrl: getVerifiedSpaceUrl,
     get3DSpaceUrl: get3DSpaceUrl,
+    ensure3DSpaceServiceUrl: ensure3DSpaceServiceUrl,
     ensureWorkingSpaceUrl: ensure3DSpaceServiceUrl,
     applyVerifiedSpaceUrl: applyVerifiedSpaceUrl,
     swapUrlHost: swapUrlHost,

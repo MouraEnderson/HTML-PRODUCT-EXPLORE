@@ -4,6 +4,27 @@ const assert = require('assert');
 const fs = require('fs');
 const vm = require('vm');
 
+const compassSource = fs.readFileSync('assets/js/platform/compass.js', 'utf8');
+const compassSandbox = {
+  APP_CONFIG: { TENANT_DEFAULTS: {}, DEMO_MODE: false },
+  window: {},
+  location: { hostname: '' },
+  Promise,
+  setTimeout
+};
+compassSandbox.window = compassSandbox;
+vm.runInNewContext(compassSource, compassSandbox, { filename: 'compass.js' });
+assert.strictEqual(
+  typeof compassSandbox.CompassServices.ensure3DSpaceServiceUrl,
+  'function',
+  'CompassServices must export ensure3DSpaceServiceUrl'
+);
+assert.strictEqual(
+  compassSandbox.CompassServices.ensure3DSpaceServiceUrl,
+  compassSandbox.CompassServices.ensureWorkingSpaceUrl,
+  'Both Compass aliases must reference the same resolver'
+);
+
 const source = fs.readFileSync('assets/js/bom-waf-session-controller-bom20260621e.js', 'utf8');
 const sandbox = {
   window: {},
@@ -46,6 +67,8 @@ const initialState = api.getState();
 assert.strictEqual(initialState.controller, 'bom-waf-session-controller-bom20260621e');
 assert.strictEqual(initialState.activeEntrypoint, 'widget-v3.html');
 assert.strictEqual(initialState.legacyOperationalHandlers, 0);
+assert.strictEqual(typeof api, 'object', 'Controller must exist in the runtime');
+assert.doesNotThrow(() => api.boot(), 'Controller boot must not fail before a user sync');
 
 const widget = fs.readFileSync('widget-v3.html', 'utf8');
 assert.ok(widget.includes('__bomWafSessionController.boot'), 'Widget must boot the official controller');
