@@ -69,6 +69,9 @@ const normalized = test.normalizeExpansion(
 );
 const instanceRows = normalized.rows.filter((row) => row.instanceId);
 assert.strictEqual(instanceRows.length, 2, 'Two instances of one reference must remain two rows');
+assert.strictEqual(normalized.rows.length, 3, 'Reference metadata must not become an additional E-BOM row when instances exist');
+assert.strictEqual(normalized.rawRows, 2, 'Raw E-BOM candidates are occurrence instances only');
+assert.strictEqual(normalized.discardedReferenceMetadata, 1, 'Reference metadata is tracked as discarded from the row set');
 const contractInspection = test.inspectExpansionPayload(expansion);
 assert.strictEqual(contractInspection.objectsDetected, 3, 'Contract inspection sees every candidate object');
 assert.strictEqual(contractInspection.byType.VPMInstance, 2, 'Contract inspection separates instance candidates from references');

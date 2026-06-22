@@ -4352,6 +4352,11 @@ var DataTable = (function () {
     return !!id && (!!label || /VPM(?:Rep)?(?:Reference|Instance)|EngItem|EngInstance/i.test(type));
   }
 
+  function isInstanceOccurrence(object) {
+    var type = nestedValue(object, ['type', 'displayType', 'objectType']);
+    return /(?:VPM(?:Rep)?Instance|EngInstance)/i.test(type);
+  }
+
   function collectObjects(payload) {
     var found = [];
     var seen = [];
@@ -4423,8 +4428,8 @@ var DataTable = (function () {
       parentRowKey: '',
       level: 0,
       path: root.internalId,
-      name: root.title || member.name || root.internalId,
-      title: root.title || member.title || root.internalId,
+      name: member.name || member.title || root.title || root.internalId,
+      title: member.title || member.name || root.title || root.internalId,
       description: member.description || '',
       revision: member.revision || '',
       owner: member.owner || '',
@@ -4440,7 +4445,14 @@ var DataTable = (function () {
   }
 
   function normalizeExpansion(root, rootResponse, expansion) {
-    var rawObjects = collectObjects(expansion);
+    var allObjects = collectObjects(expansion);
+    var instanceObjects = allObjects.filter(isInstanceOccurrence);
+    /*
+     * /expand returns reference metadata and occurrence instances together.
+     * Only instances are BOM rows. References are deliberately not promoted to
+     * rows because that double-counts every occurrence at the same depth.
+     */
+    var rawObjects = instanceObjects.length ? instanceObjects : allObjects;
     var rows = [rootRow(root, rootResponse)];
     rawObjects.forEach(function (raw, index) {
       var node = nodeFromRaw(raw, index, root);
@@ -4455,7 +4467,11 @@ var DataTable = (function () {
       if (row.parentReferenceId) row.parentRowKey = firstByReference[row.parentReferenceId] || '';
     });
     rows.sort(function (left, right) { return left.level - right.level; });
-    return { rows: rows, rawRows: rawObjects.length };
+    return {
+      rows: rows,
+      rawRows: rawObjects.length,
+      discardedReferenceMetadata: instanceObjects.length ? allObjects.length - instanceObjects.length : 0
+    };
   }
 
   function computeCounts(rows, rawRows, failures) {
