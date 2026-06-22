@@ -347,7 +347,7 @@
     if (!object || typeof object !== 'object' || Array.isArray(object)) return false;
     var id = nestedValue(object, ['instanceId', 'relationshipId', 'relId', 'physicalid', 'physicalId', 'id']);
     var label = nestedValue(object, ['title', 'name', 'label', 'displayName']);
-    var type = nestedValue(object, ['type', 'displayType']);
+    var type = nestedValue(object, ['type', 'displayType', 'objectType']);
     return !!id && (!!label || /VPM(?:Rep)?(?:Reference|Instance)|EngItem|EngInstance/i.test(type));
   }
 
@@ -389,7 +389,7 @@
     if (!referenceId && !instanceId) referenceId = rawId;
     var parentReferenceId = nestedValue(raw, ['parentReferenceId', 'parentId', 'parentPhysicalId', 'parent']);
     var path = nestedValue(raw, ['path', 'instancePath', 'treePath']);
-    var level = parseLevel(nestedValue(raw, ['level', 'depth']), path ? Math.max(1, path.split(/[\\/|>]/).filter(Boolean).length - 1) : 1);
+    var level = parseLevel(nestedValue(raw, ['level', 'depth']), path ? Math.max(1, path.split(/[\\\/|>]/).filter(Boolean).length - 1) : 1);
     var rowKey = [instanceId || 'ref:' + referenceId, parentReferenceId || 'root', path || index].join('|');
     var member = typeof AttributeService !== 'undefined' && AttributeService.extractFromMember ? AttributeService.extractFromMember(raw) : {};
     return {
@@ -450,6 +450,7 @@
      * /expand returns reference metadata and occurrence instances together.
      * Only instances are BOM rows. References are deliberately not promoted to
      * rows because that double-counts every occurrence at the same depth.
+     * This is the contract: instances only, not references.
      */
     var rawObjects = instanceObjects.length ? instanceObjects : allObjects;
     var rows = [rootRow(root, rootResponse)];
