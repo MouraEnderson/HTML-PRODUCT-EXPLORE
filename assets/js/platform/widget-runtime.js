@@ -25,13 +25,16 @@
     markTrusted();
     try {
       widget.addEvent('onRefresh', function () {
-        var btn = document.getElementById('btnRefresh');
-        if (btn) btn.click();
+        if (global.__bomWafSessionController && global.__bomWafSessionController.refresh) {
+          global.__bomWafSessionController.refresh().catch(function () {});
+        }
       });
     } catch (e1) { /* */ }
     try {
       widget.addEvent('onLoad', function () {
-        if (global.App && App.refreshUI) App.refreshUI();
+        if (global.__bomWafSessionController && global.__bomWafSessionController.boot) {
+          global.__bomWafSessionController.boot();
+        }
       });
     } catch (e2) { /* */ }
   }

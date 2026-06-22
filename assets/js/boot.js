@@ -7,7 +7,7 @@ var BomBoot = (function (global) {
   'use strict';
 
   var REPO = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-  var VER = 'uwa20260602e';
+  var VER = 'uwa20260621e';
 
   var SCRIPTS = [
     'assets/js/config.js',
@@ -15,10 +15,13 @@ var BomBoot = (function (global) {
     'assets/js/platform/platform-bridge.js',
     'assets/js/platform/context.js',
     'assets/js/platform/compass.js',
+    'assets/js/platform/waf-bootstrap.js',
     'assets/js/platform/waf-client.js',
     'assets/js/integration/3dx-content-parser.js',
     'assets/js/integration/enovia-api.js',
     'assets/js/integration/product-explorer-bridge.js',
+    'assets/js/integration/explorer-context.js',
+    'assets/js/integration/product-explorer-sync-provider.js',
     'assets/js/services/attribute-service.js',
     'assets/js/services/physical-product-service.js',
     'assets/js/services/file-import-service.js',
@@ -34,7 +37,8 @@ var BomBoot = (function (global) {
     'assets/js/ui/data-table.js',
     'assets/js/ui/explorer-sync-panel.js',
     'assets/js/ui/snapshot-panel.js',
-    'assets/js/app.js'
+    'assets/js/app.js',
+    'assets/js/bom-waf-session-controller-bom20260621e.js'
   ];
 
   function scriptUrl(path) {
@@ -113,27 +117,18 @@ var BomBoot = (function (global) {
         console.warn('[BomBoot] scripts com falha:', errors);
       }
 
-      if (typeof App === 'undefined') {
+      if (!global.__bomWafSessionController || !global.__bomWafSessionController.boot) {
         var miss = [];
         if (typeof APP_CONFIG === 'undefined') miss.push('config.js');
-        if (typeof BomService === 'undefined') miss.push('bom-service.js');
-        miss.push('app.js');
+        if (typeof EnoviaApi === 'undefined') miss.push('enovia-api.js');
+        miss.push('bom-waf-session-controller-bom20260621e.js');
         setBootStatus(
           'Scripts bloqueados (' + miss.join(', ') + '). Use widget-uwa.html com tags estáticas ou DEPLOY-3DSPACE.md.'
         );
         return;
       }
 
-      if (typeof App.run === 'function') {
-        App.run();
-      } else if (typeof App.start === 'function') {
-        App.start();
-      }
-
-      global.setTimeout(function () {
-        if (typeof App.forceStopLoading === 'function') App.forceStopLoading();
-        if (typeof App.runFallback === 'function') App.runFallback();
-      }, 14000);
+      global.__bomWafSessionController.boot();
     });
   }
 

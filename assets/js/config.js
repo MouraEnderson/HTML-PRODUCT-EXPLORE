@@ -8,9 +8,11 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260614n',
+    BUILD: 'bom20260621e',
+    /** One operational path: bom-waf-session-controller-bom20260621e.js. */
+    SESSION_CONTROLLER_ONLY: true,
     /** DEC-016: explorer-mirror (principal) | expand-item (diagnóstico) | full-bom-api (alternativo) */
-    DATA_SOURCE: 'explorer-mirror',
+    DATA_SOURCE: 'wafdata-dseng-session-controller',
     EXPAND_ITEM_LEVELS: 2,
     /** Validação automática Expand Item ao abrir widget (14f: false) */
     AUTO_VALIDATE_EXPAND_ITEM: false,
@@ -27,7 +29,7 @@
     WAF_REQUEST_TIMEOUT_MS: 15000,
     SCAN_CONNECT_TIMEOUT_MS: 35000,
     /** Piloto: se API falhar no 3DDashboard, carrega snapshot validado (Mont10) */
-    PILOT_FALLBACK_SNAPSHOT: true,
+    PILOT_FALLBACK_SNAPSHOT: false,
     /** Piloto: Varrer lÃƒÂª a ÃƒÂ¡rvore visÃƒÂ­vel do Explorer antes da API (evita 406) */
     PILOT_GRID_FIRST: false,
     /** Additional App: API dseng quando WAFData disponível */
@@ -52,7 +54,7 @@
     /** 3DDashboard: Ctrl+C / ÃƒÂ¡rea de cola como fonte principal (qualquer projeto) */
     ALLOW_PASTE_FALLBACK: false,
     /** Snapshot Mont10/Drone sÃƒÂ³ se grade e cola falharem */
-    PILOT_BUILTIN_LAST: true,
+    PILOT_BUILTIN_LAST: false,
     SCAN_TIMEOUT_MS: 90000,
     /** Atualizar estrutura (manual): evita 90s de overlay */
     MANUAL_REFRESH_TIMEOUT_MS: 28000,

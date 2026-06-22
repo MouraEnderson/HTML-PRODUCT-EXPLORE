@@ -18,6 +18,7 @@ const files = [
   'assets/js/integration/product-explorer-bridge.js',
   'assets/js/integration/3dplay-bridge.js',
   'assets/js/integration/explorer-context.js',
+  'assets/js/integration/product-explorer-sync-provider.js',
   'assets/js/services/attribute-service.js',
   'assets/js/services/physical-product-service.js',
   'assets/js/services/file-import-service.js',
@@ -44,7 +45,8 @@ const files = [
   'assets/js/ui/data-table.js',
   'assets/js/ui/explorer-sync-panel.js',
   'assets/js/ui/snapshot-panel.js',
-  'assets/js/app.js'
+  'assets/js/app.js',
+  'assets/js/bom-waf-session-controller-bom20260621e.js'
 ];
 const parts = ['/* BOM Analytics bundle snapshot */'];
 for (const f of files) {

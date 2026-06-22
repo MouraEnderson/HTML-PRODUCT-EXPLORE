@@ -14,7 +14,9 @@ var DataTable = (function () {
   var rowSelectHandler = null;
   var rowExpandHandler = null;
   var selectedIndex = -1;
-  var MAX_ROWS = 8000;
+  /* Keep all rows in state and render incrementally. There is no BOM item cap. */
+  var renderedRows = 0;
+  var RENDER_CHUNK = 1000;
 
   function uiRoot() {
     return window.__3DX_UI_ROOT__ || document;
@@ -47,6 +49,15 @@ var DataTable = (function () {
       scrollContainer.style.overflowY = 'scroll';
       scrollContainer.style.overflowX = 'auto';
       scrollContainer.style.webkitOverflowScrolling = 'touch';
+      if (!scrollContainer.__BOM_INCREMENTAL_RENDER__) {
+        scrollContainer.__BOM_INCREMENTAL_RENDER__ = true;
+        scrollContainer.addEventListener('scroll', function () {
+          if (!data.length || renderedRows >= data.length) return;
+          if (scrollContainer.scrollTop + scrollContainer.clientHeight < scrollContainer.scrollHeight - 80) return;
+          renderedRows = Math.min(data.length, renderedRows + RENDER_CHUNK);
+          render();
+        });
+      }
     }
   }
 
@@ -211,6 +222,7 @@ var DataTable = (function () {
 
   function setData(nodes) {
     data = nodes || [];
+    renderedRows = Math.min(data.length, RENDER_CHUNK);
     if (!tbody || !tableEl || !uiContains(tableEl)) {
       init('#bomTable');
     }
@@ -220,7 +232,7 @@ var DataTable = (function () {
 
   function render() {
     if (!tbody) return;
-    var slice = data.slice(0, MAX_ROWS);
+    var slice = data.slice(0, renderedRows || RENDER_CHUNK);
     if (!slice.length) {
       selectedIndex = -1;
       tbody.innerHTML =

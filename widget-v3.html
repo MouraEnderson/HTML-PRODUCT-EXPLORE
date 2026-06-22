@@ -318,12 +318,10 @@
           }
           try {
             if (typeof detectRuntimeMode === 'function') detectRuntimeMode();
-            if (typeof App !== 'undefined' && App.run) {
-              App.run();
-              if (App.rebindScanButton) App.rebindScanButton();
-              if (App.rebindImportButton) App.rebindImportButton();
+            if (window.__bomWafSessionController && window.__bomWafSessionController.boot) {
+              window.__bomWafSessionController.boot();
             } else {
-              setBar('App n\u00e3o iniciou.', 'error');
+              setBar('Controller oficial nao iniciou.', 'error');
             }
           } catch (ex) {
             setBar('Erro: ' + (ex.message || ex), 'error');
