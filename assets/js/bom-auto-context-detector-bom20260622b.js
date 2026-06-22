@@ -1,3 +1,8 @@
+/*
+ * Smart detector for Product Explorer auto-context.
+ * Runs five probes in parallel and returns the first valid result by priority:
+ * PlatformAPI -> ExplorerContext -> 3DXCompass -> PlatformBridge -> safe DOM inspection.
+ */
 (function (global) {
   'use strict';
 

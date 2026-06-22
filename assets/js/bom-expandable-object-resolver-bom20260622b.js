@@ -1,3 +1,8 @@
+/*
+ * Dynamic resolver for detected Product Explorer objects.
+ * Resolves the active selection to a dseng:EngItem using direct GET, UQL name,
+ * UQL label, and scored search strategies without hardcoded product mappings.
+ */
 (function (global) {
   'use strict';
 

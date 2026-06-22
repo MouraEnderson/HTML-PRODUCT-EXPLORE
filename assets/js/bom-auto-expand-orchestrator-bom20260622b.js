@@ -1,3 +1,8 @@
+/*
+ * Auto-context orchestrator for widget-v3.
+ * Boots detection on widget startup, updates the UI state, fills manual inputs,
+ * and optionally triggers the existing controller load flow with resolved data.
+ */
 (function (global) {
   'use strict';
 
