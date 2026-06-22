@@ -450,7 +450,7 @@
      * /expand returns reference metadata and occurrence instances together.
      * Only instances are BOM rows. References are deliberately not promoted to
      * rows because that double-counts every occurrence at the same depth.
-     * This is the contract: instances only, not references.
+     * This is the dseng contract: instances only, not references.
      */
     var rawObjects = instanceObjects.length ? instanceObjects : allObjects;
     var rows = [rootRow(root, rootResponse)];
