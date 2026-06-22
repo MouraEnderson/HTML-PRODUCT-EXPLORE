@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:widget="http://www.netvibes.com/ns/">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
@@ -27,7 +27,7 @@
 
     var BOM_BUILD = 'bom20260617d';
     var BASE_BUILD = 'bom20260607a';
-    var RELEASE_COMMIT = 'wafrec20260621b';
+    var RELEASE_COMMIT = 'wafrec20260621c';
 
     window.__BOM_GH_BASE__ = GH;
     window.__BOM_WIDGET_BUILD__ = BOM_BUILD;
@@ -40,22 +40,23 @@
     window.__BOM_LOADER_MODE__ = 'wafdata-session';
     window.__BOM_HOTFIX_MODE__ = 'wafdata-session';
 
+    function __bomLoadScript(src, onload) {
+      var script = document.createElement('script');
+      script.type = 'text/javascript';
+      script.charset = 'UTF-8';
+      script.async = false;
+      script.src = src;
+      if (onload) script.onload = onload;
+      document.getElementsByTagName('head')[0].appendChild(script);
+    }
+
     (function loadWidgetRuntime() {
       var q = '?v=' + encodeURIComponent(BOM_BUILD) + '&c=' + encodeURIComponent(RELEASE_COMMIT);
-      var runtime = document.createElement('script');
-      runtime.type = 'text/javascript';
-      runtime.charset = 'UTF-8';
-      runtime.async = false;
-      runtime.src = GH + 'assets/js/widget-runtime-bom20260617d.js' + q;
-      runtime.onload = function () {
-        var finalizer = document.createElement('script');
-        finalizer.type = 'text/javascript';
-        finalizer.charset = 'UTF-8';
-        finalizer.async = false;
-        finalizer.src = GH + 'assets/js/bom-waf-recursive-ebom-bom20260621a.js' + q;
-        document.getElementsByTagName('head')[0].appendChild(finalizer);
-      };
-      document.getElementsByTagName('head')[0].appendChild(runtime);
+      __bomLoadScript(GH + 'assets/js/widget-runtime-bom20260617d.js' + q, function () {
+        __bomLoadScript(GH + 'assets/js/bom-waf-recursive-ebom-bom20260621a.js' + q, function () {
+          __bomLoadScript(GH + 'assets/js/bom-delivery-finalizer-bom20260621c.js' + q);
+        });
+      });
     })();
   //]]>
   </script>
