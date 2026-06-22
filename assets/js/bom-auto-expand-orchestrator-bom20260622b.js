@@ -59,7 +59,6 @@
     }
     if (labelNode) {
       labelNode.textContent = text(label) || 'Aguardando seleção no Explorer';
-      labelNode.title = labelNode.textContent;
     }
     var banner = byId('syncBanner');
     if (banner) {
