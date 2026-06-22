@@ -160,6 +160,10 @@
     if (candidates.length > 1 && candidates[0].score === candidates[1].score) {
       return { ambiguous: true, candidates: candidates.slice(0, 5) };
     }
+    /*
+     * Scores above 150 indicate at least one exact or strongly correlated match
+     * across id/name/title, which is the minimum confidence accepted for autoload.
+     */
     if (candidates[0].score < 150) {
       return { ambiguous: true, candidates: candidates.slice(0, 5) };
     }
@@ -223,7 +227,7 @@
       if (error && error.code === 'AMBIGUOUS') {
         return {
           ok: false,
-          reason: 'Objeto ambíguo no Explorer; refine a seleção antes de auto-carregar.',
+          reason: 'Múltiplos objetos encontrados. Selecione apenas um item no Explorer antes de auto-carregar.',
           resolverStrategy: attempts[attempts.length - 1] || 'search-score-best-match',
           candidates: error.candidates || []
         };

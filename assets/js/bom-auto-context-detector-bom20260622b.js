@@ -263,6 +263,10 @@
           }
         });
 
+        /*
+         * Wait 450ms for postMessage replies, which keeps the full parallel probe
+         * comfortably under the 2.5s budget while allowing typical widget hops.
+         */
         timer = global.setTimeout(function () {
           var selection = global.ProductExplorerBridge && typeof global.ProductExplorerBridge.getSelection === 'function'
             ? global.ProductExplorerBridge.getSelection()

@@ -6,6 +6,8 @@
 (function (global) {
   'use strict';
 
+  var WAITING_SELECTION_MESSAGE = 'Aguardando seleção no Explorer. Você pode informar o ID manualmente ou tentar detectar novamente.';
+
   var state = {
     booted: false,
     running: false,
@@ -65,7 +67,7 @@
       banner.classList.remove('bom-hidden');
       banner.textContent = status === 'detected'
         ? 'Auto-contexto detectado: ' + (text(label) || 'estrutura ativa') + '.'
-        : (text(label) || 'Aguardando seleção no Explorer. Você pode informar o ID manualmente ou tentar detectar novamente.');
+        : (text(label) || WAITING_SELECTION_MESSAGE);
     }
   }
 
