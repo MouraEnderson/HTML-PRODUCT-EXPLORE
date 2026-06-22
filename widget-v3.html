@@ -107,6 +107,13 @@
     }
     .stat-markers-quad .stat-marker-label { font-size: 0.62rem !important; margin-bottom: 2px !important; line-height: 1.15; }
     .stat-markers-quad .stat-marker-value { font-size: 1.05rem !important; line-height: 1.1; }
+    /* Advanced panel styling */
+    details { margin: 4px 0; }
+    details summary { cursor: pointer; font-weight: 600; padding: 4px; }
+    details[open] summary { background: #f5f5f5; }
+    .bom-advanced-row { display: flex; gap: 4px; margin: 4px 0; align-items: center; flex-wrap: wrap; }
+    .bom-advanced-row .bom-input { min-width: 0; flex: 1; }
+    .bom-advanced-row .bom-btn { flex: 0 0 auto; }
   </style>
   <script type="text/javascript" src="assets/js/build-id.js?v=boot"></script>
   <script type="text/javascript">
@@ -170,9 +177,19 @@
       '<details class="bom-topbar-more">' +
       '<summary>Avan\u00e7ado</summary>' +
       '<div id="bomRulesPanel"></div>' +
-      '<input type="text" id="explorerObjectId" class="bom-input" placeholder="ID f\u00edsico" />' +
-      '<button type="button" id="btnLoadPhysicalId" class="bom-btn bom-btn-secondary">Carregar por ID</button>' +
+      '<div class="bom-advanced-row">' +
+      '<label style="flex: 0 0 auto; font-weight: 600;">ID/T\u00edtulo:</label>' +
+      '<input type="text" id="explorerObjectId" class="bom-input" placeholder="ID f\u00edsico ou t\u00edtulo exato" />' +
+      '<button type="button" id="btnLoadPhysicalId" class="bom-btn bom-btn-secondary">Carregar</button>' +
+      '</div>' +
+      '<div class="bom-advanced-row">' +
+      '<label style="flex: 0 0 auto; font-weight: 600;">Profundidade:</label>' +
+      '<input type="number" id="skaDepthInput" class="bom-input" min="1" max="20" value="1" style="flex: 0 0 60px;" />' +
+      '<span style="font-size: 0.72rem; color: #5c6b7a;">1=ra\u00edz, 2-20=filhos</span>' +
+      '</div>' +
+      '<div class="bom-advanced-row">' +
       '<button type="button" id="btnApiDiagnostic" class="bom-btn bom-btn-secondary">Diagnosticar API</button>' +
+      '</div>' +
       '<textarea id="apiDiagReport" class="bom-input bom-hidden" rows="6" readonly="readonly" placeholder="Relat\u00f3rio API\u2026"></textarea>' +
       '<textarea id="pasteArea" class="bom-paste bom-hidden" placeholder="Contingencia manual desativada"></textarea>' +
       '</details>' +
