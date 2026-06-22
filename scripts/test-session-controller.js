@@ -5,6 +5,7 @@ const fs = require('fs');
 const vm = require('vm');
 
 const compassSource = fs.readFileSync('assets/js/platform/compass.js', 'utf8');
+const contextSource = fs.readFileSync('assets/js/platform/context.js', 'utf8');
 const compassSandbox = {
   APP_CONFIG: { TENANT_DEFAULTS: {}, DEMO_MODE: false },
   window: {},
@@ -24,6 +25,8 @@ assert.strictEqual(
   compassSandbox.CompassServices.ensureWorkingSpaceUrl,
   'Both Compass aliases must reference the same resolver'
 );
+assert.ok(contextSource.includes('h.ENO_CSRF_TOKEN = state.csrfToken'), 'ENOVIA POST requests must use ENO_CSRF_TOKEN');
+assert.ok(!contextSource.includes("h['X-CSRF-Token'] = state.csrfToken"), 'Do not send the non-contract X-CSRF-Token header');
 
 const source = fs.readFileSync('assets/js/bom-waf-session-controller-bom20260621e.js', 'utf8');
 const sandbox = {

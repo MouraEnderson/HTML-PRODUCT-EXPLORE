@@ -908,7 +908,8 @@ var PlatformContext = (function (global) {
       h.SecurityContext = state.securityContext;
     }
     if (state.csrfToken) {
-      h['X-CSRF-Token'] = state.csrfToken;
+      /* ENOVIA WAFData REST contract uses this header for state-changing calls. */
+      h.ENO_CSRF_TOKEN = state.csrfToken;
     }
     return h;
   }
