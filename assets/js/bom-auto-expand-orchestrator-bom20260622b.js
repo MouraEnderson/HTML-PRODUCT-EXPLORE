@@ -134,7 +134,7 @@
           state.expectedChildCount = resolved && resolved.ok ? (resolved.expectedChildCount || 0) : 0;
           state.estimatedDepth = resolved && resolved.ok ? (resolved.detectedDepth || 1) : 0;
           if (!resolved || !resolved.ok) {
-            enableManualFallback(text(resolved && resolved.reason) || 'Nao foi possivel resolver a selecao atual.', controller);
+            enableManualFallback(text(resolved && resolved.reason) || 'Não foi possível resolver a seleção atual.', controller);
             return state;
           }
           state.status = 'detected';

@@ -93,7 +93,7 @@ async function testResolverStrategies() {
     title: 'Ambiguous Root'
   });
   assert.strictEqual(ambiguous.ok, false, 'Resolver must block ambiguous title matches');
-  assert.ok(/ambiguo/i.test(ambiguous.reason), 'Ambiguous message must be explicit');
+  assert.ok(/amb[ií]guo/i.test(ambiguous.reason), 'Ambiguous message must be explicit');
 }
 
 async function testOrchestratorAutoload() {

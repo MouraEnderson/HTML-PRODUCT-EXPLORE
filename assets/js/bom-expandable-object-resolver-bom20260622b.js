@@ -102,7 +102,7 @@
 
   function ensureEnoviaApi() {
     if (!global.EnoviaApi || typeof global.EnoviaApi.getEngItem !== 'function') {
-      throw new Error('EnoviaApi indisponivel para resolver auto-contexto.');
+      throw new Error('EnoviaApi indisponível para resolver auto-contexto.');
     }
   }
 
@@ -125,10 +125,10 @@
         return normalize(objectValue(member, [field, 'name', 'title', 'label'])) === expected;
       });
       if (!matches.length) {
-        throw new Error('Nenhum candidato encontrado.');
+        throw new Error('Nenhum candidato encontrado para ' + field + ': ' + value + '.');
       }
       if (matches.length > 1) {
-        var error = new Error('Multiplos candidatos encontrados para auto-contexto.');
+        var error = new Error('Múltiplos candidatos encontrados para auto-contexto.');
         error.code = 'AMBIGUOUS';
         error.candidates = matches.map(normalizeMember);
         throw error;
@@ -167,7 +167,7 @@
     return global.EnoviaApi.getEngItemUqlSearch(seed, 20).then(function (response) {
       var scored = chooseScoredCandidate(response, detectedObject);
       if (!scored || !scored.winner) {
-        var error = new Error('Busca pontuada ambigua para auto-contexto.');
+        var error = new Error('Busca pontuada ambígua para auto-contexto.');
         error.code = 'AMBIGUOUS';
         error.candidates = scored && scored.candidates
           ? scored.candidates.map(function (entry) { return entry.normalized; })
@@ -218,14 +218,14 @@
       if (error && error.code === 'AMBIGUOUS') {
         return {
           ok: false,
-          reason: 'Objeto ambiguo no Explorer; refine a selecao antes de auto-carregar.',
+          reason: 'Objeto ambíguo no Explorer; refine a seleção antes de auto-carregar.',
           resolverStrategy: attempts[attempts.length - 1] || 'search-score-best-match',
           candidates: error.candidates || []
         };
       }
       return {
         ok: false,
-        reason: text(error && error.message) || 'Nao foi possivel resolver o objeto detectado.',
+        reason: text(error && error.message) || 'Não foi possível resolver o objeto detectado.',
         resolverStrategy: attempts[attempts.length - 1] || ''
       };
     });

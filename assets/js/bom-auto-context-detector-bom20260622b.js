@@ -106,7 +106,7 @@
     return promiseProbe('PlatformAPI.getStructureContext()', function () {
       var api = global.__3DX_PLATFORM_API__ || global.PlatformAPI;
       if (!api || typeof api.getStructureContext !== 'function') {
-        return { ok: false, reason: 'PlatformAPI.getStructureContext indisponivel' };
+        return { ok: false, reason: 'PlatformAPI.getStructureContext indisponível' };
       }
       return Promise.resolve(api.getStructureContext()).then(function (context) {
         var detected = normalizeDetectedObject(context, 'platform-api');
@@ -143,7 +143,7 @@
       var detected = normalizeDetectedObject(selection, 'explorer-context');
       return detected
         ? { ok: true, detectedObject: detected, detail: detail }
-        : { ok: false, reason: 'ExplorerContext sem selecao compartilhada', detail: detail };
+        : { ok: false, reason: 'ExplorerContext sem seleção compartilhada', detail: detail };
     });
   }
 
@@ -170,7 +170,7 @@
           };
         }
       }
-      return { ok: false, reason: '3DXCompass sem contexto resolvivel', detail: { totalCandidates: candidates.length } };
+      return { ok: false, reason: '3DXCompass sem contexto resolvível', detail: { totalCandidates: candidates.length } };
     });
   }
 
@@ -304,7 +304,7 @@
           /* ignore inaccessible DOM */
         }
       }
-      return { ok: false, reason: 'Nenhum iframe irmao acessivel com contexto' };
+      return { ok: false, reason: 'Nenhum iframe irmão acessível com contexto' };
     });
   }
 
