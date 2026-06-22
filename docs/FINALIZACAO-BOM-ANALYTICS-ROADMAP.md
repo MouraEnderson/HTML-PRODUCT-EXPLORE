@@ -63,3 +63,17 @@ window.__bomWafSessionController.getState()
 
 Deve retornar controller, `activeEntrypoint`, `activeBuild`, `bundleLoaded` e
 `legacyOperationalHandlers: 0`.
+
+### Evidencia de publicacao - 2026-06-22
+
+Validacao executada apos o push de `fceabd1`:
+
+```text
+GET /assets/js/build-id.js                         200 - bom20260621e
+GET /assets/js/bom-bundle-bom20260621e.js          200 - controller presente
+GET /widget-v3.html                                200 - bundle escolhido por CANON_BUILD
+```
+
+O GitHub Pages inicialmente ainda serviu `bom20260617d` durante a propagacao.
+O resultado acima foi coletado depois que a publicacao concluiu; nenhum link
+alternativo foi adotado.
