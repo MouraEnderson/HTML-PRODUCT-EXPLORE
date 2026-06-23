@@ -58,7 +58,11 @@ async function testDetectorFallback() {
   vm.runInNewContext(detectorSource, sandbox, { filename: 'bom-auto-context-detector-bom20260622b.js' });
   const result = await sandbox.BomAutoContextDetector.detect();
   assert.strictEqual(result.ok, false, 'Detector should fail honestly without context');
-  assert.strictEqual(result.autoContextProbeResults.length, 5, 'Detector must report all five probes');
+  assert.strictEqual(result.autoContextProbeResults.length, 4, 'Detector must report only the four official/runtime probes');
+  assert.ok(
+    result.autoContextProbeResults.every((probe) => !/DOM|iframe|contentDocument|top\.document/i.test(probe.name + ' ' + probe.reason)),
+    'Detector must not use DOM or iframe inspection as an auto-context source'
+  );
 }
 
 async function testResolverStrategies() {
