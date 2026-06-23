@@ -5,6 +5,8 @@
 (function (global) {
   'use strict';
 
+  var lastSelectedRow = null;
+
   function text(value) {
     return value == null ? '' : String(value).trim();
   }
@@ -29,6 +31,7 @@
   }
 
   function getSelectedRow() {
+    if (lastSelectedRow) return lastSelectedRow;
     var controller = getController();
     if (!controller || !controller.getState) return null;
     var state = controller.getState();
@@ -140,6 +143,7 @@
     var original = controller.selectRow;
     controller.selectRow = function () {
       var result = original.apply(controller, arguments);
+      if (result) lastSelectedRow = result;
       window.setTimeout(installButton, 0);
       return result;
     };
