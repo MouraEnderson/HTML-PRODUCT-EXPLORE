@@ -1,6 +1,6 @@
 /**
  * @file ui/part-preview.js
- * Painel de visualização 3D (3DPlay) + metadados ao clicar numa linha da E-BOM.
+ * Painel de seleção real: metadados, Reference ID/Instance ID e estado do Geometry Resolver.
  */
 var PartPreview = (function () {
   'use strict';
@@ -34,9 +34,6 @@ var PartPreview = (function () {
         refs.titleEl = refs.panel.querySelector('#partPreviewTitle');
         refs.hintEl = refs.panel.querySelector('.bom-preview-hint');
       }
-    }
-    if (typeof ThreeDPlayViewer !== 'undefined') {
-      ThreeDPlayViewer.init('#partPreviewImage');
     }
   }
 
@@ -87,51 +84,36 @@ var PartPreview = (function () {
     return String(node.maturity || node.state || '—').trim() || '—';
   }
 
-  function model3dText(node) {
+  function referenceText(node) {
     if (!node) return '—';
-    return String(
-      node.modelo3d ||
-      node.modelo3D ||
-      node.modelo_3d ||
-      node.model3d ||
-      ((typeof PartImage !== 'undefined' && PartImage.lookupPrdId)
-        ? PartImage.lookupPrdId(node)
-        : '') ||
-      node.sourcePhysicalId ||
-      node.physicalid ||
-      '—'
-    ).trim() || '—';
+    return String(node.referenceId || node.physicalid || node.sourcePhysicalId || '—').trim() || '—';
   }
 
-  function idText(node) {
+  function instanceText(node) {
     if (!node) return '—';
-    return String(node.sourcePhysicalId || node.physicalid || '—').trim() || '—';
+    return String(node.instanceId || node.relationshipId || node.relId || '—').trim() || '—';
   }
 
   function renderMeta(node, r) {
     if (!r.metaEl) return;
     r.metaEl.innerHTML =
       '<dl class="bom-preview-dl">' +
+      '<dt>Reference ID</dt><dd class="bom-preview-id">' + escapeHtml(referenceText(node)) + '</dd>' +
+      '<dt>Instance ID</dt><dd class="bom-preview-id">' + escapeHtml(instanceText(node)) + '</dd>' +
       '<dt>Revisão</dt><dd>' + escapeHtml(node.revision || '—') + '</dd>' +
       '<dt>Proprietário</dt><dd>' + escapeHtml(ownerText(node)) + '</dd>' +
       '<dt>Maturidade</dt><dd>' + escapeHtml(maturityText(node)) + '</dd>' +
-      '<dt>Modelo 3D</dt><dd class="bom-preview-id">' + escapeHtml(model3dText(node)) + '</dd>' +
-      '<dt>ID</dt><dd class="bom-preview-id">' + escapeHtml(idText(node)) + '</dd>' +
+      '<dt>3DView</dt><dd>Bloqueado até Geometry Resolver encontrar geometria real baixável/conversível.</dd>' +
+      '<dt>Maturidade write</dt><dd>Bloqueada até transições reais e reread confirmarem stateAfter diferente.</dd>' +
       '</dl>';
   }
 
   function showVisual(node, r) {
     if (!r.imageWrap) return;
-    if (typeof ThreeDPlayViewer !== 'undefined' && ThreeDPlayViewer.show) {
-      ThreeDPlayViewer.show(node);
-      return;
-    }
-    if (typeof PartImage !== 'undefined' && PartImage.mountThumb) {
-      r.imageWrap.innerHTML = '<div class="bom-preview-visual"></div>';
-      PartImage.mountThumb(r.imageWrap.querySelector('.bom-preview-visual'), node, 'bom-thumb-lg');
-      return;
-    }
-    r.imageWrap.innerHTML = '<span class="bom-preview-placeholder">Visualização indisponível</span>';
+    r.imageWrap.innerHTML =
+      '<div class="bom-preview-visual bom-geometry-blocked">' +
+      '<span class="bom-preview-placeholder">3D real pendente: Geometry Resolver ainda não comprovou geometria baixável/conversível para esta linha.</span>' +
+      '</div>';
   }
 
   function show(node) {
@@ -160,11 +142,9 @@ var PartPreview = (function () {
     closePanel(r);
     if (r.titleEl) r.titleEl.textContent = 'Visualização da peça';
     if (r.metaEl) r.metaEl.innerHTML = '';
-    if (typeof ThreeDPlayViewer !== 'undefined' && ThreeDPlayViewer.clear) {
-      ThreeDPlayViewer.clear();
-    } else if (r.imageWrap) {
+    if (r.imageWrap) {
       r.imageWrap.innerHTML =
-        '<span class="bom-preview-placeholder">Clique numa linha da E-BOM para visualização 3D</span>';
+        '<span class="bom-preview-placeholder">Clique numa linha real da E-BOM para ver Reference ID / Instance ID.</span>';
     }
     if (r.hintEl) r.hintEl.style.display = 'block';
     reflow();
