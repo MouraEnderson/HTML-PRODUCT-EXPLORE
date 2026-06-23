@@ -14,7 +14,6 @@ $files = @(
   'assets\js\integration\search-api.js',
   'assets\js\services\product-search-service.js',
   'assets\js\integration\product-explorer-bridge.js',
-  'assets\js\integration\3dplay-bridge.js',
   'assets\js\integration\explorer-context.js',
   'assets\js\services\attribute-service.js',
   'assets\js\services\physical-product-service.js',
@@ -34,7 +33,6 @@ $files = @(
   'assets\js\ui\dashboard-theme.js',
   'assets\js\ui\charts-manager.js',
   'assets\js\ui\part-image.js',
-  'assets\js\ui\3dplay-viewer.js',
   'assets\js\ui\part-preview.js',
   'assets\js\ui\layout-fit.js',
   'assets\js\ui\sync-banner.js',
@@ -44,7 +42,7 @@ $files = @(
   'assets\js\ui\snapshot-panel.js',
   'assets\js\app.js'
 )
-$parts = @('/* BOM Analytics bundle snapshot20260601d */')
+$parts = @('/* BOM Analytics bundle snapshot20260623b-clean: 3DPlay intentionally excluded from operational build */')
 foreach ($f in $files) {
   $parts += ";/* --- $f --- */"
   $parts += [IO.File]::ReadAllText((Join-Path $root $f))
@@ -52,7 +50,7 @@ foreach ($f in $files) {
 $content = $parts -join "`n"
 $utf8 = New-Object System.Text.UTF8Encoding $false
 [IO.File]::WriteAllText($out, $content, $utf8)
-$build = 'bom20260602e'
+$build = 'bom20260623b'
 if ($content -match "BUILD:\s*'([^']+)'") { $build = $Matches[1] }
 $versioned = Join-Path $root "assets\js\bom-bundle-$build.js"
 [IO.File]::WriteAllText($versioned, $content, $utf8)
