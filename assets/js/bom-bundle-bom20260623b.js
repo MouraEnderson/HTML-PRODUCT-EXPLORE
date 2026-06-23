@@ -134,19 +134,23 @@
 
   var proxy = {
     boot: function () {
+      var args = arguments;
       bootRequested = true;
       return ensureLoaded().then(function (controller) {
-        return controller.boot.apply(controller, arguments);
+        return controller.boot.apply(controller, args);
       });
     },
     sync: function () {
-      return ensureLoaded().then(function (controller) { return controller.sync.apply(controller, arguments); });
+      var args = arguments;
+      return ensureLoaded().then(function (controller) { return controller.sync.apply(controller, args); });
     },
     refresh: function () {
-      return ensureLoaded().then(function (controller) { return controller.refresh.apply(controller, arguments); });
+      var args = arguments;
+      return ensureLoaded().then(function (controller) { return controller.refresh.apply(controller, args); });
     },
     loadManualInput: function () {
-      return ensureLoaded().then(function (controller) { return controller.loadManualInput.apply(controller, arguments); });
+      var args = arguments;
+      return ensureLoaded().then(function (controller) { return controller.loadManualInput.apply(controller, args); });
     },
     getState: function () {
       if (realController && realController.getState) return realController.getState();
