@@ -19,14 +19,12 @@
     .bom-topbar { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 8px; border-radius:8px; background:#fff; border:1px solid #dbe4ec; box-sizing:border-box; }
     .bom-topbar-left, .bom-topbar-actions { display:flex; align-items:center; gap:7px; min-width:0; }
     .bom-topbar-brand { font-weight:700; color:#0056c7; font-size:.82rem; white-space:nowrap; }
-    .bom-topbar-product, .bom-topbar-context { font-size:.74rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; }
+    .bom-topbar-product, .bom-topbar-context { font-size:.74rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:260px; }
     .bom-build-pill { display:inline-block; padding:2px 6px; border-radius:10px; background:#eef3f8; border:1px solid #dbe4ec; font-size:.62rem; color:#36526b; white-space:nowrap; }
     .bom-btn { border:1px solid #c7d5e3; border-radius:8px; background:#fff; color:#0b4070; padding:6px 10px; font-size:.76rem; font-weight:600; cursor:pointer; }
     .bom-btn-primary { background:#2b67c8; color:#fff; border-color:#2b67c8; }
     .bom-btn-secondary { background:#f7fafc; }
     .bom-input { border:1px solid #cbd8e4; border-radius:7px; padding:6px 8px; font-size:.75rem; min-width:0; box-sizing:border-box; }
-    .bom-root-direct { display:flex; align-items:center; gap:5px; min-width:280px; max-width:520px; flex:1 1 420px; }
-    .bom-root-direct input { flex:1 1 auto; }
     .bom-topbar-more { font-size:.72rem; }
     .bom-quad, .bom-ebom-block, .bom-part-preview, .bom-chart-panel { background:#fff; border:1px solid #cbd8e4; border-radius:9px; box-sizing:border-box; min-height:0; overflow:hidden; }
     .bom-zone-2-scroll, .bom-charts-unified-scroll { height:100%; overflow:auto; box-sizing:border-box; }
@@ -67,7 +65,7 @@
     window.__3DX_BOOT_DEFER__ = true;
 
     var GH = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-    var CANON_BUILD = 'bom20260623d';
+    var CANON_BUILD = 'bom20260623e';
     var BOM_BUILD = CANON_BUILD;
     var CACHE_BUST = CANON_BUILD + '-' + String(Date.now());
     var BUNDLE = GH + 'assets/js/bom-bundle-' + CANON_BUILD + '.js?v=' + encodeURIComponent(CACHE_BUST);
@@ -78,10 +76,6 @@
       '<div class="bom-topbar-left">' +
       '<span class="bom-topbar-brand">BOM Analytics</span>' +
       '<span class="bom-topbar-product" id="selectionLabel" title="-">-</span>' +
-      '</div>' +
-      '<div class="bom-root-direct" title="Caminho oficial quando o Product Explorer nao expõe contexto ao widget">' +
-      '<input type="text" id="explorerObjectId" class="bom-input" placeholder="Montagem raiz: SKA_ENDERSW-BES-00009887, prd-R... ou ID dseng" />' +
-      '<button type="button" id="btnLoadPhysicalId" class="bom-btn bom-btn-primary">Carregar E-BOM</button>' +
       '</div>' +
       '<div class="bom-topbar-actions">' +
       '<button type="button" id="btnImportPaste" class="bom-btn bom-btn-primary">Atualizar estrutura</button>' +
@@ -100,7 +94,7 @@
       '<span id="lastUpdateClock" class="bom-hidden">--:--:--</span>' +
       '</div></header>' +
       '<section class="bom-quad bom-zone-2" aria-label="Filtros e estatísticas"><div class="bom-zone-2-scroll">' +
-      '<div id="syncBanner" class="bom-sync-banner">E-BOM primeiro: se o contexto oficial não vier do Product Explorer, cole a montagem raiz acima e clique Carregar E-BOM.</div>' +
+      '<div id="syncBanner" class="bom-sync-banner">Abra uma estrutura no Product Structure Explorer e clique Atualizar estrutura. A dashboard carregará a E-BOM real via WAFData.</div>' +
       '<div class="bom-filter-bar bom-filter-bar-quad">' +
       '<label class="bom-filter-item"><span>Maturidade</span><select id="filterMaturity"><option value="all">Todas</option><option value="released">Bom (Aprovado)</option><option value="in_work">Moderado</option><option value="obsolete">Ruim</option><option value="other">Outros</option></select></label>' +
       '<label class="bom-filter-item"><span>Tipo</span><select id="filterType"><option value="all">Todos</option></select></label>' +
@@ -114,9 +108,9 @@
       '<div class="bom-chart-panel bom-chart-owners"><h3 class="bom-chart-heading">Proprietários</h3><div class="bom-chart-canvas-box"><canvas id="chartOwners"></canvas></div><div id="ownersLegendScroll" class="bom-chart-legend-list"></div></div>' +
       '</section></div></section>' +
       '<section class="bom-quad bom-zone-4" aria-label="E-BOM"><section class="bom-ebom-block"><div class="bom-ebom-head"><h2>E-BOM — <span id="tableProductLabel" title="-">-</span></h2><p id="ebomMeta" class="bom-ebom-meta">0 linhas exibidas</p></div><div class="bom-ebom-list"><div class="bom-table-wrap table-scroll"><table id="bomTable" class="bom-table"><thead><tr></tr></thead><tbody></tbody></table></div><footer id="tablePager" class="bom-table-pager">0 peças</footer></div></section></section>' +
-      '<section class="bom-quad bom-zone-5" aria-label="Visualização 3D"><div class="bom-part-preview bom-preview-quad" id="partPreviewPanel"><div class="bom-preview-body"><p class="bom-preview-hint">Clique numa linha da E-BOM</p><div id="partPreviewImage" class="bom-preview-image"><span class="bom-preview-placeholder">3D bloqueado até existir E-BOM real e linha selecionada.</span></div><div id="partPreviewMeta" class="bom-preview-meta"></div></div></div></section>' +
+      '<section class="bom-quad bom-zone-5" aria-label="Visualização 3D"><div class="bom-part-preview bom-preview-quad" id="partPreviewPanel"><div class="bom-preview-body"><p class="bom-preview-hint">Clique numa linha da E-BOM</p><div id="partPreviewImage" class="bom-preview-image"><span class="bom-preview-placeholder">3DView aguardando E-BOM real e linha selecionada.</span></div><div id="partPreviewMeta" class="bom-preview-meta"></div></div></div></section>' +
       '<button type="button" id="btnScanExplorer" class="bom-hidden">Varrer</button><div id="loadingOverlay" class="bom-loading bom-hidden">Processando…</div><span class="bom-build-tag bom-hidden" id="buildTag">' + BOM_BUILD + '</span>' +
-      '<div class="bom-hidden" id="hiddenFields"><canvas id="chartType"></canvas><canvas id="chartRevision"></canvas><canvas id="chartApproval"></canvas><input type="text" id="explorerObjectName" /><select id="filterPP"><option value="all">all</option></select></div>' +
+      '<div class="bom-hidden" id="hiddenFields"><canvas id="chartType"></canvas><canvas id="chartRevision"></canvas><canvas id="chartApproval"></canvas><input type="text" id="explorerObjectId" /><input type="text" id="explorerObjectName" /><select id="filterPP"><option value="all">all</option></select></div>' +
       '</div>';
 
     function mountTarget() { if (typeof widget !== 'undefined' && widget && widget.body) return widget.body; return document.body; }
@@ -125,9 +119,8 @@
     function paint() { var b = mountTarget(); if (!b) return; b.innerHTML = UI_HTML; b.className = 'bom-widget-body'; b.style.minHeight = '100%'; b.style.height = '100%'; window.__3DX_UI_ROOT__ = b; }
     function getRequire() { if (typeof widget !== 'undefined' && widget && widget.requirejs) return widget.requirejs; if (typeof require !== 'undefined') return require; return null; }
     function loadScript(url, optional, next) { var s = document.createElement('script'); s.type = 'text/javascript'; s.charset = 'UTF-8'; s.src = url; s.onload = function(){ if(next) next(null); }; s.onerror = function(){ if(optional){ if(next) next(null); } else if(next) next('erro'); }; document.getElementsByTagName('head')[0].appendChild(s); }
-    function loadAutoContextScripts(next) { var scripts = ['assets/js/bom-auto-context-detector-bom20260622b.js','assets/js/bom-expandable-object-resolver-bom20260622b.js','assets/js/bom-auto-expand-orchestrator-bom20260622b.js']; var i = 0; function step(){ if(i >= scripts.length){ next(); return; } loadScript(GH + scripts[i] + '?v=' + encodeURIComponent(CACHE_BUST), true, function(){ i += 1; step(); }); } step(); }
     function loadWaf(next) { if (typeof WAFData !== 'undefined' && WAFData.authenticatedRequest) { next(null); return; } var req = getRequire(); if (!req) { next(null); return; } req(['DS/WAFData/WAFData','DS/i3DXCompassServices/i3DXCompassServices','DS/PlatformAPI/PlatformAPI'], function(WAF, Compass, PAPI){ window.WAFData = WAF; window.__3DX_COMPASS__ = Compass; window.__3DX_PLATFORM_API__ = PAPI; next(null); }, function(){ next(null); }); }
-    function startBundle() { loadScript(GH + 'assets/vendor/chart.umd.min.js?v=' + encodeURIComponent(CACHE_BUST), true, function(){ loadScript(BUNDLE, false, function(err){ if(err){ setBar('Erro ao carregar bundle oficial ' + BOM_BUILD + '.', 'error'); return; } try { window.__BOM_BUNDLE_LOADED__ = true; if (typeof detectRuntimeMode === 'function') detectRuntimeMode(); loadAutoContextScripts(function(){ if(window.__bomWafSessionController && window.__bomWafSessionController.boot){ Promise.resolve(window.__bomWafSessionController.boot()).then(function(){ if(window.__bomAutoExpandOrchestrator && window.__bomAutoExpandOrchestrator.boot){ return window.__bomAutoExpandOrchestrator.boot(window.__bomWafSessionController); } return null; }).catch(function(ex){ setBar('Erro: ' + (ex && ex.message ? ex.message : ex), 'error'); }); } else { setBar('Controller oficial não iniciou.', 'error'); } }); } catch(ex){ setBar('Erro: ' + (ex.message || ex), 'error'); } }); }); }
+    function startBundle() { loadScript(GH + 'assets/vendor/chart.umd.min.js?v=' + encodeURIComponent(CACHE_BUST), true, function(){ loadScript(BUNDLE, false, function(err){ if(err){ setBar('Erro ao carregar bundle oficial ' + BOM_BUILD + '.', 'error'); return; } try { window.__BOM_BUNDLE_LOADED__ = true; if (typeof detectRuntimeMode === 'function') detectRuntimeMode(); if(window.__bomWafSessionController && window.__bomWafSessionController.boot){ Promise.resolve(window.__bomWafSessionController.boot()).catch(function(ex){ setBar('Erro: ' + (ex && ex.message ? ex.message : ex), 'error'); }); } else { setBar('Controller oficial não iniciou.', 'error'); } } catch(ex){ setBar('Erro: ' + (ex.message || ex), 'error'); } }); }); }
     function loadCss(next) { var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = GH + 'assets/css/dashboard.css?v=' + encodeURIComponent(CACHE_BUST); l.onload = function(){ if(next) next(); }; l.onerror = function(){ if(next) next(); }; document.getElementsByTagName('head')[0].appendChild(l); }
     function executeInit() { paint(); setBar('Carregando dashboard E-BOM-first…', 'info'); loadCss(function(){ loadWaf(function(){ startBundle(); }); }); }
     function boot() { if (typeof widget !== 'undefined' && widget) { if (widget.addEvent) widget.addEvent('onLoad', executeInit); if (widget.addEvent) widget.addEvent('onRefresh', executeInit); if (widget.body) executeInit(); else window.setTimeout(boot, 80); } else if (document.body) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', executeInit); else executeInit(); } else { window.setTimeout(boot, 80); } }
