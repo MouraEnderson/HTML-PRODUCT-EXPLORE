@@ -87,6 +87,27 @@ var PartPreview = (function () {
     return String(node.maturity || node.state || '—').trim() || '—';
   }
 
+  function model3dText(node) {
+    if (!node) return '—';
+    return String(
+      node.modelo3d ||
+      node.modelo3D ||
+      node.modelo_3d ||
+      node.model3d ||
+      ((typeof PartImage !== 'undefined' && PartImage.lookupPrdId)
+        ? PartImage.lookupPrdId(node)
+        : '') ||
+      node.sourcePhysicalId ||
+      node.physicalid ||
+      '—'
+    ).trim() || '—';
+  }
+
+  function idText(node) {
+    if (!node) return '—';
+    return String(node.sourcePhysicalId || node.physicalid || '—').trim() || '—';
+  }
+
   function renderMeta(node, r) {
     if (!r.metaEl) return;
     r.metaEl.innerHTML =
@@ -94,11 +115,8 @@ var PartPreview = (function () {
       '<dt>Revisão</dt><dd>' + escapeHtml(node.revision || '—') + '</dd>' +
       '<dt>Proprietário</dt><dd>' + escapeHtml(ownerText(node)) + '</dd>' +
       '<dt>Maturidade</dt><dd>' + escapeHtml(maturityText(node)) + '</dd>' +
-      '<dt>ID</dt><dd class="bom-preview-id">' + escapeHtml(
-        (typeof PartImage !== 'undefined' && PartImage.lookupPrdId
-          ? PartImage.lookupPrdId(node)
-          : '') || node.sourcePhysicalId || node.physicalid || '—'
-      ) + '</dd>' +
+      '<dt>Modelo 3D</dt><dd class="bom-preview-id">' + escapeHtml(model3dText(node)) + '</dd>' +
+      '<dt>ID</dt><dd class="bom-preview-id">' + escapeHtml(idText(node)) + '</dd>' +
       '</dl>';
   }
 

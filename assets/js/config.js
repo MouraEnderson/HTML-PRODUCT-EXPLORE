@@ -283,18 +283,18 @@
       EXPLORER_APP_IDS: ['ENOSCEN_AP', 'ENOPSTR_AP', 'ENX3DSEARCH_AP']
     },
 
-    /** Sprint 3 — visualização 3D no painel direito do widget (via widget 3DPlay no dashboard) */
+    /** Sprint 3 — visualização 3D no painel direito do widget (sem depender de widget 3DPlay externo) */
     THREE_DPLAY: {
       ENABLED: true,
       /** Módulos AMD embutidos não carregam de forma confiável no Additional App */
       EMBED_PLAYER: false,
-      /** Envia seleção ao widget 3DPlay via postMessage/InterCom/PlatformAPI */
-      PREFER_2D_IN_PANEL: false,
-      ALLOW_EXTERNAL_WIDGET_FALLBACK: true,
+      /** Mantém preview no painel local, sem acoplar widget 3DPlay no dashboard */
+      PREFER_2D_IN_PANEL: true,
+      ALLOW_EXTERNAL_WIDGET_FALLBACK: false,
       APP_IDS: ['SWX3DPlay_AP', 'X3DPlay_AP', 'ENX3DPlay_AP'],
       DEFAULT_OBJECT_TYPE: 'Physical Product',
       PUSH_TIMEOUT_MS: 1200,
-      WIDGET_HINT: 'Geometria enviada ao widget 3DPlay no dashboard.'
+      WIDGET_HINT: 'Modelo 3D disponível no painel da dashboard.'
     },
 
     MEDIA: {

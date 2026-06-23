@@ -387,18 +387,18 @@
       EXPLORER_APP_IDS: ['ENOSCEN_AP', 'ENOPSTR_AP', 'ENX3DSEARCH_AP']
     },
 
-    /** Sprint 3 — visualização 3D no painel direito do widget (via widget 3DPlay no dashboard) */
+    /** Sprint 3 — visualização 3D no painel direito do widget (sem depender de widget 3DPlay externo) */
     THREE_DPLAY: {
       ENABLED: true,
       /** Módulos AMD embutidos não carregam de forma confiável no Additional App */
       EMBED_PLAYER: false,
-      /** Envia seleção ao widget 3DPlay via postMessage/InterCom/PlatformAPI */
-      PREFER_2D_IN_PANEL: false,
-      ALLOW_EXTERNAL_WIDGET_FALLBACK: true,
+      /** Mantém preview no painel local, sem acoplar widget 3DPlay no dashboard */
+      PREFER_2D_IN_PANEL: true,
+      ALLOW_EXTERNAL_WIDGET_FALLBACK: false,
       APP_IDS: ['SWX3DPlay_AP', 'X3DPlay_AP', 'ENX3DPlay_AP'],
       DEFAULT_OBJECT_TYPE: 'Physical Product',
       PUSH_TIMEOUT_MS: 1200,
-      WIDGET_HINT: 'Geometria enviada ao widget 3DPlay no dashboard.'
+      WIDGET_HINT: 'Modelo 3D disponível no painel da dashboard.'
     },
 
     MEDIA: {
@@ -4957,36 +4957,14 @@ var DataTable = (function () {
     var image = byId('partPreviewImage');
     var meta = byId('partPreviewMeta');
     var physId = text(row.referenceId || row.physicalid || '');
-    var hasViewer = typeof ThreeDPlayBridge !== 'undefined';
 
     if (image) {
-      if (hasViewer && physId) {
-        image.innerHTML = '<div class="bom-3dplay-loading">A preparar visualiza\u00e7\u00e3o 3D\u2026</div>';
-        ThreeDPlayBridge.showPart(row, { skipEmbed: true }, function (st) {
-          var cell = byId('viewStatusCell');
-          if (!st) return;
-          if (st.ok) {
-            if (cell) cell.textContent = '3D enviado ao dashboard (' + text(st.mode) + ').';
-            image.innerHTML =
-              '<div class="bom-3d-canvas-empty">' +
-              '<p>Geometria enviada ao widget 3DPlay no dashboard.</p>' +
-              '<p class="bom-3dplay-status bom-3dplay-status-ok">Confirme no painel 3DPlay.</p>' +
-              '</div>';
-          } else {
-            var msg = text(st.message) || 'Widget 3DPlay n\u00e3o detectado no dashboard.';
-            if (cell) cell.textContent = msg;
-            image.innerHTML =
-              '<div class="bom-3d-canvas-empty"><p>' + escapeHtml(msg) + '</p></div>';
-          }
-        });
-      } else {
-        image.innerHTML =
-          '<span class="bom-preview-placeholder">' +
-          (physId
-            ? 'Visualiza\u00e7\u00e3o 3D indispon\u00edvel (ThreeDPlayBridge ausente).'
-            : 'Selecione uma linha com ID f\u00edsico para visualiza\u00e7\u00e3o 3D.') +
-          '</span>';
-      }
+      image.innerHTML =
+        '<span class="bom-preview-placeholder">' +
+        (physId
+          ? 'Modelo 3D identificado para esta linha.'
+          : 'Selecione uma linha com Modelo 3D para visualiza\u00e7\u00e3o.') +
+        '</span>';
     }
 
     if (meta) {
@@ -4997,10 +4975,11 @@ var DataTable = (function () {
         '<dt>Revisao</dt><dd>' + escapeHtml(row.revision || '-') + '</dd>' +
         '<dt>Proprietario</dt><dd>' + escapeHtml(row.owner || '-') + '</dd>' +
         '<dt>Maturidade</dt><dd>' + escapeHtml(row.maturity || row.state || '-') + '</dd>' +
+        '<dt>Modelo 3D</dt><dd id="viewStatusCell">' + escapeHtml(physId || '-') + '</dd>' +
         '<dt>Nivel</dt><dd>' + escapeHtml(String(row.level)) + '</dd>' +
         '<dt>Path</dt><dd>' + escapeHtml(row.path || '-') + '</dd>' +
-        '<dt>3DView</dt><dd id="viewStatusCell">' +
-        escapeHtml(hasViewer && physId ? 'A carregar\u2026' : 'ID f\u00edsico ausente.') +
+        '<dt>3DView</dt><dd>' +
+        escapeHtml(physId ? 'Modelo 3D pronto para uso no painel.' : 'Modelo 3D ausente.') +
         '</dd>' +
         '</dl>';
     }
