@@ -1,7 +1,10 @@
 /*
  * Smart detector for Product Explorer auto-context.
- * Runs five probes in parallel and returns the first valid result by priority:
- * PlatformAPI -> ExplorerContext -> 3DXCompass -> PlatformBridge -> safe DOM inspection.
+ * Runs official/runtime probes and returns the first valid result by priority:
+ * PlatformAPI -> ExplorerContext -> 3DXCompass -> PlatformBridge.
+ *
+ * Hard rule: this detector never reads Product Explorer DOM, parent.document,
+ * sibling iframes, window.top.document, iframe.contentDocument, clipboard, or TSV.
  */
 (function (global) {
   'use strict';
@@ -193,25 +196,6 @@
     return null;
   }
 
-  function accessibleSiblingFrames() {
-    var list = [];
-    try {
-      var frames = global.parent && global.parent.document ? global.parent.document.getElementsByTagName('iframe') : [];
-      for (var i = 0; i < frames.length; i++) {
-        var frame = frames[i];
-        if (frame === global.frameElement) continue;
-        try {
-          if (frame.contentWindow) list.push(frame);
-        } catch (error) {
-          /* ignore cross-origin siblings */
-        }
-      }
-    } catch (errorOuter) {
-      /* ignore */
-    }
-    return list;
-  }
-
   function probePlatformBridge() {
     return promiseProbe('PlatformBridge postMessage', function () {
       return new Promise(function (resolve) {
@@ -253,20 +237,9 @@
             global.parent.postMessage(request, '*');
           }
         } catch (errorParent) {
-          /* ignore */
+          /* ignore unavailable parent messaging */
         }
-        accessibleSiblingFrames().forEach(function (frame) {
-          try {
-            frame.contentWindow.postMessage(request, '*');
-          } catch (errorFrame) {
-            /* ignore */
-          }
-        });
 
-        /*
-         * Wait 450ms for postMessage replies, which keeps the full parallel probe
-         * comfortably under the 2.5s budget while allowing typical widget hops.
-         */
         timer = global.setTimeout(function () {
           var selection = global.ProductExplorerBridge && typeof global.ProductExplorerBridge.getSelection === 'function'
             ? global.ProductExplorerBridge.getSelection()
@@ -277,43 +250,6 @@
             : { ok: false, reason: 'Sem resposta inter-widget controlada' });
         }, 450);
       });
-    });
-  }
-
-  function probeDomInspection() {
-    return promiseProbe('DOM inspection', function () {
-      var frames = accessibleSiblingFrames();
-      for (var i = 0; i < frames.length; i++) {
-        var frame = frames[i];
-        try {
-          var query = frame.src || '';
-          var matchId = query.match(/[?&#](?:physicalid|physicalId|selectedId|objectId|rootId)=([^&#]+)/);
-          var matchName = query.match(/[?&#](?:displayName|title|name|rootName)=([^&#]+)/);
-          var detected = normalizeDetectedObject({
-            physicalId: matchId && matchId[1] ? decodeURIComponent(matchId[1]) : '',
-            title: matchName && matchName[1] ? decodeURIComponent(matchName[1]) : '',
-            type: 'iframe-query'
-          }, 'dom-inspection');
-          if (detected) {
-            return { ok: true, detectedObject: detected, detail: { via: 'iframe-src-query' } };
-          }
-          var doc = frame.contentDocument || (frame.contentWindow && frame.contentWindow.document);
-          if (doc) {
-            var node = doc.querySelector('[data-physical-id],[data-object-id],[data-root-id]');
-            if (node) {
-              detected = normalizeDetectedObject({
-                physicalId: node.getAttribute('data-physical-id') || node.getAttribute('data-object-id') || node.getAttribute('data-root-id'),
-                title: node.getAttribute('data-title') || node.getAttribute('data-name') || text(node.textContent),
-                type: node.getAttribute('data-type') || node.tagName
-              }, 'dom-inspection');
-              if (detected) return { ok: true, detectedObject: detected, detail: { via: 'iframe-dom-attributes' } };
-            }
-          }
-        } catch (error) {
-          /* ignore inaccessible DOM */
-        }
-      }
-      return { ok: false, reason: 'Nenhum iframe irmão acessível com contexto' };
     });
   }
 
@@ -332,8 +268,7 @@
       probePlatformApi(),
       probeExplorerContext(),
       probeCompassContext(),
-      probePlatformBridge(),
-      probeDomInspection()
+      probePlatformBridge()
     ]).then(function (results) {
       var winner = null;
       for (var i = 0; i < results.length; i++) {
