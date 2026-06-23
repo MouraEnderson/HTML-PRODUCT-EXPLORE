@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260621e',
+    BUILD: 'bom20260623a',
     /** One operational path: bom-waf-session-controller-bom20260621e.js. */
     SESSION_CONTROLLER_ONLY: true,
     ACTIVE_ENTRYPOINT: 'widget-v3.html',
@@ -283,18 +283,18 @@
       EXPLORER_APP_IDS: ['ENOSCEN_AP', 'ENOPSTR_AP', 'ENX3DSEARCH_AP']
     },
 
-    /** Sprint 3 — visualização 3D no painel direito do widget (não widget 3DPlay separado) */
+    /** Sprint 3 — visualização 3D no painel direito do widget (sem depender de widget 3DPlay externo) */
     THREE_DPLAY: {
       ENABLED: true,
-      /** Additional App (GitHub iframe): módulos 3DPlay AMD não carregam — usar preview 2D */
+      /** Módulos AMD embutidos não carregam de forma confiável no Additional App */
       EMBED_PLAYER: false,
+      /** Mantém preview no painel local, sem acoplar widget 3DPlay no dashboard */
       PREFER_2D_IN_PANEL: true,
-      /** Visualização só no painel do BOM — não exige widget 3DPlay no dashboard */
       ALLOW_EXTERNAL_WIDGET_FALLBACK: false,
       APP_IDS: ['SWX3DPlay_AP', 'X3DPlay_AP', 'ENX3DPlay_AP'],
       DEFAULT_OBJECT_TYPE: 'Physical Product',
-      PUSH_TIMEOUT_MS: 800,
-      WIDGET_HINT: 'Pré-visualização 2D no painel (3DPlay embutido indisponível neste widget).'
+      PUSH_TIMEOUT_MS: 1200,
+      WIDGET_HINT: 'Modelo 3D disponível no painel da dashboard.'
     },
 
     MEDIA: {
