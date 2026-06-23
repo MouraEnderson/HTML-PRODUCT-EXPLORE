@@ -165,9 +165,9 @@ var WafClient = (function () {
                 typeof CompassServices !== 'undefined' &&
                 CompassServices.isDashboardOnIfwe &&
                 CompassServices.isDashboardOnIfwe();
-              var forceSpaceBridge = onIfwe && isNetworkZero(msg) && /space\.3dexperience/i.test(targetUrl);
+              var shouldForceIfweRetry = onIfwe && isNetworkZero(msg) && /space\.3dexperience/i.test(targetUrl);
               var alt = onIfwe
-                ? ifweRetryUrl(targetUrl, forceSpaceBridge)
+                ? ifweRetryUrl(targetUrl, shouldForceIfweRetry)
                 : (ifweRetryUrl(targetUrl) || swapSpaceIfwe(targetUrl));
               if (alt && alt !== targetUrl) {
                 if (typeof CompassServices !== 'undefined' && CompassServices.applyVerifiedSpaceUrl) {
