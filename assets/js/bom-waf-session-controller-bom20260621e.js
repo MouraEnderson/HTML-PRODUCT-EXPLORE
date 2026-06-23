@@ -568,19 +568,52 @@
   function renderSelection(row) {
     var image = byId('partPreviewImage');
     var meta = byId('partPreviewMeta');
-    if (image) image.innerHTML = '<span class="bom-preview-placeholder">3DView: aguardando linha real e geometry resolver.</span>';
+    var physId = text(row.referenceId || row.physicalid || '');
+    var hasViewer = typeof ThreeDPlayBridge !== 'undefined';
+
+    if (image) {
+      if (hasViewer && physId) {
+        image.innerHTML = '<div class="bom-3dplay-loading">A preparar visualiza\u00e7\u00e3o 3D\u2026</div>';
+        ThreeDPlayBridge.showPart(row, { skipEmbed: true }, function (st) {
+          var cell = byId('viewStatusCell');
+          if (!st) return;
+          if (st.ok) {
+            if (cell) cell.textContent = '3D enviado ao dashboard (' + text(st.mode) + ').';
+            image.innerHTML =
+              '<div class="bom-3d-canvas-empty">' +
+              '<p>Geometria enviada ao widget 3DPlay no dashboard.</p>' +
+              '<p class="bom-3dplay-status bom-3dplay-status-ok">Confirme no painel 3DPlay.</p>' +
+              '</div>';
+          } else {
+            var msg = text(st.message) || 'Widget 3DPlay n\u00e3o detectado no dashboard.';
+            if (cell) cell.textContent = msg;
+            image.innerHTML =
+              '<div class="bom-3d-canvas-empty"><p>' + escapeHtml(msg) + '</p></div>';
+          }
+        });
+      } else {
+        image.innerHTML =
+          '<span class="bom-preview-placeholder">' +
+          (physId
+            ? 'Visualiza\u00e7\u00e3o 3D indispon\u00edvel (ThreeDPlayBridge ausente).'
+            : 'Selecione uma linha com ID f\u00edsico para visualiza\u00e7\u00e3o 3D.') +
+          '</span>';
+      }
+    }
+
     if (meta) {
-      meta.innerHTML = '<dl class="bom-preview-details">' +
+      meta.innerHTML =
+        '<dl class="bom-preview-details">' +
         '<dt>Reference ID</dt><dd>' + escapeHtml(row.referenceId || '-') + '</dd>' +
         '<dt>Instance ID</dt><dd>' + escapeHtml(row.instanceId || '-') + '</dd>' +
         '<dt>Revisao</dt><dd>' + escapeHtml(row.revision || '-') + '</dd>' +
         '<dt>Proprietario</dt><dd>' + escapeHtml(row.owner || '-') + '</dd>' +
         '<dt>Maturidade</dt><dd>' + escapeHtml(row.maturity || row.state || '-') + '</dd>' +
-        '<dt>Nivel</dt><dd>' + escapeHtml(row.level) + '</dd>' +
+        '<dt>Nivel</dt><dd>' + escapeHtml(String(row.level)) + '</dd>' +
         '<dt>Path</dt><dd>' + escapeHtml(row.path || '-') + '</dd>' +
-        '<dt>3DView</dt><dd>Aguardando geometry resolver.</dd>' +
-        '<dt>Maturidade write</dt><dd>Leitura somente; write nao habilitado.</dd>' +
-        '<dd><button type="button" disabled="disabled">Ver 3D real</button> <button type="button" disabled="disabled">Alterar maturidade</button></dd>' +
+        '<dt>3DView</dt><dd id="viewStatusCell">' +
+        escapeHtml(hasViewer && physId ? 'A carregar\u2026' : 'ID f\u00edsico ausente.') +
+        '</dd>' +
         '</dl>';
     }
   }

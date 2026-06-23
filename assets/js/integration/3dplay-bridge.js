@@ -335,7 +335,7 @@ var ThreeDPlayBridge = (function () {
 
     function finishPanelFallback() {
       finish('panel', false,
-        '3D no painel indisponível neste build — use miniatura 2D ou estrutura com prd- (API/Explorer).');
+        'Widget 3DPlay n\u00e3o detectado no dashboard. Adicione o app 3DPlay ao painel para visualizar a geometria 3D.');
     }
 
     if (allowExternal) {

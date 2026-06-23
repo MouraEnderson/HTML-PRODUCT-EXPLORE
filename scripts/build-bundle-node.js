@@ -13,6 +13,7 @@ const files = [
   'assets/js/platform/waf-client.js',
   'assets/js/integration/3dx-content-parser.js',
   'assets/js/integration/enovia-api.js',
+  'assets/js/integration/3dplay-bridge.js',
   'assets/js/integration/product-explorer-sync-provider.js',
   'assets/js/services/attribute-service.js',
   'assets/js/processing/metrics-engine.js',
