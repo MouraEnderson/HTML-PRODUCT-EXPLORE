@@ -8,7 +8,7 @@
   var APP_CONFIG = {
     APP_ID: '3DX_BOM_ANALYTICS_DASHBOARD',
     VERSION: '1.2.0',
-    BUILD: 'bom20260621e',
+    BUILD: 'bom20260623a',
     /** One operational path: bom-waf-session-controller-bom20260621e.js. */
     SESSION_CONTROLLER_ONLY: true,
     ACTIVE_ENTRYPOINT: 'widget-v3.html',

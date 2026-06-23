@@ -385,13 +385,32 @@
     var rawId = nestedValue(raw, ['id', 'physicalid', 'physicalId']);
     var instanceId = nestedValue(raw, ['instanceId', 'relationshipId', 'relId', 'instancePhysicalId']);
     if (!instanceId && /VPM(?:Rep)?Instance|EngInstance/i.test(type)) instanceId = rawId;
-    var referenceId = nestedValue(raw, ['referenceId', 'referredObjectId', 'referencePhysicalId', 'physicalid', 'physicalId']);
+
+    /* Phase 2: read referencedObject first — the correct contract field that
+     * identifies the child VPMReference/EngItem from a VPMInstance payload.
+     * The EngInstanceMask.Details contract exposes this as referencedObject. */
+    var refObj = raw.referencedObject || raw.referredObject || raw.reference || null;
+    var referenceId = (refObj && text(refObj.id || refObj.physicalid || refObj.physicalId)) ||
+      nestedValue(raw, ['referenceId', 'referredObjectId', 'referencePhysicalId']) ||
+      (!instanceId ? nestedValue(raw, ['physicalid', 'physicalId', 'id']) : '');
     if (!referenceId && !instanceId) referenceId = rawId;
+
+    var refMeta = (refObj && typeof refObj === 'object') ? refObj : {};
+
     var parentReferenceId = nestedValue(raw, ['parentReferenceId', 'parentId', 'parentPhysicalId', 'parent']);
-    var path = nestedValue(raw, ['path', 'instancePath', 'treePath']);
-    var level = parseLevel(nestedValue(raw, ['level', 'depth']), path ? Math.max(1, path.split(/[\\/|>]/).filter(Boolean).length - 1) : 1);
-    var rowKey = [instanceId || 'ref:' + referenceId, parentReferenceId || 'root', path || index].join('|');
+    var nodePath = nestedValue(raw, ['path', 'instancePath', 'treePath']);
+    var level = parseLevel(nestedValue(raw, ['level', 'depth']), nodePath ? Math.max(1, nodePath.split(/[\\/|>]/).filter(Boolean).length - 1) : 1);
+    var rowKey = [instanceId || 'ref:' + referenceId, parentReferenceId || 'root', nodePath || index].join('|');
     var member = typeof AttributeService !== 'undefined' && AttributeService.extractFromMember ? AttributeService.extractFromMember(raw) : {};
+
+    function firstOf() {
+      for (var i = 0; i < arguments.length; i++) {
+        var v = text(arguments[i]);
+        if (v) return v;
+      }
+      return '';
+    }
+
     return {
       rowKey: rowKey,
       referenceId: referenceId,
@@ -399,19 +418,21 @@
       parentReferenceId: parentReferenceId,
       parentRowKey: '',
       level: level,
-      path: path,
-      name: nestedValue(raw, ['name', 'title', 'label', 'displayName']) || member.name || referenceId,
-      title: nestedValue(raw, ['title', 'name', 'label', 'displayName']) || member.title || referenceId,
-      description: nestedValue(raw, ['description']) || member.description,
-      revision: nestedValue(raw, ['revision', 'majorrevision']) || member.revision,
-      owner: nestedValue(raw, ['owner', 'creator']) || member.owner,
-      maturity: nestedValue(raw, ['maturity', 'state', 'current', 'status']) || member.maturity,
-      state: nestedValue(raw, ['state', 'current', 'status']) || member.state,
-      type: type || member.type,
-      displayType: nestedValue(raw, ['displayType', 'type']) || member.displayType,
+      path: nodePath,
+      name: firstOf(nestedValue(raw, ['name', 'title', 'label', 'displayName']), refMeta.name, refMeta.title, member.name, referenceId),
+      title: firstOf(nestedValue(raw, ['title', 'name', 'label', 'displayName']), refMeta.title, refMeta.name, member.title, referenceId),
+      description: firstOf(nestedValue(raw, ['description']), refMeta.description, member.description),
+      revision: firstOf(nestedValue(raw, ['revision', 'majorrevision']), refMeta.revision, member.revision),
+      owner: firstOf(nestedValue(raw, ['owner', 'creator']), refMeta.owner, member.owner),
+      maturity: firstOf(nestedValue(raw, ['maturity', 'state', 'current', 'status']), refMeta.maturity, member.maturity),
+      state: firstOf(nestedValue(raw, ['state', 'current', 'status']), refMeta.state, member.state),
+      type: firstOf(type, refMeta.type, member.type),
+      displayType: firstOf(nestedValue(raw, ['displayType', 'type']), refMeta.displayType, member.displayType),
       quantity: Number(nestedValue(raw, ['quantity', 'qty']) || 1),
       physicalid: referenceId || instanceId || rawId,
-      isAssembly: /Reference|EngItem|Assembly/i.test(type),
+      isAssembly: /Reference|EngItem|Assembly/i.test(type) ||
+        !!(refObj && /Reference|EngItem|Assembly/i.test(text(refObj.type || refObj.displayType))),
+      childrenLoaded: false,
       raw: raw
     };
   }
@@ -671,6 +692,53 @@
       });
   }
 
+  /*
+   * Phase 2 — lazy expansion of a single node on demand.
+   * Calls dseng:EngItem/expand with depth 1 for the given referenceId and
+   * inserts the returned children into state.rows after the parent row.
+   * Uses the same normalizeExpansion parser so referencedObject is read correctly.
+   */
+  function expandNode(referenceId) {
+    referenceId = text(referenceId);
+    if (!referenceId) return Promise.reject(new Error('referenceId ausente para expansao de no.'));
+    var parentRow = state.rows.filter(function (r) { return r.referenceId === referenceId; })[0];
+    if (!parentRow) return Promise.reject(new Error('No nao encontrado em state.rows: ' + referenceId));
+    if (parentRow.childrenLoaded) {
+      diagnostic('info', 'node-already-expanded', { referenceId: referenceId });
+      return Promise.resolve(state.rows);
+    }
+    var fakeRoot = { internalId: referenceId, title: parentRow.title || referenceId, physicalId: parentRow.physicalid || '' };
+    return initRuntime()
+      .then(function () {
+        return EnoviaApi.expandEngItem(referenceId, { expandDepth: 1 });
+      })
+      .then(function (expansion) {
+        var normalized = normalizeExpansion(fakeRoot, null, expansion);
+        var children = normalized.rows.filter(function (r) { return r.level > 0; });
+        var childLevel = parentRow.level + 1;
+        children.forEach(function (child) {
+          child.level = childLevel;
+          child.parentReferenceId = referenceId;
+          child.parentRowKey = parentRow.rowKey;
+        });
+        parentRow.childrenLoaded = true;
+        var insertIdx = state.rows.indexOf(parentRow) + 1;
+        var existingKeys = {};
+        state.rows.forEach(function (r) { existingKeys[r.rowKey] = true; });
+        var toInsert = children.filter(function (c) { return !existingKeys[c.rowKey]; });
+        state.rows.splice.apply(state.rows, [insertIdx, 0].concat(toInsert));
+        state.counts = computeCounts(state.rows, state.counts.rawRows + normalized.rawRows, state.failures);
+        render();
+        setStatus('No expandido: ' + (parentRow.title || referenceId) + '. ' + state.counts.displayRows + ' linhas.', 'success');
+        diagnostic('info', 'node-expanded', { referenceId: referenceId, childrenAdded: toInsert.length });
+        return state.rows;
+      })
+      .catch(function (error) {
+        diagnostic('error', 'node-expand-failed', { referenceId: referenceId, message: text(error && error.message) });
+        throw error;
+      });
+  }
+
   function sync() {
     if (state.loading) return Promise.resolve(state.rows);
     state.generation += 1;
@@ -744,7 +812,7 @@
     bindControllerButton('btnRefresh', refresh);
     bindControllerButton('btnLoadPhysicalId', loadManualInput);
     setStatus('Pronto. Abra ou selecione uma montagem no Product Explorer e clique Atualizar estrutura.', 'info');
-    diagnostic('info', 'controller-booted', { version: 'bom20260621e' });
+    diagnostic('info', 'controller-booted', { version: 'bom20260623a' });
     return Promise.resolve(state);
   }
 
@@ -786,6 +854,7 @@
     resolveCurrentRoot: resolveCurrentRoot,
     resolveManualRoot: resolveManualRoot,
     loadStructure: loadStructure,
+    expandNode: expandNode,
     probeContextSources: probeContextSources,
     selectRow: selectRow,
     getState: getState,

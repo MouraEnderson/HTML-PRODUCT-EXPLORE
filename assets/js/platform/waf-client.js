@@ -44,8 +44,33 @@ var WafClient = (function () {
     return /ResponseCode.*(403|400)|\b403\b|\b400\b/i.test(msg || '');
   }
 
+  function isEmbeddedWidget() {
+    /* Additional App runs in an iframe whose parent is cross-origin (3DDashboard).
+     * isDashboardOnIfwe() cannot read window.top.location → returns false.
+     * Detect embedding: frameElement present, or accessing top.location throws SecurityError. */
+    try {
+      if (root.frameElement) return true;
+    } catch (e) {
+      return true; /* SecurityError: cross-origin access blocked → we are embedded */
+    }
+    try {
+      if (root.top && root.top !== root) {
+        /* This line throws in cross-origin contexts */
+        void root.top.location.href;
+      }
+    } catch (e) {
+      return true;
+    }
+    return false;
+  }
+
   function isSpaceBlockedInIfweSession(onIfwe, msg, targetUrl) {
-    return !!(onIfwe && isNetworkZero(msg) && /space\.3dexperience/i.test(targetUrl || ''));
+    if (!isNetworkZero(msg) || !/space\.3dexperience/i.test(targetUrl || '')) return false;
+    if (onIfwe) return true;
+    /* In Additional App the parent 3DDashboard is cross-origin, so isDashboardOnIfwe()
+     * returns false even though WAF session is IFWE-based. Force IFWE retry whenever
+     * *-space is network-blocked and the widget is running inside an iframe. */
+    return isEmbeddedWidget();
   }
 
   function mustUseIfweOnly() {
@@ -170,9 +195,11 @@ var WafClient = (function () {
                 CompassServices.isDashboardOnIfwe &&
                 CompassServices.isDashboardOnIfwe();
               var shouldForceIfweRetry = isSpaceBlockedInIfweSession(onIfwe, msg, targetUrl);
-              var alt = onIfwe
-                ? ifweRetryUrl(targetUrl, shouldForceIfweRetry)
-                : (ifweRetryUrl(targetUrl) || swapSpaceIfwe(targetUrl));
+              /* Always pass shouldForceIfweRetry to ifweRetryUrl so the IFWE alternative
+               * is used when *-space is blocked, even when onIfwe detection failed
+               * due to cross-origin restrictions in the Additional App. */
+              var alt = ifweRetryUrl(targetUrl, shouldForceIfweRetry) ||
+                (!shouldForceIfweRetry ? swapSpaceIfwe(targetUrl) : null);
               if (alt && alt !== targetUrl) {
                 if (typeof CompassServices !== 'undefined' && CompassServices.applyVerifiedSpaceUrl) {
                   var baseMatch = alt.match(/^(https:\/\/[^/]+\/enovia)/i);
