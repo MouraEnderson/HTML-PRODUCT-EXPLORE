@@ -1352,9 +1352,12 @@ var WafClient = (function () {
       (url || '').indexOf('/enovia') >= 0;
   }
 
-  function ifweRetryUrl(url) {
-    if (APP_CONFIG.ALLOW_IFWE_AS_3DSPACE !== true) return null;
-    if (!APP_CONFIG.TENANT_DEFAULTS || APP_CONFIG.SPACE_FALLBACK_VIA_IFWE === false) return null;
+  function ifweRetryUrl(url, force) {
+    var allowConfigured =
+      APP_CONFIG.ALLOW_IFWE_AS_3DSPACE === true &&
+      APP_CONFIG.SPACE_FALLBACK_VIA_IFWE !== false;
+    if (!force && !allowConfigured) return null;
+    if (!APP_CONFIG.TENANT_DEFAULTS) return null;
     var sh = APP_CONFIG.TENANT_DEFAULTS.spaceHost;
     var ih = APP_CONFIG.TENANT_DEFAULTS.platformHost;
     if (typeof CompassServices !== 'undefined' && CompassServices.swapUrlHost) {
@@ -1494,7 +1497,10 @@ var WafClient = (function () {
                 typeof CompassServices !== 'undefined' &&
                 CompassServices.isDashboardOnIfwe &&
                 CompassServices.isDashboardOnIfwe();
-              var alt = onIfwe ? ifweRetryUrl(targetUrl) : (ifweRetryUrl(targetUrl) || swapSpaceIfwe(targetUrl));
+              var forceSpaceBridge = onIfwe && isNetworkZero(msg) && /space\.3dexperience/i.test(targetUrl);
+              var alt = onIfwe
+                ? ifweRetryUrl(targetUrl, forceSpaceBridge)
+                : (ifweRetryUrl(targetUrl) || swapSpaceIfwe(targetUrl));
               if (alt && alt !== targetUrl) {
                 if (typeof CompassServices !== 'undefined' && CompassServices.applyVerifiedSpaceUrl) {
                   var baseMatch = alt.match(/^(https:\/\/[^/]+\/enovia)/i);
