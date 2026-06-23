@@ -1376,6 +1376,10 @@ var WafClient = (function () {
     return /ResponseCode.*(403|400)|\b403\b|\b400\b/i.test(msg || '');
   }
 
+  function isSpaceBlockedInIfweSession(onIfwe, msg, targetUrl) {
+    return !!(onIfwe && isNetworkZero(msg) && /space\.3dexperience/i.test(targetUrl || ''));
+  }
+
   function mustUseIfweOnly() {
     return APP_CONFIG.ALLOW_IFWE_AS_3DSPACE === true && APP_CONFIG.FORCE_IFWE_AS_3DSPACE === true;
   }
@@ -1497,7 +1501,7 @@ var WafClient = (function () {
                 typeof CompassServices !== 'undefined' &&
                 CompassServices.isDashboardOnIfwe &&
                 CompassServices.isDashboardOnIfwe();
-              var shouldForceIfweRetry = onIfwe && isNetworkZero(msg) && /space\.3dexperience/i.test(targetUrl);
+              var shouldForceIfweRetry = isSpaceBlockedInIfweSession(onIfwe, msg, targetUrl);
               var alt = onIfwe
                 ? ifweRetryUrl(targetUrl, shouldForceIfweRetry)
                 : (ifweRetryUrl(targetUrl) || swapSpaceIfwe(targetUrl));
