@@ -7,82 +7,8 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>BOM Analytics</title>
-  <script type="text/javascript">
-  //<![CDATA[
-    window.__3DX_TRUSTED_WIDGET__ = true;
-    window.__BOM_GH_BASE__ = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
-    window.__BOM_WIDGET_BUILD__ = 'bom20260617d';
-    window.__BOM_BASE_BUILD__ = 'bom20260607a';
-    window.__BOM_RELEASE_COMMIT__ = 'mvp-stable-17d';
-    window.__BOM_DATA_SOURCE__ = 'wafdata-session';
-    window.__BOM_LOADER_MODE__ = 'wafdata-session';
-    window.__BOM_EXPECTED_BUILD__ = 'bom20260617d';
-    window.__BOM_BUILD_ID__ = 'bom20260617d';
-    window.BOM_BUILD_ID = 'bom20260617d';
-
-    (function () {
-      var GH = window.__BOM_GH_BASE__;
-      var BUILD = 'bom20260617d';
-      var booted = false;
-
-      function mountTarget() {
-        if (typeof widget !== 'undefined' && widget && widget.body) return widget.body;
-        return document.body;
-      }
-
-      function setLoading(msg) {
-        try {
-          var target = mountTarget();
-          if (target && !booted) target.innerHTML = '<div style="padding:12px;font:12px Segoe UI,Arial,sans-serif;color:#24445c;">' + msg + '</div>';
-        } catch (e) {}
-      }
-
-      function loadCss() {
-        var l = document.createElement('link');
-        l.rel = 'stylesheet';
-        l.href = GH + 'assets/css/dashboard.css?v=' + encodeURIComponent(BUILD + '-mvp');
-        document.getElementsByTagName('head')[0].appendChild(l);
-      }
-
-      function loadRuntime() {
-        if (booted) return;
-        var target = mountTarget();
-        if (!target) {
-          window.setTimeout(loadRuntime, 80);
-          return;
-        }
-        booted = true;
-        setLoading('Carregando BOM Analytics MVP...');
-        loadCss();
-        var s = document.createElement('script');
-        s.type = 'text/javascript';
-        s.charset = 'UTF-8';
-        s.src = GH + 'assets/js/widget-runtime-bom20260617d.js?v=' + encodeURIComponent(BUILD + '-mvp');
-        s.onerror = function () { setLoading('Erro ao carregar runtime MVP bom20260617d.'); };
-        document.getElementsByTagName('head')[0].appendChild(s);
-      }
-
-      function schedule() {
-        if (typeof widget !== 'undefined' && widget && widget.addEvent) {
-          widget.addEvent('onLoad', loadRuntime);
-          widget.addEvent('onRefresh', function () {
-            booted = false;
-            window.__BOM_WIDGET_BOOT_STATE__ = { started: false, completed: false, build: null };
-            loadRuntime();
-          });
-          if (widget.body) loadRuntime();
-          else window.setTimeout(schedule, 80);
-        } else if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', loadRuntime);
-        } else {
-          loadRuntime();
-        }
-      }
-
-      schedule();
-    }());
-  //]]>
-  </script>
+  <link rel="stylesheet" href="assets/css/dashboard.css?v=bom20260617d" />
+  <script type="text/javascript" src="assets/js/widget-runtime-bom20260617d.js?v=bom20260617d&amp;mvp=restore"></script>
 </head>
 <body></body>
 </html>
