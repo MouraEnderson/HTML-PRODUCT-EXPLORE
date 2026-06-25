@@ -19,6 +19,11 @@ assert(
 );
 
 assert(
+  widget.includes('c=boot20260625a'),
+  'widget-v3.html must cache-bust the official runtime so 3DDashboard does not reuse a stale boot script'
+);
+
+assert(
   /window\.__BOM_BUILD_ID__\s*=\s*['"]bom20260617d['"]/.test(buildId),
   'build-id.js must pin bom20260617d'
 );
