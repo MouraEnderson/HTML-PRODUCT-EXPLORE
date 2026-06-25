@@ -1427,12 +1427,11 @@
     if (dynamicState.loadingNodeIds[parentRef]) return Promise.resolve(w.__bomSkaLastPayload);
     dynamicState.loadingNodeIds[parentRef] = true;
     setStatus('Carregando filhos via dseng: ' + (parentRow.title || parentRef), 'info');
-    return fetchBomStructureFromSkaService({
-      rootId: parentRef,
-      depth: 1,
+    return fetchStructureChildren({
+      rootId: w.__bomWafExpandRootId || parentRef,
+      parentReferenceId: parentRef,
       expandDepth: 1,
-      includeRoot: false,
-      expandStrategy: 'expand-item'
+      pageSize: 100
     })
       .then(function (payload) {
         var rows = mergeChildRows(parentRow, payload);
@@ -1673,6 +1672,7 @@
     clearStateBeforeSkaApply();
     w.__BOM_SKA_EMPTY_STATE__ = false;
     if (!opts.silent) setStatus('Carregando E-BOM via sessão WAFData (dseng expand)…', 'info');
+    w.__bomWafExpandRootId = opts.rootId;
 
     var depth = opts.depth == null ? DEFAULT_DEPTH : opts.depth;
 
