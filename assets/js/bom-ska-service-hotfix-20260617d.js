@@ -2542,7 +2542,7 @@
     if (title.indexOf(KNOWN_ROOT_TITLE_HINT) < 0) return false;
     idEl.value = KNOWN_ROOT_ID;
     setStatus(
-        'Modo wafdata-session: Product Explorer nao forneceu rootId dseng para a estrutura atual. Selecione/expanda a estrutura no Explorer e clique Atualizar estrutura novamente.';
+        'Modo wafdata-session: Product Explorer nao forneceu rootId dseng para a estrutura atual. Selecione/expanda a estrutura no Explorer e clique Atualizar estrutura novamente.',
       'info'
     );
     return true;
