@@ -6,6 +6,8 @@
   var BUILD = 'bom20260617d';
   var SKA_URL = 'https://bom-resolver.onrender.com/api/3dx/bom/structure';
   var RESOLVE_URL = 'https://bom-resolver.onrender.com/api/3dx/bom/resolve-selection';
+  var STRUCTURE_ROOT_URL = 'https://bom-resolver.onrender.com/api/3dx/bom/structure/root';
+  var STRUCTURE_CHILDREN_URL = 'https://bom-resolver.onrender.com/api/3dx/bom/structure/children';
   var VIZ_URL = 'https://bom-resolver.onrender.com/api/3dx/visualization/resolve';
   var LIFECYCLE_TRANSITIONS_URL = 'https://bom-resolver.onrender.com/api/3dx/lifecycle/transitions';
   var LIFECYCLE_CHANGE_URL = 'https://bom-resolver.onrender.com/api/3dx/lifecycle/change-maturity';
@@ -1812,6 +1814,50 @@
         includeRoot: opts.includeRoot !== false,
         mode: 'dseng-official',
         expandStrategy: opts.expandStrategy || 'expand-item'
+      })
+    }).then(function (response) {
+      return response.text().then(function (text) {
+        return parseSkaHttpResponse(response, text);
+      });
+    });
+  }
+
+  function fetchStructureRoot(opts) {
+    opts = opts || {};
+    return fetch(STRUCTURE_ROOT_URL, {
+      method: 'POST',
+      mode: 'cors',
+      credentials: 'omit',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rootId: opts.rootId,
+        expandDepth: opts.expandDepth || 1,
+        includeRoot: opts.includeRoot !== false,
+        pageSize: opts.pageSize || 100,
+        cursor: opts.cursor || null
+      })
+    }).then(function (response) {
+      return response.text().then(function (text) {
+        return parseSkaHttpResponse(response, text);
+      });
+    });
+  }
+
+  function fetchStructureChildren(opts) {
+    opts = opts || {};
+    return fetch(STRUCTURE_CHILDREN_URL, {
+      method: 'POST',
+      mode: 'cors',
+      credentials: 'omit',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rootId: opts.rootId || '',
+        parentReferenceId: opts.parentReferenceId,
+        parentInstanceId: opts.parentInstanceId || '',
+        path: opts.path || [],
+        expandDepth: opts.expandDepth || 1,
+        pageSize: opts.pageSize || 100,
+        cursor: opts.cursor || null
       })
     }).then(function (response) {
       return response.text().then(function (text) {
@@ -3971,6 +4017,8 @@
 
   w.__bomSkaServiceInstall = install;
   w.fetchBomStructureFromSkaService = fetchBomStructureFromSkaService;
+  w.fetchStructureRoot = fetchStructureRoot;
+  w.fetchStructureChildren = fetchStructureChildren;
   w.fetchResolveSelectionFromSkaService = fetchResolveSelectionFromSkaService;
   w.mapSkaRowsToImportItems = mapSkaRowsToImportItems;
   w.prepareSkaRowsForSnapshot = prepareSkaRowsForSnapshot;
