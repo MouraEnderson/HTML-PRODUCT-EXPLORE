@@ -205,24 +205,9 @@
     return false;
   }
 
-  function resolveKnownExplorerRoot(ctx) {
-    ctx = ctx || {};
-    if (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.resolveKnownExplorerRoot) {
-      return w.ProductExplorerSyncProvider.resolveKnownExplorerRoot(ctx);
-    }
-    if (isValidDsengPhysicalId(ctx.rootId)) return null;
-    var title = s(ctx.title || ctx.name || ctx.productName);
-    if (title.indexOf(KNOWN_ROOT_TITLE_HINT) >= 0) {
-      return {
-        rootId: KNOWN_ROOT_ID,
-        selectedId: KNOWN_ROOT_ID,
-        physicalId: s(ctx.physicalId),
-        title: title || KNOWN_ROOT_TITLE_HINT,
-        source: 'EXPLORER_CONTEXT_REGISTRY_KNOWN_ROOT',
-        selectionMode: 'known-root-registry',
-        expansionAvailable: true
-      };
-    }
+  /** resolveKnownExplorerRoot desativado — nenhum fallback hardcoded por projeto.
+   *  Toda resolucao passa pelo backend /resolve-selection. */
+  function resolveKnownExplorerRoot(_ctx) {
     return null;
   }
 
@@ -2518,20 +2503,7 @@
       };
     }
 
-    if (opts.allowKnownRootFallback === true && isWafSessionMode() && title.indexOf(KNOWN_ROOT_TITLE_HINT) >= 0) {
-      return {
-        ok: true,
-        rootId: KNOWN_ROOT_ID,
-        depth: depth,
-        title: title || lastSyncTitle || KNOWN_ROOT_TITLE_HINT,
-        source: 'KNOWN_ROOT_FROM_EXPLORER_TITLE',
-        useResolveSelection: false,
-        knownRootFallback: true,
-        fallbackWarning:
-          'Product Explorer não forneceu rootId dseng — usando CJ MESA conhecido (' + KNOWN_ROOT_ID + ').',
-        saved: saved
-      };
-    }
+    /* allowKnownRootFallback por titulo removido — sem fallback hardcoded por projeto */
 
     var pseNorm = normalizeCandidateRootId(ctx, '');
     if (pseNorm.ok) {
@@ -3984,13 +3956,9 @@
       }
       setTimeout(bootLoadFromContextOrPersisted, BOOT_CONTEXT_WAIT_MS);
     }, 1500);
-    var savedBoot = loadLastGoodContext();
-    if (savedBoot) {
-      applyLastGoodContextToUi(savedBoot);
-      setStatus('Recuperando último root válido salvo…', 'info');
-    } else {
-      renderInitialEmptyState();
-    }
+    /* Boot limpo — não carrega lastGoodContext automaticamente.
+     * Usuario deve clicar Sincronizar com Product Explorer. */
+    renderInitialEmptyState();
     applyTopbarCompactLabels();
     bindTestRootButton();
     bindCopyContextDiagnosticsButton();
