@@ -2726,21 +2726,21 @@
 
     clearStateBeforeSkaApply();
     w.__BOM_SKA_EMPTY_STATE__ = false;
-    if (!opts.silent) setStatus('Carregando via SKA BOM Service (/structure)…', 'info');
+    if (!opts.silent) setStatus('Carregando E-BOM via Render / SKA BOM Service (structure/root)…', 'info');
 
-    return fetchBomStructureFromSkaService({
+    return fetchStructureRoot({
       rootId: opts.rootId,
-      depth: opts.depth == null ? DEFAULT_DEPTH : opts.depth,
-      expandDepth: opts.expandDepth == null ? opts.depth : opts.expandDepth,
-      includeRoot: opts.includeRoot !== false
+      expandDepth: opts.expandDepth == null ? (opts.depth == null ? DEFAULT_DEPTH : opts.depth) : opts.expandDepth,
+      includeRoot: opts.includeRoot !== false,
+      pageSize: 100
     })
       .then(function (payload) {
         lastSyncRootId = opts.rootId;
         lastSyncDepth = opts.depth == null ? DEFAULT_DEPTH : opts.depth;
         lastSyncTitle = (payload.root && payload.root.title) || opts.title || '';
         payload.__skaSyncMeta = {
-          source: opts.source || 'STRUCTURE',
-          eventType: opts.source === 'LAST_GOOD_CONTEXT' ? 'last-good-context' : 'structure',
+          source: opts.source || 'STRUCTURE_ROOT',
+          eventType: 'structure-root',
           rootId: opts.rootId,
           depth: opts.depth,
           lastSyncAt: new Date().toISOString(),
