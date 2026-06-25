@@ -1181,7 +1181,15 @@
     }
   }
 
+  function isPayloadPaginated(payload) {
+    return !!(payload && payload.page && payload.page.hasMore);
+  }
+
   function getSkaExpectedTotal(payload) {
+    /* Payload paginado: usa rows retornadas nesta pagina, nao o total completo */
+    if (isPayloadPaginated(payload)) {
+      return Number(payload.rows ? payload.rows.length : 0);
+    }
     return Number(
       payload && payload.counts && payload.counts.totalRows != null
         ? payload.counts.totalRows
@@ -1978,6 +1986,8 @@
   }
 
   function assertSkaCountIntegrity(payload) {
+    /* Payload paginado: count mismatch e esperado — nao validar */
+    if (isPayloadPaginated(payload)) return true;
     var expected = getSkaExpectedTotal(payload);
     var issues = [];
     var tableCount = document.querySelectorAll('#bomTable tbody tr').length;
@@ -2357,6 +2367,13 @@
     var tableLbl = byId('tableProductLabel');
     if (tableLbl) tableLbl.textContent = rootName;
     updateTablePager(expected);
+    if (isPayloadPaginated(payload)) {
+      var totalKnown = (payload.counts && payload.counts.totalKnownRows) || '?';
+      var pager = byId('tablePager');
+      if (pager) {
+        pager.textContent = expected + ' de ' + totalKnown + ' linhas (parcial)';
+      }
+    }
     renderSkaKpiSummary(payload);
     renderSkaDiagnostics(payload, false);
     updateSyncBanner(payload);
@@ -2392,10 +2409,14 @@
   function applySkaPayloadToUI(payload) {
     var items = prepareSkaRowsForSnapshot(payload);
     var expected = getSkaExpectedTotal(payload);
+    var paginated = isPayloadPaginated(payload);
+
     if (!items.length) {
       return Promise.reject(new Error('SKA BOM Service retornou 0 linhas.'));
     }
-    if (items.length !== expected) {
+
+    /* Payload nao paginado: validar contagem estrita */
+    if (!paginated && items.length !== expected) {
       return Promise.reject(
         new Error('SKA rows (' + items.length + ') != counts.totalRows (' + expected + ').')
       );
@@ -2421,10 +2442,96 @@
       normalizeDynamicBomServiceNodes();
       if (w.App && w.App.refreshUI) w.App.refreshUI();
       if (!finalizeSkaUi(payload)) {
-        return Promise.reject(new Error('COUNT_MISMATCH'));
+        /* Para payload paginado, COUNT_MISMATCH e esperado — nao rejeitar */
+        if (!paginated) {
+          return Promise.reject(new Error('COUNT_MISMATCH'));
+        }
+      }
+      if (paginated) {
+        renderLoadMoreIndicator(payload);
       }
       return payload;
     });
+  }
+
+  function renderLoadMoreIndicator(payload) {
+    var page = payload && payload.page;
+    if (!page || !page.hasMore) return;
+    var totalKnown = (payload.counts && payload.counts.totalKnownRows) || '?';
+    var returned = page.returned || (payload.rows && payload.rows.length) || 0;
+    var nextCursor = page.nextCursor || '';
+    var rootId = (payload.root && payload.root.id) || (payload.scope && payload.scope.rootId) || '';
+
+    /* Mostrar banner informativo de paginacao */
+    var banner = byId('syncBanner');
+    if (banner) {
+      banner.classList.remove('bom-hidden');
+      banner.innerHTML = escapeHtml(
+        'Estrutura parcial: ' + returned + ' de ' + totalKnown + ' linhas carregadas. ' +
+        'Clique em "Carregar mais" para continuar.'
+      );
+      banner.classList.add('bom-banner-info');
+      banner.classList.remove('bom-banner-warn', 'bom-banner-error');
+    }
+
+    /* Adicionar/atualizar botao Carregar mais */
+    var loadMoreId = 'btnLoadMoreRows';
+    var existing = byId(loadMoreId);
+    if (existing) existing.parentNode && existing.parentNode.removeChild(existing);
+
+    var btn = document.createElement('button');
+    btn.id = loadMoreId;
+    btn.className = 'bom-btn bom-btn-secondary bom-load-more-btn';
+    btn.textContent = 'Carregar mais (' + returned + '/' + totalKnown + ')';
+    btn.setAttribute('data-cursor', nextCursor);
+    btn.setAttribute('data-root-id', rootId);
+    btn.onclick = function () {
+      btn.disabled = true;
+      btn.textContent = 'Carregando…';
+      var cursor = btn.getAttribute('data-cursor');
+      var rId = btn.getAttribute('data-root-id');
+      if (!rId || !cursor) {
+        btn.textContent = 'Erro: cursor invalido';
+        return;
+      }
+      w.fetchStructureRoot({
+        rootId: rId,
+        pageSize: 100,
+        cursor: cursor,
+        expandDepth: 1,
+        includeRoot: false
+      }).then(function (nextPayload) {
+        if (nextPayload && nextPayload.rows && nextPayload.rows.length) {
+          /* Mesclar rows na payload atual e reaplicar */
+          var merged = JSON.parse(JSON.stringify(w.__bomSkaLastPayload || {}));
+          merged.rows = (merged.rows || []).concat(nextPayload.rows);
+          merged.page = nextPayload.page;
+          merged.counts = nextPayload.counts || merged.counts;
+          if (merged.counts) {
+            merged.counts.totalRows = merged.rows.length;
+            merged.counts.returnedRows = merged.rows.length;
+          }
+          w.__bomSkaLastPayload = merged;
+          btn.parentNode && btn.parentNode.removeChild(btn);
+          return applySkaPayloadToUI(merged);
+        }
+        btn.textContent = 'Sem mais linhas';
+        btn.disabled = true;
+      }).catch(function (err) {
+        btn.disabled = false;
+        btn.textContent = 'Erro ao carregar — tentar novamente';
+        setStatus('Erro ao carregar mais linhas: ' + (err && err.message || err), 'error');
+      });
+    };
+
+    /* Inserir botao no pager ou após a tabela */
+    var pager = byId('tablePager');
+    var tableSection = byId('tableSection') || byId('bomTableWrapper');
+    if (pager && pager.parentNode) {
+      pager.parentNode.insertBefore(btn, pager.nextSibling);
+    } else if (tableSection) {
+      tableSection.appendChild(btn);
+    }
   }
 
   function suggestKnownRootIfApplicable(ctx) {
