@@ -9,51 +9,42 @@
   --warning: #ed6c02;
   --danger: #c62828;
   --radius: 8px;
-  --shadow: 0 2px 8px rgba(0, 40, 80, 0.08);
+  --shadow: 0 2px 8px rgba(0,40,80,.08);
   --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  /* Alturas iniciais das linhas — JS pode sobrescrever via gridTemplateRows */
-  --bom-row-top:  38px;
-  --bom-row-mid:  30%;
-  --bom-row-bot:  1fr;
 }
-
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; height: 100%; font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.45; }
+html, body { margin: 0; padding: 0; height: 100%; font-family: var(--font); background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.4; }
 body { overflow: hidden; }
 .bom-widget-body { height: 100%; overflow: hidden; background: #eceff1; }
 .hidden, .bom-hidden, .ui-hidden { display: none !important; }
 
-/* ── Dashboard root ── */
+/* ── Root ── */
 .bom-root, .bom-dashboard {
   --bom-primary: #1565c0;
-  --bom-good: #2e7d32;
-  --bom-moderate: #f57c00;
-  --bom-bad: #c62828;
-  --bom-bg: #eceff1;
   --bom-card: #ffffff;
   --bom-border: #b0bec5;
   --bom-text: #263238;
   --bom-muted: #607d8b;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  background: var(--bom-bg);
-  color: var(--bom-text);
-  font-size: 13px;
-  line-height: 1.35;
+  --bom-bg: #eceff1;
+  width: 100%; height: 100%; min-height: 0;
+  background: var(--bom-bg); color: var(--bom-text);
   overflow: hidden;
 }
 
-/* ── Grid principal ──
-   Linhas: topbar | filt+graf | ebom+prev
-   Colunas: 60% | 40%
-   JS (LayoutFit.applyPageGrid) pode ajustar gridTemplateRows.
-   gridTemplateColumns NAO deve ser sobrescrito pelo JS.
-   grid-template-areas garante posicao independente de gridTemplateColumns/Rows. */
+/* ══════════════════════════════════════════════
+   GRID PRINCIPAL
+   Zonas: top (linha 1, span 2 colunas)
+          filt (linha 2 col 1) | graf (linha 2 col 2)
+          ebom (linha 3 col 1) | prev (linha 3 col 2)
+
+   gridTemplateColumns: 60/40 fixo — JS NÃO deve sobrescrever.
+   gridTemplateRows: JS (LayoutFit.applyPageGrid) pode ajustar.
+   Tamanho inicial: topbar 38px | meio 30% | resto 1fr
+═══════════════════════════════════════════════ */
 .bom-layout-page {
   display: grid;
   grid-template-columns: 60% 40%;
-  grid-template-rows: var(--bom-row-top) var(--bom-row-mid) var(--bom-row-bot);
+  grid-template-rows: 38px minmax(120px, 30%) minmax(0, 1fr);
   grid-template-areas:
     "top  top"
     "filt graf"
@@ -65,17 +56,66 @@ body { overflow: hidden; }
   overflow: hidden;
 }
 
-.bom-zone-1 { grid-area: top;  min-height: 0; overflow: hidden; }
-.bom-zone-2 { grid-area: filt; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-.bom-zone-3 { grid-area: graf; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-.bom-zone-4 { grid-area: ebom; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-.bom-zone-5 { grid-area: prev; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+/* Zona 1 — Topbar */
+.bom-zone-1 {
+  grid-area: top;
+  min-height: 0;
+  overflow: hidden;
+}
 
-/* Cards */
-.bom-quad,
-.bom-ebom-block,
-.bom-part-preview,
-.bom-chart-panel {
+/* Zona 2 — Filtros + KPIs
+   É uma <section class="bom-quad bom-zone-2">
+   Deve ter scroll interno quando conteúdo exceder a altura */
+.bom-quad.bom-zone-2 {
+  grid-area: filt;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.bom-zone-2-scroll {
+  flex: 1 1 auto;
+  overflow: auto;
+  min-height: 0;
+}
+
+/* Zona 3 — Gráficos
+   É uma <section class="bom-quad bom-zone-3"> */
+.bom-quad.bom-zone-3 {
+  grid-area: graf;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.bom-charts-unified-scroll {
+  flex: 1 1 auto;
+  overflow: auto;
+  min-height: 0;
+}
+
+/* Zona 4 — E-BOM
+   É uma <section class="bom-quad bom-zone-4"> */
+.bom-quad.bom-zone-4 {
+  grid-area: ebom;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Zona 5 — 3D Preview
+   É uma <section class="bom-quad bom-zone-5"> */
+.bom-quad.bom-zone-5 {
+  grid-area: prev;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Cards genéricos */
+.bom-quad, .bom-ebom-block, .bom-part-preview, .bom-chart-panel {
   background: var(--bom-card);
   border: 1px solid var(--bom-border);
   border-radius: 8px;
@@ -90,159 +130,128 @@ body { overflow: hidden; }
   align-items: center;
   gap: 6px;
   padding: 3px 8px;
+  height: 100%;
+  overflow: hidden;
   background: var(--bom-card);
   border: 1px solid var(--bom-border);
   border-radius: 8px;
-  height: 100%;
-  overflow: hidden;
 }
-.bom-topbar-left   { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
-.bom-topbar-center { display: flex; align-items: center; gap: 6px; flex: 1 1 0; justify-content: center; min-width: 0; overflow: hidden; }
-.bom-topbar-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; flex-wrap: nowrap; }
-.bom-topbar-brand { color: var(--bom-primary); font-weight: 700; font-size: .85rem; white-space: nowrap; }
+.bom-topbar-left   { display: flex; align-items: center; gap: 5px; flex: 0 0 auto; }
+.bom-topbar-center { display: flex; align-items: center; gap: 5px; flex: 1 1 0; justify-content: center; min-width: 0; overflow: hidden; }
+.bom-topbar-actions{ display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.bom-topbar-brand  { color: var(--bom-primary); font-weight: 700; font-size: .84rem; white-space: nowrap; }
 .bom-explorer-context-status,
-.bom-topbar-product { color: var(--bom-text); font-size: .76rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
-.bom-source-badge,
-.bom-build-pill,
-.bom-topbar-clock { display: inline-flex; align-items: center; border: 1px solid var(--bom-border); border-radius: 999px; padding: 1px 6px; color: var(--bom-muted); background: #f8fafc; font-size: .65rem; white-space: nowrap; }
+.bom-topbar-product { color: var(--bom-text); font-size: .74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+.bom-source-badge, .bom-build-pill, .bom-topbar-clock {
+  display: inline-flex; align-items: center;
+  border: 1px solid var(--bom-border); border-radius: 999px;
+  padding: 1px 6px; color: var(--bom-muted); background: #f8fafc;
+  font-size: .64rem; white-space: nowrap;
+}
 .bom-topbar-more { font-size: .7rem; color: var(--bom-muted); position: relative; }
 .bom-topbar-more summary { cursor: pointer; white-space: nowrap; list-style: none; }
-.bom-topbar-more[open] { position: static; }
-.bom-topbar-more[open] > div,
-.bom-topbar-more[open] > label,
-.bom-topbar-more[open] > button,
-.bom-topbar-more[open] > textarea {
-  position: absolute;
-  right: 0;
-  top: 100%;
-  z-index: 100;
-  background: #fff;
-  border: 1px solid var(--bom-border);
-  border-radius: 8px;
-  padding: 8px;
-  min-width: 240px;
-  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+.bom-topbar-more[open] {
+  position: absolute; right: 4px; top: 44px; z-index: 100;
+  background: #fff; border: 1px solid var(--bom-border);
+  border-radius: 8px; padding: 8px; min-width: 240px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.14);
 }
 
 /* ── Botões ── */
 .bom-btn, .btn, .btn-primary, .btn-secondary, .bom-btn-primary, .bom-btn-secondary {
-  border: 1px solid var(--bom-border);
-  border-radius: 6px;
-  background: #fff;
-  color: #0b4070;
-  padding: 3px 8px;
-  font-size: .73rem;
-  font-weight: 600;
-  cursor: pointer;
-  line-height: 1.2;
-  white-space: nowrap;
-  flex-shrink: 0;
+  border: 1px solid var(--bom-border); border-radius: 5px;
+  background: #fff; color: #0b4070;
+  padding: 3px 8px; font-size: .72rem; font-weight: 600;
+  cursor: pointer; line-height: 1.2; white-space: nowrap; flex-shrink: 0;
 }
-.bom-btn-primary, .btn-primary { background: #2b67c8; color: #fff; border-color: #2b67c8; }
-.bom-btn-secondary, .btn-secondary { background: #f7fafc; color: #0b4070; }
-.bom-btn:disabled { opacity: .55; cursor: not-allowed; }
-.bom-btn-compact { padding: 2px 6px; font-size: .68rem; }
-.bom-load-more-btn { display: block; width: calc(100% - 12px); margin: 4px 6px; }
-.bom-input, .bom-paste { border: 1px solid var(--bom-border); border-radius: 5px; padding: 4px 6px; font-size: .73rem; width: 100%; background: #fff; color: var(--bom-text); }
+.bom-btn-primary,  .btn-primary  { background: #2b67c8; color: #fff; border-color: #2b67c8; }
+.bom-btn-secondary,.btn-secondary{ background: #f7fafc; color: #0b4070; }
+.bom-btn:disabled { opacity: .5; cursor: not-allowed; }
+.bom-btn-compact  { padding: 2px 6px; font-size: .67rem; }
+.bom-load-more-btn{ display: block; width: calc(100% - 12px); margin: 4px 6px; }
+.bom-input, .bom-paste { border: 1px solid var(--bom-border); border-radius: 5px; padding: 4px 6px; font-size: .72rem; width: 100%; background: #fff; color: var(--bom-text); }
 
-/* ── Zona 2 — Filtros + KPIs (scroll interno) ── */
-.bom-zone-2 > .bom-quad { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.bom-zone-2-scroll { flex: 1 1 auto; overflow: auto; min-height: 0; }
-.bom-sync-banner { margin: 3px 5px; padding: 4px 7px; border-left: 3px solid #2b67c8; background: #f8fbff; color: #24445c; font-size: .7rem; border-radius: 4px; }
-.bom-ska-diagnostics { margin: 0 5px 3px; padding: 3px 6px; background: #f8fafc; border: 1px solid #dbe4ec; border-radius: 4px; font-size: .67rem; color: #36526b; max-height: 44px; overflow: auto; }
+/* ── Zona 2 internals ── */
+.bom-sync-banner { margin: 3px 5px; padding: 3px 7px; border-left: 3px solid #2b67c8; background: #f8fbff; color: #24445c; font-size: .68rem; border-radius: 4px; }
+.bom-ska-diagnostics { margin: 0 5px 3px; padding: 3px 6px; background: #f8fafc; border: 1px solid #dbe4ec; border-radius: 4px; font-size: .65rem; color: #36526b; max-height: 42px; overflow: auto; }
 .bom-filter-bar-quad { display: grid; grid-template-columns: 1fr 1fr 1fr 2fr auto; gap: 3px; padding: 4px 5px; align-items: end; border-bottom: 1px solid #e1e8ef; }
-.bom-filter-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: .62rem; color: #5a6d7f; font-weight: 600; }
-.bom-filter-item select,
-.bom-filter-item input { width: 100%; min-width: 0; padding: 3px 4px; border: 1px solid #d4e0ea; border-radius: 4px; font-size: .68rem; background: #fff; }
-.stat-markers-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 4px 5px; }
+.bom-filter-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: .6rem; color: #5a6d7f; font-weight: 600; }
+.bom-filter-item select, .bom-filter-item input { width: 100%; min-width: 0; padding: 3px 4px; border: 1px solid #d4e0ea; border-radius: 4px; font-size: .67rem; background: #fff; }
+.stat-markers-row { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 3px; padding: 4px 5px; }
 .kpi-card, .bom-dashboard .kpi-card { background: #fff; border: 1px solid #dbe4ec; border-radius: 6px; padding: 5px 7px; text-align: center; border-left: 3px solid var(--bom-primary); }
-.kpi-value, .bom-dashboard .kpi-value { display: block; font-size: 1rem; line-height: 1.1; font-weight: 700; color: var(--bom-text); }
-.kpi-label, .bom-dashboard .kpi-label { display: block; font-size: .6rem; color: var(--bom-muted); margin-top: 2px; }
-.bom-st { margin: 0; padding: 3px 6px; font-size: .7rem; color: #36526b; border-top: 1px solid #e1e8ef; background: #f8fafc; flex-shrink: 0; }
-.bom-st-err, .bom-st-error { color: #a42320; background: #ffebee; }
-.bom-st-ok, .bom-st-success { color: #146b2e; background: #e8f5e9; }
+.kpi-value, .bom-dashboard .kpi-value { display: block; font-size: .95rem; line-height: 1.1; font-weight: 700; color: var(--bom-text); }
+.kpi-label, .bom-dashboard .kpi-label { display: block; font-size: .58rem; color: var(--bom-muted); margin-top: 2px; }
+.bom-st { margin: 0; padding: 3px 6px; font-size: .68rem; color: #36526b; border-top: 1px solid #e1e8ef; background: #f8fafc; flex-shrink: 0; }
+.bom-st-err,.bom-st-error { color: #a42320; background: #ffebee; }
+.bom-st-ok,.bom-st-success { color: #146b2e; background: #e8f5e9; }
 
-/* ── Zona 3 — Gráficos (scroll interno) ── */
-.bom-zone-3 > .bom-quad { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.bom-charts-unified-scroll { flex: 1 1 auto; overflow: auto; min-height: 0; }
-.bom-charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 5px; height: 100%; }
+/* ── Zona 3 internals — Gráficos ── */
+.bom-charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 5px; height: 100%; min-height: 0; }
 .bom-chart-panel { display: flex; flex-direction: column; min-height: 0; background: var(--bom-card); border: 1px solid var(--bom-border); border-radius: 6px; }
-.bom-chart-heading { margin: 4px 5px 2px; text-align: center; font-size: .75rem; color: #263238; font-weight: 600; flex-shrink: 0; }
+.bom-chart-heading { margin: 4px 5px 2px; text-align: center; font-size: .73rem; color: #263238; font-weight: 600; flex-shrink: 0; }
 .bom-chart-canvas-box { flex: 1 1 auto; min-height: 50px; position: relative; overflow: hidden; }
 .bom-chart-canvas-box canvas { width: 100% !important; height: 100% !important; }
-.bom-chart-legend-list { font-size: .63rem; padding: 0 5px 4px; max-height: 34px; overflow: auto; color: var(--bom-muted); flex-shrink: 0; }
+.bom-chart-legend-list { font-size: .62rem; padding: 0 5px 3px; max-height: 32px; overflow: auto; color: var(--bom-muted); flex-shrink: 0; }
 
-/* ── Zona 4 — E-BOM (scroll na tabela) ── */
-.bom-zone-4 > .bom-quad { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.bom-ebom-block { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+/* ── Zona 4 internals — E-BOM ── */
+.bom-ebom-block { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .bom-ebom-head { padding: 5px 8px; border-bottom: 1px solid #e1e8ef; flex-shrink: 0; }
-.bom-ebom-head h2 { margin: 0; font-size: .82rem; color: #123f63; }
-.bom-ebom-meta { margin: 2px 0 0; font-size: .65rem; color: #5a6d7f; }
+.bom-ebom-head h2 { margin: 0; font-size: .8rem; color: #123f63; }
+.bom-ebom-meta { margin: 1px 0 0; font-size: .63rem; color: #5a6d7f; }
 .bom-ebom-list { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
 .bom-table-wrap { flex: 1 1 auto; overflow: auto; min-height: 0; }
-.bom-table, table.bom-table { width: 100%; border-collapse: collapse; font-size: .73rem; color: var(--bom-text); }
+.bom-table, table.bom-table { width: 100%; border-collapse: collapse; font-size: .72rem; color: var(--bom-text); }
 .bom-table th, .bom-table td { border-bottom: 1px solid #edf2f7; padding: 4px 6px; text-align: left; vertical-align: middle; }
 .bom-table thead th, .bom-table th { position: sticky; top: 0; background: #eef3f8; color: #3a5870; z-index: 1; font-weight: 700; }
 .bom-table tbody tr { cursor: pointer; }
 .bom-table tbody tr:hover td { background: #f7fbff; }
 .bom-table tbody tr.is-selected td, .bom-table tbody tr.selected td { background: #e8f2ff; }
-.bom-table-pager { padding: 3px 7px; text-align: center; border-top: 1px solid #e1e8ef; font-size: .68rem; color: #3a5870; flex-shrink: 0; background: #fff; }
+.bom-table-pager { padding: 3px 7px; text-align: center; border-top: 1px solid #e1e8ef; font-size: .67rem; color: #3a5870; flex-shrink: 0; background: #fff; }
 
-/* ── Zona 5 — Preview (scroll no meta) ── */
-.bom-zone-5 > .bom-quad { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+/* ── Zona 5 internals — Preview 3D ── */
 .bom-part-preview, .bom-preview-quad { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; padding: 6px; overflow: hidden; }
-.bom-preview-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: 5px; min-height: 0; }
-.bom-preview-hint { margin: 0; font-size: .73rem; color: #3a5870; flex-shrink: 0; }
-.bom-preview-image { flex: 0 0 auto; min-height: 70px; max-height: 40%; border: 1px dashed #b8c7d6; border-radius: 7px; display: flex; align-items: center; justify-content: center; text-align: center; padding: 6px; background: #fbfdff; overflow: hidden; }
-.bom-preview-placeholder { color: #4a6a83; font-size: .7rem; }
-.bom-preview-meta { flex: 1 1 auto; min-height: 0; font-size: .7rem; color: #24445c; overflow: auto; }
-.bom-preview-meta dl, .bom-preview-dl { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 3px 7px; margin: 0; }
+.bom-preview-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: 5px; min-height: 0; overflow: hidden; }
+.bom-preview-hint { margin: 0; font-size: .7rem; color: #3a5870; flex-shrink: 0; }
+.bom-preview-image { flex: 0 0 auto; min-height: 64px; max-height: 42%; border: 1px dashed #b8c7d6; border-radius: 7px; display: flex; align-items: center; justify-content: center; padding: 6px; background: #fbfdff; overflow: hidden; }
+.bom-preview-placeholder { color: #4a6a83; font-size: .68rem; text-align: center; }
+.bom-preview-meta { flex: 1 1 auto; min-height: 0; font-size: .68rem; color: #24445c; overflow: auto; }
+.bom-preview-meta dl, .bom-preview-dl { display: grid; grid-template-columns: 85px minmax(0,1fr); gap: 3px 6px; margin: 0; }
 .bom-preview-meta dt { font-weight: 700; color: #47657d; }
 .bom-preview-meta dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-.bom-preview-id { font-size: .63rem; color: #38566b; }
+.bom-preview-id { font-size: .62rem; color: #38566b; }
 .bom-maturity-actions { margin-top: 5px; padding: 5px 6px; border: 1px solid #e1e8ef; border-radius: 6px; background: #f8fafc; flex-shrink: 0; }
-.bom-maturity-hint { font-size: .67rem; color: #6b7f90; margin: 3px 0 0; }
+.bom-maturity-hint { font-size: .65rem; color: #6b7f90; margin: 3px 0 0; }
 
 /* ── Badges ── */
-.badge { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: .68rem; font-weight: 600; background: #eceff1; color: #546e7a; }
-.badge-released, .badge.good { background: #e8f5e9; color: var(--success); }
-.badge-in_work, .badge.warn { background: #fff3e0; color: var(--warning); }
-.badge-obsolete, .badge.bad { background: #ffebee; color: var(--danger); }
-.badge-other, .badge.neutral { background: #eef1f4; color: var(--text-muted); }
+.badge { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: .67rem; font-weight: 600; background: #eceff1; color: #546e7a; }
+.badge-released,.badge.good  { background: #e8f5e9; color: var(--success); }
+.badge-in_work,.badge.warn   { background: #fff3e0; color: var(--warning); }
+.badge-obsolete,.badge.bad   { background: #ffebee; color: var(--danger); }
+.badge-other,.badge.neutral  { background: #eef1f4; color: var(--text-muted); }
 
 /* ── Loading ── */
 .loading-overlay, .bom-loading { position: fixed; inset: 0; background: rgba(255,255,255,.72); color: #005686; display: flex; align-items: center; justify-content: center; z-index: 9999; font-weight: 700; }
 .loading-overlay.hidden, .bom-loading.bom-hidden { display: none !important; }
 
-/* ── Splitters — resize entre zonas ──
-   Usando CSS resize em cada zona como overlay.
-   A coluna é fixa no CSS; para resize de coluna o JS do splitter é necessário. */
-.bom-zone-2,
-.bom-zone-3 {
-  resize: vertical;
-  overflow: auto;
-}
-
-/* ── Compact / ultra-compact (classes adicionadas pelo ResizeObserver) ── */
-.bom-compact .bom-topbar-product { max-width: 120px; }
-.bom-compact .bom-source-badge, .bom-compact .bom-topbar-clock { display: none; }
+/* ── Compact (classe adicionada pelo ResizeObserver) ── */
+.bom-compact .bom-source-badge,
+.bom-compact .bom-topbar-clock { display: none; }
 .bom-ultra-compact .bom-topbar-center { display: none; }
 
-/* ── Responsivo: coluna única abaixo de 760px ── */
-@media (max-width: 760px) {
+/* ── Responsivo: coluna única abaixo de 720px ── */
+@media (max-width: 720px) {
   .bom-layout-page {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto minmax(180px,1fr) minmax(140px,auto);
+    grid-template-rows: 38px auto auto minmax(160px,1fr) minmax(120px,auto);
     grid-template-areas: "top" "filt" "graf" "ebom" "prev";
-    overflow: auto;
-    height: auto;
+    overflow: auto; height: auto;
   }
-  .bom-zone-2, .bom-zone-3 { min-height: 140px; resize: none; }
+  .bom-quad.bom-zone-2, .bom-quad.bom-zone-3 { min-height: 130px; }
   .bom-topbar { flex-wrap: wrap; height: auto; }
 }
 
 /* ── Seções legadas (páginas não-widget) ── */
-.app-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; box-shadow: var(--shadow); }
+.app-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
 .app-header h1 { margin: 0; font-size: 1.1rem; font-weight: 600; color: var(--primary); }
 .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
 .main-grid { padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; max-width: 1600px; margin: 0 auto; }
