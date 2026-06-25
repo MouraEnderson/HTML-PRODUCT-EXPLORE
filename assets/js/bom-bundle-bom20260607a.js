@@ -13398,38 +13398,33 @@ var LayoutFit = (function () {
     var page = host.querySelector('.bom-layout-page');
     if (!page) return;
 
-    var hostBox = host.getBoundingClientRect();
-    var avail = Math.max(160, Math.floor(hostBox.top + vp.h - hostBox.top - 2));
+    /* Calcula altura disponivel para o grid */
+    var avail = Math.max(300, vp.h - 4);
     var header = page.querySelector('.bom-zone-1');
-    var headerBtn = header && header.querySelector('#btnImportPaste');
-    var headerH = headerBtn ? headerBtn.offsetHeight + 6 : (header ? header.offsetHeight : 32);
-    headerH = Math.max(28, Math.min(headerH, 40));
-    if (header) {
-      header.style.minHeight = '0';
-      page.style.gridTemplateRows = headerH + 'px auto 1fr';
-    }
+    var headerH = header ? Math.max(34, Math.min(header.offsetHeight || 38, 44)) : 38;
 
-    var bodyH = Math.max(120, avail - headerH - 4);
-    var zone2 = page.querySelector('.bom-zone-2-scroll');
-    var zone3row = page.querySelector('.bom-charts-row-quad');
-    var zone3scroll = page.querySelector('.bom-charts-unified-scroll');
-    var needMid = 72;
-    if (zone2) needMid = Math.max(needMid, zone2.scrollHeight + 6);
-    if (zone3row) needMid = Math.max(needMid, zone3row.offsetHeight + 8);
-    else if (zone3scroll) needMid = Math.max(needMid, zone3scroll.offsetHeight + 8);
-    var midCap = Math.max(88, Math.floor(bodyH * 0.34));
-    var midH = Math.max(68, Math.min(midCap, needMid));
-    var botH = Math.max(80, bodyH - midH - 4);
+    var bodyH = Math.max(200, avail - headerH - 12);
+    /* Linha do meio (filtros+graficos): 30-38% do espaco do corpo */
+    var midH = Math.max(120, Math.min(Math.floor(bodyH * 0.34), Math.floor(bodyH * 0.48)));
+    var botH = Math.max(100, bodyH - midH - 4);
 
-    page.style.display = 'grid';
+    /* Ajusta APENAS gridTemplateRows — nao toca em gridTemplateColumns */
     page.style.height = avail + 'px';
     page.style.maxHeight = avail + 'px';
     page.style.gridTemplateRows = headerH + 'px ' + midH + 'px ' + botH + 'px';
-
-    if (zone3scroll) zone3scroll.scrollTop = 0;
+    /* Garante que grid-template-areas do CSS permanece ativo */
+    page.style.gridTemplateAreas = '"top top" "filt graf" "ebom prev"';
+    /* Garante colunas 60/40 sem override */
+    if (!page.style.gridTemplateColumns || page.style.gridTemplateColumns === '') {
+      page.style.gridTemplateColumns = '60% 40%';
+    }
 
     applyEbom(host, botH);
     applyView3d(host, botH);
+
+    if (typeof ChartsManager !== 'undefined' && ChartsManager.scheduleResize) {
+      try { ChartsManager.scheduleResize(); } catch(e) {}
+    }
   }
 
   function applyEbom(host, rowH) {
