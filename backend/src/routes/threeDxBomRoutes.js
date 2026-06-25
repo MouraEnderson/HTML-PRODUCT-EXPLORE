@@ -7,6 +7,7 @@ import {
   resolveDiagnostic,
   getErrorStatus
 } from '../services/threeDxBomService.js';
+import { resolveStructureRoot, resolveStructureChildren } from '../services/threeDxStructureService.js';
 import { buildInternalErrorResponse } from '../services/threeDxBomNormalizer.js';
 import { getThreeDxConfig } from '../services/threeDxConfig.js';
 import { runUpstreamMatrix } from '../services/threeDxUpstreamMatrix.js';
@@ -41,6 +42,34 @@ router.post('/structure', async (req, res) => {
     if (!result.ok) {
       const code = result.error?.error?.code;
       res.status(result.status || getErrorStatus(code)).json(result.error);
+      return;
+    }
+    res.json(result.data);
+  } catch (_err) {
+    sendInternalError(res);
+  }
+});
+
+router.post('/structure/root', async (req, res) => {
+  try {
+    const config = getThreeDxConfig();
+    const result = await resolveStructureRoot(req.body || {}, config);
+    if (!result.ok) {
+      res.status(result.status || 500).json(result.error);
+      return;
+    }
+    res.json(result.data);
+  } catch (_err) {
+    sendInternalError(res);
+  }
+});
+
+router.post('/structure/children', async (req, res) => {
+  try {
+    const config = getThreeDxConfig();
+    const result = await resolveStructureChildren(req.body || {}, config);
+    if (!result.ok) {
+      res.status(result.status || 500).json(result.error);
       return;
     }
     res.json(result.data);
