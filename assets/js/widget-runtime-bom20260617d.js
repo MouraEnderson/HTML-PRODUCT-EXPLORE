@@ -234,54 +234,29 @@
 
   function startBundle() {
     var q = assetVersionQuery();
-    var vendor = GH + 'assets/vendor/';
-    loadScript(vendor + 'three.min.js' + q, false, function (errThree) {
-      if (errThree) {
-        setBar('Erro ao carregar Three.js local.', 'error');
+    loadScript(GH + 'assets/js/bom-bundle-' + BASE_BUILD + '.js' + q, false, function (err) {
+      if (err) {
+        setBar('Erro ao carregar bundle base.', 'error');
         return;
       }
-      loadScript(vendor + 'GLTFLoader.js' + q, false, function (errGltf) {
-        if (errGltf) {
-          setBar('Erro ao carregar GLTFLoader.', 'error');
+      loadScript(GH + 'assets/js/integration/product-explorer-sync-provider.js' + q, false, function (errSync) {
+        if (errSync) {
+          setBar('Erro ao carregar Product Explorer sync provider.', 'error');
           return;
         }
-        loadScript(vendor + 'OBJLoader.js' + q, true, function () {
-          loadScript(vendor + 'STLLoader.js' + q, true, function () {
-            loadScript(GH + 'assets/js/ui/bom-3d-viewer.js' + q, false, function (errViewer) {
-              if (errViewer) {
-                setBar('Erro ao carregar bom-3d-viewer.', 'error');
+        loadScript(GH + 'assets/js/integration/expand-item-provider.js' + q, true, function () {
+          loadScript(GH + 'assets/js/bom-ska-service-hotfix-20260617d.js' + q, false, function (err3) {
+            if (err3) {
+              setBar('Erro ao carregar BOM hotfix.', 'error');
+              return;
+            }
+            loadScript(GH + 'assets/js/waf3dx-client-bom20260617d.js' + q, false, function (errWaf) {
+              if (errWaf) {
+                setBar('Erro ao carregar WAF3DX client.', 'error');
                 return;
               }
-              loadScript(GH + 'assets/vendor/chart.umd.min.js' + q, true, function () {
-                loadScript(GH + 'assets/js/bom-bundle-' + BASE_BUILD + '.js' + q, false, function (err) {
-                  if (err) {
-                    setBar('Erro ao carregar bundle base.', 'error');
-                    return;
-                  }
-                  loadScript(GH + 'assets/js/integration/product-explorer-sync-provider.js' + q, false, function (errSync) {
-                    if (errSync) {
-                      setBar('Erro ao carregar Product Explorer sync provider.', 'error');
-                      return;
-                    }
-                    loadScript(GH + 'assets/js/integration/expand-item-provider.js' + q, true, function () {
-                      loadScript(GH + 'assets/js/bom-ska-service-hotfix-20260617d.js' + q, false, function (err3) {
-                        if (err3) {
-                          setBar('Erro ao carregar BOM hotfix.', 'error');
-                          return;
-                        }
-                        loadScript(GH + 'assets/js/waf3dx-client-bom20260617d.js' + q, false, function (errWaf) {
-                          if (errWaf) {
-                            setBar('Erro ao carregar WAF3DX client.', 'error');
-                            return;
-                          }
-                          loadScript(GH + 'assets/js/wafdata-probe-bom20260617d.js' + q, true, function () {
-                            loadDebugLegacyScripts(finishBoot);
-                          });
-                        });
-                      });
-                    });
-                  });
-                });
+              loadScript(GH + 'assets/js/wafdata-probe-bom20260617d.js' + q, true, function () {
+                loadDebugLegacyScripts(finishBoot);
               });
             });
           });

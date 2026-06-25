@@ -5,6 +5,7 @@ const root = path.resolve(__dirname, '..');
 const widget = fs.readFileSync(path.join(root, 'widget-v3.html'), 'utf8');
 const buildId = fs.readFileSync(path.join(root, 'assets/js/build-id.js'), 'utf8');
 const hotfix = fs.readFileSync(path.join(root, 'assets/js/bom-ska-service-hotfix-20260617d.js'), 'utf8');
+const runtime = fs.readFileSync(path.join(root, 'assets/js/widget-runtime-bom20260617d.js'), 'utf8');
 
 function assert(condition, message) {
   if (!condition) {
@@ -40,6 +41,11 @@ assert(
 assert(
   !/return tryLoadFromLastGoodContext\(\{\}, err, 'refresh selected-branch falhou'\)/.test(hotfix),
   'selected-branch refresh must not silently fall back to last-good context'
+);
+
+assert(
+  !/three\.min\.js|GLTFLoader\.js|OBJLoader\.js|STLLoader\.js|chart\.umd\.min\.js/.test(runtime),
+  'official runtime boot must not load AMD/UMD vendor libraries before the dashboard is stable'
 );
 
 console.log('PASS official widget flow contract');
