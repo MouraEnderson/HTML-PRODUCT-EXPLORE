@@ -3494,124 +3494,12 @@
   }
 
   function apply3dxProductDashboardLayout() {
-    var page = uiRoot().querySelector && uiRoot().querySelector('.bom-layout-page.bom-3dx-product-dashboard');
-    if (!page) return;
-    var host = uiRoot();
-    var hostH = host && host.clientHeight ? host.clientHeight : window.innerHeight || 640;
-    page.style.gridTemplateAreas = '';
-    page.style.gridTemplateRows = 'auto minmax(0, 1fr)';
-    page.style.gridTemplateColumns = 'minmax(0, 1fr) minmax(280px, 38%)';
-    page.style.height = hostH + 'px';
-    page.style.maxHeight = hostH + 'px';
-    page.style.gap = '4px';
-
-    var zone1 = page.querySelector('.bom-zone-1');
-    var zone2 = page.querySelector('.bom-zone-2');
-    var zone3 = page.querySelector('.bom-zone-3');
-    var zone4 = page.querySelector('.bom-zone-4');
-    var zone5 = page.querySelector('.bom-zone-5');
-
-    function placeZone(el, row, col, extra) {
-      if (!el) return;
-      el.style.gridRow = String(row);
-      el.style.gridColumn = String(col);
-      if (extra) {
-        Object.keys(extra).forEach(function (key) {
-          el.style[key] = extra[key];
-        });
-      }
-    }
-
-    placeZone(zone1, '1', '1 / -1', { zIndex: '3' });
-    placeZone(zone2, '2', '1', { alignSelf: 'start', zIndex: '4', width: '100%', maxWidth: '100%' });
-    placeZone(zone3, '2', '2', { alignSelf: 'start', zIndex: '4', width: '100%', maxWidth: '100%' });
-    placeZone(zone4, '2', '1', {
-      alignSelf: 'stretch',
-      zIndex: '1',
-      minHeight: '0',
-      height: '100%',
-      maxHeight: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      boxSizing: 'border-box'
-    });
-    placeZone(zone5, '2', '2', {
-      alignSelf: 'stretch',
-      zIndex: '1',
-      minHeight: '0',
-      height: '100%',
-      maxHeight: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      boxSizing: 'border-box'
-    });
-
-    if (zone2) {
-      zone2.style.height = 'auto';
-      zone2.style.maxHeight = 'none';
-    }
-
-    var toolsH = zone2 ? zone2.offsetHeight : 64;
-    page.style.setProperty('--bom-tools-offset', toolsH + 'px');
-    if (zone4) zone4.style.paddingTop = toolsH + 'px';
-
-    if (zone3) {
-      zone3.style.height = 'auto';
-      zone3.style.maxHeight = 'none';
-      zone3.style.overflow = 'visible';
-    }
-    var chartsH = zone3 ? zone3.offsetHeight : 168;
-    chartsH = Math.max(148, Math.min(chartsH, Math.floor(hostH * 0.34)));
-    page.style.setProperty('--bom-charts-offset', chartsH + 'px');
-    if (zone5) zone5.style.paddingTop = chartsH + 'px';
-
-    var bodyH = Math.max(200, hostH - (zone1 ? zone1.offsetHeight : 40) - 8);
-    if (zone4) {
-      zone4.style.minHeight = bodyH + 'px';
-      zone4.style.height = bodyH + 'px';
-    }
-    if (zone5) {
-      zone5.style.minHeight = bodyH + 'px';
-      zone5.style.height = bodyH + 'px';
-    }
-
-    var list = zone4 && zone4.querySelector('.bom-ebom-list');
-    var tableWrap = zone4 && zone4.querySelector('.bom-table-wrap');
-    if (list && tableWrap && zone4) {
-      var head = zone4.querySelector('.bom-ebom-head');
-      var pager = zone4.querySelector('.bom-table-pager');
-      var headH = head ? head.offsetHeight : 0;
-      var pagerH = pager ? pager.offsetHeight : 22;
-      var listH = Math.max(160, bodyH - toolsH - headH - 6);
-      list.style.height = listH + 'px';
-      list.style.maxHeight = listH + 'px';
-      tableWrap.style.height = Math.max(120, listH - pagerH) + 'px';
-      tableWrap.style.maxHeight = tableWrap.style.height;
-    }
-
-    var previewBody = zone5 && zone5.querySelector('.bom-preview-body');
-    var previewImage = zone5 && zone5.querySelector('#partPreviewImage');
-    if (previewBody && zone5) {
-      var meta = zone5.querySelector('.bom-preview-meta');
-      var metaH = meta ? meta.offsetHeight : 72;
-      var previewBodyH = Math.max(140, bodyH - chartsH - 8);
-      previewBody.style.height = previewBodyH + 'px';
-      previewBody.style.maxHeight = previewBodyH + 'px';
-      previewBody.style.display = 'flex';
-      previewBody.style.flexDirection = 'column';
-      previewBody.style.minHeight = '0';
-      if (previewImage) {
-        previewImage.style.flex = '1 1 auto';
-        previewImage.style.minHeight = Math.max(100, previewBodyH - metaH - 16) + 'px';
-        previewImage.style.maxHeight = 'none';
-        previewImage.style.height = 'auto';
-      }
-    }
-
+    /* Layout controlado inteiramente pelo CSS (grid-template-areas).
+     * Esta funcao nao reescreve gridTemplateColumns, gridTemplateRows,
+     * nem aplica padding ou height fixo nas zonas.
+     * Apenas dispara resize dos graficos apos qualquer reflow. */
     if (w.ChartsManager && w.ChartsManager.scheduleResize) {
-      try {
-        w.ChartsManager.scheduleResize();
-      } catch (e) {}
+      try { w.ChartsManager.scheduleResize(); } catch (e) {}
     }
   }
 
