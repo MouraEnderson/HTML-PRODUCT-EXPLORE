@@ -92,6 +92,7 @@
   }
 
   function loadLastGoodContext() {
+    if (w.__BOM_ALLOW_LAST_GOOD_CONTEXT__ !== true) return null;
     return parseLastGoodContext(safeStorageGet(LAST_GOOD_CONTEXT_KEY));
   }
 
@@ -2403,7 +2404,7 @@
     if (title.indexOf(KNOWN_ROOT_TITLE_HINT) < 0) return false;
     idEl.value = KNOWN_ROOT_ID;
     setStatus(
-      'Product Explorer não forneceu rootId dseng. Root CJ MESA preenchido em Avançado — clique Testar Root ID.',
+        'Modo wafdata-session: Product Explorer nao forneceu rootId dseng para a estrutura atual. Selecione/expanda a estrutura no Explorer e clique Atualizar estrutura novamente.';
       'info'
     );
     return true;
@@ -2458,9 +2459,9 @@
       opts.ctx ||
       (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.getContext && w.ProductExplorerSyncProvider.getContext()) ||
       {};
-    var manual = s(opts.manualRootId || (byId('explorerObjectId') && byId('explorerObjectId').value));
+    var manual = opts.ignoreManual ? '' : s(opts.manualRootId || (byId('explorerObjectId') && byId('explorerObjectId').value));
     var depth = opts.depth != null ? opts.depth : getDepthFromInput();
-    var saved = loadLastGoodContext();
+    var saved = opts.allowLastGoodFallback === true ? loadLastGoodContext() : null;
     var title = s(ctx.title || ctx.name || ctx.productName || lastSyncTitle);
 
     if (manual && isValidDsengPhysicalId(manual)) {
@@ -2487,7 +2488,7 @@
       };
     }
 
-    var knownRegistry = resolveKnownExplorerRoot(ctx);
+    var knownRegistry = opts.allowKnownRootFallback === true ? resolveKnownExplorerRoot(ctx) : null;
     if (knownRegistry && isValidDsengPhysicalId(knownRegistry.rootId)) {
       return {
         ok: true,
@@ -2517,7 +2518,7 @@
       };
     }
 
-    if (isWafSessionMode() && title.indexOf(KNOWN_ROOT_TITLE_HINT) >= 0) {
+    if (opts.allowKnownRootFallback === true && isWafSessionMode() && title.indexOf(KNOWN_ROOT_TITLE_HINT) >= 0) {
       return {
         ok: true,
         rootId: KNOWN_ROOT_ID,
@@ -2563,7 +2564,7 @@
       };
     }
 
-    if (saved && isValidDsengPhysicalId(saved.rootId)) {
+    if (opts.allowLastGoodFallback === true && saved && isValidDsengPhysicalId(saved.rootId)) {
       return {
         ok: true,
         rootId: saved.rootId,
@@ -2722,6 +2723,7 @@
 
     if (resolved.useResolveSelection) {
       return loadBomViaResolveSelection(opts).catch(function (err) {
+        if (opts.allowLastGoodFallback !== true) return Promise.reject(err);
         return tryLoadFromLastGoodContext(opts, err, 'resolve-selection falhou');
       });
     }
@@ -2738,6 +2740,9 @@
         })
         .then(function (uql) {
           if (!uql.ok) {
+            if (opts.allowLastGoodFallback !== true) {
+              return Promise.reject(new Error(uql.error || 'UQL resolve failed'));
+            }
             return tryLoadFromLastGoodContext(opts, new Error(uql.error || 'UQL resolve failed'), 'UQL falhou');
           }
           var idEl = byId('explorerObjectId');
@@ -2761,6 +2766,7 @@
           });
         })
         .catch(function (err) {
+          if (opts.allowLastGoodFallback !== true) return Promise.reject(err);
           return tryLoadFromLastGoodContext(opts, err, 'UQL resolve exception');
         });
     }
@@ -2778,13 +2784,18 @@
       });
     }
 
-    return tryLoadFromLastGoodContext(opts, null, 'contexto sem rootId').then(function (loaded) {
+    var fallbackAttempt =
+      opts.allowLastGoodFallback === true
+        ? tryLoadFromLastGoodContext(opts, null, 'contexto sem rootId')
+        : Promise.resolve(null);
+    return fallbackAttempt.then(function (loaded) {
       if (loaded) return loaded;
       var msg =
         'Contexto sem rootId dseng válido. Informe Root Physical ID em Avançado ou sincronize com estrutura válida no Product Explorer.';
       renderEmptySkaState('CONTEXT_INVALID', {
         contextMeta: lastContextMeta || resolved.pseNorm || {},
-        preserveGoodState: true,
+        preserveGoodState: false,
+        skipLastGoodRetry: true,
         title: resolved.title,
         statusMessage: msg,
         statusKind: 'error',
@@ -2796,13 +2807,7 @@
 
   function bootLoadFromContextOrPersisted() {
     if (hasRenderableSkaPayload()) return;
-    var saved = loadLastGoodContext();
-    if (saved) {
-      applyLastGoodContextToUi(saved);
-    }
-    loadBomWithRootResolution({ silent: true, preferSaved: !!saved }).catch(function () {
-      if (!saved) renderInitialEmptyState();
-    });
+    renderInitialEmptyState();
   }
 
   function resolveSyncParams(opts) {
@@ -2813,7 +2818,7 @@
     var manual = opts.forceManual ? s(byId('explorerObjectId') && byId('explorerObjectId').value) : '';
     if (!manual && opts.advancedOnly) manual = s(byId('explorerObjectId') && byId('explorerObjectId').value);
     var norm = normalizeCandidateRootId(ctx, manual);
-    if (!norm.ok && !manual) {
+    if (!norm.ok && !manual && opts.allowLastGoodFallback === true) {
       var saved = loadLastGoodContext();
       if (saved && isValidDsengPhysicalId(saved.rootId)) {
         norm = normalizeCandidateRootId({ title: saved.rootTitle }, saved.rootId);
@@ -3018,7 +3023,13 @@
           w.ProductExplorerSyncProvider.getContext &&
           w.ProductExplorerSyncProvider.getContext()) ||
         {};
-      var resolved = resolveRootForBomLoad({ allowResolveSelection: false, ctx: wafCtx });
+      var resolved = resolveRootForBomLoad({
+        allowResolveSelection: false,
+        ctx: wafCtx,
+        ignoreManual: opts.ignoreManual !== false,
+        allowLastGoodFallback: opts.allowLastGoodFallback === true,
+        allowKnownRootFallback: opts.allowKnownRootFallback === true
+      });
       if (resolved.ok && resolved.rootId) {
         return loadBomViaWafSession({
           rootId: resolved.rootId,
@@ -3044,14 +3055,15 @@
         });
       }
       var wafMsg =
-        'Modo wafdata-session: Product Explorer não forneceu rootId dseng. Root CJ MESA preenchido em Avançado — clique Sincronizar novamente.';
-      suggestKnownRootIfApplicable(wafCtx);
+        'Modo wafdata-session: Product Explorer nao forneceu rootId dseng para a estrutura atual. Selecione/expanda a estrutura no Explorer e clique Atualizar estrutura novamente.';
+      if (opts.allowKnownRootFallback === true) suggestKnownRootIfApplicable(wafCtx);
       renderEmptySkaState('SELECTION_NOT_RESOLVED', {
         contextMeta: lastContextMeta,
         statusMessage: wafMsg,
         statusKind: 'error',
         bannerMessage: wafMsg,
-        preserveGoodState: true
+        preserveGoodState: false,
+        skipLastGoodRetry: true
       });
       return Promise.reject(new Error('SELECTION_NOT_RESOLVED'));
     }
@@ -3061,7 +3073,7 @@
     if (syncBtn) syncBtn.disabled = true;
     if (refreshBtn) refreshBtn.disabled = true;
 
-    var manual = s(byId('explorerObjectId') && byId('explorerObjectId').value);
+    var manual = opts.forceManual ? s(byId('explorerObjectId') && byId('explorerObjectId').value) : '';
     var selectionPayload = buildExplorerSelectionPayload(manual);
     var depth = getDepthFromInput();
     lastContextMeta = {
@@ -3143,6 +3155,24 @@
         return applySkaPayloadToUI(payload);
       })
       .catch(function (err) {
+        if (opts.allowLastGoodFallback !== true) {
+          var normalizedNoFallback = normalizeSkaError(err);
+          var codeNoFallback = normalizedNoFallback.code || '';
+          var errPayloadNoFallback = err && err.payload ? err.payload : null;
+          renderEmptySkaState(codeNoFallback === 'SELECTION_NOT_RESOLVED' ? 'SELECTION_NOT_RESOLVED' : 'ERROR', {
+            contextMeta: lastContextMeta,
+            errorCode: codeNoFallback,
+            statusMessage: normalizedNoFallback.message,
+            statusKind: 'error',
+            bannerMessage: normalizedNoFallback.message,
+            preserveGoodState: false,
+            skipLastGoodRetry: true
+          });
+          if (codeNoFallback === 'SELECTION_NOT_RESOLVED') {
+            renderSelectionNotResolved(errPayloadNoFallback, lastContextMeta);
+          }
+          return Promise.reject(err);
+        }
         return tryLoadFromLastGoodContext(opts, err, 'resolve-selection falhou').then(function (loaded) {
           if (loaded) return loaded;
           var normalized = normalizeSkaError(err);
@@ -3198,53 +3228,60 @@
         rootIdUsed: isValidDsengPhysicalId(ctx.rootId) ? ctx.rootId : '',
         validationStatus: isValidDsengPhysicalId(ctx.rootId) ? 'VALID' : 'RESOLVE_PENDING'
       };
-      return loadBomWithRootResolution({ ctx: ctx, silent: opts.silent });
+      return loadBomWithRootResolution({
+        ctx: ctx,
+        silent: opts.silent,
+        ignoreManual: true,
+        allowLastGoodFallback: false,
+        allowKnownRootFallback: false
+      });
     });
   }
 
   function refreshBom() {
     if (isWafSessionMode()) {
-      var manual = s(byId('explorerObjectId') && byId('explorerObjectId').value);
-      if (manual && isValidDsengPhysicalId(manual)) {
-        return loadBomViaWafSession({
-          rootId: manual,
-          depth: getDepthFromInput(),
-          source: 'ADVANCED_MANUAL',
-          title: lastSyncTitle
-        });
-      }
       if (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.refresh) {
         return w.ProductExplorerSyncProvider.refresh('manual-refresh').then(function (ctx) {
           updateExplorerContextStatus(ctx);
-          return loadBomWithRootResolution({ ctx: ctx });
+          return loadBomWithRootResolution({
+            ctx: ctx,
+            ignoreManual: true,
+            allowLastGoodFallback: false,
+            allowKnownRootFallback: false
+          });
         });
       }
-      if (lastSyncRootId && isValidDsengPhysicalId(lastSyncRootId)) {
-        return loadBomViaWafSession({
-          rootId: lastSyncRootId,
-          depth: lastSyncDepth || getDepthFromInput(),
-          source: 'LAST_SYNC',
-          title: lastSyncTitle
-        });
-      }
-      return loadBomWithRootResolution({});
-    }
-    var manual = s(byId('explorerObjectId') && byId('explorerObjectId').value);
-    if (manual && isValidDsengPhysicalId(manual)) {
-      return loadBomViaSkaStructure({ forceManual: true, advancedOnly: true });
+      return loadBomWithRootResolution({
+        ignoreManual: true,
+        allowLastGoodFallback: false,
+        allowKnownRootFallback: false
+      });
     }
     if (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.refresh) {
       return w.ProductExplorerSyncProvider.refresh('manual-refresh').then(function (ctx) {
         updateExplorerContextStatus(ctx);
         if (ctx && ctx.selectionMode === 'selected-branch') {
-          return loadBomViaResolveSelection({ payloadMode: 'selected-branch' }).catch(function (err) {
-            return tryLoadFromLastGoodContext({}, err, 'refresh selected-branch falhou');
+          return loadBomViaResolveSelection({
+            payloadMode: 'selected-branch',
+            ctx: ctx,
+            ignoreManual: true,
+            allowLastGoodFallback: false,
+            allowKnownRootFallback: false
           });
         }
-        return loadBomWithRootResolution({ ctx: ctx });
+        return loadBomWithRootResolution({
+          ctx: ctx,
+          ignoreManual: true,
+          allowLastGoodFallback: false,
+          allowKnownRootFallback: false
+        });
       });
     }
-    return loadBomWithRootResolution({});
+    return loadBomWithRootResolution({
+      ignoreManual: true,
+      allowLastGoodFallback: false,
+      allowKnownRootFallback: false
+    });
   }
 
   w.loadViaExplorerSync = syncWithProductExplorer;

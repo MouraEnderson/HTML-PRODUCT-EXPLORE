@@ -92,18 +92,15 @@ assert.strictEqual(typeof api, 'object', 'Controller must exist in the runtime')
 assert.doesNotThrow(() => api.boot(), 'Controller boot must not fail before a user sync');
 
 const widget = fs.readFileSync('widget-v3.html', 'utf8');
-assert.ok(widget.includes('__bomWafSessionController.boot'), 'Widget must boot the official controller');
-assert.ok(widget.includes('__bomAutoExpandOrchestrator.boot'), 'Widget must boot the auto-context orchestrator');
+assert.ok(
+  widget.includes('assets/js/widget-runtime-bom20260617d.js?v=bom20260617d'),
+  'Widget must boot through the official bom20260617d runtime'
+);
 assert.ok(!widget.includes('App.run();'), 'Widget must not start legacy App.run');
-assert.ok(widget.includes("bom-bundle-' + CANON_BUILD"), 'Canonical build must choose the bundle file');
+assert.ok(!widget.includes("bom-bundle-' + CANON_BUILD"), 'Widget must not choose dynamic bundle builds inline');
 assert.ok(!widget.includes('BOM_BUILD = fromQuery'), 'Query string must not select a bundle build');
-assert.ok(widget.includes('id="autoContextBadge"'), 'Widget must expose the auto-context badge');
-assert.ok(widget.includes('id="autoContextLabel"'), 'Widget must expose the auto-context label');
-assert.ok(widget.includes('id="btnRetryAutoContext"'), 'Widget must expose the retry auto-context button');
-assert.ok(widget.includes('id="skaDepthInput"'), 'Widget must expose the depth input');
-assert.ok(widget.includes('bom-auto-context-detector-bom20260622b.js'), 'Widget must load the smart context detector');
-assert.ok(widget.includes('bom-expandable-object-resolver-bom20260622b.js'), 'Widget must load the expandable object resolver');
-assert.ok(widget.includes('bom-auto-expand-orchestrator-bom20260622b.js'), 'Widget must load the auto-expand orchestrator');
+assert.ok(!widget.includes('bom-auto-context-detector-bom20260622b.js'), 'Widget must not boot auto context from the entrypoint');
+assert.ok(!widget.includes('bom-auto-expand-orchestrator-bom20260622b.js'), 'Widget must not boot auto-expand from the entrypoint');
 
 const bundle = fs.readFileSync('assets/js/bom-bundle.js', 'utf8');
 assert.ok(!bundle.includes('product-explorer-bridge.js'), 'Official bundle must not include DOM bridge');
