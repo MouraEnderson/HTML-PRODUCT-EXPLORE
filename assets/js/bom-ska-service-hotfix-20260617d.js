@@ -2404,17 +2404,9 @@
       el.textContent = 'Contexto detectado';
       el.title = ctx.title;
       el.className = 'bom-explorer-context-status bom-explorer-context-ok';
-    } else if (saved && saved.rootTitle && (ctx.title || ctx.rootId)) {
-      el.textContent = 'Contexto parcial — root salvo disponível';
-      el.title = (ctx.title || ctx.rootId || '') + ' · último root: ' + saved.rootTitle;
-      el.className = 'bom-explorer-context-status bom-explorer-context-warn';
     } else if (ctx.rootId || ctx.title) {
       el.textContent = 'Contexto sem rootId dseng válido';
       el.title = ctx.title || ctx.rootId || '';
-      el.className = 'bom-explorer-context-status bom-explorer-context-warn';
-    } else if (saved && saved.rootTitle) {
-      el.textContent = 'Usando último root salvo';
-      el.title = saved.rootTitle + ' (' + saved.rootId + ')';
       el.className = 'bom-explorer-context-status bom-explorer-context-warn';
     } else if (ctx.path === 'C') {
       el.textContent = 'Contexto indisponível';
@@ -2425,11 +2417,8 @@
       el.className = 'bom-explorer-context-status';
     }
     var adv = byId('explorerObjectId');
+    /* Avancado so recebe rootId se contexto atual tiver ID dseng valido */
     if (adv && ctx.rootId && isValidDsengPhysicalId(ctx.rootId) && !s(adv.value)) adv.value = ctx.rootId;
-    else if (adv && saved && saved.rootId && !s(adv.value)) adv.value = saved.rootId;
-    else if (!isValidDsengPhysicalId(ctx.rootId) && (ctx.title || ctx.name)) {
-      suggestKnownRootIfApplicable(ctx);
-    }
   }
 
   function getDepthFromInput() {
