@@ -6,8 +6,6 @@
   var BUILD = 'bom20260617d';
   var SKA_URL = 'https://bom-resolver.onrender.com/api/3dx/bom/structure';
   var RESOLVE_URL = 'https://bom-resolver.onrender.com/api/3dx/bom/resolve-selection';
-  var STRUCTURE_ROOT_URL = 'https://bom-resolver.onrender.com/api/3dx/bom/structure/root';
-  var STRUCTURE_CHILDREN_URL = 'https://bom-resolver.onrender.com/api/3dx/bom/structure/children';
   var VIZ_URL = 'https://bom-resolver.onrender.com/api/3dx/visualization/resolve';
   var LIFECYCLE_TRANSITIONS_URL = 'https://bom-resolver.onrender.com/api/3dx/lifecycle/transitions';
   var LIFECYCLE_CHANGE_URL = 'https://bom-resolver.onrender.com/api/3dx/lifecycle/change-maturity';
@@ -16,7 +14,7 @@
   var DEFAULT_SPACE_URL = 'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia';
   var WAF_EXPAND_VARIANT = 'official-dseng-v1+sc+csrf';
   var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'waf3dx20260620g';
-  var DEFAULT_DEPTH = 8; /* profundidade real — estruturas industriais tipicas ate 10 niveis */
+  var DEFAULT_DEPTH = 1;
   var SESSION_KEY = '3dx_bom_snapshot_v1';
   var LAST_GOOD_CONTEXT_KEY = 'bomAnalytics:lastGoodContext:bom20260617d';
   var KNOWN_ROOT_ID = '63FC553465A62400699E0792000086AB';
@@ -207,9 +205,24 @@
     return false;
   }
 
-  /** resolveKnownExplorerRoot desativado — nenhum fallback hardcoded por projeto.
-   *  Toda resolucao passa pelo backend /resolve-selection. */
-  function resolveKnownExplorerRoot(_ctx) {
+  function resolveKnownExplorerRoot(ctx) {
+    ctx = ctx || {};
+    if (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.resolveKnownExplorerRoot) {
+      return w.ProductExplorerSyncProvider.resolveKnownExplorerRoot(ctx);
+    }
+    if (isValidDsengPhysicalId(ctx.rootId)) return null;
+    var title = s(ctx.title || ctx.name || ctx.productName);
+    if (title.indexOf(KNOWN_ROOT_TITLE_HINT) >= 0) {
+      return {
+        rootId: KNOWN_ROOT_ID,
+        selectedId: KNOWN_ROOT_ID,
+        physicalId: s(ctx.physicalId),
+        title: title || KNOWN_ROOT_TITLE_HINT,
+        source: 'EXPLORER_CONTEXT_REGISTRY_KNOWN_ROOT',
+        selectionMode: 'known-root-registry',
+        expansionAvailable: true
+      };
+    }
     return null;
   }
 
@@ -1181,15 +1194,7 @@
     }
   }
 
-  function isPayloadPaginated(payload) {
-    return !!(payload && payload.page && payload.page.hasMore);
-  }
-
   function getSkaExpectedTotal(payload) {
-    /* Payload paginado: usa rows retornadas nesta pagina, nao o total completo */
-    if (isPayloadPaginated(payload)) {
-      return Number(payload.rows ? payload.rows.length : 0);
-    }
     return Number(
       payload && payload.counts && payload.counts.totalRows != null
         ? payload.counts.totalRows
@@ -1427,11 +1432,12 @@
     if (dynamicState.loadingNodeIds[parentRef]) return Promise.resolve(w.__bomSkaLastPayload);
     dynamicState.loadingNodeIds[parentRef] = true;
     setStatus('Carregando filhos via dseng: ' + (parentRow.title || parentRef), 'info');
-    return fetchStructureChildren({
-      rootId: w.__bomWafExpandRootId || parentRef,
-      parentReferenceId: parentRef,
+    return fetchBomStructureFromSkaService({
+      rootId: parentRef,
+      depth: 1,
       expandDepth: 1,
-      pageSize: 100
+      includeRoot: false,
+      expandStrategy: 'expand-item'
     })
       .then(function (payload) {
         var rows = mergeChildRows(parentRow, payload);
@@ -1672,7 +1678,6 @@
     clearStateBeforeSkaApply();
     w.__BOM_SKA_EMPTY_STATE__ = false;
     if (!opts.silent) setStatus('Carregando E-BOM via sessão WAFData (dseng expand)…', 'info');
-    w.__bomWafExpandRootId = opts.rootId;
 
     var depth = opts.depth == null ? DEFAULT_DEPTH : opts.depth;
 
@@ -1830,50 +1835,6 @@
     });
   }
 
-  function fetchStructureRoot(opts) {
-    opts = opts || {};
-    return fetch(STRUCTURE_ROOT_URL, {
-      method: 'POST',
-      mode: 'cors',
-      credentials: 'omit',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        rootId: opts.rootId,
-        expandDepth: opts.expandDepth || 1,
-        includeRoot: opts.includeRoot !== false,
-        pageSize: opts.pageSize || 100,
-        cursor: opts.cursor || null
-      })
-    }).then(function (response) {
-      return response.text().then(function (text) {
-        return parseSkaHttpResponse(response, text);
-      });
-    });
-  }
-
-  function fetchStructureChildren(opts) {
-    opts = opts || {};
-    return fetch(STRUCTURE_CHILDREN_URL, {
-      method: 'POST',
-      mode: 'cors',
-      credentials: 'omit',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        rootId: opts.rootId || '',
-        parentReferenceId: opts.parentReferenceId,
-        parentInstanceId: opts.parentInstanceId || '',
-        path: opts.path || [],
-        expandDepth: opts.expandDepth || 1,
-        pageSize: opts.pageSize || 100,
-        cursor: opts.cursor || null
-      })
-    }).then(function (response) {
-      return response.text().then(function (text) {
-        return parseSkaHttpResponse(response, text);
-      });
-    });
-  }
-
   function fetchResolveSelectionFromSkaService(opts) {
     opts = opts || {};
     return fetch(RESOLVE_URL, {
@@ -1986,8 +1947,6 @@
   }
 
   function assertSkaCountIntegrity(payload) {
-    /* Payload paginado: count mismatch e esperado — nao validar */
-    if (isPayloadPaginated(payload)) return true;
     var expected = getSkaExpectedTotal(payload);
     var issues = [];
     var tableCount = document.querySelectorAll('#bomTable tbody tr').length;
@@ -2367,13 +2326,6 @@
     var tableLbl = byId('tableProductLabel');
     if (tableLbl) tableLbl.textContent = rootName;
     updateTablePager(expected);
-    if (isPayloadPaginated(payload)) {
-      var totalKnown = (payload.counts && payload.counts.totalKnownRows) || '?';
-      var pager = byId('tablePager');
-      if (pager) {
-        pager.textContent = expected + ' de ' + totalKnown + ' linhas (parcial)';
-      }
-    }
     renderSkaKpiSummary(payload);
     renderSkaDiagnostics(payload, false);
     updateSyncBanner(payload);
@@ -2409,14 +2361,10 @@
   function applySkaPayloadToUI(payload) {
     var items = prepareSkaRowsForSnapshot(payload);
     var expected = getSkaExpectedTotal(payload);
-    var paginated = isPayloadPaginated(payload);
-
     if (!items.length) {
       return Promise.reject(new Error('SKA BOM Service retornou 0 linhas.'));
     }
-
-    /* Payload nao paginado: validar contagem estrita */
-    if (!paginated && items.length !== expected) {
+    if (items.length !== expected) {
       return Promise.reject(
         new Error('SKA rows (' + items.length + ') != counts.totalRows (' + expected + ').')
       );
@@ -2442,96 +2390,10 @@
       normalizeDynamicBomServiceNodes();
       if (w.App && w.App.refreshUI) w.App.refreshUI();
       if (!finalizeSkaUi(payload)) {
-        /* Para payload paginado, COUNT_MISMATCH e esperado — nao rejeitar */
-        if (!paginated) {
-          return Promise.reject(new Error('COUNT_MISMATCH'));
-        }
-      }
-      if (paginated) {
-        renderLoadMoreIndicator(payload);
+        return Promise.reject(new Error('COUNT_MISMATCH'));
       }
       return payload;
     });
-  }
-
-  function renderLoadMoreIndicator(payload) {
-    var page = payload && payload.page;
-    if (!page || !page.hasMore) return;
-    var totalKnown = (payload.counts && payload.counts.totalKnownRows) || '?';
-    var returned = page.returned || (payload.rows && payload.rows.length) || 0;
-    var nextCursor = page.nextCursor || '';
-    var rootId = (payload.root && payload.root.id) || (payload.scope && payload.scope.rootId) || '';
-
-    /* Mostrar banner informativo de paginacao */
-    var banner = byId('syncBanner');
-    if (banner) {
-      banner.classList.remove('bom-hidden');
-      banner.innerHTML = escapeHtml(
-        'Estrutura parcial: ' + returned + ' de ' + totalKnown + ' linhas carregadas. ' +
-        'Clique em "Carregar mais" para continuar.'
-      );
-      banner.classList.add('bom-banner-info');
-      banner.classList.remove('bom-banner-warn', 'bom-banner-error');
-    }
-
-    /* Adicionar/atualizar botao Carregar mais */
-    var loadMoreId = 'btnLoadMoreRows';
-    var existing = byId(loadMoreId);
-    if (existing) existing.parentNode && existing.parentNode.removeChild(existing);
-
-    var btn = document.createElement('button');
-    btn.id = loadMoreId;
-    btn.className = 'bom-btn bom-btn-secondary bom-load-more-btn';
-    btn.textContent = 'Carregar mais (' + returned + '/' + totalKnown + ')';
-    btn.setAttribute('data-cursor', nextCursor);
-    btn.setAttribute('data-root-id', rootId);
-    btn.onclick = function () {
-      btn.disabled = true;
-      btn.textContent = 'Carregando…';
-      var cursor = btn.getAttribute('data-cursor');
-      var rId = btn.getAttribute('data-root-id');
-      if (!rId || !cursor) {
-        btn.textContent = 'Erro: cursor invalido';
-        return;
-      }
-      w.fetchStructureRoot({
-        rootId: rId,
-        pageSize: 100,
-        cursor: cursor,
-        expandDepth: 1,
-        includeRoot: false
-      }).then(function (nextPayload) {
-        if (nextPayload && nextPayload.rows && nextPayload.rows.length) {
-          /* Mesclar rows na payload atual e reaplicar */
-          var merged = JSON.parse(JSON.stringify(w.__bomSkaLastPayload || {}));
-          merged.rows = (merged.rows || []).concat(nextPayload.rows);
-          merged.page = nextPayload.page;
-          merged.counts = nextPayload.counts || merged.counts;
-          if (merged.counts) {
-            merged.counts.totalRows = merged.rows.length;
-            merged.counts.returnedRows = merged.rows.length;
-          }
-          w.__bomSkaLastPayload = merged;
-          btn.parentNode && btn.parentNode.removeChild(btn);
-          return applySkaPayloadToUI(merged);
-        }
-        btn.textContent = 'Sem mais linhas';
-        btn.disabled = true;
-      }).catch(function (err) {
-        btn.disabled = false;
-        btn.textContent = 'Erro ao carregar — tentar novamente';
-        setStatus('Erro ao carregar mais linhas: ' + (err && err.message || err), 'error');
-      });
-    };
-
-    /* Inserir botao no pager ou após a tabela */
-    var pager = byId('tablePager');
-    var tableSection = byId('tableSection') || byId('bomTableWrapper');
-    if (pager && pager.parentNode) {
-      pager.parentNode.insertBefore(btn, pager.nextSibling);
-    } else if (tableSection) {
-      tableSection.appendChild(btn);
-    }
   }
 
   function suggestKnownRootIfApplicable(ctx) {
@@ -2542,7 +2404,7 @@
     if (title.indexOf(KNOWN_ROOT_TITLE_HINT) < 0) return false;
     idEl.value = KNOWN_ROOT_ID;
     setStatus(
-        'Modo wafdata-session: Product Explorer nao forneceu rootId dseng para a estrutura atual. Selecione/expanda a estrutura no Explorer e clique Atualizar estrutura novamente.',
+        'Modo wafdata-session: Product Explorer nao forneceu rootId dseng para a estrutura atual. Selecione/expanda a estrutura no Explorer e clique Atualizar estrutura novamente.';
       'info'
     );
     return true;
@@ -2557,9 +2419,17 @@
       el.textContent = 'Contexto detectado';
       el.title = ctx.title;
       el.className = 'bom-explorer-context-status bom-explorer-context-ok';
+    } else if (saved && saved.rootTitle && (ctx.title || ctx.rootId)) {
+      el.textContent = 'Contexto parcial — root salvo disponível';
+      el.title = (ctx.title || ctx.rootId || '') + ' · último root: ' + saved.rootTitle;
+      el.className = 'bom-explorer-context-status bom-explorer-context-warn';
     } else if (ctx.rootId || ctx.title) {
       el.textContent = 'Contexto sem rootId dseng válido';
       el.title = ctx.title || ctx.rootId || '';
+      el.className = 'bom-explorer-context-status bom-explorer-context-warn';
+    } else if (saved && saved.rootTitle) {
+      el.textContent = 'Usando último root salvo';
+      el.title = saved.rootTitle + ' (' + saved.rootId + ')';
       el.className = 'bom-explorer-context-status bom-explorer-context-warn';
     } else if (ctx.path === 'C') {
       el.textContent = 'Contexto indisponível';
@@ -2570,8 +2440,11 @@
       el.className = 'bom-explorer-context-status';
     }
     var adv = byId('explorerObjectId');
-    /* Avancado so recebe rootId se contexto atual tiver ID dseng valido */
     if (adv && ctx.rootId && isValidDsengPhysicalId(ctx.rootId) && !s(adv.value)) adv.value = ctx.rootId;
+    else if (adv && saved && saved.rootId && !s(adv.value)) adv.value = saved.rootId;
+    else if (!isValidDsengPhysicalId(ctx.rootId) && (ctx.title || ctx.name)) {
+      suggestKnownRootIfApplicable(ctx);
+    }
   }
 
   function getDepthFromInput() {
@@ -2645,7 +2518,20 @@
       };
     }
 
-    /* allowKnownRootFallback por titulo removido — sem fallback hardcoded por projeto */
+    if (opts.allowKnownRootFallback === true && isWafSessionMode() && title.indexOf(KNOWN_ROOT_TITLE_HINT) >= 0) {
+      return {
+        ok: true,
+        rootId: KNOWN_ROOT_ID,
+        depth: depth,
+        title: title || lastSyncTitle || KNOWN_ROOT_TITLE_HINT,
+        source: 'KNOWN_ROOT_FROM_EXPLORER_TITLE',
+        useResolveSelection: false,
+        knownRootFallback: true,
+        fallbackWarning:
+          'Product Explorer não forneceu rootId dseng — usando CJ MESA conhecido (' + KNOWN_ROOT_ID + ').',
+        saved: saved
+      };
+    }
 
     var pseNorm = normalizeCandidateRootId(ctx, '');
     if (pseNorm.ok) {
@@ -2726,21 +2612,21 @@
 
     clearStateBeforeSkaApply();
     w.__BOM_SKA_EMPTY_STATE__ = false;
-    if (!opts.silent) setStatus('Carregando E-BOM via Render / SKA BOM Service (structure/root)…', 'info');
+    if (!opts.silent) setStatus('Carregando via SKA BOM Service (/structure)…', 'info');
 
-    return fetchStructureRoot({
+    return fetchBomStructureFromSkaService({
       rootId: opts.rootId,
-      expandDepth: opts.expandDepth == null ? (opts.depth == null ? DEFAULT_DEPTH : opts.depth) : opts.expandDepth,
-      includeRoot: opts.includeRoot !== false,
-      pageSize: 100
+      depth: opts.depth == null ? DEFAULT_DEPTH : opts.depth,
+      expandDepth: opts.expandDepth == null ? opts.depth : opts.expandDepth,
+      includeRoot: opts.includeRoot !== false
     })
       .then(function (payload) {
         lastSyncRootId = opts.rootId;
         lastSyncDepth = opts.depth == null ? DEFAULT_DEPTH : opts.depth;
         lastSyncTitle = (payload.root && payload.root.title) || opts.title || '';
         payload.__skaSyncMeta = {
-          source: opts.source || 'STRUCTURE_ROOT',
-          eventType: 'structure-root',
+          source: opts.source || 'STRUCTURE',
+          eventType: opts.source === 'LAST_GOOD_CONTEXT' ? 'last-good-context' : 'structure',
           rootId: opts.rootId,
           depth: opts.depth,
           lastSyncAt: new Date().toISOString(),
@@ -3494,12 +3380,124 @@
   }
 
   function apply3dxProductDashboardLayout() {
-    /* Layout controlado inteiramente pelo CSS (grid-template-areas).
-     * Esta funcao nao reescreve gridTemplateColumns, gridTemplateRows,
-     * nem aplica padding ou height fixo nas zonas.
-     * Apenas dispara resize dos graficos apos qualquer reflow. */
+    var page = uiRoot().querySelector && uiRoot().querySelector('.bom-layout-page.bom-3dx-product-dashboard');
+    if (!page) return;
+    var host = uiRoot();
+    var hostH = host && host.clientHeight ? host.clientHeight : window.innerHeight || 640;
+    page.style.gridTemplateAreas = '';
+    page.style.gridTemplateRows = 'auto minmax(0, 1fr)';
+    page.style.gridTemplateColumns = 'minmax(0, 1fr) minmax(280px, 38%)';
+    page.style.height = hostH + 'px';
+    page.style.maxHeight = hostH + 'px';
+    page.style.gap = '4px';
+
+    var zone1 = page.querySelector('.bom-zone-1');
+    var zone2 = page.querySelector('.bom-zone-2');
+    var zone3 = page.querySelector('.bom-zone-3');
+    var zone4 = page.querySelector('.bom-zone-4');
+    var zone5 = page.querySelector('.bom-zone-5');
+
+    function placeZone(el, row, col, extra) {
+      if (!el) return;
+      el.style.gridRow = String(row);
+      el.style.gridColumn = String(col);
+      if (extra) {
+        Object.keys(extra).forEach(function (key) {
+          el.style[key] = extra[key];
+        });
+      }
+    }
+
+    placeZone(zone1, '1', '1 / -1', { zIndex: '3' });
+    placeZone(zone2, '2', '1', { alignSelf: 'start', zIndex: '4', width: '100%', maxWidth: '100%' });
+    placeZone(zone3, '2', '2', { alignSelf: 'start', zIndex: '4', width: '100%', maxWidth: '100%' });
+    placeZone(zone4, '2', '1', {
+      alignSelf: 'stretch',
+      zIndex: '1',
+      minHeight: '0',
+      height: '100%',
+      maxHeight: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      boxSizing: 'border-box'
+    });
+    placeZone(zone5, '2', '2', {
+      alignSelf: 'stretch',
+      zIndex: '1',
+      minHeight: '0',
+      height: '100%',
+      maxHeight: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      boxSizing: 'border-box'
+    });
+
+    if (zone2) {
+      zone2.style.height = 'auto';
+      zone2.style.maxHeight = 'none';
+    }
+
+    var toolsH = zone2 ? zone2.offsetHeight : 64;
+    page.style.setProperty('--bom-tools-offset', toolsH + 'px');
+    if (zone4) zone4.style.paddingTop = toolsH + 'px';
+
+    if (zone3) {
+      zone3.style.height = 'auto';
+      zone3.style.maxHeight = 'none';
+      zone3.style.overflow = 'visible';
+    }
+    var chartsH = zone3 ? zone3.offsetHeight : 168;
+    chartsH = Math.max(148, Math.min(chartsH, Math.floor(hostH * 0.34)));
+    page.style.setProperty('--bom-charts-offset', chartsH + 'px');
+    if (zone5) zone5.style.paddingTop = chartsH + 'px';
+
+    var bodyH = Math.max(200, hostH - (zone1 ? zone1.offsetHeight : 40) - 8);
+    if (zone4) {
+      zone4.style.minHeight = bodyH + 'px';
+      zone4.style.height = bodyH + 'px';
+    }
+    if (zone5) {
+      zone5.style.minHeight = bodyH + 'px';
+      zone5.style.height = bodyH + 'px';
+    }
+
+    var list = zone4 && zone4.querySelector('.bom-ebom-list');
+    var tableWrap = zone4 && zone4.querySelector('.bom-table-wrap');
+    if (list && tableWrap && zone4) {
+      var head = zone4.querySelector('.bom-ebom-head');
+      var pager = zone4.querySelector('.bom-table-pager');
+      var headH = head ? head.offsetHeight : 0;
+      var pagerH = pager ? pager.offsetHeight : 22;
+      var listH = Math.max(160, bodyH - toolsH - headH - 6);
+      list.style.height = listH + 'px';
+      list.style.maxHeight = listH + 'px';
+      tableWrap.style.height = Math.max(120, listH - pagerH) + 'px';
+      tableWrap.style.maxHeight = tableWrap.style.height;
+    }
+
+    var previewBody = zone5 && zone5.querySelector('.bom-preview-body');
+    var previewImage = zone5 && zone5.querySelector('#partPreviewImage');
+    if (previewBody && zone5) {
+      var meta = zone5.querySelector('.bom-preview-meta');
+      var metaH = meta ? meta.offsetHeight : 72;
+      var previewBodyH = Math.max(140, bodyH - chartsH - 8);
+      previewBody.style.height = previewBodyH + 'px';
+      previewBody.style.maxHeight = previewBodyH + 'px';
+      previewBody.style.display = 'flex';
+      previewBody.style.flexDirection = 'column';
+      previewBody.style.minHeight = '0';
+      if (previewImage) {
+        previewImage.style.flex = '1 1 auto';
+        previewImage.style.minHeight = Math.max(100, previewBodyH - metaH - 16) + 'px';
+        previewImage.style.maxHeight = 'none';
+        previewImage.style.height = 'auto';
+      }
+    }
+
     if (w.ChartsManager && w.ChartsManager.scheduleResize) {
-      try { w.ChartsManager.scheduleResize(); } catch (e) {}
+      try {
+        w.ChartsManager.scheduleResize();
+      } catch (e) {}
     }
   }
 
@@ -3986,9 +3984,13 @@
       }
       setTimeout(bootLoadFromContextOrPersisted, BOOT_CONTEXT_WAIT_MS);
     }, 1500);
-    /* Boot limpo — não carrega lastGoodContext automaticamente.
-     * Usuario deve clicar Sincronizar com Product Explorer. */
-    renderInitialEmptyState();
+    var savedBoot = loadLastGoodContext();
+    if (savedBoot) {
+      applyLastGoodContextToUi(savedBoot);
+      setStatus('Recuperando último root válido salvo…', 'info');
+    } else {
+      renderInitialEmptyState();
+    }
     applyTopbarCompactLabels();
     bindTestRootButton();
     bindCopyContextDiagnosticsButton();
@@ -4012,8 +4014,6 @@
 
   w.__bomSkaServiceInstall = install;
   w.fetchBomStructureFromSkaService = fetchBomStructureFromSkaService;
-  w.fetchStructureRoot = fetchStructureRoot;
-  w.fetchStructureChildren = fetchStructureChildren;
   w.fetchResolveSelectionFromSkaService = fetchResolveSelectionFromSkaService;
   w.mapSkaRowsToImportItems = mapSkaRowsToImportItems;
   w.prepareSkaRowsForSnapshot = prepareSkaRowsForSnapshot;
