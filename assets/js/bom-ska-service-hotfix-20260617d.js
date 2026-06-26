@@ -16,7 +16,7 @@
   var DEFAULT_SPACE_URL = 'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia';
   var WAF_EXPAND_VARIANT = 'official-dseng-v1+sc+csrf';
   var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'waf3dx20260620g';
-  var DEFAULT_DEPTH = 1;
+  var DEFAULT_DEPTH = 8; /* profundidade real — estruturas industriais tipicas ate 10 niveis */
   var SESSION_KEY = '3dx_bom_snapshot_v1';
   var LAST_GOOD_CONTEXT_KEY = 'bomAnalytics:lastGoodContext:bom20260617d';
   var KNOWN_ROOT_ID = '63FC553465A62400699E0792000086AB';
