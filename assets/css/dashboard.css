@@ -43,12 +43,16 @@ body { overflow: hidden; }
 
 .bom-layout-page {
   display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
-  grid-template-rows: 42px minmax(145px, 30%) minmax(0, 1fr);
-  gap: 6px;
+  grid-template-columns: 60% 40%;
+  grid-template-rows: 38px minmax(120px, 30%) minmax(0, 1fr);
+  grid-template-areas:
+    "top  top"
+    "filt graf"
+    "ebom prev";
+  gap: 4px;
+  padding: 4px;
   width: 100%;
   height: 100%;
-  padding: 4px;
   overflow: hidden;
 }
 .bom-zone-1 { grid-column: 1 / -1; grid-row: 1; min-height: 0; }
@@ -214,3 +218,18 @@ tr:hover td { background: #f7fbff; }
   .bom-charts-row { grid-template-columns: 1fr; }
   .bom-filter-bar-quad { grid-template-columns: 1fr 1fr; }
 }
+
+/* grid-area para cada zona */
+.bom-zone-1 { grid-area: top; }
+.bom-zone-2, .bom-quad.bom-zone-2 { grid-area: filt; display: flex; flex-direction: column; min-height: 0; }
+.bom-zone-3, .bom-quad.bom-zone-3 { grid-area: graf; display: flex; flex-direction: column; min-height: 0; }
+.bom-zone-4, .bom-quad.bom-zone-4 { grid-area: ebom; display: flex; flex-direction: column; min-height: 0; }
+.bom-zone-5, .bom-quad.bom-zone-5 { grid-area: prev; display: flex; flex-direction: column; min-height: 0; }
+
+/* pizza CSS conic-gradient — sem dependencia de CDN */
+.cf-pie-quad-holder { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 4px; gap: 8px; }
+.cf-pie-quad { position: relative; width: min(100%, 110px); height: min(100%, 110px); border-radius: 50%; flex-shrink: 0; }
+.cf-pie-hole-quad { position: absolute; inset: 25%; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 700; color: #263238; }
+.cf-pie-legend { flex: 1 1 auto; min-width: 0; font-size: .62rem; color: #546e7a; overflow: hidden; }
+.cf-pie-legend-item { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cf-pie-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
