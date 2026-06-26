@@ -2563,7 +2563,7 @@ var ProductSearchService = (function () {
  * @file integration/product-explorer-bridge.js
  * Ponte de seleção com Product Structure Explorer / widgets 3DDashboard.
  */
-var ProductExplorerBridge = null;
+var ProductExplorerBridge = undefined; /* removido */
 var ThreeDPlayBridge = (function () {
   'use strict';
 
@@ -3424,7 +3424,7 @@ var PhysicalProductService = (function () {
  * @file services/file-import-service.js
  * Importa estrutura Product Explorer via colar (Ctrl+C) ou arquivo opcional.
  */
-var FileImportService = null;
+var FileImportService = undefined; /* removido */
 var BomSnapshot = (function () {
   'use strict';
 
