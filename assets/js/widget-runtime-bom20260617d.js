@@ -5,7 +5,7 @@
   var GH = typeof w.__BOM_GH_BASE__ === 'string' ? w.__BOM_GH_BASE__ : 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
   var BOM_BUILD = w.__BOM_WIDGET_BUILD__ || 'bom20260617d';
   var BASE_BUILD = w.__BOM_BASE_BUILD__ || 'bom20260607a';
-  var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'waf3dx20260620g';
+  var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'refactor20260626a';
 
   w.__BOM_DATA_SOURCE__ = w.__BOM_DATA_SOURCE__ || 'wafdata-session';
   w.__BOM_LOADER_MODE__ = w.__BOM_LOADER_MODE__ || 'wafdata-session';
@@ -245,7 +245,7 @@
           return;
         }
         loadScript(GH + 'assets/js/integration/expand-item-provider.js' + q, true, function () {
-          loadScript(GH + 'assets/js/bom-ska-service-hotfix-20260617d-fixed.js', false, function (err3) {
+          loadScript(GH + 'assets/js/bom-ska-service-hotfix-20260617d.js' + q, false, function (err3) {
             if (err3) {
               setBar('Erro ao carregar BOM hotfix.', 'error');
               return;
