@@ -8,7 +8,19 @@
   <meta http-equiv="Expires" content="0" />
   <title>BOM Analytics</title>
   <link rel="stylesheet" href="assets/css/dashboard.css?v=bom20260617d&c=layout20260626a" />
-  <script type="text/javascript" src="assets/js/widget-runtime-bom20260617d.js?v=bom20260617d&mvp=restore&c=layout20260626a"></script>
+  <script type="text/javascript">
+  /* Boot loader — injeta runtime com cache-bust dinamico para evitar cache do Netvibes */
+  (function() {
+    var BASE = 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
+    var BUILD = 'bom20260617d';
+    var COMMIT = 'layout20260626a';
+    var cb = Date.now();
+    var s = document.createElement('script');
+    s.type = 'text/javascript';
+    s.src = BASE + 'assets/js/widget-runtime-bom20260617d.js?v=' + BUILD + '&mvp=restore&c=' + COMMIT + '&t=' + cb;
+    document.head.appendChild(s);
+  })();
+  </script>
 </head>
 <body></body>
 </html>
