@@ -12628,7 +12628,7 @@ var ChartsManager = (function () {
 
     var slices = filterSlices(labels, values, colors);
     if (!slices.labels.length) slices = emptySlice();
-    var quadCharts = !!document.querySelector('.bom-charts-row-quad');
+    var quadCharts = !!(document.querySelector('.bom-charts-row-quad') || document.querySelector('.bom-charts-row'));
 
     if (typeof Chart === 'undefined') {
       if (quadCharts) {
@@ -12740,7 +12740,7 @@ var ChartsManager = (function () {
       owners = { labels: ['Sem proprietário'], values: [metrics.totalItems || 1] };
     }
 
-    var quadCharts = !!document.querySelector('.bom-charts-row-quad');
+    var quadCharts = !!(document.querySelector('.bom-charts-row-quad') || document.querySelector('.bom-charts-row'));
     var chartOpts = quadCharts ? { hideLegend: true, hideTitle: true } : {};
 
     if (quadCharts) {
