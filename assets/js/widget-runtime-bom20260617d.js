@@ -14,7 +14,7 @@
   w.__BOM_RUNTIME_BUILD__ = BOM_BUILD;
   w.__BOM_BUILD_ID__ = BOM_BUILD;
   w.__BOM_SCRIPT_LOAD_STATUS__ = w.__BOM_SCRIPT_LOAD_STATUS__ || {};
-  w.__BOM_WIDGET_BOOT_STATE__ = w.__BOM_WIDGET_BOOT_STATE__ || { started: false, completed: false, build: null };
+  w.__BOM_WIDGET_BOOT_STATE__ = { started: false, completed: false, build: null };
   w.__BOM_LOADED_SCRIPT_URLS__ = w.__BOM_LOADED_SCRIPT_URLS__ || {};
 
   w.__BOM_RELEASE_MANIFEST__ = {
