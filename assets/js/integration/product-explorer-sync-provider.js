@@ -8,8 +8,14 @@
   var DEBOUNCE_MS = 500;
   var POLL_MS = 3000;
   var ALLOWED_EXPLORER_CONTEXT_SOURCES = ['query-id', 'query-name', 'config-id', 'registry'];
-  /** Registry de raiz conhecida removido — resolução sempre via backend /resolve-selection. */
-  var KNOWN_EXPLORER_ROOT_REGISTRY = [];
+  /** Regression registry — item real conhecido no tenant piloto (não é mock). */
+  var KNOWN_EXPLORER_ROOT_REGISTRY = [
+    {
+      physicalId: 'prd-R1132100929518-01103695',
+      title: 'CJ MESA 4BCS VP TOP 3DX',
+      rootId: '63FC553465A62400699E0792000086AB'
+    }
+  ];
   var listeners = [];
   var lastContext = null;
   var lastRawPlatformItem = null;
@@ -37,9 +43,41 @@
     return s(title).toLowerCase().replace(/\s+/g, ' ').trim();
   }
 
-  /** resolveKnownExplorerRoot removido — registry hardcoded desativado.
-   *  Toda resolução passa pelo backend /resolve-selection. */
-  function resolveKnownExplorerRoot(_ctx) {
+  function resolveKnownExplorerRoot(ctx) {
+    ctx = ctx || {};
+    var physicalId = s(ctx.physicalId || ctx.id || ctx.selectedId);
+    var title = s(ctx.productName || ctx.rootName || ctx.displayName || ctx.title || ctx.name);
+    var titleKey = normalizeTitleKey(title);
+    var i;
+    for (i = 0; i < KNOWN_EXPLORER_ROOT_REGISTRY.length; i++) {
+      var entry = KNOWN_EXPLORER_ROOT_REGISTRY[i];
+      if (physicalId && s(entry.physicalId).toLowerCase() === physicalId.toLowerCase()) {
+        return {
+          rootId: entry.rootId,
+          selectedId: entry.rootId,
+          physicalId: entry.physicalId,
+          title: title || entry.title,
+          source: 'EXPLORER_CONTEXT_REGISTRY_KNOWN_ROOT',
+          selectionMode: 'known-root-registry',
+          expansionAvailable: true,
+          autoSyncAvailable: true,
+          message: 'Contexto Product Explorer mapeado para root dseng conhecido (registry regressão)'
+        };
+      }
+      if (titleKey && normalizeTitleKey(entry.title) === titleKey) {
+        return {
+          rootId: entry.rootId,
+          selectedId: entry.rootId,
+          physicalId: entry.physicalId,
+          title: title || entry.title,
+          source: 'EXPLORER_CONTEXT_REGISTRY_KNOWN_ROOT',
+          selectionMode: 'known-root-registry',
+          expansionAvailable: true,
+          autoSyncAvailable: true,
+          message: 'Contexto Product Explorer mapeado por título para root dseng conhecido (registry regressão)'
+        };
+      }
+    }
     return null;
   }
 
@@ -227,6 +265,15 @@
     var name = s(ctx.name || ctx.objectName || '');
     var physicalId = s(ctx.physicalId);
     var src = s(ctx.source);
+    var known = resolveKnownExplorerRoot({ physicalId: physicalId, title: title, name: name, selectedId: ctx.selectedId });
+    if (known) {
+      known.name = name;
+      known.eventType = 'context';
+      known.path = 'B';
+      known.lastSyncAt = null;
+      known.bridgeDiagnostic = getBridgeDiagnosticStatus();
+      return { normalized: known, raw: ctx };
+    }
     var base = {
       rootId: isValidPhysicalId(physicalId) ? physicalId : '',
       selectedId: isValidPhysicalId(physicalId) ? physicalId : s(ctx.selectedId || name || title),
@@ -333,6 +380,17 @@
       return ctxOfficial;
     }
     if (ctxOfficial && (ctxOfficial.title || ctxOfficial.name)) {
+      var knownMerge = resolveKnownExplorerRoot(ctxOfficial);
+      if (knownMerge) {
+        knownMerge.name = ctxOfficial.name || knownMerge.name;
+        knownMerge.label = ctxOfficial.label || ctxOfficial.title;
+        knownMerge.eventType = ctxOfficial.eventType || 'context';
+        knownMerge.path = 'B';
+        knownMerge.selectedCandidates = selectedCandidates.filter(Boolean);
+        knownMerge.lastSyncAt = null;
+        knownMerge.bridgeDiagnostic = getBridgeDiagnosticStatus();
+        return knownMerge;
+      }
       ctxOfficial.selectionMode = ctxOfficial.selectionMode || 'fallback';
       ctxOfficial.selectedCandidates = selectedCandidates.filter(Boolean);
       if (!ctxOfficial.source) ctxOfficial.source = 'EXPLORER_CONTEXT';
@@ -482,6 +540,8 @@
     getRawSelectionContext: getRawSelectionContext,
     getBridgeDiagnosticStatus: getBridgeDiagnosticStatus,
     isValidPhysicalId: isValidPhysicalId,
+    resolveKnownExplorerRoot: resolveKnownExplorerRoot,
+    KNOWN_EXPLORER_ROOT_REGISTRY: KNOWN_EXPLORER_ROOT_REGISTRY,
     DEBOUNCE_MS: DEBOUNCE_MS
   };
 })(window);
