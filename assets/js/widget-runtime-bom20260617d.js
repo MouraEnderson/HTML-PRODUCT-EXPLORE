@@ -296,7 +296,10 @@
       return;
     }
     if (mode === 'init' && st.started && st.build === BOM_BUILD && !st.completed) {
-      return;
+      /* Boot em progresso ou travado — chamar paint() para garantir DOM visivel
+         e resetar estado para tentar novamente (resolve Loading infinito apos reload) */
+      paint();
+      st.started = false;
     }
     if (mode === 'refresh') {
       st.completed = false;
