@@ -14,7 +14,7 @@
   var DEFAULT_SPACE_URL = 'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia';
   var WAF_EXPAND_VARIANT = 'official-dseng-v1+sc+csrf';
   var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'waf3dx20260620g';
-  var DEFAULT_DEPTH = 1;
+  var DEFAULT_DEPTH = 8;
   var SESSION_KEY = '3dx_bom_snapshot_v1';
   var LAST_GOOD_CONTEXT_KEY = 'bomAnalytics:lastGoodContext:bom20260617d';
   var KNOWN_ROOT_ID = '63FC553465A62400699E0792000086AB';
@@ -208,7 +208,8 @@
   function resolveKnownExplorerRoot(ctx) {
     ctx = ctx || {};
     if (w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.resolveKnownExplorerRoot) {
-      return w.ProductExplorerSyncProvider.resolveKnownExplorerRoot(ctx);
+      var fromProvider = w.ProductExplorerSyncProvider.resolveKnownExplorerRoot(ctx);
+      if (fromProvider) return fromProvider;
     }
     if (isValidDsengPhysicalId(ctx.rootId)) return null;
     var title = s(ctx.title || ctx.name || ctx.productName);
@@ -2404,7 +2405,7 @@
     if (title.indexOf(KNOWN_ROOT_TITLE_HINT) < 0) return false;
     idEl.value = KNOWN_ROOT_ID;
     setStatus(
-        'Modo wafdata-session: Product Explorer nao forneceu rootId dseng para a estrutura atual. Selecione/expanda a estrutura no Explorer e clique Atualizar estrutura novamente.';
+        'Modo wafdata-session: Product Explorer nao forneceu rootId dseng para a estrutura atual. Selecione/expanda a estrutura no Explorer e clique Atualizar estrutura novamente.',
       'info'
     );
     return true;
