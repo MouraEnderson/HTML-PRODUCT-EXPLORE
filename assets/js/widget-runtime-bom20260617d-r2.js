@@ -234,7 +234,7 @@
 
   function startBundle() {
     var q = assetVersionQuery();
-    loadScript(GH + 'assets/js/bom-bundle-' + BASE_BUILD + '.js' + q, false, function (err) {
+    loadScript(GH + 'assets/js/bom-bundle-r2.js', false, function (err) {
       if (err) {
         setBar('Erro ao carregar bundle base.', 'error');
         return;
@@ -245,7 +245,7 @@
           return;
         }
         loadScript(GH + 'assets/js/integration/expand-item-provider.js' + q, true, function () {
-          loadScript(GH + 'assets/js/bom-ska-service-hotfix-20260617d.js' + q, false, function (err3) {
+          loadScript(GH + 'assets/js/bom-ska-service-hotfix-r2.js', false, function (err3) {
             if (err3) {
               setBar('Erro ao carregar BOM hotfix.', 'error');
               return;
