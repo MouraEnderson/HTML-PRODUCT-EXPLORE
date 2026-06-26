@@ -5,7 +5,7 @@
   var GH = typeof w.__BOM_GH_BASE__ === 'string' ? w.__BOM_GH_BASE__ : 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
   var BOM_BUILD = w.__BOM_WIDGET_BUILD__ || 'bom20260617d';
   var BASE_BUILD = w.__BOM_BASE_BUILD__ || 'bom20260607a';
-  var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'layout20260626a';
+  var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'waf3dx20260620g';
 
   w.__BOM_DATA_SOURCE__ = w.__BOM_DATA_SOURCE__ || 'wafdata-session';
   w.__BOM_LOADER_MODE__ = w.__BOM_LOADER_MODE__ || 'wafdata-session';
@@ -256,17 +256,7 @@
                 return;
               }
               loadScript(GH + 'assets/js/wafdata-probe-bom20260617d.js' + q, true, function () {
-                /* Carregar Chart.js lazy (removido do boot critico no b72b25d).
-                   Falha silenciosa: pieChart usa conic-gradient como fallback. */
-                if (typeof w.Chart === 'undefined') {
-                  loadScript(
-                    'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js',
-                    true,
-                    function () { loadDebugLegacyScripts(finishBoot); }
-                  );
-                } else {
-                  loadDebugLegacyScripts(finishBoot);
-                }
+                loadDebugLegacyScripts(finishBoot);
               });
             });
           });
@@ -296,10 +286,7 @@
       return;
     }
     if (mode === 'init' && st.started && st.build === BOM_BUILD && !st.completed) {
-      /* Boot em progresso ou travado — chamar paint() para garantir DOM visivel
-         e resetar estado para tentar novamente (resolve Loading infinito apos reload) */
-      paint();
-      st.started = false;
+      return;
     }
     if (mode === 'refresh') {
       st.completed = false;
