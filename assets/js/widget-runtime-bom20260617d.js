@@ -256,7 +256,17 @@
                 return;
               }
               loadScript(GH + 'assets/js/wafdata-probe-bom20260617d.js' + q, true, function () {
-                loadDebugLegacyScripts(finishBoot);
+                /* Carregar Chart.js lazy (removido do boot critico no b72b25d).
+                   Falha silenciosa: pieChart usa conic-gradient como fallback. */
+                if (typeof w.Chart === 'undefined') {
+                  loadScript(
+                    'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js',
+                    true,
+                    function () { loadDebugLegacyScripts(finishBoot); }
+                  );
+                } else {
+                  loadDebugLegacyScripts(finishBoot);
+                }
               });
             });
           });
