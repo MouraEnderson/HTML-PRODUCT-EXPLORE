@@ -245,7 +245,7 @@
           return;
         }
         loadScript(GH + 'assets/js/integration/expand-item-provider.js' + q, true, function () {
-          loadScript(GH + 'assets/js/bom-ska-service-hotfix-20260617d.js' + q, false, function (err3) {
+          loadScript(GH + 'assets/js/bom-ska-service-hotfix-20260617d-fixed.js', false, function (err3) {
             if (err3) {
               setBar('Erro ao carregar BOM hotfix.', 'error');
               return;
