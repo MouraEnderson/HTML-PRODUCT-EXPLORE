@@ -5,7 +5,7 @@
   var GH = typeof w.__BOM_GH_BASE__ === 'string' ? w.__BOM_GH_BASE__ : 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
   var BOM_BUILD = w.__BOM_WIDGET_BUILD__ || 'bom20260617d';
   var BASE_BUILD = w.__BOM_BASE_BUILD__ || 'bom20260607a';
-  var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'refactor20260626a';
+  var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'refactor20260627a';
 
   w.__BOM_DATA_SOURCE__ = w.__BOM_DATA_SOURCE__ || 'wafdata-session';
   w.__BOM_LOADER_MODE__ = w.__BOM_LOADER_MODE__ || 'wafdata-session';
@@ -14,7 +14,7 @@
   w.__BOM_RUNTIME_BUILD__ = BOM_BUILD;
   w.__BOM_BUILD_ID__ = BOM_BUILD;
   w.__BOM_SCRIPT_LOAD_STATUS__ = w.__BOM_SCRIPT_LOAD_STATUS__ || {};
-  w.__BOM_WIDGET_BOOT_STATE__ = { started: false, completed: false, build: null };
+  w.__BOM_WIDGET_BOOT_STATE__ = { started: false, completed: false, build: null, startedAt: 0 };
   w.__BOM_LOADED_SCRIPT_URLS__ = w.__BOM_LOADED_SCRIPT_URLS__ || {};
 
   w.__BOM_RELEASE_MANIFEST__ = {
@@ -286,13 +286,15 @@
       return;
     }
     if (mode === 'init' && st.started && st.build === BOM_BUILD && !st.completed) {
-      return;
+      if (Date.now() - (st.startedAt || 0) < 30000) return;
+      st.started = false; /* timeout: resetar e tentar de novo */
     }
     if (mode === 'refresh') {
       st.completed = false;
     }
     st.started = true;
     st.build = BOM_BUILD;
+    st.startedAt = Date.now();
     paint();
     setBar('Carregando ' + BOM_BUILD + ' (WAFData session)...', 'info');
     if (st.completed) {
