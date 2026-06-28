@@ -328,12 +328,6 @@
       } else {
         setTimeout(bootWidget, 200);
       }
-    } else if (document.body) {
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function () { executeInit('init'); });
-      } else {
-        executeInit('init');
-      }
     } else {
       setTimeout(bootWidget, 200);
     }
