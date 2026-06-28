@@ -5,7 +5,7 @@
   var GH = typeof w.__BOM_GH_BASE__ === 'string' ? w.__BOM_GH_BASE__ : 'https://mouraenderson.github.io/HTML-PRODUCT-EXPLORE/';
   var BOM_BUILD = w.__BOM_WIDGET_BUILD__ || 'bom20260617d';
   var BASE_BUILD = w.__BOM_BASE_BUILD__ || 'bom20260607a';
-  var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'refactor20260627a';
+  var RELEASE_COMMIT = w.__BOM_RELEASE_COMMIT__ || 'refactor20260628a';
 
   w.__BOM_DATA_SOURCE__ = w.__BOM_DATA_SOURCE__ || 'wafdata-session';
   w.__BOM_LOADER_MODE__ = w.__BOM_LOADER_MODE__ || 'wafdata-session';
@@ -311,10 +311,23 @@
 
   function bootWidget() {
     if (typeof w.widget !== 'undefined' && w.widget) {
-      if (w.widget.addEvent) w.widget.addEvent('onLoad', function () { executeInit('init'); });
-      if (w.widget.addEvent) w.widget.addEvent('onRefresh', function () { executeInit('refresh'); });
-      if (w.widget.body) executeInit('init');
-      else setTimeout(bootWidget, 80);
+      if (w.widget.addEvent) {
+        w.widget.addEvent('onLoad', function () {
+          /* Netvibes onLoad: garantir que widget.body existe antes de inicializar */
+          if (w.widget.body) {
+            executeInit('init');
+          } else {
+            setTimeout(function () { executeInit('init'); }, 200);
+          }
+        });
+        w.widget.addEvent('onRefresh', function () { executeInit('refresh'); });
+      }
+      /* Se widget.body ja existe neste momento, inicializar diretamente */
+      if (w.widget.body) {
+        executeInit('init');
+      } else {
+        setTimeout(bootWidget, 200);
+      }
     } else if (document.body) {
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function () { executeInit('init'); });
@@ -322,7 +335,7 @@
         executeInit('init');
       }
     } else {
-      setTimeout(bootWidget, 80);
+      setTimeout(bootWidget, 200);
     }
   }
 
