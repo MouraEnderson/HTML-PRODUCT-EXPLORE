@@ -2808,6 +2808,19 @@
 
   function bootLoadFromContextOrPersisted() {
     if (hasRenderableSkaPayload()) return;
+    /* Auto-load: se o contexto do PSE ja tem rootId dseng valido, carregar E-BOM */
+    var ctx = w.ProductExplorerSyncProvider && w.ProductExplorerSyncProvider.getContext
+      ? w.ProductExplorerSyncProvider.getContext() : null;
+    if (ctx && ctx.rootId && isValidDsengPhysicalId(ctx.rootId)) {
+      refreshBom();
+      return;
+    }
+    /* Fallback: se suggestKnownRoot preencheu o campo, usar esse ID */
+    var idEl = byId('explorerObjectId');
+    if (idEl && s(idEl.value) && isValidDsengPhysicalId(s(idEl.value))) {
+      refreshBom();
+      return;
+    }
     renderInitialEmptyState();
   }
 
