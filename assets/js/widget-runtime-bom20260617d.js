@@ -342,5 +342,5 @@
     commit: RELEASE_COMMIT
   };
 
-  bootWidget();
+  /* bootWidget() removido — ciclo de vida UWA via widget.addEvent no HTML */
 })(window);
