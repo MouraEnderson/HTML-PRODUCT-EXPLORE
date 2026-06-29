@@ -239,7 +239,8 @@
         setBar('Erro ao carregar bundle base.', 'error');
         return;
       }
-      loadScript(GH + 'assets/js/integration/product-explorer-sync-provider.js' + q, false, function (errSync) {
+      loadScript(GH + 'assets/js/integration/explorer-context.js' + q, true, function () {
+        loadScript(GH + 'assets/js/integration/product-explorer-sync-provider.js' + q, false, function (errSync) {
         if (errSync) {
           setBar('Erro ao carregar Product Explorer sync provider.', 'error');
           return;
@@ -261,6 +262,7 @@
             });
           });
         });
+      });
       });
     });
   }
