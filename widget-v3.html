@@ -2,20 +2,25 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:widget="http://www.netvibes.com/ns/">
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
   <title>BOM Analytics</title>
   <link rel="stylesheet" href="assets/css/dashboard.css?v=bom20260617d" />
+  <script type="text/javascript" src="assets/js/widget-runtime-bom20260617d.js?v=bom20260617d&amp;c=refactor20260628a"></script>
   <script type="text/javascript">
   //<![CDATA[
-  window.__BOM_WIDGET_BOOT_STATE__ = { started: false, completed: false, build: null, startedAt: 0 };
-  window.__BOM_LOADED_SCRIPT_URLS__ = {};
-  window.__BOM_SCRIPT_LOAD_STATUS__ = {};
+  /* Ciclo de vida UWA oficial — widget.addEvent inline conforme documentacao DS */
+  widget.addEvent('onLoad', function () {
+    window.__BOM_WIDGET_BOOT_STATE__ = { started: false, completed: false, build: null, startedAt: 0 };
+    if (typeof window.BomWidgetRuntime !== 'undefined' && window.BomWidgetRuntime.init) {
+      window.BomWidgetRuntime.init('init');
+    }
+  });
+  widget.addEvent('onRefresh', function () {
+    if (typeof window.BomWidgetRuntime !== 'undefined' && window.BomWidgetRuntime.refresh) {
+      window.BomWidgetRuntime.refresh();
+    }
+  });
   //]]>
   </script>
-  <script type="text/javascript" src="assets/js/widget-runtime-bom20260617d.js?v=bom20260617d&amp;mvp=restore&amp;c=refactor20260628a"></script>
 </head>
 <body></body>
 </html>
