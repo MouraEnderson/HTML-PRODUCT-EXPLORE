@@ -1803,14 +1803,51 @@
 
     function tryInvoke(idx) {
       if (idx >= invokeCandidates.length) {
-        return Promise.resolve({
-          ok: false,
-          success: false,
-          verifiedByReread: false,
-          stateBefore: stateBefore,
-          stateAfter: stateBefore,
-          blocker: 'No documented invoke succeeded',
-          nextAction: 'Capture F12 Network on native maturity change and map invoke name/payload'
+        /* Fallback: PATCH direto no EngItem com cestamp — confirmado funcional no tenant */
+        return ensureSpaceUrl().then(function (spaceUrl) {
+          return getCsrf().then(function (csrf) {
+            /* Obter cestamp atual do EngItem */
+            var getUrl = buildEngItemUrl(spaceUrl, id, '');
+            var getHeaders = { Accept: 'application/json', SecurityContext: getSecurityContextValue() };
+            return wafRequest(getUrl, { method: 'GET', type: 'json', headers: getHeaders }).then(function (getRes) {
+              var member = getRes.data && getRes.data.member && getRes.data.member[0];
+              var cestamp = member && member.cestamp;
+              if (!cestamp) {
+                return Promise.resolve({
+                  ok: false, success: false, stateBefore: stateBefore, stateAfter: stateBefore,
+                  blocker: 'cestamp nao encontrado no GET EngItem'
+                });
+              }
+              var patchHeaders = {
+                Accept: 'application/json', 'Content-Type': 'application/json',
+                SecurityContext: getSecurityContextValue()
+              };
+              if (csrf.ok && cachedCsrf && cachedCsrf.value) patchHeaders[cachedCsrf.name] = cachedCsrf.value;
+              var patchBody = JSON.stringify({ cestamp: cestamp, state: targetState });
+              var patchUrl = buildEngItemUrl(spaceUrl, id, '');
+              return wafRequest(patchUrl, {
+                method: 'PATCH', type: 'json', headers: patchHeaders, data: patchBody
+              }).then(function (patchRes) {
+                if (!patchRes.ok && patchRes.status !== 200) {
+                  return Promise.resolve({
+                    ok: false, success: false, stateBefore: stateBefore, stateAfter: stateBefore,
+                    blocker: 'PATCH retornou ' + patchRes.status,
+                    patchResponse: patchRes.data
+                  });
+                }
+                return getMaturity(id).then(function (reread) {
+                  var stateAfter = reread.current || '';
+                  var verified = stateAfter && stateBefore && stateAfter !== stateBefore;
+                  return {
+                    ok: verified, success: verified, changeExecuted: true,
+                    verifiedByReread: verified, stateBefore: stateBefore, stateAfter: stateAfter,
+                    invoke: 'PATCH+cestamp', status: patchRes.status,
+                    error: verified ? '' : 'PATCH executado mas state nao mudou — verificar permissoes'
+                  };
+                });
+              });
+            });
+          });
         });
       }
       var invokeName = invokeCandidates[idx];
