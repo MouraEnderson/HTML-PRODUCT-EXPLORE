@@ -2815,6 +2815,11 @@
       refreshBom();
       return;
     }
+    /* Auto-load prd-R generico: UQL resolve qualquer projeto automaticamente */
+    if (ctx && ctx.physicalId && /^prd-/i.test(s(ctx.physicalId))) {
+      refreshBom();
+      return;
+    }
     /* Fallback: se suggestKnownRoot preencheu o campo, usar esse ID */
     var idEl = byId('explorerObjectId');
     if (idEl && s(idEl.value) && isValidDsengPhysicalId(s(idEl.value))) {
