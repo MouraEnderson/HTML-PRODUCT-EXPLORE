@@ -1823,7 +1823,7 @@
                 SecurityContext: getSecurityContextValue()
               };
               if (csrf.ok && cachedCsrf && cachedCsrf.value) patchHeaders[cachedCsrf.name] = cachedCsrf.value;
-              var patchBody = JSON.stringify({ cestamp: cestamp, state: targetState });
+              var patchBody = JSON.stringify({ cestamp: cestamp, ceStamp: cestamp, state: targetState });
               var patchUrl = buildEngItemUrl(spaceUrl, id, '');
               return wafRequest(patchUrl, {
                 method: 'PATCH', type: 'json', headers: patchHeaders, data: patchBody
