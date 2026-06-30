@@ -1056,8 +1056,7 @@
 
   function bindMaturityAction(active) {
     var btn = byId('btnChangeMaturity');
-    if (!btn || btn.__BOM_MATURITY_BOUND__) return;
-    btn.__BOM_MATURITY_BOUND__ = true;
+    if (!btn) return;
     /* Mapa de transições local — Engineering Definition Maturity Graph */
     var TRANSITION_MAP = {
       'IN_WORK':    [{ label: 'Congelar (Frozen)', to: 'FROZEN', action: 'promote' }],
@@ -1069,14 +1068,20 @@
       'RELEASED':   [{ label: 'Obsoleto', to: 'OBSOLETE', action: 'promote' }],
       'Liberado':   [{ label: 'Obsoleto', to: 'OBSOLETE', action: 'promote' }]
     };
-    btn.addEventListener('click', function () {
-      var current = s(active.activeMaturity || active.activeState || '');
-      var transitions = TRANSITION_MAP[current] || [];
-      openMaturityModal(active, {
-        item: { currentState: current },
-        transitions: transitions
+    /* Atualizar active a cada seleção — sem __BOM_MATURITY_BOUND__ guard */
+    btn.__BOM_MATURITY_ACTIVE__ = active;
+    if (!btn.__BOM_MATURITY_BOUND__) {
+      btn.__BOM_MATURITY_BOUND__ = true;
+      btn.addEventListener('click', function () {
+        var cur = btn.__BOM_MATURITY_ACTIVE__ || active;
+        var current = s(cur.activeMaturity || cur.activeState || '');
+        var transitions = TRANSITION_MAP[current] || [];
+        openMaturityModal(cur, {
+          item: { currentState: current },
+          transitions: transitions
+        });
       });
-    });
+    }
   }
 
   function handleEbomRowSelect(node) {
