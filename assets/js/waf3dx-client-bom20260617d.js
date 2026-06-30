@@ -115,7 +115,12 @@
     return url;
   }
 
-  function ensureSpaceUrl() {
+  
+  function extractTenantId(url) {
+    var m = url.match(/\/([A-Z]\d+)-/i) || url.match(/tenant=([A-Z]\d+)/i);
+    return m ? m[1] : 'R1132100929518';
+  }
+function ensureSpaceUrl() {
     return ensurePlatformContext().then(function () {
       if (typeof w.CompassServices !== 'undefined' && w.CompassServices.ensureWorkingSpaceUrl) {
         return w.CompassServices.ensureWorkingSpaceUrl().then(function (url) {
@@ -1803,49 +1808,38 @@
 
     function tryInvoke(idx) {
       if (idx >= invokeCandidates.length) {
-        /* Fallback: PATCH direto no EngItem com cestamp — confirmado funcional no tenant */
+        /* Endpoint real capturado da UI nativa: /resources/lifecycle/maturity/promote */
         return ensureSpaceUrl().then(function (spaceUrl) {
-          return getCsrf().then(function (csrf) {
-            /* Obter cestamp atual do EngItem */
-            var getUrl = buildEngItemUrl(spaceUrl, id, '');
-            var getHeaders = { Accept: 'application/json', SecurityContext: getSecurityContextValue() };
-            return wafRequest(getUrl, { method: 'GET', type: 'json', headers: getHeaders }).then(function (getRes) {
-              var member = getRes.data && getRes.data.member && getRes.data.member[0];
-              var cestamp = member && member.cestamp;
-              if (!cestamp) {
-                return Promise.resolve({
-                  ok: false, success: false, stateBefore: stateBefore, stateAfter: stateBefore,
-                  blocker: 'cestamp nao encontrado no GET EngItem'
-                });
-              }
-              var patchHeaders = {
-                Accept: 'application/json', 'Content-Type': 'application/json',
-                SecurityContext: getSecurityContextValue()
-              };
-              if (csrf.ok && cachedCsrf && cachedCsrf.value) patchHeaders[cachedCsrf.name] = cachedCsrf.value;
-              var patchBody = JSON.stringify({ cestamp: cestamp, ceStamp: cestamp, state: targetState });
-              var patchUrl = buildEngItemUrl(spaceUrl, id, '');
-              return wafRequest(patchUrl, {
-                method: 'PATCH', type: 'json', headers: patchHeaders, data: patchBody
-              }).then(function (patchRes) {
-                if (!patchRes.ok && patchRes.status !== 200) {
-                  return Promise.resolve({
-                    ok: false, success: false, stateBefore: stateBefore, stateAfter: stateBefore,
-                    blocker: 'PATCH retornou ' + patchRes.status,
-                    patchResponse: patchRes.data
-                  });
-                }
-                return getMaturity(id).then(function (reread) {
-                  var stateAfter = reread.current || '';
-                  var verified = stateAfter && stateBefore && stateAfter !== stateBefore;
-                  return {
-                    ok: verified, success: verified, changeExecuted: true,
-                    verifiedByReread: verified, stateBefore: stateBefore, stateAfter: stateAfter,
-                    invoke: 'PATCH+cestamp', status: patchRes.status,
-                    error: verified ? '' : 'PATCH executado mas state nao mudou — verificar permissoes'
-                  };
-                });
+          var promoteUrl = spaceUrl + '/resources/lifecycle/maturity/promote?tenant=' + extractTenantId(spaceUrl);
+          var promoteHeaders = {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            SecurityContext: getSecurityContextValue()
+          };
+          var promoteBody = JSON.stringify({
+            data: [{ physicalid: id, tostate: targetState, fromstate: stateBefore }],
+            metrics: { UXName: 'Maturity', client_app_domain: '3DEXPERIENCE 3DDashboard', client_app_name: 'ENOLCMI_AP' },
+            notificationTimeout: 3600
+          });
+          return wafRequest(promoteUrl, {
+            method: 'POST', type: 'json', headers: promoteHeaders, data: promoteBody
+          }).then(function (promoteRes) {
+            if (!promoteRes.ok && promoteRes.status !== 200) {
+              return Promise.resolve({
+                ok: false, success: false, stateBefore: stateBefore, stateAfter: stateBefore,
+                blocker: 'promote retornou ' + promoteRes.status,
+                promoteResponse: promoteRes.data
               });
+            }
+            return getMaturity(id).then(function (reread) {
+              var stateAfter = reread.current || '';
+              var verified = stateAfter && stateBefore && stateAfter !== stateBefore;
+              return {
+                ok: verified, success: verified, changeExecuted: true,
+                verifiedByReread: verified, stateBefore: stateBefore, stateAfter: stateAfter,
+                invoke: 'lifecycle/maturity/promote', status: promoteRes.status,
+                error: verified ? '' : 'promote executado mas state nao mudou'
+              };
             });
           });
         });
