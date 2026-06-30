@@ -623,7 +623,13 @@
   function renderEbomSidePanel(node, active, refs) {
     if (!refs || !refs.metaEl) return;
     active = active || buildActiveEbomRow(node, findSkaRowForNode(node));
+    /* Thumbnail: ícone por tipo + tentativa de thumbnail real do 3DSpace */
+    var typeIcon = (active.activeType || '').indexOf('ssembl') > -1
+      ? '<svg viewBox="0 0 48 48" width="64" height="64" style="fill:#1565c0"><rect x="6" y="18" width="14" height="14" rx="2" opacity=".7"/><rect x="16" y="8" width="14" height="14" rx="2" opacity=".85"/><rect x="26" y="18" width="14" height="14" rx="2"/><rect x="16" y="28" width="14" height="14" rx="2" opacity=".6"/></svg>'
+      : '<svg viewBox="0 0 48 48" width="64" height="64" style="fill:#2e7d32"><path d="M24 4L42 14v20L24 44 6 34V14z" opacity=".8"/><path d="M24 4L42 14 24 24 6 14z" opacity=".5" fill="#fff"/></svg>';
     refs.metaEl.innerHTML =
+      '<div class="bom-preview-thumb">' + typeIcon +
+      '<span class="bom-preview-type-label">' + escapeHtml(active.activeType || 'Item') + '</span></div>' +
       '<dl class="bom-preview-dl">' +
       '<dt>Título</dt><dd>' +
       escapeHtml(active.activeTitle || '—') +
