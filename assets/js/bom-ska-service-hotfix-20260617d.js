@@ -1080,23 +1080,24 @@
     var btn = byId('btnChangeMaturity');
     if (!btn || btn.__BOM_MATURITY_BOUND__) return;
     btn.__BOM_MATURITY_BOUND__ = true;
+    /* Mapa de transições local — Engineering Definition Maturity Graph */
+    var TRANSITION_MAP = {
+      'IN_WORK':    [{ label: 'Congelar (Frozen)', to: 'FROZEN', action: 'promote' }],
+      'Em Trabalho':[{ label: 'Congelar (Frozen)', to: 'FROZEN', action: 'promote' }],
+      'FROZEN':     [{ label: 'Liberar (Released)', to: 'RELEASED', action: 'promote' },
+                     { label: 'Devolver (In Work)', to: 'IN_WORK', action: 'demote' }],
+      'Congelado':  [{ label: 'Liberar (Released)', to: 'RELEASED', action: 'promote' },
+                     { label: 'Devolver (In Work)', to: 'IN_WORK', action: 'demote' }],
+      'RELEASED':   [{ label: 'Obsoleto', to: 'OBSOLETE', action: 'promote' }],
+      'Liberado':   [{ label: 'Obsoleto', to: 'OBSOLETE', action: 'promote' }]
+    };
     btn.addEventListener('click', function () {
-      postJson(LIFECYCLE_TRANSITIONS_URL, {
-        referenceId: active.activeReferenceId,
-        physicalId: active.activePhysicalId,
-        currentState: active.activeMaturity || active.activeState,
-        type: active.activeType,
-        mode: 'dseng-official'
-      })
-        .then(function (result) {
-          openMaturityModal(active, result.data || {});
-        })
-        .catch(function () {
-          openMaturityModal(active, {
-            code: 'LIFECYCLE_REQUEST_FAILED',
-            item: { currentState: active.activeMaturity || active.activeState }
-          });
-        });
+      var current = s(active.activeMaturity || active.activeState || '');
+      var transitions = TRANSITION_MAP[current] || [];
+      openMaturityModal(active, {
+        item: { currentState: current },
+        transitions: transitions
+      });
     });
   }
 
