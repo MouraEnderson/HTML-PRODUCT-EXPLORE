@@ -844,33 +844,11 @@
   }
 
   function loadLifecycleForRowWaf(active) {
-    if (!active || !active.activeReferenceId || !w.__waf3dxClient) return;
-    var reqId = ++activeLifecycleRequestId;
-    updateMaturityHint('Consultando maturidade via sessão WAFData…', 'ok');
-    w.__waf3dxClient
-      .getAllowedMaturityTransitions(active.activeReferenceId)
-      .then(function (data) {
-        if (reqId !== activeLifecycleRequestId) return;
-        w.__bomActiveLifecycleData = {
-          ok: data.transitionsLoaded,
-          transitions: (data.transitions || []).map(function (state, idx) {
-            return { id: 't' + idx, label: state, to: state, action: 'promote' };
-          }),
-          item: { currentState: data.current || active.activeMaturity }
-        };
-        if (!data.transitionsLoaded) {
-          updateMaturityHint(data.recommendation || formatMaturityBlockHint({ code: 'LIFECYCLE_TRANSITIONS_UNAVAILABLE' }, active), 'warn');
-          setMaturityButtonBlocked(true);
-          return;
-        }
-        setMaturityButtonBlocked(false);
-        updateMaturityHint(data.transitions.length + ' transição(ões) via sessão WAFData.', 'ok');
-      })
-      .catch(function () {
-        if (reqId !== activeLifecycleRequestId) return;
-        updateMaturityHint('Falha ao consultar maturidade via WAFData.', 'err');
-        setMaturityButtonBlocked(true);
-      });
+    if (!active || !active.activeReferenceId) return;
+    /* Transições são locais (TRANSITION_MAP no bindMaturityAction) — não chamar API GetNextStates */
+    var current = s(active.activeMaturity || active.activeState || '');
+    setMaturityButtonBlocked(false);
+    updateMaturityHint('Estado: ' + (current || '—') + ' · clique Alterar maturidade para ver transições.', 'ok');
   }
 
   function loadLifecycleForRow(active) {
