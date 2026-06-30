@@ -3660,8 +3660,8 @@
     }
     var depthEl = byId('skaDepthInput');
     if (depthEl) {
-      depthEl.max = '3';
-      if (!s(depthEl.value)) depthEl.value = String(DEFAULT_DEPTH);
+      depthEl.max = '20';
+      depthEl.value = String(DEFAULT_DEPTH);
     }
     var banner = byId('syncBanner');
     if (banner && !w.__bomSkaLastPayload) {
