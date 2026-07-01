@@ -623,47 +623,25 @@
   function renderEbomSidePanel(node, active, refs) {
     if (!refs || !refs.metaEl) return;
     active = active || buildActiveEbomRow(node, findSkaRowForNode(node));
-    /* Thumbnail: ícone por tipo + tentativa de thumbnail real do 3DSpace */
-    var typeIcon = (active.activeType || '').indexOf('ssembl') > -1
-      ? '<svg viewBox="0 0 48 48" width="64" height="64" style="fill:#1565c0"><rect x="6" y="18" width="14" height="14" rx="2" opacity=".7"/><rect x="16" y="8" width="14" height="14" rx="2" opacity=".85"/><rect x="26" y="18" width="14" height="14" rx="2"/><rect x="16" y="28" width="14" height="14" rx="2" opacity=".6"/></svg>'
-      : '<svg viewBox="0 0 48 48" width="64" height="64" style="fill:#2e7d32"><path d="M24 4L42 14v20L24 44 6 34V14z" opacity=".8"/><path d="M24 4L42 14 24 24 6 14z" opacity=".5" fill="#fff"/></svg>';
     refs.metaEl.innerHTML =
-      '<div class="bom-preview-thumb">' + typeIcon +
-      '<span class="bom-preview-type-label">' + escapeHtml(active.activeType || 'Item') + '</span></div>' +
-      '<dl class="bom-preview-dl">' +
-      '<dt>Título</dt><dd>' +
-      escapeHtml(active.activeTitle || '—') +
-      '</dd>' +
-      '<dt>Descrição</dt><dd>' +
-      escapeHtml(active.activeDescription || '—') +
-      '</dd>' +
-      '<dt>Revisão</dt><dd>' +
-      escapeHtml(active.activeRevision || '—') +
-      '</dd>' +
-      '<dt>Proprietário</dt><dd>' +
-      escapeHtml(ownerLabel(node)) +
-      '</dd>' +
-      '<dt>Maturidade</dt><dd>' +
-      escapeHtml(active.activeMaturity || '—') +
-      '</dd>' +
-      '<dt>Estado</dt><dd>' +
-      escapeHtml(active.activeState || '—') +
-      '</dd>' +
-      '<dt>Reference ID</dt><dd class="bom-preview-id">' +
-      escapeHtml(active.activeReferenceId || '—') +
-      '</dd>' +
-      '<dt>Instance ID</dt><dd class="bom-preview-id">' +
-      escapeHtml(active.activeInstanceId || '—') +
-      '</dd>' +
-      '<dt>Path</dt><dd class="bom-preview-id">' +
-      escapeHtml((active.activePath || []).join(' > ') || '—') +
-      '</dd>' +
-      '</dl>' +
-      '<div class="bom-maturity-actions" id="bomMaturityActions">' +
+      '<div class="bom-preview-actions">' +
       '<button type="button" class="bom-btn bom-btn-secondary bom-btn-compact" id="btnChangeMaturity">Alterar maturidade</button>' +
-      '<p class="bom-maturity-hint" id="bomMaturityHint"></p>' +
-      '</div>';
+      '<button type="button" class="bom-btn bom-btn-primary bom-btn-compact" id="btnView3D">Visualização 3D</button>' +
+      '</div>' +
+      '<div class="bom-3d-viewer-container" id="bom3dViewerContainer"></div>' +
+      '<dl class="bom-preview-dl">' +
+      '<dt>Título</dt><dd>' + escapeHtml(active.activeTitle || '—') + '</dd>' +
+      '<dt>Descrição</dt><dd>' + escapeHtml(active.activeDescription || '—') + '</dd>' +
+      '<dt>Revisão</dt><dd>' + escapeHtml(active.activeRevision || '—') + '</dd>' +
+      '<dt>Proprietário</dt><dd>' + escapeHtml(ownerLabel(node)) + '</dd>' +
+      '<dt>Maturidade</dt><dd>' + escapeHtml(active.activeMaturity || '—') + '</dd>' +
+      '<dt>Estado</dt><dd>' + escapeHtml(active.activeState || '—') + '</dd>' +
+      '<dt>Reference ID</dt><dd class="bom-preview-id">' + escapeHtml(active.activeReferenceId || '—') + '</dd>' +
+      '<dt>Instance ID</dt><dd class="bom-preview-id">' + escapeHtml(active.activeInstanceId || '—') + '</dd>' +
+      '</dl>' +
+      '<p class="bom-maturity-hint" id="bomMaturityHint"></p>';
     bindMaturityAction(active);
+    bind3DViewerAction(active);
   }
 
   function postJson(url, body) {
@@ -1056,6 +1034,62 @@
           .catch(function () {
             if (statusEl) statusEl.textContent = 'Falha na chamada de lifecycle.';
           });
+      });
+    }
+  }
+
+  function bind3DViewerAction(active) {
+    var btn = byId('btnView3D');
+    if (!btn) return;
+    btn.__BOM_3D_ACTIVE__ = active;
+    if (!btn.__BOM_3D_BOUND__) {
+      btn.__BOM_3D_BOUND__ = true;
+      btn.addEventListener('click', function () {
+        var cur = btn.__BOM_3D_ACTIVE__ || active;
+        var container = byId('bom3dViewerContainer');
+        if (!container) return;
+        var physId = s(cur.activeReferenceId || cur.activePhysicalId || '');
+        if (!physId) {
+          container.innerHTML = '<p class="bom-3d-msg">Selecione um item com ID válido.</p>';
+          return;
+        }
+        container.innerHTML = '<p class="bom-3d-msg">Carregando viewer 3D…</p>';
+        container.style.minHeight = '200px';
+        if (typeof w.require === 'function') {
+          w.require(['DS/3DPlaySupport/Loader'], function (Loader) {
+            container.innerHTML = '';
+            var asset = {
+              provider: 'EV6',
+              type: 'VPMReference',
+              objectId: physId,
+              tenant: 'R1132100929518'
+            };
+            try {
+              Loader(
+                { asset: asset },
+                container,
+                null,
+                function (Experience, processedAsset) {
+                  try {
+                    var viewer = new Experience(container, processedAsset);
+                  } catch (e2) {
+                    container.innerHTML = '<p class="bom-3d-msg">Viewer inicializou mas geometria não renderizou: ' + escapeHtml(e2.message) + '</p>';
+                  }
+                },
+                function (err) {
+                  container.innerHTML = '<p class="bom-3d-msg">Erro ao carregar viewer: ' + escapeHtml(String(err)) + '</p>';
+                },
+                { tenant: 'R1132100929518' }
+              );
+            } catch (e) {
+              container.innerHTML = '<p class="bom-3d-msg">Loader falhou: ' + escapeHtml(e.message) + '</p>';
+            }
+          }, function () {
+            container.innerHTML = '<p class="bom-3d-msg">Módulo DS/3DPlaySupport/Loader não disponível.</p>';
+          });
+        } else {
+          container.innerHTML = '<p class="bom-3d-msg">AMD require não disponível neste contexto.</p>';
+        }
       });
     }
   }
