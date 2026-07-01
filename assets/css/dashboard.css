@@ -312,19 +312,39 @@ tr:hover td { background: #f7fbff; }
   min-height: 18px;
 }
 
-/* Thumbnail na zona 5 */
-.bom-preview-thumb {
+/* Zona 5 — ações no topo + viewer 3D + detalhes */
+.bom-preview-actions {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 0 4px;
+  gap: 6px;
+  padding: 6px 0;
   border-bottom: 1px solid #e0e0e0;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
 }
-.bom-preview-type-label {
+.bom-preview-actions .bom-btn {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 11px;
-  color: #78909c;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  padding: 5px 8px;
+  white-space: nowrap;
+}
+.bom-3d-viewer-container {
+  width: 100%;
+  min-height: 0;
+  background: #1a1a1a;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  overflow: hidden;
+  position: relative;
+}
+.bom-3d-viewer-container:empty {
+  display: none;
+}
+.bom-3d-msg {
+  color: #90a4ae;
+  font-size: 11px;
+  text-align: center;
+  padding: 16px 8px;
+  margin: 0;
 }
