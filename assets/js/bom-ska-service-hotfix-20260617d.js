@@ -628,7 +628,7 @@
       '<button type="button" class="bom-btn bom-btn-secondary bom-btn-compact" id="btnChangeMaturity">Alterar maturidade</button>' +
       '<button type="button" class="bom-btn bom-btn-primary bom-btn-compact" id="btnView3D">Visualização 3D</button>' +
       '</div>' +
-      '<div class="bom-3d-viewer-container" id="bom3dViewerContainer"></div>' +
+      
       '<dl class="bom-preview-dl">' +
       '<dt>Título</dt><dd>' + escapeHtml(active.activeTitle || '—') + '</dd>' +
       '<dt>Descrição</dt><dd>' + escapeHtml(active.activeDescription || '—') + '</dd>' +
@@ -1046,55 +1046,14 @@
       btn.__BOM_3D_BOUND__ = true;
       btn.addEventListener('click', function () {
         var cur = btn.__BOM_3D_ACTIVE__ || active;
-        var container = byId('bom3dViewerContainer');
-        if (!container) return;
         var physId = s(cur.activeReferenceId || cur.activePhysicalId || '');
-        if (!physId) {
-          container.innerHTML = '<p class="bom-3d-msg">Selecione um item com ID válido.</p>';
-          return;
-        }
-        container.innerHTML = '<p class="bom-3d-msg">Carregando viewer 3D…</p>';
-        container.style.minHeight = '200px';
-        /* AMD require: tentar widget → parent → top (3DPlay está no frame pai) */
-        var amdRequire = (typeof w.require === 'function' && w.require) ||
-          (w.parent && typeof w.parent.require === 'function' && w.parent.require) ||
-          (w.top && typeof w.top.require === 'function' && w.top.require) ||
-          null;
-        if (amdRequire) {
-          amdRequire(['DS/3DPlaySupport/Loader'], function (Loader) {
-            container.innerHTML = '';
-            var asset = {
-              provider: 'EV6',
-              type: 'VPMReference',
-              objectId: physId,
-              tenant: 'R1132100929518'
-            };
-            try {
-              Loader(
-                { asset: asset },
-                container,
-                null,
-                function (Experience, processedAsset) {
-                  try {
-                    var viewer = new Experience(container, processedAsset);
-                  } catch (e2) {
-                    container.innerHTML = '<p class="bom-3d-msg">Viewer inicializou mas geometria não renderizou: ' + escapeHtml(e2.message) + '</p>';
-                  }
-                },
-                function (err) {
-                  container.innerHTML = '<p class="bom-3d-msg">Erro ao carregar viewer: ' + escapeHtml(String(err)) + '</p>';
-                },
-                { tenant: 'R1132100929518' }
-              );
-            } catch (e) {
-              container.innerHTML = '<p class="bom-3d-msg">Loader falhou: ' + escapeHtml(e.message) + '</p>';
-            }
-          }, function () {
-            container.innerHTML = '<p class="bom-3d-msg">Módulo DS/3DPlaySupport/Loader não disponível.</p>';
-          });
-        } else {
-          container.innerHTML = '<p class="bom-3d-msg">AMD require não disponível. Recarregue a página.</p>';
-        }
+        if (!physId) { alert('Selecione um item com ID válido.'); return; }
+        /* Abrir janela Information nativa do 3DEXPERIENCE com 3DPlay */
+        var spaceUrl = w.__BOM_3DSPACE_URL__ || 'https://r1132100929518-us1-space.3dexperience.3ds.com/enovia';
+        var infoUrl = spaceUrl + '/common/emxNavigator.jsp?objectId=' + encodeURIComponent(physId) +
+          '&emxSuiteDirectory=common&suiteKey=Framework&StringResourceFileId=emxFrameworkStringResource' +
+          '&SuiteDirectory=common&mode=content&header=true';
+        window.open(infoUrl, 'bom3dviewer', 'width=900,height=700,resizable=yes,scrollbars=yes');
       });
     }
   }
