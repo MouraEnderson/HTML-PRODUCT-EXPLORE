@@ -348,3 +348,6 @@ tr:hover td { background: #f7fbff; }
   padding: 16px 8px;
   margin: 0;
 }
+
+/* Esconder placeholders legados do bundle na zona 5 */
+.bom-3dplay-empty, .bom-preview-placeholder { display: none !important; }
