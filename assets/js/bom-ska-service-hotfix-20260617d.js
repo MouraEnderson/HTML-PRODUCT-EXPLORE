@@ -1055,8 +1055,13 @@
         }
         container.innerHTML = '<p class="bom-3d-msg">Carregando viewer 3D…</p>';
         container.style.minHeight = '200px';
-        if (typeof w.require === 'function') {
-          w.require(['DS/3DPlaySupport/Loader'], function (Loader) {
+        /* AMD require: tentar widget → parent → top (3DPlay está no frame pai) */
+        var amdRequire = (typeof w.require === 'function' && w.require) ||
+          (w.parent && typeof w.parent.require === 'function' && w.parent.require) ||
+          (w.top && typeof w.top.require === 'function' && w.top.require) ||
+          null;
+        if (amdRequire) {
+          amdRequire(['DS/3DPlaySupport/Loader'], function (Loader) {
             container.innerHTML = '';
             var asset = {
               provider: 'EV6',
@@ -1088,7 +1093,7 @@
             container.innerHTML = '<p class="bom-3d-msg">Módulo DS/3DPlaySupport/Loader não disponível.</p>';
           });
         } else {
-          container.innerHTML = '<p class="bom-3d-msg">AMD require não disponível neste contexto.</p>';
+          container.innerHTML = '<p class="bom-3d-msg">AMD require não disponível. Recarregue a página.</p>';
         }
       });
     }
