@@ -349,5 +349,6 @@ tr:hover td { background: #f7fbff; }
   margin: 0;
 }
 
-/* Esconder placeholders legados do bundle na zona 5 */
-.bom-3dplay-empty, .bom-preview-placeholder { display: none !important; }
+/* Esconder elementos legados do bundle na zona 5 */
+.bom-3dplay-empty, .bom-preview-placeholder, .bom-3d-viewer-container,
+.bom-viewer-wrap, .bom-viewer-canvas, .bom-viewer-host { display: none !important; }
